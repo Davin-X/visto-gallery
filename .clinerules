@@ -1,8 +1,0 @@
-# Cline workspace rules
-
-- Do only what the user explicitly asks. No extra refactors, features, styling, or PRs unless requested.
-- Keep responses concise and action-oriented.
-- Before large changes, ask for confirmation.
-- NEVER commit, push, open PRs, or merge without explicit user request.
-- Prefer minimal, targeted edits.
-- Run build/tests only when relevant to the requested change.

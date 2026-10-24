@@ -1,5 +1,5 @@
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder, PredefinedMenuItem};
-use tauri::{AppHandle, Manager, Emitter};
+use tauri::AppHandle;
 
 pub fn create_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     // File menu

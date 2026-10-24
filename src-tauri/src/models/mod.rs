@@ -63,19 +63,6 @@ pub struct Tag {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct MediaTag {
-    pub media_id: String,
-    pub tag_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct AlbumItem {
-    pub album_id: String,
-    pub media_id: String,
-    pub added_at: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportSession {
     pub id: String,
@@ -86,11 +73,6 @@ pub struct ImportSession {
     pub completed_at: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct Setting {
-    pub key: String,
-    pub value: String,
-}
 
 /// Hand-written row mapping.
 ///

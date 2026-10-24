@@ -29,6 +29,8 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hudVisible, setHudVisible] = useState(true);
+  const [pip, setPip] = useState(false);
+  const [pipSupported, setPipSupported] = useState(false);
   const [zoom, setZoom] = useState(100);
   const [rotation, setRotation] = useState(0);
   const [flipX, setFlipX] = useState(false);
@@ -110,25 +112,49 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
     return () => video.pause();
   }, [item?.id, item?.kind, playing]);
 
-  // Keep the slideshow from continuing to play media behind another app.
-  useEffect(() => {
-    if (!isOpen) return;
-    const pauseWhenBackgrounded = () => {
-      if (document.visibilityState !== "hidden" && document.hasFocus()) return;
-      const state = useSlideshowStore.getState();
-      if (state.playing) state.toggle();
-      videoRef.current?.pause();
-    };
-    document.addEventListener("visibilitychange", pauseWhenBackgrounded);
-    window.addEventListener("blur", pauseWhenBackgrounded);
-    return () => {
-      document.removeEventListener("visibilitychange", pauseWhenBackgrounded);
-      window.removeEventListener("blur", pauseWhenBackgrounded);
-      videoRef.current?.pause();
-    };
-  }, [isOpen]);
+  // Background playback is allowed; videos are only paused when the slideshow
+  // closes or the slide changes (see the effects above).
 
-  // Reset per-slide transform when the slide changes.
+  // Track PiP support/state for the current slide's video.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || item?.kind !== "video") {
+      setPipSupported(false);
+      setPip(false);
+      return;
+    }
+    setPipSupported(
+      Boolean((document as any).pictureInPictureEnabled || (video as any).webkitSupportsPresentationMode?.("picture-in-picture"))
+    );
+    const onEnter = () => setPip(true);
+    const onLeave = () => setPip(false);
+    const onWebKit = () => setPip((video as any).webkitPresentationMode === "picture-in-picture");
+    video.addEventListener("enterpictureinpicture", onEnter);
+    video.addEventListener("leavepictureinpicture", onLeave);
+    video.addEventListener("webkitpresentationmodechanged", onWebKit);
+    return () => {
+      video.removeEventListener("enterpictureinpicture", onEnter);
+      video.removeEventListener("leavepictureinpicture", onLeave);
+      video.removeEventListener("webkitpresentationmodechanged", onWebKit);
+    };
+  }, [item?.id, item?.kind]);
+
+  const togglePip = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const v = video as any;
+    try {
+      if (v.webkitSupportsPresentationMode?.("picture-in-picture")) {
+        v.webkitSetPresentationMode(v.webkitPresentationMode === "picture-in-picture" ? "inline" : "picture-in-picture");
+      } else if (document.pictureInPictureElement === video) {
+        void document.exitPictureInPicture();
+      } else if (typeof video.requestPictureInPicture === "function") {
+        void video.requestPictureInPicture();
+      }
+    } catch (err) {
+      console.warn("Picture-in-picture unavailable", err);
+    }
+  };
   useEffect(() => {
     setZoom(100);
     setRotation(0);
@@ -207,6 +233,11 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
           <button type="button" onClick={() => setRotation((r) => (r + 90) % 360)} aria-label="Rotate 90 degrees" title="Rotate 90°"><RotateIcon size={14} /></button>
           <button type="button" className={flipX ? "active" : ""} onClick={() => setFlipX((f) => !f)} aria-label="Flip horizontally" title="Flip horizontal"><FlipIcon size={14} /></button>
           {(rotation !== 0 || flipX || zoom !== 100) && <button type="button" style={{ width: "auto", padding: "0 10px" }} onClick={() => { setZoom(100); setRotation(0); setFlipX(false); }} aria-label="Reset transform" title="Reset transform">Reset</button>}
+          {item.kind === "video" && pipSupported && (
+            <button type="button" onClick={togglePip} aria-label={pip ? "Exit picture in picture" : "Picture in picture"} title="Picture in picture">
+              {pip ? "PiP on" : "PiP"}
+            </button>
+          )}
           <button type="button" onClick={() => void toggleFullscreen()} aria-label="Full screen" title="Full screen"><FullscreenIcon size={14} /></button>
           <button
             type="button"

@@ -1,8 +1,6 @@
 use std::sync::Mutex;
+
 use tauri::{Emitter, Manager, State};
-use tauri_plugin_dialog::DialogExt;
-use tauri_plugin_fs::FsExt;
-use tauri_plugin_shell::ShellExt;
 
 // Modules
 mod commands;
@@ -13,7 +11,6 @@ mod db;
 use commands::*;
 use db::Database;
 use menu::create_menu;
-use models::*;
 
 struct AppState {
     db: Mutex<Option<Database>>,

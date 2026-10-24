@@ -2,9 +2,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::{AppHandle, State, Manager, Emitter, Window};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use crate::{AppState, Database, models::*};
+use crate::{AppState, models::*};
 use anyhow::Result;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
@@ -83,6 +82,7 @@ pub struct ExifData {
     pub metadata_error: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PartialExifData {
@@ -95,6 +95,7 @@ pub struct PartialExifData {
     pub longitude: Option<f64>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderRequest {
@@ -976,6 +977,7 @@ pub struct ThumbnailResponse {
 
 /// Large originals should be downsampled by macOS ImageIO (via `sips`) instead
 /// of being decoded into a full-resolution buffer just to shrink them.
+#[cfg(test)]
 const LARGE_THUMBNAIL_SOURCE_BYTES: i64 = 8 * 1024 * 1024;
 /// Thumbnails are small, but they should still have a predictable disk budget.
 const THUMBNAIL_CACHE_LIMIT_BYTES: u64 = 512 * 1024 * 1024;
@@ -1108,18 +1110,19 @@ fn prune_thumbnail_cache(root: &Path, max_bytes: u64) {
     }
 }
 
+#[allow(unreachable_code)]
 fn generate_cached_thumbnail(
     source: &str,
     destination: &Path,
     size: u32,
-    source_size: i64,
+    _source_size: i64,
 ) -> Result<(Vec<u8>, u32, u32), String> {
     #[cfg(target_os = "macos")]
     {
         return generate_with_macos_sips(source, destination, size, "macOS sips");
     }
     #[cfg(not(target_os = "macos"))]
-    let _ = source_size;
+    let _ = _source_size;
 
     let mut reader = image::ImageReader::open(source)
         .map_err(|error| format!("Could not read photo: {error}"))?
@@ -2246,10 +2249,6 @@ pub async fn find_duplicates(
     use tokio::sync::Semaphore;
 
     let total = full_hash_candidates.len() as u64;
-    let total_bytes: u64 = full_hash_candidates
-        .iter()
-        .map(|&index| items[index].size.max(0) as u64)
-        .sum();
     
     let semaphore = Arc::new(Semaphore::new(2));
     let mut hash_updates: Vec<(String, String)> = Vec::with_capacity(full_hash_candidates.len());
@@ -2373,10 +2372,8 @@ pub async fn find_duplicates(
 ///
 /// This avoids reading entire multi-GB video files unless they actually
 /// have a matching prefix + size + mtime, which is extremely rare.
-const QUICK_FINGERPRINT_BYTES: u64 = 64 * 1024;
-
 fn compute_quick_fingerprint(path: &str, size: u64, _modified_at: i64) -> Option<String> {
-    use std::io::{Read, Seek, SeekFrom};
+    use std::io::Read;
     let mut file = std::fs::File::open(path).ok()?;
     let mut buf = [0u8; 64 * 1024];
     let n = file.read(&mut buf).ok()?;

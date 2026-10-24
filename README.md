@@ -26,12 +26,12 @@ Nothing is uploaded. Nothing phones home. Your photos stay on your disk.
 - **Inspector** — preview a selected item and edit tags alongside file metadata
 - **Smart filters** — All / Photos / Videos / RAW / Favorites
 - **Search** — by filename, folder path, camera model, tags
-- **Viewer** — keyboard navigation, zoom, full-screen, video playback, and a thumbnail filmstrip
+- **Viewer** — keyboard navigation, zoom, full-screen, video playback (volume, background playback, picture-in-picture), and a thumbnail filmstrip; controls auto-hide
 - **Non-destructive edits** — exposure, contrast, warmth, rotation, flip; export JPEG/PNG/HEIC/AVIF
 - **Duplicate detection** — SHA-256 scanner with live progress and cancellation
 - **Long-running scans** — cancel folder indexing, file imports, or duplicate hashing; completed work stays saved
 - **Batch tools** — rename, export, convert, strip metadata
-- **Slideshow** — configurable photo interval, shuffle and transitions; videos advance when playback ends
+- **Slideshow** — configurable photo interval, shuffle and transitions; videos advance when playback ends; video volume controls, picture-in-picture, and auto-hiding controls
 - **Hidden** — conceal sensitive items and their metadata in the gallery; files stay on disk at their original paths (not encrypted)
 - **Dark / Light / System** appearance
 - **Finder tags** read/write
