@@ -4,7 +4,7 @@ A fast, local-first photo & video gallery for macOS — React, TypeScript, Vite,
 
 ![VistoGallery icon](src-tauri/icons/icon.png)
 
-> **Status:** Beta · `v0.1.0` · Local-first · macOS 13+ · MIT
+> **Status:** Stable · `v0.1.1` · Local-first · macOS 13+ (Apple Silicon) · MIT
 
 ## What VistoGallery is
 
