@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSlideshowStore, useDraftTransforms, draftTransformStyle, type SlideshowTransition } from "../../engine/stores";
-import { GearIcon, PauseIcon, PlayIcon, StopIcon } from "./icons";
+import { GearIcon, PauseIcon, PlayIcon, StopIcon, PlusIcon, MinusIcon, RotateIcon, FlipIcon, FullscreenIcon } from "./icons";
 
 interface SlideshowOverlayProps {
   assetUrl: (path: string) => string;
@@ -29,15 +29,26 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hudVisible, setHudVisible] = useState(true);
+  const [zoom, setZoom] = useState(100);
+  const [rotation, setRotation] = useState(0);
+  const [flipX, setFlipX] = useState(false);
+  const [hintsVisible, setHintsVisible] = useState(true);
+  const hintsTimer = useRef<number | null>(null);
+
   const hideTimer = useRef<number | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   // Controls fade out while the slideshow plays and come back on movement.
   const poke = useCallback(() => {
     setHudVisible(true);
+    setHintsVisible(true);
     if (hideTimer.current) window.clearTimeout(hideTimer.current);
     hideTimer.current = window.setTimeout(() => setHudVisible(false), 3000);
+    if (hintsTimer.current) window.clearTimeout(hintsTimer.current);
+    hintsTimer.current = window.setTimeout(() => setHintsVisible(false), 3500);
   }, []);
+
+
 
   useEffect(() => {
     if (!isOpen) return;
@@ -68,11 +79,26 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
         e.preventDefault();
         e.stopPropagation();
         toggle();
+      } else if (e.key === "ArrowUp" && item.kind === "video" && videoRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        const v = videoRef.current;
+        v.volume = Math.min(1, v.volume + 0.1);
+        if (v.volume > 0) v.muted = false;
+      } else if (e.key === "ArrowDown" && item.kind === "video" && videoRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        const v = videoRef.current;
+        v.volume = Math.max(0, v.volume - 0.1);
+      } else if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        e.stopPropagation();
+        void toggleFullscreen();
       }
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [isOpen, close, next, previous, toggle]);
+  }, [isOpen, close, next, previous, toggle, item]);
 
   // The slideshow's play/pause state owns its video too. Videos advance on
   // `ended`, while still images use the configured interval timer.
@@ -102,6 +128,13 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
     };
   }, [isOpen]);
 
+  // Reset per-slide transform when the slide changes.
+  useEffect(() => {
+    setZoom(100);
+    setRotation(0);
+    setFlipX(false);
+  }, [item?.id]);
+
   // Reset the settings popover when the session ends.
   useEffect(() => {
     if (!isOpen) setSettingsOpen(false);
@@ -113,7 +146,16 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
   const hudShown = hudVisible || !playing || settingsOpen;
   const position = `${(index + 1).toLocaleString()} / ${items.length.toLocaleString()}`;
   const draftTransform = draftTransforms.get(item.id);
-  const rotated = Boolean(draftTransform && draftTransform.rotation % 180 !== 0);
+  const draftRotation = draftTransform?.rotation || 0;
+  const imageRotation = (rotation + draftRotation) % 360;
+  const rotated = imageRotation % 180 !== 0;
+
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.querySelector(".slideshow-overlay")?.requestFullscreen();
+    } catch {}
+  };
 
   return (
     <div
@@ -124,15 +166,24 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
       aria-label="Slideshow"
       onMouseMove={poke}
     >
-      <div className="slideshow-media" key={item.id} onClick={toggle} title={playing ? "Pause" : "Play"}>
+      <div className="slideshow-media" key={item.id} onClick={toggle} title={playing ? "Pause" : "Play"} onMouseEnter={() => { setHudVisible(true); if (hideTimer.current) window.clearTimeout(hideTimer.current); }} onMouseLeave={poke}>
         {item.kind === "video" ? (
           <video
             ref={videoRef}
             src={assetUrl(item.path)}
+             controls
+             onClick={(e) => e.stopPropagation()}
+
             autoPlay={playing}
             loop={false}
             playsInline
             onEnded={() => (items.length > 1 ? next() : toggle())}
+             style={{
+               maxWidth: rotated ? "min(100%, 100cqh)" : undefined,
+               maxHeight: rotated ? "min(100%, 100cqw)" : undefined,
+               transform: [`rotate(${imageRotation}deg)`, `scaleX(${flipX ? -1 : 1})`, draftTransformStyle(draftTransform), `scale(${zoom / 100})`].filter(Boolean).join(" "),
+             }}
+
           />
         ) : (
           <img
@@ -142,15 +193,21 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
             style={{
               maxWidth: rotated ? "min(100%, 100cqh)" : undefined,
               maxHeight: rotated ? "min(100%, 100cqw)" : undefined,
-              transform: draftTransformStyle(draftTransform),
+              transform: [`rotate(${imageRotation}deg)`, `scaleX(${flipX ? -1 : 1})`, draftTransformStyle(draftTransform), `scale(${zoom / 100})`].filter(Boolean).join(" "),
             }}
           />
         )}
       </div>
 
-      <div className="slideshow-hud slideshow-hud-top">
+      <div className="slideshow-hud slideshow-hud-top" onMouseEnter={() => { setHudVisible(true); if (hideTimer.current) window.clearTimeout(hideTimer.current); }} onMouseLeave={poke}>
         <span className="slideshow-position">{position}</span>
         <div className="slideshow-hud-actions">
+          <button type="button" onClick={() => setZoom((z) => Math.min(300, z + 25))} aria-label="Zoom in" title="Zoom in"><PlusIcon size={14} /></button>
+          <button type="button" onClick={() => setZoom((z) => Math.max(25, z - 25))} aria-label="Zoom out" title="Zoom out"><MinusIcon size={14} /></button>
+          <button type="button" onClick={() => setRotation((r) => (r + 90) % 360)} aria-label="Rotate 90 degrees" title="Rotate 90°"><RotateIcon size={14} /></button>
+          <button type="button" className={flipX ? "active" : ""} onClick={() => setFlipX((f) => !f)} aria-label="Flip horizontally" title="Flip horizontal"><FlipIcon size={14} /></button>
+          {(rotation !== 0 || flipX || zoom !== 100) && <button type="button" style={{ width: "auto", padding: "0 10px" }} onClick={() => { setZoom(100); setRotation(0); setFlipX(false); }} aria-label="Reset transform" title="Reset transform">Reset</button>}
+          <button type="button" onClick={() => void toggleFullscreen()} aria-label="Full screen" title="Full screen"><FullscreenIcon size={14} /></button>
           <button
             type="button"
             className={settingsOpen ? "active" : ""}
@@ -166,7 +223,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
         </div>
       </div>
 
-      <div className="slideshow-hud slideshow-hud-bottom">
+      <div className="slideshow-hud slideshow-hud-bottom" onMouseEnter={() => { setHudVisible(true); if (hideTimer.current) window.clearTimeout(hideTimer.current); }} onMouseLeave={poke}>
         <div className="slideshow-transport">
           <button type="button" onClick={previous} aria-label="Previous slide" title="Previous (←)">
             ‹
@@ -226,6 +283,12 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
           </label>
         </div>
       )}
+      {hintsVisible && (
+        <div className="slideshow-hints" role="status" aria-live="polite">
+          Space play/pause · ←/→ navigate · Esc close · F fullscreen · +/- zoom · R rotate
+        </div>
+      )}
+
     </div>
   );
 }
