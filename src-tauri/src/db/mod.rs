@@ -1,7 +1,6 @@
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool, Row};
 use std::path::PathBuf;
 use tauri::Manager;
-use crate::models::*;
 use anyhow::Result;
 
 pub struct Database {

@@ -21,3 +21,6 @@ yarn-error.log*
 *.pem
 .idea
 
+
+# Cline workspace rules (local)
+.clinerules

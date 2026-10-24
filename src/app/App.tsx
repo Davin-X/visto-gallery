@@ -2447,6 +2447,8 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
+  const [pip, setPip] = useState(false);
+  const [pipSupported, setPipSupported] = useState(false);
 
   useEffect(() => {
     const video = ref.current;
@@ -2480,20 +2482,12 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
     };
   }, [src]);
 
-  // A video should never keep playing after its viewer goes away or the app
-  // moves into the background. Explicitly pause during teardown because the
-  // Tauri webview can retain media briefly while React removes the element.
+  // Pause the video when the viewer is torn down so the Tauri webview does not
+  // keep media alive briefly while React removes the element.
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
-    const pauseWhenBackgrounded = () => {
-      if (document.visibilityState === "hidden" || !document.hasFocus()) video.pause();
-    };
-    document.addEventListener("visibilitychange", pauseWhenBackgrounded);
-    window.addEventListener("blur", pauseWhenBackgrounded);
     return () => {
-      document.removeEventListener("visibilitychange", pauseWhenBackgrounded);
-      window.removeEventListener("blur", pauseWhenBackgrounded);
       video.pause();
     };
   }, []);
@@ -2552,9 +2546,80 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
+    setPipSupported(
+      Boolean((document as any).pictureInPictureEnabled || (video as any).webkitSupportsPresentationMode?.("picture-in-picture"))
+    );
+    const onEnter = () => setPip(true);
+    const onLeave = () => setPip(false);
+    const onWebKitMode = () => setPip((video as any).webkitPresentationMode === "picture-in-picture");
+    video.addEventListener("enterpictureinpicture", onEnter);
+    video.addEventListener("leavepictureinpicture", onLeave);
+    video.addEventListener("webkitpresentationmodechanged", onWebKitMode);
+    return () => {
+      video.removeEventListener("enterpictureinpicture", onEnter);
+      video.removeEventListener("leavepictureinpicture", onLeave);
+      video.removeEventListener("webkitpresentationmodechanged", onWebKitMode);
+    };
+  }, [src]);
+
+  const togglePip = async () => {
+    const video = ref.current;
+    if (!video) return;
+    try {
+      const v = video as any;
+      if (v.webkitSupportsPresentationMode?.("picture-in-picture")) {
+        v.webkitSetPresentationMode(
+          v.webkitPresentationMode === "picture-in-picture" ? "inline" : "picture-in-picture"
+        );
+        return;
+      }
+      if (document.pictureInPictureElement === video) {
+        await document.exitPictureInPicture();
+      } else if (typeof video.requestPictureInPicture === "function") {
+        await video.requestPictureInPicture();
+      }
+    } catch (err) {
+      console.warn("Picture-in-picture unavailable", err);
+    }
+  };
+
+  useEffect(() => {
+    const video = ref.current;
+    if (!video) return;
     video.volume = volume;
     video.muted = muted;
   }, [volume, muted]);
+
+  // Wire media keys / PiP transport controls to the player.
+  useEffect(() => {
+    const video = ref.current;
+    if (!video || !("mediaSession" in navigator)) return;
+    const session = navigator.mediaSession;
+    session.metadata = new MediaMetadata({ title: name || "Video", artist: "Stillroom" });
+    const play = () => void video.play().catch(() => {});
+    const pause = () => video.pause();
+    const seekBy = (delta: number) => {
+      const next = Math.min(Math.max(0, video.currentTime + delta), video.duration || 0);
+      video.currentTime = next;
+      setTime(next);
+    };
+    session.setActionHandler("play", play);
+    session.setActionHandler("pause", pause);
+    session.setActionHandler("seekbackward", (details) => seekBy(-(details?.seekOffset || 10)));
+    session.setActionHandler("seekforward", (details) => seekBy(details?.seekOffset || 10));
+    const onPlay = () => { session.playbackState = "playing"; };
+    const onPause = () => { session.playbackState = "paused"; };
+    video.addEventListener("play", onPlay);
+    video.addEventListener("pause", onPause);
+    return () => {
+      video.removeEventListener("play", onPlay);
+      video.removeEventListener("pause", onPause);
+      session.setActionHandler("play", null);
+      session.setActionHandler("pause", null);
+      session.setActionHandler("seekbackward", null);
+      session.setActionHandler("seekforward", null);
+    };
+  }, [src, name]);
 
   const toggle = () => {
     const video = ref.current;
@@ -2613,6 +2678,11 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
         <button type="button" onClick={() => adjustVolume(0.1)} aria-label="Volume up" title="Volume up">
           <PlusIcon size={12} />
         </button>
+        {pipSupported && (
+          <button type="button" onClick={togglePip} aria-label={pip ? "Exit picture in picture" : "Picture in picture"} title="Picture in picture">
+            {pip ? "PiP on" : "PiP"}
+          </button>
+        )}
         {onFullscreen && (
           <button type="button" onClick={onFullscreen} aria-label="Full screen"><FullscreenIcon size={14} /></button>
         )}
@@ -3951,14 +4021,14 @@ function ViewerScreen(props: any) {
         if ((e.target as HTMLElement).closest("button, input")) return;
         props.onSetZoom(props.zoom === 100 ? 200 : 100);
       }}>
-        <button className="viewer-arrow left" type="button" onClick={() => props.onNavigate(-1)} aria-label="Previous">‹</button>
+        <button className={`viewer-arrow left${hintsVisible ? "" : " hidden"}`} type="button" onMouseEnter={() => { setHintsVisible(true); if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current); }} onMouseLeave={() => { hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500); }} onClick={() => props.onNavigate(-1)} aria-label="Previous">‹</button>
         {selected.kind === "video" ? <VideoPlayer
           src={props.assetUrl(selected.path)}
           name={selected.name}
           onFullscreen={() => void props.onToggleFullscreen()}
         /> : selected.kind === "photo" ? <img src={props.assetUrl(selected.path)} alt={selected.name} decoding="async" onError={(e) => { const target = e.currentTarget; void tauri.library.getThumbnail({ itemId: selected.id, size: 1024 }).then((response) => { target.src = response.dataUrl; }).catch(() => {}); }} style={{ maxWidth: imageRotation % 180 ? "min(100%, 100cqh)" : undefined, maxHeight: imageRotation % 180 ? "min(100%, 100cqw)" : undefined, transform: [`rotate(${props.rotation || 0}deg)`, `scaleX(${props.flipX ? -1 : 1})`, draftTransformStyle(draftTransforms.get(selected.id)), `scale(${props.zoom / 100})`].filter(Boolean).join(" ") }} /> : <div className="raw-viewer"><b>{selected.extension.toUpperCase()}</b><span>RAW preview requires native backend</span></div>}
-        <button className="viewer-arrow right" type="button" onClick={() => props.onNavigate(1)} aria-label="Next">›</button>
-        <div className="viewer-overlay-top">
+        <button className={`viewer-arrow right${hintsVisible ? "" : " hidden"}`} type="button" onMouseEnter={() => { setHintsVisible(true); if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current); }} onMouseLeave={() => { hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500); }} onClick={() => props.onNavigate(1)} aria-label="Next">›</button>
+        <div className={`viewer-overlay-top${hintsVisible ? "" : " hidden"}`} onMouseEnter={() => { setHintsVisible(true); if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current); }} onMouseLeave={() => { hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500); }}>
           <span className="viewer-transform-state">
             {props.rotation ? `${props.rotation}°` : ""}
             {props.rotation && props.flipX ? " · " : ""}
@@ -3978,7 +4048,7 @@ function ViewerScreen(props: any) {
           <span><kbd>Esc</kbd> Close</span>
         </div>
         {selected.kind !== "video" && (
-          <div className="viewer-overlay-bottom">
+          <div className={`viewer-overlay-bottom${hintsVisible ? "" : " hidden"}`} onMouseEnter={() => { setHintsVisible(true); if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current); }} onMouseLeave={() => { hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500); }}>
           <button type="button" onClick={() => props.onSetZoom(Math.max(25, props.zoom - 25))} aria-label="Zoom out"><MinusIcon size={15} /></button>
           <span>{props.zoom}%</span>
           <button type="button" onClick={() => props.onSetZoom(Math.min(300, props.zoom + 25))} aria-label="Zoom in"><PlusIcon size={15} /></button>

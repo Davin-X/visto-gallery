@@ -3357,6 +3357,18 @@ body {
   transform: translateY(-4px);
   pointer-events: none;
 }
+.viewer-arrow.hidden,
+.viewer-overlay-top.hidden,
+.viewer-overlay-bottom.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+.viewer-arrow,
+.viewer-overlay-top,
+.viewer-overlay-bottom {
+  transition: opacity 0.35s ease;
+}
 .viewer-hints span {
   display: inline-flex;
   align-items: center;
