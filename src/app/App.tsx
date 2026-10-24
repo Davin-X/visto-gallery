@@ -592,10 +592,17 @@ function App() {
       showNotice("Add photos or videos to start a slideshow.");
       return;
     }
+    // Close any open viewer so its media can't keep playing underneath the show.
+    if (viewer.isOpen) {
+      viewer.close();
+      setScreen(viewerOrigin || "Library");
+    }
+    // Pause any other playing videos (e.g. inspector preview) to avoid parallel audio.
+    document.querySelectorAll("video").forEach((v) => { try { v.pause(); } catch {} });
     // Read the action off the store instead of subscribing to it: advancing
     // slides should only re-render the overlay, never the whole app.
     startConfiguredSlideshow(scope, library.inspectedId);
-  }, [library.items, library.visibleItems, library.inspectedId, showNotice]);
+  }, [library.items, library.visibleItems, library.inspectedId, showNotice, viewer]);
 
   const openAlbumDialog = useCallback((seedIds?: string[]) => {
     setAlbumDialogMode("create");
