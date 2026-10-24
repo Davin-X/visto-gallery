@@ -9,6 +9,7 @@ export function LibraryPanel(props: {
   onAddFolder?: () => void;
   onRemoveFolder?: (folder: LibraryFolder) => void;
   onRescan?: () => void;
+  onRescanFolder?: (folder: LibraryFolder) => void;
   onChange: (key: any, value: any) => void;
 }) {
   return (
@@ -75,6 +76,7 @@ export function LibraryPanel(props: {
         onAddFolder={props.onAddFolder}
         onRemoveFolder={props.onRemoveFolder}
         onRescan={props.onRescan}
+        onRescanFolder={props.onRescanFolder}
       />
 
       <div className="settings-warning">

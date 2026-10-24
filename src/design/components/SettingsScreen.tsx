@@ -23,6 +23,7 @@ export function SettingsScreen(props: {
   onAddFolder?: () => void;
   onRemoveFolder?: (folder: LibraryFolder) => void;
   onRescan?: () => void;
+  onRescanFolder?: (folder: LibraryFolder) => void;
 }) {
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const sidebarWidth = useSidebarWidth();
@@ -252,6 +253,7 @@ export function SettingsScreen(props: {
           onAddFolder={props.onAddFolder}
           onRemoveFolder={props.onRemoveFolder}
           onRescan={props.onRescan}
+          onRescanFolder={props.onRescanFolder}
           onChange={update}
         />}
         {activeTab === "privacy" && <PrivacyPanel />}
