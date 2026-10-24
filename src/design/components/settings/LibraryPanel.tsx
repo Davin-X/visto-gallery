@@ -81,7 +81,7 @@ export function LibraryPanel(props: {
 
       <div className="settings-warning">
         <span className="settings-warning-icon"><InfoIcon size={14} /></span>
-        <span>Folder watching requires granting Full Disk Access in System Settings → Privacy & Security. Without it, Stillroom can only import files you explicitly select.</span>
+        <span>Folder watching requires granting Full Disk Access in System Settings → Privacy & Security. Without it, VistoGallery can only import files you explicitly select.</span>
       </div>
     </>
   );

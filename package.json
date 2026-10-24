@@ -1,5 +1,5 @@
 {
-  "name": "stillroom",
+  "name": "visto-gallery",
   "version": "0.1.1",
   "description": "A fast, local-first photo & video gallery app for macOS",
   "private": true,
@@ -7,11 +7,11 @@
   "author": "Devendra Kumar",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Davin-X/stillroom.git"
+    "url": "https://github.com/Davin-X/visto-gallery.git"
   },
-  "homepage": "https://github.com/Davin-X/stillroom#readme",
+  "homepage": "https://github.com/Davin-X/visto-gallery#readme",
   "bugs": {
-    "url": "https://github.com/Davin-X/stillroom/issues"
+    "url": "https://github.com/Davin-X/visto-gallery/issues"
   },
   "keywords": [
     "macOS",

@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Create a report to help us improve Stillroom
+about: Create a report to help us improve VistoGallery
 title: '[BUG] '
 labels: bug
 assignees: ''
@@ -27,7 +27,7 @@ If applicable, add screenshots to help explain your problem.
 ## Environment
 
 - **macOS version:** 
-- **Stillroom version:** 
+- **VistoGallery version:** 
 - **Build:** browser prototype / native desktop app
 - **Device:** Apple Silicon / Intel
 

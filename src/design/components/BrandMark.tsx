@@ -1,7 +1,7 @@
 import React from "react";
 import appIcon from "../../../src-tauri/icons/icon.png";
 
-/** The shared Stillroom app mark used in the top bar and empty states. */
+/** The shared VistoGallery app mark used in the top bar and empty states. */
 export function BrandMark({
   size = 26,
   className = "",
@@ -15,7 +15,7 @@ export function BrandMark({
       src={appIcon}
       width={size}
       height={size}
-      alt="Stillroom"
+      alt="VistoGallery"
       draggable={false}
     />
   );

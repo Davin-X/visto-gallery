@@ -150,7 +150,7 @@ impl Database {
         .await?;
         
         // Folders the user explicitly brought into the library. Rows are
-        // removed when the user removes the folder from Stillroom.
+        // removed when the user removes the folder from VistoGallery.
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS library_folders (
@@ -258,5 +258,6 @@ fn get_db_path(app_handle: &tauri::AppHandle) -> Result<PathBuf> {
         .path()
         .app_data_dir()
         .map_err(|e| anyhow::anyhow!("Failed to get app data dir: {}", e))?;
-    Ok(app_dir.join("stillroom.db"))
+    
+    Ok(app_dir.join("visto-gallery.db"))
 }

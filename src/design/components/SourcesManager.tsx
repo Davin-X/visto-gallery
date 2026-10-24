@@ -209,7 +209,7 @@ export function SourcesManager(props: {
         <p className="sources-note">
           <InfoIcon size={14} />
           <span>
-            Removing a source only clears it from Stillroom. Your files stay exactly where they
+            Removing a source only clears it from VistoGallery. Your files stay exactly where they
             are on disk, and adding the folder again brings everything back.
           </span>
         </p>
@@ -225,7 +225,7 @@ export function SourcesManager(props: {
     <section className="settings-section">
       <h2 className="settings-section-title">Sources</h2>
       <p className="settings-section-desc">
-        Folders Stillroom indexes. Your files are read in place and never moved.
+        Folders VistoGallery indexes. Your files are read in place and never moved.
       </p>
       {body}
     </section>

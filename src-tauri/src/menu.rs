@@ -28,7 +28,7 @@ pub fn create_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         .accelerator("CmdOrCtrl+W")
         .build(app)?;
     
-    let quit = MenuItemBuilder::new("Quit Stillroom")
+    let quit = MenuItemBuilder::new("Quit VistoGallery")
         .id("file_quit")
         .accelerator("CmdOrCtrl+Q")
         .build(app)?;
@@ -121,7 +121,7 @@ pub fn create_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         .build()?;
 
     // Help menu
-    let about = MenuItemBuilder::new("About Stillroom")
+    let about = MenuItemBuilder::new("About VistoGallery")
         .id("help_about")
         .build(app)?;
     

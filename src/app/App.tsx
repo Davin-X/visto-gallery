@@ -429,7 +429,7 @@ function App() {
       await register("menu-toggle-inspector", () => liveRef.current.library.toggleInspector());
       await register("menu-zoom-in", () => liveRef.current.viewer.zoomIn());
       await register("menu-zoom-out", () => liveRef.current.viewer.zoomOut());
-      await register("menu-about", () => handlersRef.current.showNotice("Stillroom v0.1.0 - Native macOS Photo Gallery"));
+      await register("menu-about", () => handlersRef.current.showNotice("VistoGallery v0.1.0 - Native macOS Photo Gallery"));
       await register("menu-check-updates", () => handlersRef.current.showNotice("Check for updates - coming soon"));
 
       // Listen for native import progress events from scan/import commands.
@@ -797,8 +797,8 @@ function App() {
       const removed = await library.removeFolder(folderPendingRemove.path);
       showNotice(
         removed > 0
-          ? `Removed “${folderPendingRemove.name}” from Stillroom. ${removed.toLocaleString()} item${removed === 1 ? "" : "s"} dropped from the library — your files are still on disk.`
-          : `Removed empty folder “${folderPendingRemove.name}” from Stillroom.`
+          ? `Removed “${folderPendingRemove.name}” from VistoGallery. ${removed.toLocaleString()} item${removed === 1 ? "" : "s"} dropped from the library — your files are still on disk.`
+          : `Removed empty folder “${folderPendingRemove.name}” from VistoGallery.`
       );
       setFolderPendingRemove(null);
     } catch (error) {
@@ -1211,7 +1211,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
     >
       <a className="skip-to-content" href="#main-content">Skip to main content</a>
       <header className="topbar" onMouseDown={beginTopbarDrag} onDoubleClick={handleTopbarDoubleClick}>
-        <div className="topbar-brand"><BrandMark size={26} /><b>Stillroom</b></div>
+        <div className="topbar-brand"><BrandMark size={26} /><b>VistoGallery</b></div>
         <div className="topbar-context">
           {(() => {
             const activeAlbumRecord = library.activeAlbum
@@ -2193,7 +2193,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
               </button>
             </div>
             <p className="delete-album-copy">
-              Remove <b>“{folderPendingRemove.name}”</b> from Stillroom?
+              Remove <b>“{folderPendingRemove.name}”</b> from VistoGallery?
             </p>
             <div className="delete-album-safety" id="remove-folder-description">
               <span><FolderIcon size={19} /></span>
@@ -2595,7 +2595,7 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
     const video = ref.current;
     if (!video || !("mediaSession" in navigator)) return;
     const session = navigator.mediaSession;
-    session.metadata = new MediaMetadata({ title: name || "Video", artist: "Stillroom" });
+    session.metadata = new MediaMetadata({ title: name || "Video", artist: "VistoGallery" });
     const play = () => void video.play().catch(() => {});
     const pause = () => video.pause();
     const seekBy = (delta: number) => {

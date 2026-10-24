@@ -1,4 +1,4 @@
-# Stillroom Code of Conduct
+# VistoGallery Code of Conduct
 
 ## Our Pledge
 

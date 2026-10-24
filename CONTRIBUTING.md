@@ -1,6 +1,6 @@
-# Contributing to Stillroom
+# Contributing to VistoGallery
 
-Thank you for contributing! Stillroom is a local-first macOS photo gallery built with React, TypeScript, Vite, and Tauri 2 (Rust). Contributions are reviewed through pull requests. Check the repository's current branch rules for review and merge requirements.
+Thank you for contributing! VistoGallery is a local-first macOS photo gallery built with React, TypeScript, Vite, and Tauri 2 (Rust). Contributions are reviewed through pull requests. Check the repository's current branch rules for review and merge requirements.
 
 ---
 
@@ -16,8 +16,8 @@ Thank you for contributing! Stillroom is a local-first macOS photo gallery built
 
 ```sh
 # Fork, then clone your fork
-git clone https://github.com/<your-username>/stillroom.git
-cd stillroom
+git clone https://github.com/<your-username>/visto-gallery.git
+cd visto-gallery
 
 # Install dependencies
 npm install

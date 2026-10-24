@@ -1,11 +1,11 @@
 [package]
-name = "stillroom"
+name = "visto-gallery"
 version = "0.1.1"
 description = "A fast, local-first photo & video gallery app for macOS"
 authors = ["Devendra Kumar"]
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/Davin-X/stillroom"
+repository = "https://github.com/Davin-X/visto-gallery"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

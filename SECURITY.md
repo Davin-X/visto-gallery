@@ -8,7 +8,7 @@
 
 ## Reporting a Vulnerability
 
-Stillroom is designed to be **local-first** — it makes no network requests by default and stores all data in a local SQLite database on your Mac. Because of this, the attack surface is intentionally small.
+VistoGallery is designed to be **local-first** — it makes no network requests by default and stores all data in a local SQLite database on your Mac. Because of this, the attack surface is intentionally small.
 
 If you discover a security issue (for example, in the Vault encryption, SQLite handling, or Tauri command surface), please report it responsibly:
 

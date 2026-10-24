@@ -1,17 +1,17 @@
 {
-  "productName": "Stillroom",
+  "productName": "VistoGallery",
   "version": "0.1.1",
-  "identifier": "com.stillroom.app",
+  "identifier": "com.vistogallery.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "echo 'Vite dev server already running'",
     "beforeBuildCommand": "npm run build",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
-        "title": "Stillroom",
+        "title": "VistoGallery",
         "width": 1280,
         "height": 880,
         "minWidth": 960,

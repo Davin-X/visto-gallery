@@ -1317,7 +1317,7 @@ pub async fn get_library_folders(state: State<'_, AppState>) -> Result<Vec<Libra
     Ok(folders)
 }
 
-/// Remove a folder from Stillroom.
+/// Remove a folder from VistoGallery.
 ///
 /// The files stay on disk by default: this only drops the folder's rows from
 /// the catalog. Pass `delete_files = true` to move the originals to the macOS
@@ -2095,7 +2095,7 @@ fn export_batch_item(
             let target = if direct {
                 output_path.clone()
             } else {
-                folder.join(format!(".stillroom-{}.png", Uuid::new_v4()))
+                folder.join(format!(".visto-gallery-{}.png", Uuid::new_v4()))
             };
 
             if let Err(fallback_error) = write_batch_with_sips(
@@ -2694,7 +2694,7 @@ mod thumbnail_cache_tests {
     #[test]
     fn large_sources_use_the_native_downsample_path() {
         let root = std::env::temp_dir().join(format!(
-            "stillroom-thumb-sips-test-{}",
+            "visto-gallery-thumb-sips-test-{}",
             Uuid::new_v4()
         ));
         fs::create_dir_all(&root).expect("create test dir");
@@ -2721,7 +2721,7 @@ mod thumbnail_cache_tests {
     #[test]
     fn prune_keeps_cache_within_budget() {
         let root = std::env::temp_dir().join(format!(
-            "stillroom-thumb-cache-test-{}",
+            "visto-gallery-thumb-cache-test-{}",
             Uuid::new_v4()
         ));
         fs::create_dir_all(&root).expect("create cache dir");
@@ -2773,7 +2773,7 @@ mod thumbnail_cache_tests {
         .expect("create album_items");
 
         let root = std::env::temp_dir().join(format!(
-            "stillroom-prune-test-{}",
+            "visto-gallery-prune-test-{}",
             Uuid::new_v4()
         ));
         fs::create_dir_all(&root).expect("create test dir");
@@ -2851,7 +2851,7 @@ mod batch_export_tests {
 
     fn temp_dir(label: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
-            "stillroom-batch-test-{}-{}",
+            "visto-gallery-batch-test-{}-{}",
             label,
             Uuid::new_v4()
         ));
@@ -2875,14 +2875,14 @@ mod batch_export_tests {
     }
 
     /// Manual microbenchmark of the real media inspection and SQLite write
-    /// paths. Set STILLROOM_PERF_ROOT to benchmark a real media folder; without
+    /// paths. Set VISTOGALLERY_PERF_ROOT to benchmark a real media folder; without
     /// it, the test creates a generated 10,000-image fixture. Run with:
     /// `cargo test scan_performance_benchmark -- --ignored --nocapture`
     #[tokio::test]
     #[ignore = "manual synthetic performance benchmark"]
     async fn scan_performance_benchmark() {
         const BATCH: usize = 100;
-        let supplied_root = std::env::var_os("STILLROOM_PERF_ROOT").map(PathBuf::from);
+        let supplied_root = std::env::var_os("VISTOGALLERY_PERF_ROOT").map(PathBuf::from);
         let generated = supplied_root.is_none();
         let root = supplied_root.unwrap_or_else(|| temp_dir("scan-perf"));
         if generated {

@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for Stillroom
+about: Suggest an idea for VistoGallery
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''

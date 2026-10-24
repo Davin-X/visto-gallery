@@ -194,7 +194,7 @@ export function SettingsScreen(props: {
         <div>
           <p className="eyebrow">PREFERENCES</p>
           <h1>Settings</h1>
-          <p className="page-subtitle">Customize Stillroom to match your workflow.</p>
+          <p className="page-subtitle">Customize VistoGallery to match your workflow.</p>
         </div>
       </div>
 

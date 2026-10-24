@@ -10,10 +10,10 @@ export function PrivacyPanel() {
         <span className="privacy-overview-icon" aria-hidden="true"><LockIcon size={17} /></span>
         <div>
           <b>Your library stays on this Mac</b>
-          <p>Stillroom scans and processes media locally. This build does not include analytics, crash reporting, or update checks.</p>
+          <p>VistoGallery scans and processes media locally. This build does not include analytics, crash reporting, or update checks.</p>
         </div>
       </div>
-      <div className="privacy-facts" aria-label="How Stillroom handles your data">
+      <div className="privacy-facts" aria-label="How VistoGallery handles your data">
         <div>
           <span>Library</span>
           <b>Local database</b>

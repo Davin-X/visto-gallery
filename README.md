@@ -1,14 +1,14 @@
-# Stillroom
+# VistoGallery
 
 A fast, local-first photo & video gallery for macOS — React, TypeScript, Vite, Tauri 2 (Rust).
 
-![Stillroom icon](src-tauri/icons/icon.png)
+![VistoGallery icon](src-tauri/icons/icon.png)
 
 > **Status:** Beta · `v0.1.0` · Local-first · macOS 13+ · MIT
 
-## What Stillroom is
+## What VistoGallery is
 
-Stillroom is your private photo library — on your Mac, under your control. It scans folders you choose, builds a local SQLite catalog, reads/writes EXIF metadata, lets you non-destructively edit and export, finds duplicates by SHA-256, and can hide sensitive items from the gallery.
+VistoGallery is your private photo library — on your Mac, under your control. It scans folders you choose, builds a local SQLite catalog, reads/writes EXIF metadata, lets you non-destructively edit and export, finds duplicates by SHA-256, and can hide sensitive items from the gallery.
 
 Nothing is uploaded. Nothing phones home. Your photos stay on your disk.
 
@@ -41,8 +41,8 @@ Nothing is uploaded. Nothing phones home. Your photos stay on your disk.
 ### Browser preview (no Rust needed)
 
 ```sh
-git clone https://github.com/Davin-X/stillroom.git
-cd stillroom
+git clone https://github.com/Davin-X/visto-gallery.git
+cd visto-gallery
 npm install
 npm run dev        # open http://localhost:1420/harness.html
 npm run build      # dist/
@@ -66,7 +66,7 @@ npm run tauri build   # .app bundle (macOS)
 ## Project structure
 
 ```
-stillroom/
+visto-gallery/
 ├── src/              # React/Vite frontend
 ├── src-tauri/        # Tauri 2 + Rust backend
 │   └── icons/        # App icons used by Tauri bundles
@@ -111,4 +111,4 @@ MIT License. See [`LICENSE`](./LICENSE).
 
 ---
 
-**Stillroom** — your photos, your Mac, your terms.
+**VistoGallery** — your photos, your Mac, your terms.

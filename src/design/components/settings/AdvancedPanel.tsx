@@ -121,7 +121,7 @@ export function AdvancedPanel(props: {
         <h2 className="settings-section-title">
           <TrashIcon size={14} /> Danger Zone
         </h2>
-        <p className="settings-section-desc">These actions change Stillroom preferences or its catalog. Original media files are never deleted.</p>
+        <p className="settings-section-desc">These actions change VistoGallery preferences or its catalog. Original media files are never deleted.</p>
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Reset All Settings</b>
