@@ -1031,6 +1031,8 @@
 
 .sources-table-viewport {
   min-height: 0;
+  max-height: 360px;
+  overflow: auto;
 }
 
 .sources-summary {
@@ -1343,6 +1345,7 @@
 .sources-sheet .sources-table-viewport {
   flex: 1 1 auto;
   overflow: auto;
+  max-height: none;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
 }

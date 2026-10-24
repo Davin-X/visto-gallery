@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo, useDeferredValue, memo } from "react";
+import { createPortal } from "react-dom";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { save, open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { currentMonitor, getCurrentWindow, LogicalSize, PhysicalPosition } from "@tauri-apps/api/window";
@@ -66,7 +67,7 @@ import { SourcesManager } from "../design/components/SourcesManager";
 import { SlideshowOverlay } from "../design/components/SlideshowOverlay";
 import { ContextMenu } from "../design/components/ContextMenu";
 import { BrandMark } from "../design/components/BrandMark";
-import { GearIcon, SunIcon, MoonIcon, LibraryIcon, AlbumsIcon, ViewerIcon, DuplicatesIcon, EditIcon, BatchIcon, SearchIcon, PlusIcon, MinusIcon, MoreIcon, InspectorIcon, FolderIcon, GridIcon, OverviewIcon, DetailsIcon, TimelineIcon, HeartIcon, EyeIcon, EyeOffIcon, FullscreenIcon, RotateIcon, CropIcon, FlipIcon, PlayIcon, PauseIcon, SparkleIcon, UsersIcon, TagIcon, ImageOffIcon, ShareIcon, CheckIcon, StopIcon, TrashIcon } from "../design/components/icons";
+import { GearIcon, SunIcon, MoonIcon, LibraryIcon, AlbumsIcon, ViewerIcon, DuplicatesIcon, EditIcon, BatchIcon, SearchIcon, PlusIcon, MinusIcon, MoreIcon, InspectorIcon, FolderIcon, GridIcon, OverviewIcon, DetailsIcon, TimelineIcon, HeartIcon, EyeIcon, EyeOffIcon, FullscreenIcon, RotateIcon, CropIcon, FlipIcon, PlayIcon, PauseIcon, SparkleIcon, UsersIcon, TagIcon, ImageOffIcon, ShareIcon, CheckIcon, StopIcon, TrashIcon, VolumeIcon } from "../design/components/icons";
 
 type Screen = "Library" | "Albums" | "Viewer" | "Duplicates" | "Edit" | "Batch" | "Hidden" | "Settings";
 
@@ -2276,7 +2277,7 @@ const thumbnailQueue: Array<() => void> = [];
 // mounted thumbnails alive on its own, so this only needs to cover navigation
 // between views without holding the whole library in JS memory.
 const THUMBNAIL_CACHE_LIMIT = 256;
-const MAX_CONCURRENT_THUMBNAIL_REQUESTS = 2;
+const MAX_CONCURRENT_THUMBNAIL_REQUESTS = 6;
 type CachedThumbnailSize = 64 | 128 | 256 | 512 | 1024;
 let activeThumbnailRequests = 0;
 
@@ -2325,6 +2326,7 @@ function CachedThumbnail({
   style,
   showStatus = false,
   placeholderClassName,
+  fallbackSrc,
 }: {
   itemId: string;
   name: string;
@@ -2332,6 +2334,7 @@ function CachedThumbnail({
   style?: React.CSSProperties;
   showStatus?: boolean;
   placeholderClassName?: string;
+  fallbackSrc?: string;
 }) {
   const placeholderRef = useRef<HTMLSpanElement | null>(null);
   const [loaded, setLoaded] = useState<{ key: string; src: string } | null>(null);
@@ -2374,6 +2377,9 @@ function CachedThumbnail({
     return () => { current = false; };
   }, [itemId, size, nearViewport, requestKey]);
 
+  if (failed && fallbackSrc) {
+    return <img src={fallbackSrc} alt={name} loading="lazy" decoding="async" style={style} />;
+  }
   if (src) {
     return <img src={src} alt={name} loading="lazy" decoding="async" fetchPriority="low" style={style} />;
   }
@@ -2408,6 +2414,8 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
 
   useEffect(() => {
     const video = ref.current;
@@ -2415,6 +2423,8 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
     setPlaying(false);
     setTime(0);
     setDuration(0);
+    setVolume(1);
+    setMuted(false);
 
     const onMetadata = () => {
       setDuration(Number.isFinite(video.duration) ? video.duration : 0);
@@ -2458,6 +2468,14 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
   }, []);
 
   // Keyboard shortcuts for video (when focused)
+  const adjustVolume = useCallback((delta: number) => {
+    setVolume((current) => {
+      const next = Math.min(1, Math.max(0, current + delta));
+      if (next > 0) setMuted(false);
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
@@ -2474,6 +2492,22 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
         e.preventDefault();
         e.stopPropagation();
         seek(Math.min(video.duration || 0, video.currentTime + 5));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        e.stopPropagation();
+        adjustVolume(0.1);
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        e.stopPropagation();
+        adjustVolume(-0.1);
+      } else if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        e.stopPropagation();
+        adjustVolume(0.1);
+      } else if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        e.stopPropagation();
+        adjustVolume(-0.1);
       } else if (e.key === "f" || e.key === "F") {
         e.preventDefault();
         e.stopPropagation();
@@ -2482,7 +2516,14 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
     };
     video.addEventListener("keydown", handleKeyDown);
     return () => video.removeEventListener("keydown", handleKeyDown);
-  }, [onFullscreen]);
+  }, [onFullscreen, adjustVolume]);
+
+  useEffect(() => {
+    const video = ref.current;
+    if (!video) return;
+    video.volume = volume;
+    video.muted = muted;
+  }, [volume, muted]);
 
   const toggle = () => {
     const video = ref.current;
@@ -2518,6 +2559,29 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
           aria-label="Seek"
         />
         <span className="video-time">{formatDuration(duration)}</span>
+        <button type="button" onClick={() => setMuted((m) => !m)} aria-label={muted ? "Unmute" : "Mute"} title={muted ? "Unmute" : "Mute"}>
+          <VolumeIcon size={14} muted={muted || volume === 0} />
+        </button>
+        <button type="button" onClick={() => adjustVolume(-0.1)} aria-label="Volume down" title="Volume down">
+          <MinusIcon size={12} />
+        </button>
+        <input
+          type="range"
+          className="video-volume"
+          min={0}
+          max={1}
+          step={0.01}
+          value={muted ? 0 : volume}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            setVolume(v);
+            if (v > 0) setMuted(false);
+          }}
+          aria-label="Volume"
+        />
+        <button type="button" onClick={() => adjustVolume(0.1)} aria-label="Volume up" title="Volume up">
+          <PlusIcon size={12} />
+        </button>
         {onFullscreen && (
           <button type="button" onClick={onFullscreen} aria-label="Full screen"><FullscreenIcon size={14} /></button>
         )}
@@ -3407,7 +3471,7 @@ function LibraryScreen(props: any) {
                       </div>
                       <button type="button" className="tile-open-button" onClick={(e) => handleTileClick(item, e)} onDoubleClick={() => handleTileDoubleClick(item)} {...holdHandlers(item.id)}>
                         <span className="tile-image">
-                          {item.kind === "video" ? <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} /> : item.kind === "photo" ? <CachedThumbnail itemId={item.id} name={tileAlt(item)} size={thumbnailPixels} style={draftImageStyle(draftTransforms, item.id)} /> : <span className="raw-tile"><KindBadge kind={item.kind} /></span>}
+                          {item.kind === "video" ? <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} /> : item.kind === "photo" ? <CachedThumbnail itemId={item.id} name={tileAlt(item)} size={thumbnailPixels} style={draftImageStyle(draftTransforms, item.id)} fallbackSrc={assetUrl(item.path)} /> : <span className="raw-tile"><KindBadge kind={item.kind} /></span>}
                           {item.kind === "video" && <span className="video-label"><PlayIcon size={10} /></span>}
                           {item.kind === "raw" && <span className="format-label"><KindBadge kind={item.kind} /></span>}
                           {item.favorite && !masked(item) ? (
@@ -3459,7 +3523,7 @@ function LibraryScreen(props: any) {
                             </div>
                             <button type="button" className="tile-open-button" onClick={(e) => handleTileClick(item, e)} onDoubleClick={() => handleTileDoubleClick(item)} {...holdHandlers(item.id)}>
                               <span className="tile-image">
-                                {item.kind === "video" ? <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} /> : item.kind === "photo" ? <CachedThumbnail itemId={item.id} name={tileAlt(item)} size={thumbnailPixels} style={draftImageStyle(draftTransforms, item.id)} /> : <span className="raw-tile"><KindBadge kind={item.kind} /></span>}
+                                {item.kind === "video" ? <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} /> : item.kind === "photo" ? <CachedThumbnail itemId={item.id} name={tileAlt(item)} size={thumbnailPixels} style={draftImageStyle(draftTransforms, item.id)} fallbackSrc={assetUrl(item.path)} /> : <span className="raw-tile"><KindBadge kind={item.kind} /></span>}
                                 {item.kind === "video" && <span className="video-label"><PlayIcon size={10} /></span>}
                                 {item.kind === "raw" && <span className="format-label"><KindBadge kind={item.kind} /></span>}
                           {item.favorite && !masked(item) ? (
@@ -3494,7 +3558,7 @@ function LibraryScreen(props: any) {
                     </div>
                     <button type="button" className="tile-open-button" onClick={(e) => handleTileClick(item, e)} onDoubleClick={() => handleTileDoubleClick(item)} {...holdHandlers(item.id)}>
                       <span className="tile-image">
-                        {item.kind === "video" ? <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} /> : item.kind === "photo" ? <CachedThumbnail itemId={item.id} name={tileAlt(item)} size={thumbnailPixels} style={draftImageStyle(draftTransforms, item.id)} /> : <span className="raw-tile"><KindBadge kind={item.kind} /></span>}
+                        {item.kind === "video" ? <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} /> : item.kind === "photo" ? <CachedThumbnail itemId={item.id} name={tileAlt(item)} size={thumbnailPixels} style={draftImageStyle(draftTransforms, item.id)} fallbackSrc={assetUrl(item.path)} /> : <span className="raw-tile"><KindBadge kind={item.kind} /></span>}
                         {item.kind === "video" && <span className="video-label"><PlayIcon size={10} /></span>}
                         {item.kind === "raw" && <span className="format-label"><KindBadge kind={item.kind} /></span>}
                           {item.favorite && !masked(item) ? (
@@ -3666,7 +3730,6 @@ function LibraryScreen(props: any) {
 function ViewerScreen(props: any) {
   const selected = props.selected;
   const draftTransforms = useDraftTransforms();
-  const stripRef = useRef<HTMLDivElement | null>(null);
   // Folder context: the pill shows the containing folder, the subtle line the
   // full path. Deriving both from the media path keeps it honest (no fake
   // "LOCAL FILE" label).
@@ -3677,6 +3740,8 @@ function ViewerScreen(props: any) {
   const [hintsVisible, setHintsVisible] = useState(true);
   const [stripStart, setStripStart] = useState(() => Math.max(0, props.items.findIndex((item: any) => item.id === selected?.id) - 18));
   const hideTimerRef = useRef<number | null>(null);
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  const programmaticScrollRef = useRef(false);
   const stripWindowSize = 50;
   const selectedIndex = props.items.findIndex((item: any) => item.id === selected?.id);
   const stripEnd = Math.min(props.items.length, stripStart + stripWindowSize);
@@ -3698,19 +3763,36 @@ function ViewerScreen(props: any) {
   }, [props.selected?.id, flashHints]);
 
   // Keep the active thumbnail in view as you navigate a long filmstrip.
+  // Keep the active thumbnail in view as you navigate a long filmstrip.
   useEffect(() => {
     if (selectedIndex < 0) return;
-    if (selectedIndex < stripStart || selectedIndex >= stripEnd) {
-      setStripStart(Math.max(0, Math.min(selectedIndex - 18, props.items.length - stripWindowSize)));
+    let nextStart = stripStart;
+    if (selectedIndex < stripStart) {
+      nextStart = selectedIndex;
+    } else if (selectedIndex >= stripStart + stripWindowSize) {
+      nextStart = Math.max(0, Math.min(selectedIndex - stripWindowSize + 1, props.items.length - stripWindowSize));
     }
-  }, [selectedIndex, stripStart, stripEnd, props.items.length]);
+    if (nextStart !== stripStart) {
+      const delta = (nextStart - stripStart) * 60;
+      programmaticScrollRef.current = true;
+      if (stripRef.current) stripRef.current.scrollLeft = Math.max(0, stripRef.current.scrollLeft + delta);
+      window.setTimeout(() => { programmaticScrollRef.current = false; }, 0);
+      setStripStart(nextStart);
+    }
+  }, [selectedIndex, stripStart, props.items.length]);
 
+  // On open, align scroll position with the initial window (no smooth animation).
   useEffect(() => {
-    const active = stripRef.current?.querySelector<HTMLElement>(".filmstrip button.active");
-    active?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [props.selected?.id, stripStart]);
+    if (stripRef.current) {
+      programmaticScrollRef.current = true;
+      stripRef.current.scrollLeft = stripStart * 60;
+      window.setTimeout(() => { programmaticScrollRef.current = false; }, 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleFilmstripScroll = useCallback(() => {
+    if (programmaticScrollRef.current) return;
     const strip = stripRef.current;
     if (!strip || props.items.length <= stripWindowSize) return;
     const nextStart = Math.max(0, Math.min(
@@ -3719,6 +3801,7 @@ function ViewerScreen(props: any) {
     ));
     setStripStart((current) => Math.abs(nextStart - current) > 5 ? nextStart : current);
   }, [props.items.length]);
+
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -3842,7 +3925,7 @@ function ViewerScreen(props: any) {
           src={props.assetUrl(selected.path)}
           name={selected.name}
           onFullscreen={() => void props.onToggleFullscreen()}
-        /> : selected.kind === "photo" ? <img src={props.assetUrl(selected.path)} alt={selected.name} decoding="async" style={{ maxWidth: imageRotation % 180 ? "min(100%, 100cqh)" : undefined, maxHeight: imageRotation % 180 ? "min(100%, 100cqw)" : undefined, transform: [`rotate(${props.rotation || 0}deg)`, `scaleX(${props.flipX ? -1 : 1})`, draftTransformStyle(draftTransforms.get(selected.id)), `scale(${props.zoom / 100})`].filter(Boolean).join(" ") }} /> : <div className="raw-viewer"><b>{selected.extension.toUpperCase()}</b><span>RAW preview requires native backend</span></div>}
+        /> : selected.kind === "photo" ? <img src={props.assetUrl(selected.path)} alt={selected.name} decoding="async" onError={(e) => { const target = e.currentTarget; void tauri.library.getThumbnail({ itemId: selected.id, size: 1024 }).then((response) => { target.src = response.dataUrl; }).catch(() => {}); }} style={{ maxWidth: imageRotation % 180 ? "min(100%, 100cqh)" : undefined, maxHeight: imageRotation % 180 ? "min(100%, 100cqw)" : undefined, transform: [`rotate(${props.rotation || 0}deg)`, `scaleX(${props.flipX ? -1 : 1})`, draftTransformStyle(draftTransforms.get(selected.id)), `scale(${props.zoom / 100})`].filter(Boolean).join(" ") }} /> : <div className="raw-viewer"><b>{selected.extension.toUpperCase()}</b><span>RAW preview requires native backend</span></div>}
         <button className="viewer-arrow right" type="button" onClick={() => props.onNavigate(1)} aria-label="Next">›</button>
         <div className="viewer-overlay-top">
           <span className="viewer-transform-state">
@@ -3857,6 +3940,7 @@ function ViewerScreen(props: any) {
         <div className={`viewer-hints${hintsVisible ? "" : " hidden"}`} aria-hidden="true">
           <span><kbd>←</kbd><kbd>→</kbd> Navigate</span>
           {selected.kind !== "video" && <span><kbd>↑</kbd><kbd>↓</kbd> Zoom</span>}
+          {selected.kind === "video" && <span><kbd>↑</kbd><kbd>↓</kbd> Volume</span>}
           {selected.kind === "photo" && <span><kbd>R</kbd><kbd>X</kbd> Rotate/Flip</span>}
           <span><kbd>Space</kbd> Play</span>
           <span><kbd>F</kbd> Fullscreen</span>
@@ -3902,6 +3986,16 @@ function EditScreen(props: any) {
   const [confirmReplace, setConfirmReplace] = useState(false);
   const [showOriginalPreview, setShowOriginalPreview] = useState(false);
   const [draftTrayOpen, setDraftTrayOpen] = useState(false);
+  const draftTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const [draftPopoverPos, setDraftPopoverPos] = useState<{ top: number; right: number } | null>(null);
+  useEffect(() => {
+    if (draftTrayOpen && draftTriggerRef.current) {
+      const rect = draftTriggerRef.current.getBoundingClientRect();
+      setDraftPopoverPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+    } else {
+      setDraftPopoverPos(null);
+    }
+  }, [draftTrayOpen]);
   const draftTransforms = useDraftTransforms();
   const draftIds = useDraftIds();
   const stageRef = useRef<any>(null);
@@ -4047,25 +4141,28 @@ function EditScreen(props: any) {
         <div><p className="eyebrow">NON-DESTRUCTIVE EDITING</p><h1>{props.item.name}</h1><p className="page-subtitle">Adjustments are applied only when you export a new copy.</p></div>
         <div className="edit-heading-actions">
           {savedDraftItems.length > 0 && <div className="edit-drafts-menu">
-            <button className="quiet-button edit-drafts-trigger" type="button" aria-expanded={draftTrayOpen} onClick={() => setDraftTrayOpen((open) => !open)}>
+            <button ref={draftTriggerRef} className="quiet-button edit-drafts-trigger" type="button" aria-expanded={draftTrayOpen} onClick={() => setDraftTrayOpen((open) => !open)}>
               Drafts <span>{savedDraftItems.length}</span>
             </button>
-            {draftTrayOpen && <div className="edit-drafts-popover" aria-label="Saved edit drafts">
-              <div className="edit-drafts-popover-head"><b>Saved drafts</b><small>{savedDraftItems.length} {savedDraftItems.length === 1 ? "photo" : "photos"}</small></div>
-              <div className="edit-drafts-list">
-                {savedDraftItems.map((item: any) => (
-                  <div key={item.id} className="edit-draft-card">
-                    <button className="edit-draft-open" type="button" onClick={() => { props.onSaveDraft?.(); props.onOpenEdit?.(item); setDraftTrayOpen(false); }} title={`Open draft for ${item.name}`}>
-                      <CachedThumbnail itemId={item.id} name={item.name} size={256} style={draftImageStyle(draftTransforms, item.id)} />
-                      <span>{item.name}</span>
-                    </button>
-                    <button className="edit-draft-remove" type="button" aria-label={`Remove draft for ${item.name}`} title="Remove draft" onClick={() => { clearEditDraft(item.id); props.onNotice?.("Draft removed"); }}>
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>}
+            {draftTrayOpen && draftPopoverPos && createPortal(
+              <div className="edit-drafts-popover" style={{ position: "fixed", top: draftPopoverPos.top, right: draftPopoverPos.right, left: "auto", zIndex: 1001 }} aria-label="Saved edit drafts">
+                <div className="edit-drafts-popover-head"><b>Saved drafts</b><small>{savedDraftItems.length} {savedDraftItems.length === 1 ? "photo" : "photos"}</small></div>
+                <div className="edit-drafts-list">
+                  {savedDraftItems.map((item: any) => (
+                    <div key={item.id} className="edit-draft-card">
+                      <button className="edit-draft-open" type="button" onClick={() => { props.onSaveDraft?.(); props.onOpenEdit?.(item); setDraftTrayOpen(false); }} title={`Open draft for ${item.name}`}>
+                        <CachedThumbnail itemId={item.id} name={item.name} size={256} style={draftImageStyle(draftTransforms, item.id)} />
+                        <span>{item.name}</span>
+                      </button>
+                      <button className="edit-draft-remove" type="button" aria-label={`Remove draft for ${item.name}`} title="Remove draft" onClick={() => { clearEditDraft(item.id); props.onNotice?.("Draft removed"); }}>
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>,
+              document.querySelector(".app-frame") || document.body
+            )}
           </div>}
           <button className="primary-button" type="button" onClick={() => props.onClose?.()}>Select photo</button>
           <span className="saved-indicator"><i /> Original unchanged</span>

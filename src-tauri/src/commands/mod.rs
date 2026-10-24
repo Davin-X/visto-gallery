@@ -1116,16 +1116,7 @@ fn generate_cached_thumbnail(
 ) -> Result<(Vec<u8>, u32, u32), String> {
     #[cfg(target_os = "macos")]
     {
-        let extension = Path::new(source)
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        let native_only = matches!(extension.as_str(), "heic" | "heif" | "avif");
-        if native_only || source_size >= LARGE_THUMBNAIL_SOURCE_BYTES {
-            let reason = if native_only { "native format" } else { "large source" };
-            return generate_with_macos_sips(source, destination, size, reason);
-        }
+        return generate_with_macos_sips(source, destination, size, "macOS sips");
     }
     #[cfg(not(target_os = "macos"))]
     let _ = source_size;
