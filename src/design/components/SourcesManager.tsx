@@ -11,8 +11,9 @@ export function SourcesManager(props: {
   onRemoveFolder?: (folder: LibraryFolder) => void;
   onFilterSource?: (folder: LibraryFolder) => void;
   onRescan?: () => void;
+  onRescanFolder?: (folder: LibraryFolder) => void;
 }) {
-  const { variant = "inline", onAddFolder, onRemoveFolder, onFilterSource, onRescan } = props;
+  const { variant = "inline", onAddFolder, onRemoveFolder, onFilterSource, onRescan, onRescanFolder } = props;
   const folders = useLibraryStore((s) => s.folders);
   const activeSource = useLibraryStore((s) => s.activeSource);
   const libraryBusy = useLibraryStore((s) => s.busy);
@@ -47,6 +48,7 @@ export function SourcesManager(props: {
     return [
       { label: viewing ? "Viewing in Library" : "View in Library", disabled: viewing, onClick: () => filterTo(folder) },
       { label: "Reveal in Finder", onClick: () => reveal(folder) },
+      { label: "Rescan this source", disabled: !onRescanFolder, onClick: () => void onRescanFolder?.(folder) },
       { label: "", divider: true },
       { label: "Remove Source…", danger: true, disabled: !onRemoveFolder, onClick: () => onRemoveFolder?.(folder) },
     ];
@@ -131,7 +133,14 @@ export function SourcesManager(props: {
             {filteredFolders.map((folder) => {
               const viewing = isViewing(folder);
               return (
-                <tr key={folder.path} className={viewing ? "is-active" : undefined}>
+                <tr
+                  key={folder.path}
+                  className={viewing ? "is-active" : undefined}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setMenu({ folder, x: event.clientX, y: event.clientY });
+                  }}
+                >
                   <td>
                     <span className="sources-name">
                       <span className="sources-icon"><FolderIcon size={15} /></span>

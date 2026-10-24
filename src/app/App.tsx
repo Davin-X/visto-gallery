@@ -1125,6 +1125,28 @@ const importFolder = async () => {
   }
 };
 
+  const rescanSource = async (folder: any) => {
+    if (rescanInProgress.current) return;
+    rescanInProgress.current = true;
+    try {
+      library.setBusy(true);
+      await tauri.library.cancelScan();
+      library.setProgress({ phase: "scanning", processed: 0, total: 1, currentFile: folder.path });
+      const result = await tauri.library.scan(folder.path, true);
+      await library.loadLibrary();
+      await library.loadFolders();
+      library.setProgress(null);
+      library.setBusy(false);
+      showNotice(result?.cancelled ? `Rescan cancelled for ${folder.name}.` : `Rescanned ${folder.name}.`);
+    } catch (e) {
+      showNotice(`Rescan failed: ${describeError(e)}`);
+    } finally {
+      library.setBusy(false);
+      library.setProgress(null);
+      rescanInProgress.current = false;
+    }
+  };
+
 const rescanSources = async () => {
   // Prevent concurrent rescans (e.g. double-click on the button)
   if (rescanInProgress.current) return;
@@ -1646,6 +1668,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
             onAddFolder={() => importFolder()}
             onRemoveFolder={(folder: LibraryFolder) => setFolderPendingRemove(folder)}
             onRescan={() => { void rescanSources(); }}
+            onRescanFolder={(folder) => { void rescanSource(folder); }}
           />}
         </main>
       </div>
@@ -2117,6 +2140,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
               onRemoveFolder={(folder: LibraryFolder) => setFolderPendingRemove(folder)}
               onFilterSource={() => { setScreen("Library"); setSourcesSheetOpen(false); }}
               onRescan={() => { void rescanSources(); }}
+             onRescanFolder={(folder) => { void rescanSource(folder); }}
             />
             <div className="dialog-actions">
               <button
