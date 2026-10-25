@@ -897,8 +897,10 @@ pub async fn get_library_items(filter: Option<LibraryFilterDTO>, state: State<'_
     // interpolated straight from the caller.
     let sort_column = match f.sort_by.as_deref() {
         Some("capturedAt") => "COALESCE(captured_at, modified_at)",
+        Some("modifiedAt") => "modified_at",
         Some("name") => "name",
         Some("size") => "size",
+        Some("kind") => "kind",
         _ => "modified_at",
     };
     let sort_order = match f.sort_order.as_deref() {

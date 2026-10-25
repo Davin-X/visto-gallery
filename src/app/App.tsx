@@ -460,7 +460,7 @@ function App() {
       await register("menu-toggle-inspector", () => liveRef.current.library.toggleInspector());
       await register("menu-zoom-in", () => liveRef.current.viewer.zoomIn());
       await register("menu-zoom-out", () => liveRef.current.viewer.zoomOut());
-      await register("menu-about", () => handlersRef.current.showNotice("VistoGallery v0.1.0 - Native macOS Photo Gallery"));
+      await register("menu-about", () => handlersRef.current.showNotice("VistoGallery v0.1.1 - Native macOS Photo Gallery"));
       await register("menu-check-updates", () => handlersRef.current.showNotice("Check for updates - coming soon"));
 
       // Listen for native import progress events from scan/import commands.
@@ -1473,7 +1473,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
               <span className="health-dot" aria-hidden="true" />
               Storage Healthy
             </span>
-            <span className="sidebar-version">v0.1.0</span>
+            <span className="sidebar-version">v0.1.1</span>
           </div>
         </aside>
 

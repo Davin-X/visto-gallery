@@ -26,7 +26,7 @@ export interface LibraryFilterDTO {
   dateTo?: number;
   limit?: number;
   offset?: number;
-  sortBy?: "capturedAt" | "modifiedAt" | "name" | "size";
+  sortBy?: "capturedAt" | "modifiedAt" | "name" | "size" | "kind";
   sortOrder?: "asc" | "desc";
 }
 
