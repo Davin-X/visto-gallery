@@ -287,7 +287,7 @@ export const useLibraryStore = create<LibraryState>()(
       
       // Pagination
       page: 0,
-      pageSize: 5000,
+      pageSize: 5000, // 0 = load all (no pagination)
       
       // Computed (updated via subscribe in components)
       visibleItems: [],
@@ -305,6 +305,7 @@ export const useLibraryStore = create<LibraryState>()(
         set({ busy: true, progress: { phase: "reading", processed: 0, total: 0 } });
         try {
           const { page, pageSize, sortBy, sortOrder } = get();
+          const usePagination = pageSize > 0;
           const dto = filter ? {
             kind: filter.kind,
             favorite: filter.favorite,
@@ -315,11 +316,11 @@ export const useLibraryStore = create<LibraryState>()(
             dateTo: filter.dateTo,
             sortBy: sortBy as LibraryFilterDTO["sortBy"],
             sortOrder: sortOrder as LibraryFilterDTO["sortOrder"],
-            limit: pageSize,
-            offset: page * pageSize,
+            limit: usePagination ? pageSize : undefined,
+            offset: usePagination ? page * pageSize : undefined,
           } : {
-            limit: pageSize,
-            offset: page * pageSize,
+            limit: usePagination ? pageSize : undefined,
+            offset: usePagination ? page * pageSize : undefined,
           };
           
           console.log("loadLibrary: starting", { dto });
