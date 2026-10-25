@@ -3274,6 +3274,42 @@ function LibraryScreen(props: any) {
     if (!el || renderLimit >= props.items.length) return;
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 800) loadMore();
   };
+  const handleGridKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const rawTarget = (e.target as HTMLElement) || (document.activeElement as HTMLElement);
+    const button = (rawTarget?.closest?.(".tile-open-button") as HTMLButtonElement | null)
+      || (document.activeElement as HTMLElement | null)?.closest?.(".tile-open-button") as HTMLButtonElement | null;
+    if (!button) return;
+    const buttons = Array.from(scrollRef.current?.querySelectorAll<HTMLButtonElement>(".tile-open-button") ?? []);
+    const currentIndex = buttons.indexOf(button);
+    if (currentIndex < 0) return;
+    let columns = 1;
+    const firstTop = buttons[0]?.offsetTop;
+    for (let i = 1; i < buttons.length; i++) {
+      if (buttons[i].offsetTop === firstTop) columns += 1;
+      else break;
+    }
+    if (columns < 1) columns = 1;
+    let nextIndex = currentIndex;
+    if (e.key === "ArrowRight") nextIndex = currentIndex + 1;
+    else if (e.key === "ArrowLeft") nextIndex = currentIndex - 1;
+    else if (e.key === "ArrowDown") nextIndex = currentIndex + columns;
+    else if (e.key === "ArrowUp") nextIndex = currentIndex - columns;
+    else return;
+    if (nextIndex < 0 || nextIndex >= buttons.length) return;
+    e.preventDefault();
+    const nextButton = buttons[nextIndex];
+    nextButton.focus();
+    const itemId = nextButton.getAttribute("data-item-id");
+    if (itemId) props.onInspectItem?.(itemId);
+  }, [props.onInspectItem]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      handleGridKeyDown(e as unknown as React.KeyboardEvent<HTMLDivElement>);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [handleGridKeyDown]);
 
   const renderedItems = useMemo(() => props.items.slice(0, renderLimit), [props.items, renderLimit]);
   const selectedIdSet = useMemo(() => new Set(props.selectedIds), [props.selectedIds]);
@@ -3743,7 +3779,7 @@ function LibraryScreen(props: any) {
           )}
         </header>
 
-        <div className="library-grid-container" ref={scrollRef} onScroll={handleGridScroll}>
+        <div className="library-grid-container" ref={scrollRef} onScroll={handleGridScroll} onKeyDown={handleGridKeyDown}>
           {props.layout === "details" && (
             <div className="details-header-sticky">
               <div className="details-col details-preview-heading">Preview</div>
@@ -3763,7 +3799,7 @@ function LibraryScreen(props: any) {
                         <input type="checkbox" checked={selectedIdSet.has(item.id)} onChange={() => props.onToggleSelect(item.id)} title={selectedIdSet.has(item.id) ? "Remove from selection" : "Add to selection"} onClick={(e: any) => e.stopPropagation()} />
                         <CheckIcon size={12} />
                       </div>
-                      <button type="button" className="tile-open-button" onClick={(e) => handleTileClick(item, e)} onDoubleClick={() => handleTileDoubleClick(item)} {...holdHandlers(item.id)}>
+                      <button type="button" className="tile-open-button" data-item-id={item.id} onClick={(e) => { e.currentTarget.focus(); handleTileClick(item, e); }} onDoubleClick={() => handleTileDoubleClick(item)} {...holdHandlers(item.id)}>
                         <span className="tile-image">
                           {item.kind === "video" ? <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} /> : item.kind === "photo" ? <CachedThumbnail itemId={item.id} name={tileAlt(item)} size={thumbnailPixels} style={draftImageStyle(draftTransforms, item.id)} fallbackSrc={assetUrl(item.path)} /> : <span className="raw-tile"><KindBadge kind={item.kind} /></span>}
                           {item.kind === "video" && <span className="video-label"><PlayIcon size={10} /></span>}
@@ -3815,7 +3851,7 @@ function LibraryScreen(props: any) {
                               <input type="checkbox" checked={selectedIdSet.has(item.id)} onChange={() => props.onToggleSelect(item.id)} title={selectedIdSet.has(item.id) ? "Remove from selection" : "Add to selection"} onClick={(e: any) => e.stopPropagation()} />
                         <CheckIcon size={12} />
                             </div>
-                            <button type="button" className="tile-open-button" onClick={(e) => handleTileClick(item, e)} onDoubleClick={() => handleTileDoubleClick(item)} {...holdHandlers(item.id)}>
+                            <button type="button" className="tile-open-button" data-item-id={item.id} onClick={(e) => { e.currentTarget.focus(); handleTileClick(item, e); }} onDoubleClick={() => handleTileDoubleClick(item)} {...holdHandlers(item.id)}>
                               <span className="tile-image">
                                 {item.kind === "video" ? <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} /> : item.kind === "photo" ? <CachedThumbnail itemId={item.id} name={tileAlt(item)} size={thumbnailPixels} style={draftImageStyle(draftTransforms, item.id)} fallbackSrc={assetUrl(item.path)} /> : <span className="raw-tile"><KindBadge kind={item.kind} /></span>}
                                 {item.kind === "video" && <span className="video-label"><PlayIcon size={10} /></span>}
@@ -3850,7 +3886,7 @@ function LibraryScreen(props: any) {
                       <input type="checkbox" checked={selectedIdSet.has(item.id)} onChange={() => props.onToggleSelect(item.id)} title={selectedIdSet.has(item.id) ? "Remove from selection" : "Add to selection"} onClick={(e: any) => e.stopPropagation()} />
                         <CheckIcon size={12} />
                     </div>
-                    <button type="button" className="tile-open-button" onClick={(e) => handleTileClick(item, e)} onDoubleClick={() => handleTileDoubleClick(item)} {...holdHandlers(item.id)}>
+                    <button type="button" className="tile-open-button" data-item-id={item.id} onClick={(e) => { e.currentTarget.focus(); handleTileClick(item, e); }} onDoubleClick={() => handleTileDoubleClick(item)} {...holdHandlers(item.id)}>
                       <span className="tile-image">
                         {item.kind === "video" ? <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} /> : item.kind === "photo" ? <CachedThumbnail itemId={item.id} name={tileAlt(item)} size={thumbnailPixels} style={draftImageStyle(draftTransforms, item.id)} fallbackSrc={assetUrl(item.path)} /> : <span className="raw-tile"><KindBadge kind={item.kind} /></span>}
                         {item.kind === "video" && <span className="video-label"><PlayIcon size={10} /></span>}
