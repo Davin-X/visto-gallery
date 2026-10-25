@@ -606,18 +606,25 @@ export const useLibraryStore = create<LibraryState>()(
             .map((i) => i.path);
         set({ busy: true, canceling: false, progress: { phase: "trashing", processed: 0, total: paths.length } });
         try {
-          await tauri.items.moveToTrash(paths);
+          const result = await tauri.items.moveToTrash(paths);
+          // Only remove items that were successfully trashed
+          const trashedIds = new Set(
+            get().items.filter((i) => result.trashed.includes(i.path)).map((i) => i.id)
+          );
+          if (result.failed.length > 0) {
+            const errors = result.failed.map((f) => `${f.path}: ${f.error}`).join("; ");
+            get().showNotice(`Failed to trash ${result.failed.length} item(s): ${errors}`);
+          }
+          set({ busy: false, canceling: false, progress: null });
+          set((s) => ({
+            items: s.items.filter((i) => !trashedIds.has(i.id)),
+            selectedIds: s.selectedIds.filter((id) => !trashedIds.has(id)),
+            inspectedId: s.inspectedId && trashedIds.has(s.inspectedId) ? null : s.inspectedId,
+          }));
         } catch (e) {
           set({ busy: false, canceling: false, progress: null });
           throw e;
         }
-        set({ busy: false, canceling: false, progress: null });
-        set((s) => ({
-          items: s.items.filter((i) => !ids.includes(i.id)),
-          selectedIds: s.selectedIds.filter((id) => !ids.includes(id)),
-          // Never leave inspection pointing at a deleted item.
-          inspectedId: s.inspectedId && ids.includes(s.inspectedId) ? null : s.inspectedId,
-        }));
         get().refreshDerived();
       },
 

@@ -112,6 +112,16 @@ export interface BatchExportResult {
   outputs: string[];
 }
 
+export interface TrashResult {
+  trashed: string[];
+  failed: Array<{ path: string; error: string }>;
+}
+
+export interface TrashError {
+  path: string;
+  error: string;
+}
+
 export interface LibraryChangedEvent {
   type: "added" | "updated" | "removed" | "reindexed";
   itemIds: string[];
