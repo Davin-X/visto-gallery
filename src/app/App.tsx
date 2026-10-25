@@ -1610,9 +1610,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
                   showNotice("Replace original supports JPEG, PNG, and WebP. Save a copy instead.");
                   return;
                 }
-                const ok = window.confirm("This will overwrite the original file with the edited version. This cannot be undone. Continue?");
-                if (!ok) return;
-              }
+                }
               try {
                 const img = new Image();
                 img.crossOrigin = "anonymous";
