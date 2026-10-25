@@ -911,19 +911,22 @@ pub async fn get_library_items(filter: Option<LibraryFilterDTO>, state: State<'_
 
     // Identifiers cannot be bound, so the sort column is whitelisted instead of
     // interpolated straight from the caller.
-    let sort_column = match f.sort_by.as_deref() {
-        Some("capturedAt") => "COALESCE(captured_at, modified_at)",
-        Some("modifiedAt") => "modified_at",
-        Some("name") => "name",
-        Some("size") => "size",
-        Some("kind") => "kind",
-        _ => "modified_at",
+    // Define default direction per column: dates default DESC, others ASC.
+    let (primary_sql, default_dir) = match f.sort_by.as_deref() {
+        Some("capturedAt") => ("COALESCE(captured_at, modified_at)", "DESC"),
+        Some("modifiedAt") => ("modified_at", "DESC"),
+        Some("name") => ("name COLLATE NOCASE", "ASC"),
+        Some("size") => ("size", "ASC"),
+        Some("kind") => ("kind", "ASC"),
+        _ => ("COALESCE(captured_at, modified_at)", "DESC"),
     };
-    let sort_order = match f.sort_order.as_deref() {
+    let dir = match f.sort_order.as_deref() {
         Some("asc") => "ASC",
-        _ => "DESC",
+        Some("desc") => "DESC",
+        _ => default_dir,
     };
-    qb.push(format!(" ORDER BY {} {}", sort_column, sort_order));
+    // Stable secondary sort: id ASC
+    qb.push(format!(" ORDER BY {} {}, id ASC", primary_sql, dir));
 
     if let Some(limit) = f.limit {
         qb.push(" LIMIT ").push_bind(limit as i64);
