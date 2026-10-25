@@ -1482,9 +1482,15 @@ pub async fn move_to_trash(
 
     let db = get_db(&state)?;
 
+let known_paths: std::collections::HashSet<String> = sqlx::query_scalar("SELECT path FROM media_items")
+        .fetch_all(&db)
+        .await
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .collect();
     let paths: Vec<String> = paths
         .into_iter()
-        .filter(|p| std::path::Path::new(p).exists())
+        .filter(|p| std::path::Path::new(p).exists() && known_paths.contains(p))
         .collect();
     if paths.is_empty() {
         return Err("Selected items no longer exist on disk.".to_string());
