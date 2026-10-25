@@ -1563,8 +1563,15 @@ let known_paths: std::collections::HashSet<String> = sqlx::query_scalar("SELECT 
 
 #[tauri::command]
 pub async fn reveal_in_finder(path: String, state: State<'_, AppState>) -> Result<(), String> {
-    let _ = state;
-    // `open -R` selects the file in a new Finder window.
+    let db = get_db(&state)?;
+    let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
+        .bind(&path)
+        .fetch_optional(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    if exists.is_none() {
+        return Err("Path is not part of the catalog.".to_string());
+    }
     std::process::Command::new("open")
         .arg("-R")
         .arg(&path)
