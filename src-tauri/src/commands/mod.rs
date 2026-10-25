@@ -1012,7 +1012,6 @@ pub struct ThumbnailResponse {
 
 /// Large originals should be downsampled by macOS ImageIO (via `sips`) instead
 /// of being decoded into a full-resolution buffer just to shrink them.
-#[cfg(test)]
 const LARGE_THUMBNAIL_SOURCE_BYTES: i64 = 8 * 1024 * 1024;
 /// Thumbnails are small, but they should still have a predictable disk budget.
 const THUMBNAIL_CACHE_LIMIT_BYTES: u64 = 512 * 1024 * 1024;
@@ -1105,9 +1104,10 @@ fn maybe_prune_thumbnail_cache(root: PathBuf) {
 }
 
 /// Remove the oldest thumbnails until the directory fits the budget.
-fn prune_thumbnail_cache(root: &Path, max_bytes: u64) {
+/// Returns (deleted_count, bytes_freed, failed_count).
+fn prune_thumbnail_cache(root: &Path, max_bytes: u64) -> (usize, u64, usize) {
     let Ok(entries) = std::fs::read_dir(root) else {
-        return;
+        return (0, 0, 0);
     };
 
     let mut files = Vec::new();
@@ -1130,34 +1130,54 @@ fn prune_thumbnail_cache(root: &Path, max_bytes: u64) {
     }
 
     if total <= max_bytes {
-        return;
+        return (0, 0, 0);
     }
 
     // Cache files are written once, so modified time is a good proxy for age.
     files.sort_by_key(|(_, _, modified)| *modified);
+    
+    let mut deleted = 0;
+    let mut bytes_freed = 0_u64;
+    let mut failed = 0;
+    
     for (path, size, _) in files {
         if total <= max_bytes {
             break;
         }
-        if std::fs::remove_file(&path).is_ok() {
-            total = total.saturating_sub(size);
+        match std::fs::remove_file(&path) {
+            Ok(_) => {
+                total = total.saturating_sub(size);
+                deleted += 1;
+                bytes_freed += size;
+            }
+            Err(_) => {
+                failed += 1;
+                // Don't subtract size since deletion failed
+            }
         }
     }
+    
+    (deleted, bytes_freed, failed)
 }
 
-#[allow(unreachable_code)]
 fn generate_cached_thumbnail(
     source: &str,
     destination: &Path,
     size: u32,
-    _source_size: i64,
+    source_size: i64,
 ) -> Result<(Vec<u8>, u32, u32), String> {
     #[cfg(target_os = "macos")]
     {
-        return generate_with_macos_sips(source, destination, size, "macOS sips");
+        // Use sips for large images on macOS; fall back to image crate for smaller ones
+        if source_size > LARGE_THUMBNAIL_SOURCE_BYTES {
+            return generate_with_macos_sips(source, destination, size, "macOS sips (large image)");
+        }
     }
-    #[cfg(not(target_os = "macos"))]
-    let _ = _source_size;
+    // Fallback: use image crate (used on non-macOS, and for small images on macOS)
+    let mut reader = image::ImageReader::open(source)
+        .map_err(|error| format!("Could not read photo: {error}"))?
+        .with_guessed_format()
+        .map_err(|error| format!("Could not identify photo format: {error}"))?;
 
     let mut reader = image::ImageReader::open(source)
         .map_err(|error| format!("Could not read photo: {error}"))?
@@ -2544,6 +2564,8 @@ pub async fn find_duplicates(
     // Phase 1: Quick fingerprint (first 64KB + size) for all candidates.
     // Run in parallel batches to avoid blocking the executor.
     let mut quick_fingerprints: Vec<(usize, String)> = Vec::with_capacity(candidates.len());
+    // Store prefixes for reuse in full hash phase (across all batches)
+    let mut quick_prefixes: HashMap<usize, Vec<u8>> = HashMap::new();
     const FINGERPRINT_BATCH: usize = 50;
     for chunk in candidates.chunks(FINGERPRINT_BATCH) {
         if SCAN_CANCEL.load(Ordering::SeqCst) {
@@ -2561,15 +2583,16 @@ pub async fn find_duplicates(
             paths
                 .into_iter()
                 .filter_map(|(index, path, size)| {
-                    compute_quick_fingerprint(&path, size, 0).map(|fp| (index, fp))
+                    compute_quick_fingerprint(&path, size).map(|(fp, prefix)| (index, fp, prefix))
                 })
                 .collect::<Vec<_>>()
         })
         .await
         .map_err(|e| format!("Fingerprint task failed: {e}"))?;
         
-        for (index, fp) in fps {
+        for (index, fp, prefix) in fps {
             quick_fingerprints.push((index, fp));
+            quick_prefixes.insert(index, prefix);
         }
 
         let _ = window.emit(
@@ -2604,6 +2627,7 @@ pub async fn find_duplicates(
     let total = full_hash_candidates.len() as u64;
     
     let semaphore = Arc::new(Semaphore::new(2));
+    let quick_prefixes = Arc::new(quick_prefixes);
     let mut hash_updates: Vec<(String, String)> = Vec::with_capacity(full_hash_candidates.len());
     let mut bytes_completed = 0u64;
     let mut processed = 0u64;
@@ -2631,12 +2655,15 @@ pub async fn find_duplicates(
         let id = items[index].id.clone();
         let sem = semaphore.clone();
         let window_clone = window.clone();
+        let prefixes = quick_prefixes.clone();
 
         join_set.spawn(async move {
             let _permit = sem.acquire().await.ok();
             if SCAN_CANCEL.load(Ordering::SeqCst) {
                 return None;
             }
+            // Reuse cached prefix from quick fingerprint phase
+            let prefix = prefixes.get(&index).cloned();
             let hash = compute_full_sha256_with_progress(
                 path,
                 name,
@@ -2646,6 +2673,7 @@ pub async fn find_duplicates(
                 1,
                 1,
                 window_clone,
+                prefix,
             )
             .await;
             Some((index, id, hash, size))
@@ -2720,12 +2748,12 @@ pub async fn find_duplicates(
 }
 
 /// Two-phase duplicate detection:
-/// 1. Quick fingerprint: first 64KB + file size + mtime — O(1) per file
+/// 1. Quick fingerprint: first 64KB + file size — O(1) per file
 /// 2. Full SHA-256 only for files that share a quick fingerprint.
 ///
 /// This avoids reading entire multi-GB video files unless they actually
-/// have a matching prefix + size + mtime, which is extremely rare.
-fn compute_quick_fingerprint(path: &str, size: u64, _modified_at: i64) -> Option<String> {
+/// have a matching prefix + size, which is extremely rare.
+fn compute_quick_fingerprint(path: &str, size: u64) -> Option<(String, Vec<u8>)> {
     use std::io::Read;
     let mut file = std::fs::File::open(path).ok()?;
     let mut buf = [0u8; 64 * 1024];
@@ -2733,15 +2761,18 @@ fn compute_quick_fingerprint(path: &str, size: u64, _modified_at: i64) -> Option
     if n == 0 && size > 0 {
         return None;
     }
-    // Hash the first 64KB + file size. Omit mtime so files with identical
-    // content but different mtimes are correctly grouped as duplicates.
+    // Hash the first 64KB + file size.
     let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
     ctx.update(&buf[..n]);
     ctx.update(&size.to_le_bytes());
-    Some(hex::encode(ctx.finish().as_ref()))
+    let fingerprint = hex::encode(ctx.finish().as_ref());
+    // Return both fingerprint AND the prefix bytes for reuse in full hash
+    Some((fingerprint, buf[..n].to_vec()))
 }
 
-/// Full SHA-256 with progress. Uses a large buffer and async I/O for throughput.
+/// Full SHA-256 with progress. Uses a 1MB buffer and async I/O for throughput.
+/// Accepts an optional prefix (first 64KB) from the quick fingerprint phase
+/// to avoid re-reading the beginning of the file.
 async fn compute_full_sha256_with_progress(
     path: String,
     name: String,
@@ -2751,15 +2782,26 @@ async fn compute_full_sha256_with_progress(
     file_number: u64,
     total_files: u64,
     window: Window,
+    prefix: Option<Vec<u8>>,
 ) -> Option<String> {
     use tokio::io::AsyncReadExt;
     let mut file = tokio::fs::File::open(&path).await.ok()?;
     let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
-    // 64MB buffer for sequential throughput on SSD/NVMe.
-    let mut buf = vec![0u8; 64 * 1024 * 1024];
+    
+    // If we have a prefix from quick fingerprint, use it and skip those bytes
+    if let Some(prefix) = prefix {
+        ctx.update(&prefix);
+        // Skip the prefix bytes in the file
+        use tokio::io::AsyncSeekExt;
+        file.seek(std::io::SeekFrom::Start(prefix.len() as u64)).await.ok()?;
+    }
+    
+    // 1MB buffer for sequential throughput on SSD/NVMe (reduced from 64MB)
+    let mut buf = vec![0u8; 1024 * 1024];
     let mut file_bytes = 0u64;
     let mut last_reported_bytes = 0u64;
     let mut last_reported_at = std::time::Instant::now();
+    
     loop {
         if SCAN_CANCEL.load(Ordering::SeqCst) {
             return None;
