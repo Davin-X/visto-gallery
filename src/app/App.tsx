@@ -19,7 +19,10 @@ import {
   draftTransformStyle,
   clearEditDraft,
   type DraftTransform,
+  usePlaybackStore,
 } from "../engine/stores";
+import { formatDuration } from "../engine/utils/time";
+import { MiniPlayer } from "../design/components/MiniPlayer";
 import { getTypeIdentity, getKindIcon } from "../engine/utils/mediaTypes";
 
 // Helper: render a kind badge using centralized type identity
@@ -213,19 +216,47 @@ function App() {
   const batch = useBatchStore();
   const settings = useSettingsStore();
 
+  // A video keeps playing when the user switches tabs. To do that the viewer
+  // must stay mounted (off-screen) and keep showing the item it was playing,
+  // even if the library inspection moves to another photo in the meantime.
+  const [frozenViewerItem, setFrozenViewerItem] = useState<MediaItem | null>(null);
+  const lastViewerItemRef = useRef<MediaItem | null>(null);
+  const viewerHostRef = useRef<HTMLDivElement | null>(null);
 
-  // Leaving the Viewer screen must close the viewer store too, otherwise its
-  // isOpen flag lingers and a later "Viewer" nav click would look like a
-  // no-op. Navigating away is the user's signal to stop viewing.
   useEffect(() => {
-    if (screen !== "Viewer" && viewer.isOpen) {
+    if (screen === "Viewer") lastViewerItemRef.current = library.viewerSelected;
+  }, [screen, library.viewerSelected]);
+
+  // Only videos are allowed to outlive the Viewer screen. Photos (and a viewer
+  // with nothing playing) close on navigation exactly as before.
+  useEffect(() => {
+    if (screen === "Viewer") {
+      setFrozenViewerItem(null);
+      return;
+    }
+    if (!viewer.isOpen) {
+      setFrozenViewerItem(null);
+      return;
+    }
+    const last = lastViewerItemRef.current;
+    if (last?.kind === "video") {
+      setFrozenViewerItem(last);
+    } else {
       viewer.close();
+      setFrozenViewerItem(null);
     }
-    // Also ensure screen state matches viewer state on mount/hydration
-    if (screen === "Viewer" && !viewer.isOpen) {
-      viewer.open();
-    }
-  }, [screen, viewer.isOpen, viewer.close, viewer.open]);
+  }, [screen, viewer.isOpen, viewer.close]);
+
+  // The hidden player must not be reachable with Tab or a screen reader.
+  useEffect(() => {
+    const host = viewerHostRef.current;
+    if (host) (host as HTMLElement & { inert: boolean }).inert = screen !== "Viewer";
+  }, [screen, viewer.isOpen]);
+
+  // Ensure screen state matches viewer state on mount/hydration.
+  useEffect(() => {
+    if (screen === "Viewer" && !viewer.isOpen) viewer.open();
+  }, [screen, viewer.isOpen, viewer.open]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -476,6 +507,18 @@ function App() {
       if (mod && key === "e") { e.preventDefault(); handlersRef.current.showNotice("Export - coming soon"); return; }
       if (mod && e.key === "\\") { e.preventDefault(); library.toggleSidebar(); return; }
       if (mod && e.altKey && key === "i") { e.preventDefault(); library.toggleInspector(); return; }
+      if (mod && key === "a") {
+        const target = e.target as HTMLElement;
+        const isEditable = target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
+        if (!isEditable && (screen === "Library" || screen === "Hidden" || screen === "Albums")) {
+          e.preventDefault();
+          const items = screen === "Hidden" ? library.hiddenItems : library.visibleItems;
+          const selectedSet = new Set(library.selectedIds);
+          const allSelected = items.length > 0 && items.every((item: any) => selectedSet.has(item.id));
+          library.setSelectedIds(allSelected ? [] : items.map((item: any) => item.id));
+          return;
+        }
+      }
       if (mod && key === "f") {
         const target = e.target as HTMLElement;
         const isEditable = target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
@@ -580,16 +623,43 @@ function App() {
     library.showNotice(text);
   }, [library]);
 
+  // Single entry point for "open this item in the player". Used by tiles, the
+  // inspector and by Play on a video-only selection.
+  const openViewer = useCallback((id?: string, origin: Screen = "Library", scope: "library" | "hidden" = "library") => {
+    setViewerOrigin(origin);
+    library.setViewerScope(scope);
+    viewer.open(id);
+    setScreen("Viewer");
+  }, [library, viewer]);
+
   // Slideshow is a mode over the current context, not a separate screen:
   // play the selection when there is one, otherwise the collection on screen
   // (album, folder, filter or search results).
   const playSlideshow = useCallback((ids?: string[]) => {
     const selection = ids && ids.length ? new Set(ids) : null;
+    // A selection is authoritative: play every selected item, even one the
+    // current filter/album is not showing. Ordering follows the grid for the
+    // items on screen, then appends the rest so nothing selected is dropped.
+    const visibleSelection = selection
+      ? library.visibleItems.filter((item: MediaItem) => selection.has(item.id))
+      : [];
+    const visibleSelectionIds = new Set(visibleSelection.map((item) => item.id));
+    const offscreenSelection = selection
+      ? library.items.filter((item: MediaItem) => selection.has(item.id) && !visibleSelectionIds.has(item.id))
+      : [];
     const scope = selection
-      ? library.items.filter((item: MediaItem) => selection.has(item.id))
+      ? [...visibleSelection, ...offscreenSelection]
       : library.visibleItems;
     if (scope.length === 0) {
       showNotice("Add photos or videos to start a slideshow.");
+      return;
+    }
+    // A video-only selection belongs in the player: seeking, volume and
+    // auto-advance are what people expect from a video, while a slideshow is
+    // built for sequencing photos. Mixed selections still use the slideshow,
+    // because it is the only mode that can play both kinds.
+    if (selection && scope.every((item) => item.kind === "video")) {
+      openViewer(scope[0].id);
       return;
     }
     // Close any open viewer so its media can't keep playing underneath the show.
@@ -601,8 +671,11 @@ function App() {
     document.querySelectorAll("video").forEach((v) => { try { v.pause(); } catch {} });
     // Read the action off the store instead of subscribing to it: advancing
     // slides should only re-render the overlay, never the whole app.
-    startConfiguredSlideshow(scope, library.inspectedId);
-  }, [library.items, library.visibleItems, library.inspectedId, showNotice, viewer]);
+    // An explicit selection starts at its first item; only the no-selection
+    // case resumes from whatever was last inspected, so a video that was
+    // playing in the background cannot hijack the start of a new selection.
+    startConfiguredSlideshow(scope, selection ? null : library.inspectedId);
+  }, [library.items, library.visibleItems, library.inspectedId, showNotice, viewer, viewerOrigin, openViewer]);
 
   const openAlbumDialog = useCallback((seedIds?: string[]) => {
     setAlbumDialogMode("create");
@@ -1000,10 +1073,10 @@ function App() {
     if (next === "Albums" && library.activeAlbum) {
       library.setActiveAlbum(null);
     }
-    // Navigating away from Viewer should close it
-    if (screen === "Viewer" && next !== "Viewer") {
-      viewer.close();
-    }
+    // Navigating away from the Viewer does not close it here: a playing video
+    // keeps the viewer mounted off-screen so audio survives the tab switch (see
+    // the freeze effect above). That effect still closes it for photos and for
+    // an idle viewer.
     if (next === "Viewer") {
       // The sidebar Viewer is the library viewer. Ensure it cannot resume on a
       // hidden item the library grid does not contain.
@@ -1443,12 +1516,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
             onDeleteItems={library.deleteItems}
             onRequestDeleteItems={(ids: string[]) => { itemPendingDeleteRef.current = ids; setItemPendingDeleteCount(ids.length); }}
             onRequestRemoveFromAlbum={(albumId: string, itemIds: string[]) => setAlbumRemovePending({ albumId, itemIds })}
-            onOpenViewer={(id?: string) => {
-              setViewerOrigin("Library");
-              library.setViewerScope("library");
-              viewer.open(id);
-              setScreen("Viewer");
-            }}
+            onOpenViewer={(id?: string) => openViewer(id, "Library")}
             onOpenEdit={(item: any) => { edit.open(item); setScreen("Edit"); }}
             onImportFolder={() => importFolder()}
             onImportFiles={() => importFiles()}
@@ -1477,32 +1545,40 @@ handlersRef.current = { importFolder, importFiles, showNotice };
             }}
           />}
 
-          {screen === "Viewer" && <ViewerScreen
-            items={library.viewerItems}
-            selected={library.viewerSelected}
-            zoom={viewer.zoom}
-            fitMode={viewer.fitMode}
-            rotation={viewer.rotation}
-            flipX={viewer.flipX}
-            onNavigate={viewer.navigate}
-            onSetPhoto={(id: string) => library.inspectItem(id)}
-            onSetZoom={viewer.setZoom}
-            onZoomIn={viewer.zoomIn}
-            onZoomOut={viewer.zoomOut}
-            onResetZoom={viewer.resetZoom}
-            onToggleFitMode={viewer.toggleFitMode}
-            onRotate={viewer.rotate}
-            onToggleFlip={viewer.toggleFlip}
-            onResetTransform={viewer.resetTransform}
-            onToggleFullscreen={viewer.toggleFullscreen}
-            onClose={viewer.close}
-            onToggleFavorite={library.toggleFavorite}
-            onToggleHidden={library.toggleHidden}
-            onOpenEdit={(item: any) => { edit.open(item); setScreen("Edit"); }}
-            onPlaySlideshow={playSlideshow}
-            onContextMenu={openContextMenu}
-            assetUrl={assetUrl}
-          />}
+          {(screen === "Viewer" || viewer.isOpen) && (
+            <div
+              ref={viewerHostRef}
+              className={`viewer-host${screen === "Viewer" ? "" : " viewer-host-hidden"}`}
+              aria-hidden={screen !== "Viewer"}
+            >
+              <ViewerScreen
+                active={screen === "Viewer"}
+                items={library.viewerItems}
+                selected={screen === "Viewer" ? library.viewerSelected : (frozenViewerItem ?? lastViewerItemRef.current)}
+                zoom={viewer.zoom}
+                fitMode={viewer.fitMode}
+                rotation={viewer.rotation}
+                flipX={viewer.flipX}
+                onNavigate={viewer.navigate}
+                onSetPhoto={(id: string) => library.inspectItem(id)}
+                onSetZoom={viewer.setZoom}
+                onZoomIn={viewer.zoomIn}
+                onZoomOut={viewer.zoomOut}
+                onResetZoom={viewer.resetZoom}
+                onToggleFitMode={viewer.toggleFitMode}
+                onRotate={viewer.rotate}
+                onToggleFlip={viewer.toggleFlip}
+                onResetTransform={viewer.resetTransform}
+                onToggleFullscreen={viewer.toggleFullscreen}
+                onClose={viewer.close}
+                onToggleFavorite={library.toggleFavorite}
+                onToggleHidden={library.toggleHidden}
+                onOpenEdit={(item: any) => { edit.open(item); setScreen("Edit"); }}
+                onContextMenu={openContextMenu}
+                assetUrl={assetUrl}
+              />
+            </div>
+          )}
 
           {screen === "Edit" && <EditScreen
             item={edit.item}
@@ -1600,7 +1676,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
             onClearDraft={edit.clearDraft}
             onNotice={showNotice}
             assetUrl={assetUrl}
-            items={library.items.filter((i: any) => i.kind === "photo")}
+            items={library.items.filter((i: any) => i.kind === "photo" && !i.hidden)}
             onOpenEdit={(item: any) => { edit.saveDraft(); edit.open(item); }}
           />}
 
@@ -1645,12 +1721,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
             onOpenAlbumPicker={(itemIds?: string[]) => openAlbumPicker(itemIds)}
             onRequestDeleteItems={(ids: string[]) => { itemPendingDeleteRef.current = ids; setItemPendingDeleteCount(ids.length); }}
             onOpenEdit={(item: any) => { edit.open(item); setScreen("Edit"); }}
-            onOpenViewer={(id?: string) => {
-              setViewerOrigin("Hidden");
-              library.setViewerScope("hidden");
-              viewer.open(id);
-              setScreen("Viewer");
-            }}
+            onOpenViewer={(id?: string) => openViewer(id, "Hidden", "hidden")}
           />}
 
 
@@ -2227,6 +2298,20 @@ handlersRef.current = { importFolder, importFiles, showNotice };
         </div>
       )}
 
+      {screen !== "Viewer" && frozenViewerItem?.kind === "video" && (
+        <MiniPlayer
+          onExpand={() => {
+            library.inspectItem(frozenViewerItem.id);
+            setScreen("Viewer");
+          }}
+          onClose={() => {
+            usePlaybackStore.getState().stop();
+            viewer.close();
+            setFrozenViewerItem(null);
+          }}
+        />
+      )}
+
       <SlideshowOverlay assetUrl={assetUrl} />
 
       {contextMenu && (
@@ -2438,17 +2523,39 @@ function PickerThumbnail({ itemId, name, style }: { itemId: string; name: string
   );
 }
 
-function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; onFullscreen?: () => void }) {
+function VideoPlayer({ itemId, active = true, src, name, onFullscreen, onNext }: { itemId: string; active?: boolean; src: string; name?: string; onFullscreen?: () => void; onNext?: () => void }) {
   const videoAutoPlay = useSettingsStore((s) => s.videoAutoPlay);
   const videoLoop = useSettingsStore((s) => s.videoLoop);
+  const registerPlayback = usePlaybackStore((s) => s.register);
+  const unregisterPlayback = usePlaybackStore((s) => s.unregister);
+  const syncPlayback = usePlaybackStore((s) => s.sync);
   const ref = useRef<HTMLVideoElement | null>(null);
+  const clickTimerRef = useRef<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [pip, setPip] = useState(false);
+  const [autoAdvance, setAutoAdvance] = useState(false);
   const [pipSupported, setPipSupported] = useState(false);
+
+  // Expose this element to the mini-player that takes over when the user
+  // navigates away from the Viewer. The viewer is kept mounted off-screen, so
+  // the media element is never torn down during tab switches.
+  useEffect(() => {
+    const video = ref.current;
+    if (!video) return;
+    registerPlayback(video, { itemId, name: name || "Video" });
+    syncPlayback({
+      playing: !video.paused,
+      time: video.currentTime,
+      duration: Number.isFinite(video.duration) ? video.duration : 0,
+      muted: video.muted,
+      volume: video.volume,
+    });
+    return () => unregisterPlayback(video);
+  }, [itemId, name, registerPlayback, unregisterPlayback, syncPlayback]);
 
   useEffect(() => {
     const video = ref.current;
@@ -2460,34 +2567,66 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
     setMuted(false);
 
     const onMetadata = () => {
-      setDuration(Number.isFinite(video.duration) ? video.duration : 0);
+      const nextDuration = Number.isFinite(video.duration) ? video.duration : 0;
+      setDuration(nextDuration);
       try { video.currentTime = Math.min(0.15, (video.duration || 1) / 2); } catch { /* ignore */ }
+      syncPlayback({
+        duration: nextDuration,
+        time: video.currentTime,
+        playing: !video.paused,
+      });
     };
-    const onTimeUpdate = () => setTime(video.currentTime);
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
+    const onTimeUpdate = () => {
+      setTime(video.currentTime);
+      syncPlayback({ time: video.currentTime });
+    };
+    const onPlay = () => {
+      setPlaying(true);
+      syncPlayback({ playing: true });
+    };
+    const onPause = () => {
+      setPlaying(false);
+      syncPlayback({ playing: false });
+    };
 
     video.addEventListener("loadedmetadata", onMetadata);
     video.addEventListener("timeupdate", onTimeUpdate);
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
-    video.addEventListener("ended", onPause);
     if (video.readyState >= 1) onMetadata();
     return () => {
       video.removeEventListener("loadedmetadata", onMetadata);
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);
-      video.removeEventListener("ended", onPause);
     };
-  }, [src]);
+  }, [src, syncPlayback]);
+
+  useEffect(() => {
+    const video = ref.current;
+    if (!video) return;
+    const onEnded = () => {
+      if (autoAdvance && active && onNext) {
+        // Auto-advance is a foreground affordance: background playback must
+        // not silently navigate the library while another tab is on screen.
+        onNext();
+      } else {
+        setPlaying(false);
+        syncPlayback({ playing: false });
+      }
+    };
+    video.addEventListener("ended", onEnded);
+    return () => video.removeEventListener("ended", onEnded);
+  }, [src, autoAdvance, active, onNext, syncPlayback]);
 
   // Pause the video when the viewer is torn down so the Tauri webview does not
-  // keep media alive briefly while React removes the element.
+  // keep media alive briefly while React removes the element. Navigation away
+  // from the Viewer does not unmount it (see the viewer host in App).
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
     return () => {
+      if (clickTimerRef.current) window.clearTimeout(clickTimerRef.current);
       video.pause();
     };
   }, []);
@@ -2537,6 +2676,10 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
         e.preventDefault();
         e.stopPropagation();
         onFullscreen?.();
+      } else if (e.key === "m" || e.key === "M") {
+        e.preventDefault();
+        e.stopPropagation();
+        setMuted((m) => !m);
       }
     };
     video.addEventListener("keydown", handleKeyDown);
@@ -2588,7 +2731,8 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
     if (!video) return;
     video.volume = volume;
     video.muted = muted;
-  }, [volume, muted]);
+    syncPlayback({ volume, muted });
+  }, [volume, muted, syncPlayback]);
 
   // Wire media keys / PiP transport controls to the player.
   useEffect(() => {
@@ -2624,8 +2768,12 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
   const toggle = () => {
     const video = ref.current;
     if (!video) return;
-    if (video.paused) void video.play().catch(() => {});
-    else video.pause();
+    if (video.paused) {
+      if (video.ended) video.currentTime = 0;
+      void video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
   };
 
   const seek = (value: number) => {
@@ -2635,14 +2783,44 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
     setTime(value);
   };
 
+  // A double-click means "fullscreen". Delay the single-click toggle briefly so
+  // the second click of a double-click does not pause and resume the video.
+  const handleVideoClick = () => {
+    if (clickTimerRef.current) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+      return;
+    }
+    clickTimerRef.current = window.setTimeout(() => {
+      clickTimerRef.current = null;
+      toggle();
+    }, 220);
+  };
+
   return (
     <>
-      <video ref={ref} className="viewer-video" src={src} title={name} autoPlay={videoAutoPlay} loop={videoLoop} playsInline preload="metadata" onClick={toggle} tabIndex={0} />
+      <video ref={ref} className="viewer-video" src={src} title={name} autoPlay={videoAutoPlay} loop={videoLoop && !autoAdvance} playsInline preload="metadata" onClick={handleVideoClick} onDoubleClick={() => onFullscreen?.()} tabIndex={0} />
       {/* macOS hides a video's native control bar unless the pointer is over the
           frame, so playback gets a permanent bar of our own instead. */}
       <div className="viewer-video-controls">
-        <button type="button" onClick={toggle} aria-label={playing ? "Pause" : "Play"}>
+        <button type="button" onClick={toggle} aria-label={playing ? "Pause" : "Play"} title={playing ? "Pause" : "Play"}>
           {playing ? <PauseIcon size={15} /> : <PlayIcon size={15} />}
+        </button>
+        <button
+          type="button"
+          onClick={() => setAutoAdvance((v) => !v)}
+          aria-pressed={autoAdvance}
+          aria-label="Auto-advance to the next item"
+          title={autoAdvance ? "Auto-advance on: play the next item when this ends" : "Auto-advance off: stop at the end"}
+        >
+          {autoAdvance ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polygon points="5 4 15 12 5 20 5 4" />
+              <line x1="19" y1="5" x2="19" y2="19" />
+            </svg>
+          ) : (
+            <StopIcon size={14} />
+          )}
         </button>
         <span className="video-time">{formatDuration(time)}</span>
         <input
@@ -2680,22 +2858,20 @@ function VideoPlayer({ src, name, onFullscreen }: { src: string; name?: string; 
         </button>
         {pipSupported && (
           <button type="button" onClick={togglePip} aria-label={pip ? "Exit picture in picture" : "Picture in picture"} title="Picture in picture">
-            {pip ? "PiP on" : "PiP"}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <rect x="12" y="12" width="8" height="6" fill={pip ? "currentColor" : "none"} />
+            </svg>
           </button>
         )}
         {onFullscreen && (
-          <button type="button" onClick={onFullscreen} aria-label="Full screen"><FullscreenIcon size={14} /></button>
+          <button type="button" onClick={onFullscreen} aria-label="Full screen" title="Full screen"><FullscreenIcon size={14} /></button>
         )}
       </div>
     </>
   );
 }
 
-function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
-  const total = Math.floor(seconds);
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
-}
 
 // How many tiles to mount before the user scrolls further. Small enough to
 // keep filtering/typing snappy, large enough to fill a tall window.
@@ -3228,6 +3404,27 @@ function LibraryScreen(props: any) {
   }, [library.items, props.selectedIds]);
   const anySelectedFavorite = selectedItems.some((i: any) => i.favorite);
   const anySelectedHidden = selectedItems.some((i: any) => i.hidden);
+  // Play on a video-only selection opens the player; anything with a photo
+  // starts a slideshow. The label follows the action so it is never a surprise.
+  const selectionPlaysInViewer = selectedItems.length > 0 && selectedItems.every((i: any) => i.kind === "video");
+  // Say what is actually in the selection: "3 photos · 2 videos" explains the
+  // Play/Slideshow label and avoids surprises when a filter hides some of them.
+  const selectedKindCounts = useMemo(() => {
+    const counts: Record<string, number> = { photo: 0, video: 0, raw: 0 };
+    for (const item of selectedItems) counts[item.kind] = (counts[item.kind] || 0) + 1;
+    return counts;
+  }, [selectedItems]);
+  const selectedKindSummary = [
+    selectedKindCounts.photo ? `${selectedKindCounts.photo} photo${selectedKindCounts.photo === 1 ? "" : "s"}` : "",
+    selectedKindCounts.video ? `${selectedKindCounts.video} video${selectedKindCounts.video === 1 ? "" : "s"}` : "",
+    selectedKindCounts.raw ? `${selectedKindCounts.raw} RAW` : "",
+  ].filter(Boolean).join(" · ");
+  // Select-all now lives in the selection bar and is scoped to the items the
+  // screen is actually showing (including the Hidden and album views).
+  const allVisibleSelected = props.items.length > 0 && props.items.every((item: any) => selectedIdSet.has(item.id));
+  const toggleSelectAllVisible = () => {
+    props.onSetSelection?.(allVisibleSelected ? [] : props.items.map((item: any) => item.id));
+  };
 
   return (
     <div className={`library-layout ${props.showInspector ? "with-inspector" : ""}`}>
@@ -3261,7 +3458,7 @@ function LibraryScreen(props: any) {
                     type="button"
                     onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
                     disabled={props.busy || props.items.length === 0}
-                    title="Play this album as a slideshow"
+                    title={props.selectedIds.length ? "Play the selected items" : "Play this album as a slideshow"}
                   >
                     <PlayIcon size={14} /> Play
                   </button>
@@ -3425,25 +3622,6 @@ function LibraryScreen(props: any) {
                   </div>
                 )}
               </div>
-              <div className="selection-cluster">
-                {(() => {
-                  const visibleCount = props.items.length;
-                  const allSelected = visibleCount > 0 && props.items.every((item: any) => selectedIdSet.has(item.id));
-                  return (
-                    <button
-                      key="select-all"
-                      type="button"
-                      className={`quick-filter select-all-toggle ${allSelected ? "active" : ""}`}
-                      onClick={() => props.onToggleSelectAll?.()}
-                      title="Select/deselect all (⌘A)"
-                    >
-                      <span className="select-all-icon"><CheckIcon size={12} /></span>
-                      {allSelected ? "Deselect all" : "Select all"}
-                    </button>
-                  );
-                })()}
-              </div>
-
             </div>
           </div>
 
@@ -3470,15 +3648,39 @@ function LibraryScreen(props: any) {
                 <span className="selection-bar-size">
                   {formatBytesSimple(selectedItems.reduce((sum: number, item: any) => sum + (item.size || 0), 0))} selected
                 </span>
+                {selectedKindSummary && (
+                  <>
+                    <span className="selection-bar-divider" aria-hidden="true" />
+                    <span className="selection-bar-kinds">{selectedKindSummary}</span>
+                  </>
+                )}
               </div>
               <div className="selection-bar-actions">
+                <button
+                  type="button"
+                  className="selection-bar-action selection-bar-clear"
+                  onClick={() => props.onClearSelection?.()}
+                  title="Clear selection (inspection is kept)"
+                >
+                  Clear
+                </button>
+                <span className="selection-bar-divider" aria-hidden="true" />
+                <button
+                  type="button"
+                  className="selection-bar-action"
+                  onClick={toggleSelectAllVisible}
+                  title={allVisibleSelected ? "Deselect all shown items" : "Select all shown items"}
+                >
+                  <CheckIcon size={12} />
+                  {allVisibleSelected ? "Deselect all" : "Select all"}
+                </button>
               <button
                 type="button"
                 className="selection-bar-action"
                 onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
-                title="Play selected items as a slideshow"
+                title={selectionPlaysInViewer ? "Play the selected videos in the viewer" : "Play selected items as a slideshow"}
               >
-                <PlayIcon size={13} /> Play
+                <PlayIcon size={13} /> {selectionPlaysInViewer ? "Play" : "Slideshow"}
               </button>
               <button
                 type="button"
@@ -3536,17 +3738,8 @@ function LibraryScreen(props: any) {
                   <TrashIcon size={13} /> Delete
                 </button>
               )}
-              <span className="selection-bar-divider" aria-hidden="true" />
-              <button
-                type="button"
-                className="selection-bar-action selection-bar-clear"
-                onClick={() => props.onClearSelection?.()}
-                title="Clear selection (inspection is kept)"
-              >
-                Clear
-              </button>
-              </div>
             </div>
+          </div>
           )}
         </header>
 
@@ -3907,6 +4100,9 @@ function ViewerScreen(props: any) {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // The viewer stays mounted off-screen to keep a video playing; its
+      // shortcuts must not fire while another tab is on screen.
+      if (!props.active) return;
       // Ignore if typing in an input, or if the slideshow overlay is driving.
       if ((e.target as HTMLElement).closest("input, textarea, select")) return;
       if (useSlideshowStore.getState().isOpen) return;
@@ -4007,25 +4203,24 @@ function ViewerScreen(props: any) {
             )}
           </div>
         </div>
-        <button
-          className="quiet-button viewer-slideshow-button"
-          type="button"
-          onClick={() => props.onPlaySlideshow?.(props.items.map((i: any) => i.id))}
-          title="Play this collection as a slideshow"
-        >
-          <PlayIcon size={14} /> Slideshow
-        </button>
       </div>
       <div className="viewer-stage" onMouseMove={() => flashHints()} onDoubleClick={(e) => {
-        if (selected.kind !== "photo") return;
         if ((e.target as HTMLElement).closest("button, input")) return;
+        if (selected.kind === "video") {
+          void props.onToggleFullscreen();
+          return;
+        }
+        if (selected.kind !== "photo") return;
         props.onSetZoom(props.zoom === 100 ? 200 : 100);
       }}>
         <button className={`viewer-arrow left${hintsVisible ? "" : " hidden"}`} type="button" onMouseEnter={() => { setHintsVisible(true); if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current); }} onMouseLeave={() => { hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500); }} onClick={() => props.onNavigate(-1)} aria-label="Previous">‹</button>
         {selected.kind === "video" ? <VideoPlayer
+          itemId={selected.id}
+          active={!!props.active}
           src={props.assetUrl(selected.path)}
           name={selected.name}
           onFullscreen={() => void props.onToggleFullscreen()}
+          onNext={() => props.onNavigate(1)}
         /> : selected.kind === "photo" ? <img src={props.assetUrl(selected.path)} alt={selected.name} decoding="async" onError={(e) => { const target = e.currentTarget; void tauri.library.getThumbnail({ itemId: selected.id, size: 1024 }).then((response) => { target.src = response.dataUrl; }).catch(() => {}); }} style={{ maxWidth: imageRotation % 180 ? "min(100%, 100cqh)" : undefined, maxHeight: imageRotation % 180 ? "min(100%, 100cqw)" : undefined, transform: [`rotate(${props.rotation || 0}deg)`, `scaleX(${props.flipX ? -1 : 1})`, draftTransformStyle(draftTransforms.get(selected.id)), `scale(${props.zoom / 100})`].filter(Boolean).join(" ") }} /> : <div className="raw-viewer"><b>{selected.extension.toUpperCase()}</b><span>RAW preview requires native backend</span></div>}
         <button className={`viewer-arrow right${hintsVisible ? "" : " hidden"}`} type="button" onMouseEnter={() => { setHintsVisible(true); if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current); }} onMouseLeave={() => { hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500); }} onClick={() => props.onNavigate(1)} aria-label="Next">›</button>
         <div className={`viewer-overlay-top${hintsVisible ? "" : " hidden"}`} onMouseEnter={() => { setHintsVisible(true); if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current); }} onMouseLeave={() => { hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500); }}>
@@ -4105,13 +4300,14 @@ function EditScreen(props: any) {
   const hasAdjustments = Object.entries(initialEdits).some(([key, value]) => values[key] !== value);
   const crop = props.crop || { enabled:false, x:0,y:0,width:1,height:1 };
   const savedDraftItems = useMemo(
-    () => (props.items || []).filter((item: any) => draftIds.has(item.id)),
+    () => (props.items || []).filter((item: any) => draftIds.has(item.id) && !item.hidden),
     [props.items, draftIds],
   );
   const pickerItems = useMemo(() => {
     const query = deferredPickerQuery.trim().toLowerCase();
     return (props.items || []).filter((item: any) =>
       item.kind === "photo" &&
+      !item.hidden &&
       !draftIds.has(item.id) &&
       (!query || String(item.name || "").toLowerCase().includes(query)),
     );

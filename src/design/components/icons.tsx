@@ -478,4 +478,28 @@ export function CheckIcon({ size = 14, className = "", strokeWidth = 2.2 }: Icon
   );
 }
 
+export function ChevronDownIcon({ size = 14, className = "", strokeWidth = 2 }: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <path d="M6 9l6 6 6-6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export function ChevronLeftIcon({ size = 14, className = "", strokeWidth = 2 }: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <path d="M15 18l-6-6 6-6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export function ChevronRightIcon({ size = 14, className = "", strokeWidth = 2 }: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <path d="M9 6l6 6-6 6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 export default GearIcon;

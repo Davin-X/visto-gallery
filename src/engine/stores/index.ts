@@ -4,3 +4,4 @@ export { useViewerStore, useViewerOpen, useViewerZoom, useViewerFitMode } from "
 export { useEditStore, useEditItem, useEditValues, useEditCrop, useEditHistory, useDraftTransforms, useDraftIds, draftTransformStyle, clearEditDraft, type DraftTransform } from "./useEditStore";
 export { useSlideshowStore, type SlideshowTransition } from "./useSlideshowStore";
 export { useBatchStore, useBatchConfig, useBatchState } from "./useBatchStore";
+export { usePlaybackStore } from "./usePlaybackStore";

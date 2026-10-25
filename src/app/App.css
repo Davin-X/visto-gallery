@@ -889,6 +889,13 @@ body {
   white-space: nowrap;
 }
 
+.selection-bar-kinds {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .selection-bar-divider {
   flex: 0 0 auto;
   width: 1px;
@@ -915,9 +922,20 @@ body {
 }
 
 .selection-bar-clear {
-  border-color: transparent;
+  border-color: var(--red, #c0392b);
   background: transparent;
-  color: var(--muted);
+  color: var(--red, #c0392b);
+}
+
+.selection-bar-clear:hover {
+  background: color-mix(in srgb, var(--red, #c0392b) 12%, transparent);
+  border-color: var(--red, #c0392b);
+  color: var(--red, #c0392b);
+}
+
+.selection-bar-clear:focus-visible {
+  outline: 2px solid var(--red, #c0392b);
+  outline-offset: 2px;
 }
 
 .selection-bar-action-danger {
@@ -3235,8 +3253,8 @@ body {
   color: white;
   font-size: 13px;
   cursor: pointer;
-  padding: 8px 10px;
-  border-radius: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
   transition: background 0.15s, color 0.15s;
 }
 
@@ -4904,52 +4922,151 @@ body {
   to { opacity: 1; transform: none; }
 }
 
-.slideshow-hud {
+/* Slideshow bottom controls - matches viewer video controls style */
+.slideshow-controls {
   position: absolute;
-  right: 0;
-  left: 0;
+  bottom: 18px;
+  left: 50%;
+  z-index: 2;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 14px 22px;
+  gap: 8px;
+  max-width: min(720px, 90vw);
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(20, 24, 30, 0.92);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  transform: translateX(-50%);
+  box-sizing: border-box;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.18s ease;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  transform: translateX(-50%) translateY(8px);
 }
 
-.slideshow-overlay.hud-visible .slideshow-hud {
+.slideshow-overlay.hud-visible .slideshow-controls {
   opacity: 1;
   pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
 }
 
-.slideshow-hud-top {
-  top: 0;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 20px 24px 40px;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.66), transparent);
+.slideshow-controls button {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 6px;
+  border: 0 !important;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
-.slideshow-hud-bottom {
-  bottom: 0;
-  padding: 44px 24px 20px;
-  background: linear-gradient(0deg, rgba(0, 0, 0, 0.78), transparent);
+.slideshow-controls button:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 
-/* Left spacer takes remaining space, position is centered via absolute positioning */
-.slideshow-hud-top::before {
-  content: "";
+.slideshow-controls button:focus {
+  outline: none;
+  background: transparent;
+}
+
+.slideshow-controls button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.slideshow-controls button:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.slideshow-controls input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--blue);
+}
+
+.slideshow-controls .slideshow-time {
+  flex: 0 0 auto;
+  min-width: 0;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.slideshow-volume {
+  flex: 0 0 80px;
+  width: 80px;
+  min-width: 60px;
+}
+
+.slideshow-controls input:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* Caption in the controls bar */
+.slideshow-caption {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 400px;
+  text-align: center;
+}
+
+.slideshow-caption > div:first-child {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.slideshow-caption > div:last-child {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.slideshow-zoom-value {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  text-align: center;
+}
+
+.slideshow-stop {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Transform active state */
+.slideshow-controls button.active {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .slideshow-position {
   position: absolute;
-  left: 50%;
-  top: 20px;
-  transform: translateX(-50%);
-  text-align: center;
-  color: rgba(255, 255, 255, 0.94);
-  font-size: 14px;
+  top: 16px;
+  left: 24px;
+  z-index: 10;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
@@ -4959,171 +5076,15 @@ body {
   background: rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(6px);
   min-width: 100px;
-  pointer-events: none;
-}
-
-.slideshow-hud-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
-.slideshow-hud-actions button {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  font-size: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  cursor: pointer;
-  backdrop-filter: blur(12px);
-  transition: background 0.12s ease, border-color 0.12s ease, transform 0.1s ease;
-}
-
-.slideshow-hud-actions button:hover {
-  border-color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.25);
-  transform: scale(1.05);
-}
-
-.slideshow-hud-actions button:active {
-  transform: scale(0.98);
-}
-
-.slideshow-hud-actions button.active {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.5);
-}
-
-/* Close button - red on hover like macOS */
-.slideshow-hud-actions button[aria-label="Close slideshow"]:hover {
-  border-color: #ff5f57;
-  background: rgba(255, 95, 87, 0.3);
-  color: #ff5f57;
-}
-
-/* Settings gear - blue accent on hover */
-.slideshow-hud-actions button[aria-label="Slideshow settings"]:hover {
-  border-color: var(--blue);
-  background: color-mix(in srgb, var(--blue) 30%, transparent);
-  color: var(--accent-text);
-}
-
-/* Tooltip-like labels on hover */
-.slideshow-hud-actions button::after {
-  content: attr(title);
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.85);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 500;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
-  z-index: 10;
-}
-
-.slideshow-hud-actions button:hover::after {
-  opacity: 1;
-}
-
-.slideshow-overlay button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  backdrop-filter: blur(12px);
-  transition: background 0.12s ease, border-color 0.12s ease;
-}
-
-.slideshow-overlay button:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.slideshow-hud-actions button {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  font-size: 17px;
-}
-
-.slideshow-hud-actions button.active {
-  background: rgba(255, 255, 255, 0.26);
-}
-
-.slideshow-transport {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.slideshow-transport button {
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  font-size: 20px;
-}
-
-.slideshow-transport .slideshow-toggle {
-  width: 38px;
-  height: 38px;
-  border-color: transparent;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.94);
-  color: #15181c;
-}
-
-.slideshow-transport .slideshow-toggle:hover {
-  background: #fff;
-}
-
-.slideshow-overlay-caption {
-  display: grid;
-  flex: 1;
-  gap: 2px;
-  min-width: 0;
   text-align: center;
+  pointer-events: none;
 }
 
-.slideshow-overlay-caption b {
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.94);
-  font-size: 13px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.slideshow-overlay-caption span {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 11px;
-}
-
-.slideshow-stop {
-  padding: 8px 12px;
-}
-
+/* Settings popover - anchored to the gear button */
 .slideshow-settings-pop {
   position: absolute;
-  right: 22px;
-  bottom: 78px;
+  right: 0;
+  bottom: 68px;
   z-index: 1;
   display: grid;
   width: 258px;
@@ -5212,6 +5173,85 @@ body {
 
 .slideshow-setting select option {
   color: #15181c;
+}
+
+.slideshow-hints {
+  position: absolute;
+  top: 16px;
+  right: 24px;
+  z-index: 10;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  padding: 8px 14px;
+  border-radius: 100px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Transform popover (kept for zoom/rotate/flip) */
+.slideshow-transform-group {
+  position: relative;
+}
+
+.slideshow-transform-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: auto;
+  padding: 0 10px;
+}
+
+.slideshow-transform-popover {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: rgba(24, 26, 31, 0.96);
+  color: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(18px);
+  z-index: 5;
+  white-space: nowrap;
+}
+
+.slideshow-transform-popover button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.slideshow-transform-popover button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.slideshow-zoom-value {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  text-align: center;
+}
+
+.slideshow-stop {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .viewer-slideshow-button { flex: 0 0 auto; gap: 7px; }
@@ -7311,4 +7351,115 @@ body {
   max-width: none;
 }
 
+}
+/* The Viewer stays mounted (hidden) while a video plays in the background.
+   `display: contents` keeps the normal layout when it is on screen. */
+.viewer-host {
+  display: contents;
+}
+
+.viewer-host-hidden {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mini-player {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(430px, calc(100vw - 40px));
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(14px);
+  color: var(--text);
+  box-sizing: border-box;
+}
+
+.mini-player-info {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mini-player-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-player-time {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mini-player-seek {
+  flex: 0 1 110px;
+  min-width: 60px;
+  accent-color: var(--blue);
+}
+
+.mini-player-button {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.mini-player-button:hover {
+  background: var(--surface-3);
+}
+
+.mini-player-button:focus-visible,
+.mini-player-info:focus-visible,
+.mini-player-seek:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.mini-player-close {
+  font-size: 18px;
+  line-height: 1;
+}
+
+@media (max-width: 720px) {
+  .mini-player {
+    right: 12px;
+    bottom: 12px;
+    width: calc(100vw - 24px);
+  }
+
+  .mini-player-seek {
+    display: none;
+  }
 }
