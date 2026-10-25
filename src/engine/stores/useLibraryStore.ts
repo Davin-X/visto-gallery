@@ -287,7 +287,7 @@ export const useLibraryStore = create<LibraryState>()(
       
       // Pagination
       page: 0,
-      pageSize: 200,
+      pageSize: 5000,
       
       // Computed (updated via subscribe in components)
       visibleItems: [],
