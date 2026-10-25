@@ -1610,9 +1610,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
                   showNotice("Replace original supports JPEG, PNG, and WebP. Save a copy instead.");
                   return;
                 }
-                const ok = window.confirm("This will overwrite the original file with the edited version. This cannot be undone. Continue?");
-                if (!ok) return;
-              }
+                }
               try {
                 const img = new Image();
                 img.crossOrigin = "anonymous";
@@ -1621,6 +1619,10 @@ handlersRef.current = { importFolder, importFiles, showNotice };
               const v = edit.values || {};
               const crop = edit.crop || { enabled: false, x:0,y:0,width:1,height:1 };
               const useCrop = !!crop.enabled;
+               if (useCrop && (((v.rotation || 0) % 360) !== 0 || !!v.flip)) {
+                 showNotice("Crop cannot be combined with rotation or flip. Reset transforms first.");
+                 return;
+               }
               const srcX = useCrop ? crop.x * img.naturalWidth : 0;
               const srcY = useCrop ? crop.y * img.naturalHeight : 0;
               const srcW = useCrop ? crop.width * img.naturalWidth : img.naturalWidth;
@@ -1638,14 +1640,36 @@ handlersRef.current = { importFolder, importFiles, showNotice };
               ctx.rotate((rot * Math.PI) / 180);
               ctx.scale(v.flip ? -1 : 1, 1);
               const warmth = Number(v.warmth || 0);
-              ctx.filter = [
-                `brightness(${100 + (v.exposure || 0) + (v.shadows || 0) * 0.22 + (v.highlights || 0) * 0.1}%)`,
-                `contrast(${100 + (v.contrast || 0) - (v.shadows || 0) * 0.08 + (v.highlights || 0) * 0.12}%)`,
-                `saturate(${100 + (v.saturation || 0)}%)`,
-                `sepia(${Math.abs(warmth) * 0.004})`,
-                `hue-rotate(${warmth < 0 ? 180 : 0}deg)`,
-              ].join(" ");
+              ctx.filter = "none";
               ctx.drawImage(img, srcX, srcY, srcW, srcH, -baseW / 2, -baseH / 2, baseW, baseH);
+              // Manual color adjustments (WebKit-compatible fallback; avoids ctx.filter gaps).
+              try {
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const d = imgData.data;
+                const brightness = 100 + (v.exposure || 0) + (v.shadows || 0) * 0.22 + (v.highlights || 0) * 0.1;
+                const contrast = 100 + (v.contrast || 0) - (v.shadows || 0) * 0.08 + (v.highlights || 0) * 0.12;
+                const saturation = 100 + (v.saturation || 0);
+                const bf = brightness / 100;
+                const cf = contrast / 100;
+                const sf = saturation / 100;
+                for (let i = 0; i < d.length; i += 4) {
+                  let r = d[i], g = d[i+1], b = d[i+2];
+                  r *= bf; g *= bf; b *= bf;
+                  r = (r - 128) * cf + 128;
+                  g = (g - 128) * cf + 128;
+                  b = (b - 128) * cf + 128;
+                  const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                  r = gray + (r - gray) * sf;
+                  g = gray + (g - gray) * sf;
+                  b = gray + (b - gray) * sf;
+                  if (warmth > 0) { r += warmth * 0.3; b -= warmth * 0.3; }
+                  else if (warmth < 0) { b += -warmth * 0.3; r -= -warmth * 0.3; }
+                  d[i] = Math.max(0, Math.min(255, r));
+                  d[i+1] = Math.max(0, Math.min(255, g));
+                  d[i+2] = Math.max(0, Math.min(255, b));
+                }
+                ctx.putImageData(imgData, 0, 0);
+              } catch (e) { /* ignore */ }
                 const outputType = inPlace
                   ? sourceExtension === "png" ? "image/png" : sourceExtension === "webp" ? "image/webp" : "image/jpeg"
                   : "image/jpeg";
@@ -1666,8 +1690,9 @@ handlersRef.current = { importFolder, importFiles, showNotice };
                   if (!path) { showNotice("Export cancelled"); return; }
                 }
                 const buf = await blob.arrayBuffer();
-                await invoke("save_file", { path, bytes: Array.from(new Uint8Array(buf)) });
+                await invoke("save_file", { path, bytes: Array.from(new Uint8Array(buf)), backup: inPlace });
                 clearEditDraft(item.id);
+                if (inPlace) await library.loadLibrary();
                 showNotice(inPlace ? "Replaced original" : "Exported edited copy");
               } catch (e) {
                 showNotice("Export failed");
@@ -4257,7 +4282,7 @@ function ViewerScreen(props: any) {
           name={selected.name}
           onFullscreen={() => void props.onToggleFullscreen()}
           onNext={() => props.onNavigate(1)}
-        /> : selected.kind === "photo" ? <img src={props.assetUrl(selected.path)} alt={selected.name} decoding="async" onError={(e) => { const target = e.currentTarget; void tauri.library.getThumbnail({ itemId: selected.id, size: 1024 }).then((response) => { target.src = response.dataUrl; }).catch(() => {}); }} style={{ maxWidth: imageRotation % 180 ? "min(100%, 100cqh)" : undefined, maxHeight: imageRotation % 180 ? "min(100%, 100cqw)" : undefined, transform: [`rotate(${props.rotation || 0}deg)`, `scaleX(${props.flipX ? -1 : 1})`, draftTransformStyle(draftTransforms.get(selected.id)), `scale(${props.zoom / 100})`].filter(Boolean).join(" ") }} /> : <div className="raw-viewer"><b>{selected.extension.toUpperCase()}</b><span>RAW preview requires native backend</span></div>}
+        /> : selected.kind === "photo" ? <img src={props.assetUrl(selected.path)} alt={selected.name} decoding="async" onError={(e) => { const target = e.currentTarget; if (target.dataset.fallback === "1") return; target.dataset.fallback = "1"; void tauri.library.getThumbnail({ itemId: selected.id, size: 1024 }).then((response) => { target.src = response.dataUrl; }).catch(() => {}); }} style={{ maxWidth: imageRotation % 180 ? "min(100%, 100cqh)" : undefined, maxHeight: imageRotation % 180 ? "min(100%, 100cqw)" : undefined, transform: [`rotate(${props.rotation || 0}deg)`, `scaleX(${props.flipX ? -1 : 1})`, draftTransformStyle(draftTransforms.get(selected.id)), `scale(${props.zoom / 100})`].filter(Boolean).join(" ") }} /> : <div className="raw-viewer"><b>{selected.extension.toUpperCase()}</b><span>RAW preview requires native backend</span></div>}
         <button className={`viewer-arrow right${hintsVisible ? "" : " hidden"}`} type="button" onMouseEnter={() => { setHintsVisible(true); if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current); }} onMouseLeave={() => { hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500); }} onClick={() => props.onNavigate(1)} aria-label="Next">›</button>
         <div className={`viewer-overlay-top${hintsVisible ? "" : " hidden"}`} onMouseEnter={() => { setHintsVisible(true); if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current); }} onMouseLeave={() => { hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500); }}>
           <span className="viewer-transform-state">

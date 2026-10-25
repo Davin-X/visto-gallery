@@ -25,15 +25,17 @@ impl Default for AppState {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_shell::init())
-        .manage(AppState::default())
+.manage(AppState::default())
         .setup(|app| {
             // Initialize database (await so it's ready before any invoke)
             let app_handle = app.handle().clone();
             let db = tauri::async_runtime::block_on(async {
                 let handle = app_handle.clone();
-                Database::new(&handle).await.expect("Failed to initialize database")
+                let db = Database::new(&handle).await.expect("Failed to initialize database");
+    for folder in db.registered_folders().await {
+        let _ = handle.asset_protocol_scope().allow_directory(&folder, true);
+    }
+    db
             });
             let state: State<'_, AppState> = app_handle.state();
             *state.db.lock().unwrap() = Some(db);

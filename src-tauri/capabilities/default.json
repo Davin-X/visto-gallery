@@ -14,11 +14,6 @@
     "core:window:allow-outer-size",
     "core:window:allow-current-monitor",
     "dialog:allow-open",
-    "dialog:allow-save",
-    "fs:allow-read-file",
-    "fs:allow-read-dir",
-    "fs:allow-write-file",
-    "fs:allow-exists",
-    "shell:allow-open"
+    "dialog:allow-save"
   ]
 }

@@ -344,7 +344,7 @@ fn path_is_inside(path: &str, root: &str) -> bool {
 
 /// Record an imported folder so the sidebar can list and remove it later.
 /// Failures are non-fatal: a catalog write should never fail an import.
-async fn remember_folder(db: &SqlitePool, root: &str) {
+async fn remember_folder(db: &SqlitePool, root: &str, app: &tauri::AppHandle) {
     let path = normalize_root(root);
     if path.is_empty() || !Path::new(&path).is_dir() {
         return;
@@ -354,6 +354,7 @@ async fn remember_folder(db: &SqlitePool, root: &str) {
         .bind(now_ms())
         .execute(db)
         .await;
+    let _ = app.asset_protocol_scope().allow_directory(&path, true);
 }
 
 fn is_media_file(ext: &str) -> bool {
@@ -701,7 +702,7 @@ pub async fn scan_library(
     // Only remember the folder once it actually contributed media, so an
     // accidental pick of an empty folder never shows up in the sidebar.
     if discovered_count > 0 {
-        remember_folder(&db, &root_path).await;
+        remember_folder(&db, &root_path, &window.app_handle()).await;
     }
 
     let duration = start.elapsed().as_millis() as i64;
@@ -751,6 +752,7 @@ pub async fn import_files(
     paths: Vec<String>,
     state: State<'_, AppState>,
     window: Window,
+    app: tauri::AppHandle,
 ) -> Result<ScanResult, String> {
     SCAN_CANCEL.store(false, Ordering::SeqCst);
     let start = std::time::Instant::now();
@@ -828,7 +830,7 @@ pub async fn import_files(
     if !items.is_empty() {
         for raw in &paths {
             if Path::new(raw).is_dir() {
-                remember_folder(&db, raw).await;
+                remember_folder(&db, raw, &app).await;
             }
         }
     }
@@ -1476,21 +1478,24 @@ pub async fn move_to_trash(
     state: State<'_, AppState>,
     window: Window,
 ) -> Result<(), String> {
-    // Reset cancel flag so a previous cancel doesn't block a new trash operation.
     SCAN_CANCEL.store(false, Ordering::SeqCst);
 
     let db = get_db(&state)?;
 
-    // Filter to only files that exist on disk.
+let known_paths: std::collections::HashSet<String> = sqlx::query_scalar("SELECT path FROM media_items")
+        .fetch_all(&db)
+        .await
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .collect();
     let paths: Vec<String> = paths
         .into_iter()
-        .filter(|p| std::path::Path::new(p).exists())
+        .filter(|p| std::path::Path::new(p).exists() && known_paths.contains(p))
         .collect();
     if paths.is_empty() {
         return Err("Selected items no longer exist on disk.".to_string());
     }
 
-    // Emit initial progress.
     let _ = window.emit(
         "import-progress",
         json!({
@@ -1500,58 +1505,26 @@ pub async fn move_to_trash(
         }),
     );
 
-    // Chunk into batches to avoid AppleScript command length limits.
-    // Each file path becomes ~100+ chars in AppleScript; 150 paths ~15KB, well under limits.
-    const TRASH_CHUNK: usize = 150;
-    let mut processed = 0;
-    for chunk in paths.chunks(TRASH_CHUNK) {
-        // Check cancel BEFORE trashing this chunk.
+    let mut trashed: Vec<String> = Vec::new();
+    let mut processed = 0usize;
+    for path in &paths {
         if SCAN_CANCEL.load(Ordering::SeqCst) {
-            return Err("Cancelled".to_string());
+            break;
         }
-
-        // Escape paths for AppleScript string literals: backslashes and double quotes.
-        let posix_paths: Vec<String> = chunk
-            .iter()
-            .map(|path| {
-                let escaped = path
-                    .replace('\\', "\\\\")
-                    .replace('"', "\\\"");
-                format!("POSIX file \"{}\"", escaped)
-            })
-            .collect();
-        let script = format!(
-            "tell application \"Finder\" to delete {{{}}}",
-            posix_paths.join(", ")
-        );
-
-        // Run osascript in blocking thread pool to avoid blocking async executor.
-        // This allows the executor to process cancel signals and yield to other tasks.
-        let script_for_log = script.clone(); // clone for error logging
-        let result = tokio::task::spawn_blocking(move || {
-            std::process::Command::new("osascript")
-                .arg("-e")
-                .arg(&script)
-                .output()
-        })
-        .await
-        .map_err(|e| format!("osascript task failed: {e}"))?;
-
-        let output = result.map_err(|e| format!("Could not execute osascript: {e}"))?;
-
-        // Check cancel AFTER osascript returns (it's synchronous, can't interrupt mid-call).
-        if SCAN_CANCEL.load(Ordering::SeqCst) {
-            return Err("Cancelled".to_string());
+        let path_for_trash = path.clone();
+        let result = tokio::task::spawn_blocking(move || trash::delete(&path_for_trash)).await;
+        match result {
+            Ok(Ok(())) => {
+                trashed.push(path.clone());
+                processed += 1;
+            }
+            Ok(Err(e)) => {
+                return Err(format!("Could not move {} to Trash: {}", path, e));
+            }
+            Err(e) => {
+                return Err(format!("Trash task failed: {}", e));
+            }
         }
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            // Log the failing script for debugging (first 500 chars)
-            eprintln!("AppleScript failed: {}", &script_for_log[..script_for_log.len().min(500)]);
-            return Err(format!("Could not move files to Trash: {}", stderr.trim()));
-        }
-
-        processed += chunk.len();
         let _ = window.emit(
             "import-progress",
             json!({
@@ -1563,7 +1536,6 @@ pub async fn move_to_trash(
         tokio::task::yield_now().await;
     }
 
-    // Emit final progress.
     let _ = window.emit(
         "import-progress",
         json!({
@@ -1573,9 +1545,8 @@ pub async fn move_to_trash(
         }),
     );
 
-    // Remove from catalog in a single transaction.
     let mut transaction = db.begin().await.map_err(|e| e.to_string())?;
-    for path in &paths {
+    for path in &trashed {
         sqlx::query("DELETE FROM media_items WHERE path = ?")
             .bind(path)
             .execute(&mut *transaction)
@@ -1584,13 +1555,23 @@ pub async fn move_to_trash(
     }
     transaction.commit().await.map_err(|e| e.to_string())?;
 
+    if trashed.len() != paths.len() {
+        return Err("Trash operation cancelled.".to_string());
+    }
     Ok(())
 }
 
 #[tauri::command]
 pub async fn reveal_in_finder(path: String, state: State<'_, AppState>) -> Result<(), String> {
-    let _ = state;
-    // `open -R` selects the file in a new Finder window.
+    let db = get_db(&state)?;
+    let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
+        .bind(&path)
+        .fetch_optional(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    if exists.is_none() {
+        return Err("Path is not part of the catalog.".to_string());
+    }
     std::process::Command::new("open")
         .arg("-R")
         .arg(&path)
@@ -2662,15 +2643,35 @@ pub async fn check_updates() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 pub async fn open_external(url: String) -> Result<(), String> {
+    let trimmed = url.trim();
+    let allowed = trimmed.starts_with("https://")
+        || trimmed.starts_with("http://")
+        || trimmed.starts_with("mailto:");
+    if !allowed {
+        return Err("Unsupported URL scheme".to_string());
+    }
     std::process::Command::new("open")
-        .arg(&url)
+        .arg(trimmed)
         .status()
-        .map_err(|e| format!("Could not open {}: {}", url, e))?;
+        .map_err(|e| format!("Could not open {}: {}", trimmed, e))?;
     Ok(())
 }
 #[tauri::command]
-pub async fn save_file(path: String, bytes: Vec<u8>) -> Result<(), String> {
-    std::fs::write(&path, bytes).map_err(|e| e.to_string())
+pub async fn save_file(path: String, bytes: Vec<u8>, backup: Option<bool>) -> Result<(), String> {
+    use std::io::Write;
+    let target = std::path::Path::new(&path);
+    let parent = target.parent().ok_or_else(|| "Invalid path".to_string())?;
+    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    if backup.unwrap_or(false) && target.exists() {
+        let bak = format!("{}.bak", path);
+        let _ = std::fs::copy(target, &bak);
+    }
+    let tmp = target.with_extension("tmp");
+    let mut file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+    file.write_all(&bytes).map_err(|e| e.to_string())?;
+    file.sync_all().map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, target).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[cfg(test)]

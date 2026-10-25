@@ -9,8 +9,9 @@ pub struct Database {
 
 impl Database {
     pub async fn new(app_handle: &tauri::AppHandle) -> Result<Self> {
-        let db_path = get_db_path(app_handle)?;
         
+let db_path = get_db_path(app_handle)?;
+
         // Ensure parent directory exists
         if let Some(parent) = db_path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -22,6 +23,7 @@ impl Database {
                 sqlx::sqlite::SqliteConnectOptions::new()
                     .filename(&db_path)
                     .create_if_missing(true)
+                    .foreign_keys(true)
                     .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
                     .busy_timeout(std::time::Duration::from_secs(30)),
             )
@@ -32,6 +34,13 @@ impl Database {
         Ok(db)
     }
     
+    pub async fn registered_folders(&self) -> Vec<String> {
+        sqlx::query_scalar("SELECT path FROM library_folders")
+            .fetch_all(&self.pool)
+            .await
+            .unwrap_or_default()
+    }
+
     async fn migrate(&self) -> Result<()> {
         // Enable foreign keys
         sqlx::query("PRAGMA foreign_keys = ON").execute(&self.pool).await?;
