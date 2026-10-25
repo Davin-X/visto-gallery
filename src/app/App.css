@@ -1367,25 +1367,30 @@ body {
 
 .gallery-grid.layout-grid .gallery-tile.selected .tile-image,
 .gallery-grid.layout-overview .gallery-tile.selected .tile-image,
-.gallery-grid.layout-timeline .gallery-tile.selected .tile-image,
-.gallery-grid.layout-grid .gallery-tile.inspected .tile-image,
-.gallery-grid.layout-overview .gallery-tile.inspected .tile-image,
-.gallery-grid.layout-timeline .gallery-tile.inspected .tile-image {
+.gallery-grid.layout-timeline .gallery-tile.selected .tile-image {
   border: 0;
   box-shadow: none;
   border-radius: 0;
 }
 
-/* Height comes from the ratio, not a fixed pixel value, so tiles keep their
-   shape at any window size. `height: auto` overrides the fixed heights (and the
-   width-based ones in global.css's media queries) for every layout mode. */
+.gallery-tile .tile-image img,
+.gallery-tile .tile-image video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.gallery-tile:hover .tile-image img,
+.gallery-tile:hover .tile-image video {
+  transform: scale(1.05);
+}
 .tile-image {
   position: relative;
   display: block;
   height: auto;
   aspect-ratio: 4 / 3;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 0;
   background: var(--surface);
 }
 
@@ -1462,13 +1467,13 @@ body {
 
 /* Inspection focus ring: uses the user accent color and stays visually
    distinct from the blue multi-selection border. */
-.gallery-tile.inspected .tile-image {
-  border: 2px solid var(--accent, var(--blue));
+.gallery-tile.inspected {
+  border-color: var(--accent, var(--blue));
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, var(--blue)) 45%, transparent);
 }
 
-.gallery-tile.inspected.selected .tile-image {
-  border: 2px solid var(--blue);
+.gallery-tile.inspected.selected {
+  border-color: var(--blue);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, var(--blue)) 60%, transparent), 0 0 0 1px var(--blue);
 }
 
@@ -6803,8 +6808,8 @@ body {
   }
 }
 
-.gallery-tile .tile-image { border-radius: 10px; transition: transform .25s ease, box-shadow .25s ease; }
-.gallery-tile:hover .tile-image { box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
+.gallery-tile .tile-image { border: 0; border-radius: 0; transition: transform .25s ease; }
+.gallery-tile:hover .tile-image { border-color: transparent; box-shadow: none; }
 .gallery-tile .tile-caption { transition: opacity .2s ease; }
 
 /* Shared shell finish across Library, Albums, Viewer, Edit, Batch and Settings. */
