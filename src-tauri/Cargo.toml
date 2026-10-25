@@ -34,9 +34,13 @@ uuid = { version = "1", features = ["v4", "serde"] }
 # Time
 time = { version = "0.3", features = ["serde", "formatting", "macros", "std"] }
 
+# Trash
+trash = "5"
+
 # Error handling
 anyhow = "1"
 thiserror = "1"
+
 
 # Image processing
 image = "0.25"

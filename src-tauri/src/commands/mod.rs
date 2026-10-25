@@ -1478,12 +1478,10 @@ pub async fn move_to_trash(
     state: State<'_, AppState>,
     window: Window,
 ) -> Result<(), String> {
-    // Reset cancel flag so a previous cancel doesn't block a new trash operation.
     SCAN_CANCEL.store(false, Ordering::SeqCst);
 
     let db = get_db(&state)?;
 
-    // Filter to only files that exist on disk.
     let paths: Vec<String> = paths
         .into_iter()
         .filter(|p| std::path::Path::new(p).exists())
@@ -1492,7 +1490,6 @@ pub async fn move_to_trash(
         return Err("Selected items no longer exist on disk.".to_string());
     }
 
-    // Emit initial progress.
     let _ = window.emit(
         "import-progress",
         json!({
@@ -1502,58 +1499,26 @@ pub async fn move_to_trash(
         }),
     );
 
-    // Chunk into batches to avoid AppleScript command length limits.
-    // Each file path becomes ~100+ chars in AppleScript; 150 paths ~15KB, well under limits.
-    const TRASH_CHUNK: usize = 150;
-    let mut processed = 0;
-    for chunk in paths.chunks(TRASH_CHUNK) {
-        // Check cancel BEFORE trashing this chunk.
+    let mut trashed: Vec<String> = Vec::new();
+    let mut processed = 0usize;
+    for path in &paths {
         if SCAN_CANCEL.load(Ordering::SeqCst) {
-            return Err("Cancelled".to_string());
+            break;
         }
-
-        // Escape paths for AppleScript string literals: backslashes and double quotes.
-        let posix_paths: Vec<String> = chunk
-            .iter()
-            .map(|path| {
-                let escaped = path
-                    .replace('\\', "\\\\")
-                    .replace('"', "\\\"");
-                format!("POSIX file \"{}\"", escaped)
-            })
-            .collect();
-        let script = format!(
-            "tell application \"Finder\" to delete {{{}}}",
-            posix_paths.join(", ")
-        );
-
-        // Run osascript in blocking thread pool to avoid blocking async executor.
-        // This allows the executor to process cancel signals and yield to other tasks.
-        let script_for_log = script.clone(); // clone for error logging
-        let result = tokio::task::spawn_blocking(move || {
-            std::process::Command::new("osascript")
-                .arg("-e")
-                .arg(&script)
-                .output()
-        })
-        .await
-        .map_err(|e| format!("osascript task failed: {e}"))?;
-
-        let output = result.map_err(|e| format!("Could not execute osascript: {e}"))?;
-
-        // Check cancel AFTER osascript returns (it's synchronous, can't interrupt mid-call).
-        if SCAN_CANCEL.load(Ordering::SeqCst) {
-            return Err("Cancelled".to_string());
+        let path_for_trash = path.clone();
+        let result = tokio::task::spawn_blocking(move || trash::delete(&path_for_trash)).await;
+        match result {
+            Ok(Ok(())) => {
+                trashed.push(path.clone());
+                processed += 1;
+            }
+            Ok(Err(e)) => {
+                return Err(format!("Could not move {} to Trash: {}", path, e));
+            }
+            Err(e) => {
+                return Err(format!("Trash task failed: {}", e));
+            }
         }
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            // Log the failing script for debugging (first 500 chars)
-            eprintln!("AppleScript failed: {}", &script_for_log[..script_for_log.len().min(500)]);
-            return Err(format!("Could not move files to Trash: {}", stderr.trim()));
-        }
-
-        processed += chunk.len();
         let _ = window.emit(
             "import-progress",
             json!({
@@ -1565,7 +1530,6 @@ pub async fn move_to_trash(
         tokio::task::yield_now().await;
     }
 
-    // Emit final progress.
     let _ = window.emit(
         "import-progress",
         json!({
@@ -1575,9 +1539,8 @@ pub async fn move_to_trash(
         }),
     );
 
-    // Remove from catalog in a single transaction.
     let mut transaction = db.begin().await.map_err(|e| e.to_string())?;
-    for path in &paths {
+    for path in &trashed {
         sqlx::query("DELETE FROM media_items WHERE path = ?")
             .bind(path)
             .execute(&mut *transaction)
@@ -1586,6 +1549,9 @@ pub async fn move_to_trash(
     }
     transaction.commit().await.map_err(|e| e.to_string())?;
 
+    if trashed.len() != paths.len() {
+        return Err("Trash operation cancelled.".to_string());
+    }
     Ok(())
 }
 
