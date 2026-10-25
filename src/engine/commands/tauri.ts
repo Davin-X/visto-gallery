@@ -124,9 +124,6 @@ export const tauri = {
   duplicates: {
     scan: (): Promise<DuplicateGroup[]> =>
       invoke("find_duplicates"),
-
-    computeHash: (path: string): Promise<string> =>
-      invoke("compute_hash", { path }),
   },
 
   finder: {

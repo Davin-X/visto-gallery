@@ -2425,12 +2425,6 @@ async fn compute_full_sha256_with_progress(
     Some(hex::encode(ctx.finish().as_ref()))
 }
 
-#[tauri::command]
-pub async fn compute_hash(path: String, state: State<'_, AppState>) -> Result<String, String> {
-    let _ = (path, state);
-    // TODO: SHA-256 via ring
-    Ok("".to_string())
-}
 
 #[tauri::command]
 pub async fn write_finder_tags(path: String, tags: Vec<String>, state: State<'_, AppState>) -> Result<(), String> {

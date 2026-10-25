@@ -197,7 +197,6 @@ export type TauriCommandSignature = {
 
   // Duplicates
   find_duplicates: () => DuplicateGroup[];
-  compute_hash: (path: string) => string;
 
   // Finder
   write_finder_tags: (path: string, tags: string[]) => void;
