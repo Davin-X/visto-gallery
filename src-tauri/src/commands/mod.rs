@@ -2644,11 +2644,15 @@ pub async fn open_external(url: String) -> Result<(), String> {
     Ok(())
 }
 #[tauri::command]
-pub async fn save_file(path: String, bytes: Vec<u8>) -> Result<(), String> {
+pub async fn save_file(path: String, bytes: Vec<u8>, backup: Option<bool>) -> Result<(), String> {
     use std::io::Write;
     let target = std::path::Path::new(&path);
     let parent = target.parent().ok_or_else(|| "Invalid path".to_string())?;
     std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    if backup.unwrap_or(false) && target.exists() {
+        let bak = format!("{}.bak", path);
+        let _ = std::fs::copy(target, &bak);
+    }
     let tmp = target.with_extension("tmp");
     let mut file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
     file.write_all(&bytes).map_err(|e| e.to_string())?;

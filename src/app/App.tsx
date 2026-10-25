@@ -1666,8 +1666,9 @@ handlersRef.current = { importFolder, importFiles, showNotice };
                   if (!path) { showNotice("Export cancelled"); return; }
                 }
                 const buf = await blob.arrayBuffer();
-                await invoke("save_file", { path, bytes: Array.from(new Uint8Array(buf)) });
+                await invoke("save_file", { path, bytes: Array.from(new Uint8Array(buf)), backup: inPlace });
                 clearEditDraft(item.id);
+                if (inPlace) await library.loadLibrary();
                 showNotice(inPlace ? "Replaced original" : "Exported edited copy");
               } catch (e) {
                 showNotice("Export failed");
