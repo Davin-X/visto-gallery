@@ -1621,6 +1621,10 @@ handlersRef.current = { importFolder, importFiles, showNotice };
               const v = edit.values || {};
               const crop = edit.crop || { enabled: false, x:0,y:0,width:1,height:1 };
               const useCrop = !!crop.enabled;
+               if (useCrop && (((v.rotation || 0) % 360) !== 0 || !!v.flip)) {
+                 showNotice("Crop cannot be combined with rotation or flip. Reset transforms first.");
+                 return;
+               }
               const srcX = useCrop ? crop.x * img.naturalWidth : 0;
               const srcY = useCrop ? crop.y * img.naturalHeight : 0;
               const srcW = useCrop ? crop.width * img.naturalWidth : img.naturalWidth;
@@ -1638,14 +1642,36 @@ handlersRef.current = { importFolder, importFiles, showNotice };
               ctx.rotate((rot * Math.PI) / 180);
               ctx.scale(v.flip ? -1 : 1, 1);
               const warmth = Number(v.warmth || 0);
-              ctx.filter = [
-                `brightness(${100 + (v.exposure || 0) + (v.shadows || 0) * 0.22 + (v.highlights || 0) * 0.1}%)`,
-                `contrast(${100 + (v.contrast || 0) - (v.shadows || 0) * 0.08 + (v.highlights || 0) * 0.12}%)`,
-                `saturate(${100 + (v.saturation || 0)}%)`,
-                `sepia(${Math.abs(warmth) * 0.004})`,
-                `hue-rotate(${warmth < 0 ? 180 : 0}deg)`,
-              ].join(" ");
+              ctx.filter = "none";
               ctx.drawImage(img, srcX, srcY, srcW, srcH, -baseW / 2, -baseH / 2, baseW, baseH);
+              // Manual color adjustments (WebKit-compatible fallback; avoids ctx.filter gaps).
+              try {
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const d = imgData.data;
+                const brightness = 100 + (v.exposure || 0) + (v.shadows || 0) * 0.22 + (v.highlights || 0) * 0.1;
+                const contrast = 100 + (v.contrast || 0) - (v.shadows || 0) * 0.08 + (v.highlights || 0) * 0.12;
+                const saturation = 100 + (v.saturation || 0);
+                const bf = brightness / 100;
+                const cf = contrast / 100;
+                const sf = saturation / 100;
+                for (let i = 0; i < d.length; i += 4) {
+                  let r = d[i], g = d[i+1], b = d[i+2];
+                  r *= bf; g *= bf; b *= bf;
+                  r = (r - 128) * cf + 128;
+                  g = (g - 128) * cf + 128;
+                  b = (b - 128) * cf + 128;
+                  const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                  r = gray + (r - gray) * sf;
+                  g = gray + (g - gray) * sf;
+                  b = gray + (b - gray) * sf;
+                  if (warmth > 0) { r += warmth * 0.3; b -= warmth * 0.3; }
+                  else if (warmth < 0) { b += -warmth * 0.3; r -= -warmth * 0.3; }
+                  d[i] = Math.max(0, Math.min(255, r));
+                  d[i+1] = Math.max(0, Math.min(255, g));
+                  d[i+2] = Math.max(0, Math.min(255, b));
+                }
+                ctx.putImageData(imgData, 0, 0);
+              } catch (e) { /* ignore */ }
                 const outputType = inPlace
                   ? sourceExtension === "png" ? "image/png" : sourceExtension === "webp" ? "image/webp" : "image/jpeg"
                   : "image/jpeg";
