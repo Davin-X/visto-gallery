@@ -22,6 +22,8 @@ import type {
   AppSettings,
   EditValues,
   CropRect,
+  TrashResult,
+  TrashError,
 } from "../types/commands";
 
 // Type-safe command wrappers
@@ -67,7 +69,7 @@ export const tauri = {
     updateTags: (itemId: string, tags: string[]): Promise<void> =>
       invoke("update_item_tags", { itemId, tags }),
 
-    moveToTrash: (paths: string[]): Promise<void> =>
+    moveToTrash: (paths: string[]): Promise<TrashResult> =>
       invoke("move_to_trash", { paths }),
 
     revealInFinder: (path: string): Promise<void> =>
@@ -151,6 +153,9 @@ export const tauri = {
 
     openExternal: (url: string): Promise<void> =>
       invoke("open_external", { url }),
+
+    exportBytes: (suggestedName: string, bytes: Uint8Array, backup?: boolean): Promise<string> =>
+      invoke("export_bytes", { suggestedName, bytes: Array.from(bytes), backup }),
   },
 };
 

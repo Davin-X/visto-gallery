@@ -1690,7 +1690,8 @@ handlersRef.current = { importFolder, importFiles, showNotice };
                   if (!path) { showNotice("Export cancelled"); return; }
                 }
                 const buf = await blob.arrayBuffer();
-                await invoke("save_file", { path, bytes: Array.from(new Uint8Array(buf)), backup: inPlace });
+                const suggestedName = String(item.name).replace(/\.[^.]+$/, "") + (inPlace ? "" : "_edited") + ".jpg";
+                await tauri.app.exportBytes(suggestedName, new Uint8Array(buf), inPlace);
                 clearEditDraft(item.id);
                 if (inPlace) await library.loadLibrary();
                 showNotice(inPlace ? "Replaced original" : "Exported edited copy");

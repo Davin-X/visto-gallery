@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::{AppHandle, State, Manager, Emitter, Window};
+use tauri_plugin_dialog::DialogExt;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use crate::{AppState, models::*};
 use anyhow::Result;
@@ -185,6 +186,20 @@ pub struct BatchExportResult {
 #[serde(rename_all = "camelCase")]
 pub struct BatchExportError {
     pub item_id: String,
+    pub error: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashResult {
+    pub trashed: Vec<String>,
+    pub failed: Vec<TrashError>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashError {
+    pub path: String,
     pub error: String,
 }
 
@@ -1479,12 +1494,12 @@ pub async fn move_to_trash(
     paths: Vec<String>,
     state: State<'_, AppState>,
     window: Window,
-) -> Result<(), String> {
+) -> Result<TrashResult, String> {
     SCAN_CANCEL.store(false, Ordering::SeqCst);
 
     let db = get_db(&state)?;
 
-let known_paths: std::collections::HashSet<String> = sqlx::query_scalar("SELECT path FROM media_items")
+    let known_paths: std::collections::HashSet<String> = sqlx::query_scalar("SELECT path FROM media_items")
         .fetch_all(&db)
         .await
         .map_err(|e| e.to_string())?
@@ -1507,18 +1522,41 @@ let known_paths: std::collections::HashSet<String> = sqlx::query_scalar("SELECT 
         }),
     );
 
-let mut trashed: Vec<String> = Vec::new();
-    let paths_for_trash = paths.clone();
-    let result = tokio::task::spawn_blocking(move || trash::delete_all(&paths_for_trash)).await;
-    match result {
-        Ok(Ok(())) => {
-            trashed = paths.clone();
+    let mut trashed = Vec::new();
+    let mut failed = Vec::new();
+
+    for (idx, path) in paths.iter().enumerate() {
+        if SCAN_CANCEL.load(Ordering::SeqCst) {
+            failed.push(TrashError {
+                path: path.clone(),
+                error: "Operation cancelled".to_string(),
+            });
+            continue;
         }
-        Ok(Err(e)) => {
-            return Err(format!("Could not move files to Trash: {}", e));
-        }
-        Err(e) => {
-            return Err(format!("Trash task failed: {}", e));
+
+        let _ = window.emit(
+            "import-progress",
+            json!({
+                "phase": "trashing",
+                "processed": idx,
+                "total": paths.len(),
+                "currentFile": path,
+            }),
+        );
+
+        match tokio::task::spawn_blocking({
+            let path = path.clone();
+            move || trash::delete(&path)
+        }).await {
+            Ok(Ok(())) => trashed.push(path.clone()),
+            Ok(Err(e)) => failed.push(TrashError {
+                path: path.clone(),
+                error: format!("Could not move to Trash: {}", e),
+            }),
+            Err(e) => failed.push(TrashError {
+                path: path.clone(),
+                error: format!("Trash task failed: {}", e),
+            }),
         }
     }
 
@@ -1531,20 +1569,19 @@ let mut trashed: Vec<String> = Vec::new();
         }),
     );
 
-    let mut transaction = db.begin().await.map_err(|e| e.to_string())?;
-    for path in &trashed {
-        sqlx::query("DELETE FROM media_items WHERE path = ?")
-            .bind(path)
-            .execute(&mut *transaction)
-            .await
-            .map_err(|e| e.to_string())?;
+    if !trashed.is_empty() {
+        let mut transaction = db.begin().await.map_err(|e| e.to_string())?;
+        for path in &trashed {
+            sqlx::query("DELETE FROM media_items WHERE path = ?")
+                .bind(path)
+                .execute(&mut *transaction)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        transaction.commit().await.map_err(|e| e.to_string())?;
     }
-    transaction.commit().await.map_err(|e| e.to_string())?;
 
-    if trashed.len() != paths.len() {
-        return Err("Trash operation cancelled.".to_string());
-    }
-    Ok(())
+    Ok(TrashResult { trashed, failed })
 }
 
 #[tauri::command]
@@ -2636,22 +2673,51 @@ pub async fn open_external(url: String) -> Result<(), String> {
         .map_err(|e| format!("Could not open {}: {}", trimmed, e))?;
     Ok(())
 }
+/// Secure export: the backend owns path selection via native dialog.
+/// Writes to a temp file next to the destination, then renames atomically.
 #[tauri::command]
-pub async fn save_file(path: String, bytes: Vec<u8>, backup: Option<bool>) -> Result<(), String> {
+pub async fn export_bytes(
+    app: tauri::AppHandle,
+    suggested_name: String,
+    bytes: Vec<u8>,
+    backup: Option<bool>,
+) -> Result<String, String> {
     use std::io::Write;
-    let target = std::path::Path::new(&path);
-    let parent = target.parent().ok_or_else(|| "Invalid path".to_string())?;
-    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    if backup.unwrap_or(false) && target.exists() {
-        let bak = format!("{}.bak", path);
-        let _ = std::fs::copy(target, &bak);
+
+    // 1. User confirms destination via native dialog (no arbitrary path from frontend)
+    let picked = app
+        .dialog()
+        .file()
+        .set_file_name(&suggested_name)
+        .add_filter("JPEG Image", &["jpg", "jpeg"])
+        .add_filter("PNG Image", &["png"])
+        .add_filter("WebP Image", &["webp"])
+        .add_filter("All Images", &["jpg", "jpeg", "png", "webp"])
+        .blocking_save_file()
+        .ok_or("Export cancelled by user")?;
+
+    let path = picked.into_path().map_err(|e| e.to_string())?;
+
+    // 2. Optional backup of existing file (only if user chose to replace)
+    if backup.unwrap_or(false) && path.exists() {
+        let bak = path.with_extension(format!("{}.bak", path.extension().and_then(|s| s.to_str()).unwrap_or("bak")));
+        let _ = std::fs::copy(&path, &bak);
     }
-    let tmp = target.with_extension("tmp");
+
+    // 3. Atomic write: temp file next to destination, then rename
+    let tmp = path.with_extension(format!(
+        "tmp-{}",
+        uuid::Uuid::new_v4()
+    ));
     let mut file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
     file.write_all(&bytes).map_err(|e| e.to_string())?;
     file.sync_all().map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, target).map_err(|e| e.to_string())?;
-    Ok(())
+    std::fs::rename(&tmp, &path).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        e.to_string()
+    })?;
+
+    Ok(path.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]
