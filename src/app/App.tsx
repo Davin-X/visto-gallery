@@ -2541,16 +2541,36 @@ function VideoPlayer({ itemId, active = true, src, name, onFullscreen, onNext }:
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
-    setPlaying(false);
-    setTime(0);
-    setDuration(0);
-    setVolume(1);
-    setMuted(false);
+
+    // Restore playback state from store if this is the same itemId
+    const { itemId: storeItemId, time, volume, muted, playing, duration } = usePlaybackStore.getState();
+    if (storeItemId === itemId && duration > 0) {
+      // Restore saved state
+      video.currentTime = time;
+      video.volume = volume;
+      video.muted = muted;
+      if (playing && !video.paused) {
+        // Already playing, just sync
+      } else if (playing) {
+        void video.play().catch(() => {});
+      }
+      setPlaying(playing);
+      setTime(time);
+      setDuration(duration);
+      setVolume(volume);
+      setMuted(muted);
+    } else {
+      // Fresh load - defaults
+      setPlaying(false);
+      setTime(0);
+      setDuration(0);
+      setVolume(1);
+      setMuted(false);
+    }
 
     const onMetadata = () => {
       const nextDuration = Number.isFinite(video.duration) ? video.duration : 0;
       setDuration(nextDuration);
-      try { video.currentTime = Math.min(0.15, (video.duration || 1) / 2); } catch { /* ignore */ }
       syncPlayback({
         duration: nextDuration,
         time: video.currentTime,
