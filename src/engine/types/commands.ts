@@ -59,7 +59,7 @@ export interface ExifData {
 export interface RenderRequest {
   sourcePath: string;
   edits: EditValues;
-  outputFormat: "jpeg" | "png" | "webp" | "heic" | "avif";
+  outputFormat: "jpeg" | "png" | "webp" | "heic" | "avif" | "in_place";
   quality: number;
   stripMetadata: boolean;
   crop?: CropRect;
