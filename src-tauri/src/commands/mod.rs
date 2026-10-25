@@ -942,26 +942,38 @@ pub async fn get_library_items(filter: Option<LibraryFilterDTO>, state: State<'_
     Ok(items)
 }
 
-/// Attach tags and album ids to a page of items using two batch queries rather
-/// than one query per item.
+/// Attach tags and album ids to a page of items using filtered queries.
+/// Only fetches relations for the given item IDs (keyset pagination friendly).
 async fn hydrate_relations(db: &SqlitePool, items: &mut [MediaItem]) -> Result<(), String> {
     if items.is_empty() {
         return Ok(());
     }
 
-    let tag_rows = sqlx::query_as::<_, (String, String)>(
-        "SELECT mt.media_id, t.name FROM media_tags mt JOIN tags t ON t.id = mt.tag_id",
-    )
-    .fetch_all(db)
-    .await
-    .map_err(|e| e.to_string())?;
+    // Collect item IDs for IN clause
+    let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
+    let placeholders = std::iter::repeat("?").take(ids.len()).collect::<Vec<_>>().join(",");
+    
+    // Tags with JOIN to get names
+    let tag_sql = format!(
+        "SELECT mt.media_id, t.name FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.media_id IN ({})",
+        placeholders
+    );
+    let mut tag_query = sqlx::query_as::<_, (String, String)>(&tag_sql);
+    for id in &ids {
+        tag_query = tag_query.bind(*id);
+    }
+    let tag_rows = tag_query.fetch_all(db).await.map_err(|e| e.to_string())?;
 
-    let album_rows = sqlx::query_as::<_, (String, String)>(
-        "SELECT media_id, album_id FROM album_items",
-    )
-    .fetch_all(db)
-    .await
-    .map_err(|e| e.to_string())?;
+    // Album items
+    let album_sql = format!(
+        "SELECT media_id, album_id FROM album_items WHERE media_id IN ({})",
+        placeholders
+    );
+    let mut album_query = sqlx::query_as::<_, (String, String)>(&album_sql);
+    for id in &ids {
+        album_query = album_query.bind(*id);
+    }
+    let album_rows = album_query.fetch_all(db).await.map_err(|e| e.to_string())?;
 
     let mut tags_by_item: HashMap<String, Vec<String>> = HashMap::new();
     for (media_id, name) in tag_rows {

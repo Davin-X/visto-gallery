@@ -86,6 +86,12 @@ let db_path = get_db_path(app_handle)?;
             CREATE INDEX IF NOT EXISTS idx_media_hidden ON media_items(hidden);
             CREATE INDEX IF NOT EXISTS idx_media_sha256 ON media_items(sha256);
             CREATE INDEX IF NOT EXISTS idx_media_session ON media_items(import_session_id);
+            -- Composite index for paginated sorting
+            CREATE INDEX IF NOT EXISTS idx_media_captured_id ON media_items(COALESCE(captured_at, modified_at) DESC, id);
+            CREATE INDEX IF NOT EXISTS idx_media_modified_id ON media_items(modified_at DESC, id);
+            CREATE INDEX IF NOT EXISTS idx_media_name_id ON media_items(name COLLATE NOCASE, id);
+            CREATE INDEX IF NOT EXISTS idx_media_size_id ON media_items(size, id);
+            CREATE INDEX IF NOT EXISTS idx_media_kind_id ON media_items(kind, id);
             "#,
         )
         .execute(&self.pool)
@@ -138,6 +144,16 @@ let db_path = get_db_path(app_handle)?;
                 added_at INTEGER NOT NULL,
                 PRIMARY KEY (album_id, media_id)
             )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+        
+        // Relation table indexes for efficient hydration
+        sqlx::query(
+            r#"
+            CREATE INDEX IF NOT EXISTS idx_media_tags_media ON media_tags(media_id);
+            CREATE INDEX IF NOT EXISTS idx_album_items_media ON album_items(media_id);
             "#,
         )
         .execute(&self.pool)

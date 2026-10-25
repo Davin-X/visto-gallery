@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import type { MediaItem, Album, Tag, ImportSession, LibraryFilter, DuplicateGroup, Filter, LayoutMode, Screen } from "../types/media";
-import type { LibraryFolder } from "../types/commands";
+import type { LibraryFolder, LibraryFilterDTO } from "../types/commands";
 import { tauri } from "../commands/tauri";
 import { formatBytes } from "../commands/tauri";
 
@@ -62,6 +62,10 @@ interface LibraryState {
   // deliberately absent from the normal viewer, so the Hidden gallery asks the
   // viewer to browse the hidden set instead.
   viewerScope: "library" | "hidden";
+
+  // Pagination
+  page: number;
+  pageSize: number;
 
   // Status
   busy: boolean;
@@ -281,6 +285,10 @@ export const useLibraryStore = create<LibraryState>()(
       progress: null,
       notice: null,
       
+      // Pagination
+      page: 0,
+      pageSize: 200,
+      
       // Computed (updated via subscribe in components)
       visibleItems: [],
       sortedItems: [],
@@ -296,6 +304,7 @@ export const useLibraryStore = create<LibraryState>()(
       loadLibrary: async (filter) => {
         set({ busy: true, progress: { phase: "reading", processed: 0, total: 0 } });
         try {
+          const { page, pageSize, sortBy, sortOrder } = get();
           const dto = filter ? {
             kind: filter.kind,
             favorite: filter.favorite,
@@ -304,9 +313,14 @@ export const useLibraryStore = create<LibraryState>()(
             query: filter.query,
             dateFrom: filter.dateFrom,
             dateTo: filter.dateTo,
-            sortBy: "capturedAt" as const,
-            sortOrder: "desc" as const,
-          } : undefined;
+            sortBy: sortBy as LibraryFilterDTO["sortBy"],
+            sortOrder: sortOrder as LibraryFilterDTO["sortOrder"],
+            limit: pageSize,
+            offset: page * pageSize,
+          } : {
+            limit: pageSize,
+            offset: page * pageSize,
+          };
           
           console.log("loadLibrary: starting", { dto });
 
