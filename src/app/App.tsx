@@ -147,6 +147,7 @@ function App() {
   const [addingToAlbumId, setAddingToAlbumId] = useState<string | null>(null);
   const albumSearchRef = useRef<HTMLInputElement | null>(null);
   const [albumDragOver, setAlbumDragOver] = useState(false);
+  const [appVersion, setAppVersion] = useState("");
   const importPathsIntoAlbumRef = useRef<(paths: string[], albumId: string) => Promise<void>>(async () => {});
 
   // Opening our own menu has to cancel the event, otherwise the webview shows
@@ -2367,16 +2368,15 @@ function VideoThumb({ src, name, className }: { src: string; name?: string; clas
 // grid used to request multi-megabyte originals; cached JPEGs make scrolling a
 // large library cheap. Keys include the size because the backend caches each
 // rendering separately.
-const thumbnailCache = new Map<string, string>();
+const thumbnailCache = new Map<string, { dataUrl: string; byteLength: number }>();
 const thumbnailRequests = new Map<string, Promise<string>>();
 const thumbnailQueue: Array<() => void> = [];
-// Roughly one screenful of large tiles plus the editor picker. The DOM keeps
-// mounted thumbnails alive on its own, so this only needs to cover navigation
-// between views without holding the whole library in JS memory.
-const THUMBNAIL_CACHE_LIMIT = 256;
+// Byte budget: 20 MiB ≈ 256 * 80 KB (1024px JPEG). Evict by bytes, not count.
+const THUMBNAIL_CACHE_LIMIT_BYTES = 20 * 1024 * 1024;
 const MAX_CONCURRENT_THUMBNAIL_REQUESTS = 6;
 type CachedThumbnailSize = 64 | 128 | 256 | 512 | 1024;
 let activeThumbnailRequests = 0;
+let thumbnailCacheBytes = 0;
 
 function loadThumbnail(itemId: string, size: CachedThumbnailSize): Promise<string> {
   const key = `${itemId}:${size}`;
@@ -2385,7 +2385,7 @@ function loadThumbnail(itemId: string, size: CachedThumbnailSize): Promise<strin
     // Refresh insertion order so the least recently used entry is evicted first.
     thumbnailCache.delete(key);
     thumbnailCache.set(key, cached);
-    return Promise.resolve(cached);
+    return Promise.resolve(cached.dataUrl);
   }
   const inFlight = thumbnailRequests.get(key);
   if (inFlight) return inFlight;
@@ -2394,10 +2394,19 @@ function loadThumbnail(itemId: string, size: CachedThumbnailSize): Promise<strin
     thumbnailQueue.push(() => {
       activeThumbnailRequests += 1;
       void tauri.library.getThumbnail({ itemId, size }).then((response) => {
-        thumbnailCache.set(key, response.dataUrl);
-        if (thumbnailCache.size > THUMBNAIL_CACHE_LIMIT) {
-          const oldest = thumbnailCache.keys().next().value;
-          if (oldest) thumbnailCache.delete(oldest);
+        const byteLength = response.dataUrl.length; // base64 length ≈ 4/3 * bytes
+        thumbnailCache.set(key, { dataUrl: response.dataUrl, byteLength });
+        thumbnailCacheBytes += byteLength;
+        // Evict by bytes, not count
+        while (thumbnailCacheBytes > THUMBNAIL_CACHE_LIMIT_BYTES && thumbnailCache.size > 0) {
+          const oldestKey = thumbnailCache.keys().next().value;
+          if (oldestKey) {
+            const oldest = thumbnailCache.get(oldestKey);
+            if (oldest) thumbnailCacheBytes -= oldest.byteLength;
+            thumbnailCache.delete(oldestKey);
+          } else {
+            break;
+          }
         }
         resolve(response.dataUrl);
       }).catch(reject).finally(() => {

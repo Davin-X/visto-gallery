@@ -133,18 +133,18 @@ export const useSidebarWidth = () => useSettingsStore((s) => s.sidebarWidth);
 export const useDefaultLayout = () => useSettingsStore((s) => s.defaultLayout);
 export const useThumbnailSize = () => useSettingsStore((s) => s.thumbnailSize);
 
+// Memoization cache for applyTheme: key = `${accent}|${isDark}`
+const applyThemeCache = new Map<string, {
+  accent: string;
+  accentHover: string;
+  accentText: string;
+  accentSoft: string;
+  accentContrast: string;
+  fieldFocusInner: string;
+  surface: string;
+}>();
+
 // Apply theme to the native app frame.
-//
-// The accent is expanded into a small set of derived tokens so that every
-// part of the UI can use it correctly:
-//   --accent           the raw fill color (button backgrounds, borders)
-//   --accent-hover     the fill color for :hover / :active states
-//   --accent-text      the accent color WEIGHTED FOR TEXT on the surface.
-//                      This is darker in light mode and lighter in dark mode
-//                      so accent-colored labels stay readable.
-//   --accent-soft      a low-opacity tint of the accent for chip/badge fills
-//   --accent-contrast  readable text color to place ON TOP of --accent
-//   --field-focus-inner  the focus ring tint, derived from the accent
 export function applyTheme(settings: Pick<AppSettings, "appearance" | "accentColor">) {
   const frame = document.querySelector<HTMLElement>(".app-frame");
   if (!frame) return;
@@ -155,42 +155,39 @@ export function applyTheme(settings: Pick<AppSettings, "appearance" | "accentCol
   frame.classList.toggle("dark", isDark);
   const base = resolveAccent(settings.accentColor, isDark);
   const surface = isDark ? "#0b0d12" : "#ffffff";
-  // Push the accent away from the surface so it reads as a distinct hue:
-  // darken for light mode, lighten for dark mode.
-  const toward = isDark ? "#ffffff" : "#000000";
 
-  // --accent-soft is a TINT of the accent over the surface, i.e. mostly the
-  // surface with a little accent in it. mixColors(base, surface, r) blends
-  // toward the surface, so r must be high (0.88) to keep only 12% accent —
-  // this matches the `color-mix(in srgb, var(--accent) 12%, var(--surface))`
-  // fallback declared in the CSS.
-  const soft = mixColors(base, surface, 0.88);
+  // Check cache
+  const cacheKey = `${base}|${isDark}`;
+  let tokens = applyThemeCache.get(cacheKey);
+  
+  if (!tokens) {
+    const toward = isDark ? "#ffffff" : "#000000";
+    const soft = mixColors(base, surface, 0.88);
+    const text = accentTextFor(base, soft, isDark ? "#ffffff" : "#000000", surface);
+    
+    tokens = {
+      accent: base,
+      accentHover: mixColors(base, toward, isDark ? 0.16 : 0.12),
+      accentText: text,
+      accentSoft: soft,
+      accentContrast: contrastOn(base),
+      fieldFocusInner: rgba(base, isDark ? 0.26 : 0.24),
+      surface,
+    };
+    applyThemeCache.set(cacheKey, tokens);
+  }
 
-  // --accent-text has to work on BOTH the plain surface and the soft tint
-  // (active nav items, filter chips and badges all put accent text on the
-  // soft fill). Mixing 18% toward black is not enough for warm accents like
-  // orange, so darken/lighten the accent until it clears 4.5:1 against both
-  // backgrounds. This keeps the accent hue visible instead of falling back to
-  // a generic grey.
-  const text = accentTextFor(base, soft, isDark ? "#ffffff" : "#000000", surface);
+  frame.style.setProperty("--accent", tokens.accent);
+  frame.style.setProperty("--accent-hover", tokens.accentHover);
+  frame.style.setProperty("--accent-text", tokens.accentText);
+  frame.style.setProperty("--accent-soft", tokens.accentSoft);
+  frame.style.setProperty("--accent-contrast", tokens.accentContrast);
+  frame.style.setProperty("--field-focus-inner", tokens.fieldFocusInner);
+  document.documentElement.style.setProperty("--surface", tokens.surface);
 
-  frame.style.setProperty("--accent", base);
-  frame.style.setProperty("--accent-hover", mixColors(base, toward, isDark ? 0.16 : 0.12));
-  frame.style.setProperty("--accent-text", text);
-  frame.style.setProperty("--accent-soft", soft);
-  frame.style.setProperty("--accent-contrast", contrastOn(base));
-  frame.style.setProperty("--field-focus-inner", rgba(base, isDark ? 0.26 : 0.24));
-  // Expose --surface on <html> so <body> (an ancestor of .app-frame) inherits
-  // the correct dark/light surface color. This prevents the parent-window
-  // background from flashing during live window resizes when .app-frame
-  // hasn't yet resized to fill the viewport.
-  document.documentElement.style.setProperty("--surface", surface);
-
-  // Sync the native window background color to match the surface so that any
-  // gap between the webview backing store and the native window edge during
-  // macOS live resize shows the correct color instead of a white/light stripe.
+  // Sync native window background
   try {
-    void getCurrentWindow().setBackgroundColor(surface);
+    void getCurrentWindow().setBackgroundColor(tokens.surface);
   } catch {
     // Tauri not available (web preview) or API call failed — ignore.
   }

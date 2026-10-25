@@ -21,7 +21,7 @@ tauri-plugin-dialog = "2"
 tokio = { version = "1", features = ["full", "macros"] }
 
 # Database
-sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "macros", "time", "uuid", "chrono"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "macros", "time", "uuid", "chrono", "migrate"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -33,6 +33,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 
 # Time
 time = { version = "0.3", features = ["serde", "formatting", "macros", "std"] }
+chrono = { version = "0.4", features = ["serde"] }
 
 # Trash
 trash = "5"
