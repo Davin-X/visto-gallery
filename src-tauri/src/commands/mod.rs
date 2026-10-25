@@ -1505,35 +1505,19 @@ let known_paths: std::collections::HashSet<String> = sqlx::query_scalar("SELECT 
         }),
     );
 
-    let mut trashed: Vec<String> = Vec::new();
-    let mut processed = 0usize;
-    for path in &paths {
-        if SCAN_CANCEL.load(Ordering::SeqCst) {
-            break;
+let mut trashed: Vec<String> = Vec::new();
+    let paths_for_trash = paths.clone();
+    let result = tokio::task::spawn_blocking(move || trash::delete_all(&paths_for_trash)).await;
+    match result {
+        Ok(Ok(())) => {
+            trashed = paths.clone();
         }
-        let path_for_trash = path.clone();
-        let result = tokio::task::spawn_blocking(move || trash::delete(&path_for_trash)).await;
-        match result {
-            Ok(Ok(())) => {
-                trashed.push(path.clone());
-                processed += 1;
-            }
-            Ok(Err(e)) => {
-                return Err(format!("Could not move {} to Trash: {}", path, e));
-            }
-            Err(e) => {
-                return Err(format!("Trash task failed: {}", e));
-            }
+        Ok(Err(e)) => {
+            return Err(format!("Could not move files to Trash: {}", e));
         }
-        let _ = window.emit(
-            "import-progress",
-            json!({
-                "phase": "trashing",
-                "processed": processed,
-                "total": paths.len(),
-            }),
-        );
-        tokio::task::yield_now().await;
+        Err(e) => {
+            return Err(format!("Trash task failed: {}", e));
+        }
     }
 
     let _ = window.emit(
