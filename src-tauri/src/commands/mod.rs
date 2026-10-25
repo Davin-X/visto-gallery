@@ -344,7 +344,7 @@ fn path_is_inside(path: &str, root: &str) -> bool {
 
 /// Record an imported folder so the sidebar can list and remove it later.
 /// Failures are non-fatal: a catalog write should never fail an import.
-async fn remember_folder(db: &SqlitePool, root: &str) {
+async fn remember_folder(db: &SqlitePool, root: &str, app: &tauri::AppHandle) {
     let path = normalize_root(root);
     if path.is_empty() || !Path::new(&path).is_dir() {
         return;
@@ -354,6 +354,7 @@ async fn remember_folder(db: &SqlitePool, root: &str) {
         .bind(now_ms())
         .execute(db)
         .await;
+    let _ = app.asset_protocol_scope().allow_directory(&path, true);
 }
 
 fn is_media_file(ext: &str) -> bool {
@@ -701,7 +702,7 @@ pub async fn scan_library(
     // Only remember the folder once it actually contributed media, so an
     // accidental pick of an empty folder never shows up in the sidebar.
     if discovered_count > 0 {
-        remember_folder(&db, &root_path).await;
+        remember_folder(&db, &root_path, &window.app_handle()).await;
     }
 
     let duration = start.elapsed().as_millis() as i64;
@@ -751,6 +752,7 @@ pub async fn import_files(
     paths: Vec<String>,
     state: State<'_, AppState>,
     window: Window,
+    app: tauri::AppHandle,
 ) -> Result<ScanResult, String> {
     SCAN_CANCEL.store(false, Ordering::SeqCst);
     let start = std::time::Instant::now();
@@ -828,7 +830,7 @@ pub async fn import_files(
     if !items.is_empty() {
         for raw in &paths {
             if Path::new(raw).is_dir() {
-                remember_folder(&db, raw).await;
+                remember_folder(&db, raw, &app).await;
             }
         }
     }
@@ -2662,15 +2664,31 @@ pub async fn check_updates() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 pub async fn open_external(url: String) -> Result<(), String> {
+    let trimmed = url.trim();
+    let allowed = trimmed.starts_with("https://")
+        || trimmed.starts_with("http://")
+        || trimmed.starts_with("mailto:");
+    if !allowed {
+        return Err("Unsupported URL scheme".to_string());
+    }
     std::process::Command::new("open")
-        .arg(&url)
+        .arg(trimmed)
         .status()
-        .map_err(|e| format!("Could not open {}: {}", url, e))?;
+        .map_err(|e| format!("Could not open {}: {}", trimmed, e))?;
     Ok(())
 }
 #[tauri::command]
 pub async fn save_file(path: String, bytes: Vec<u8>) -> Result<(), String> {
-    std::fs::write(&path, bytes).map_err(|e| e.to_string())
+    use std::io::Write;
+    let target = std::path::Path::new(&path);
+    let parent = target.parent().ok_or_else(|| "Invalid path".to_string())?;
+    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let tmp = target.with_extension("tmp");
+    let mut file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+    file.write_all(&bytes).map_err(|e| e.to_string())?;
+    file.sync_all().map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, target).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[cfg(test)]

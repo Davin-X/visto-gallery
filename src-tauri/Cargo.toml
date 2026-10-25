@@ -16,8 +16,6 @@ tauri = { version = "2", features = ["protocol-asset",
     "http-range",
 ] }
 tauri-plugin-dialog = "2"
-tauri-plugin-fs = "2"
-tauri-plugin-shell = "2"
 
 # Async runtime
 tokio = { version = "1", features = ["full", "macros"] }
