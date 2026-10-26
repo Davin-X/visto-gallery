@@ -4531,8 +4531,18 @@ function EditScreen(props: any) {
           <div ref={stageRef} className={`crop-stage${showOriginalPreview ? " is-original" : ""}`}>
             <img src={props.assetUrl(props.item.path)} alt={props.item.name} style={{ transform: `rotate(${previewValues.rotation}deg) scaleX(${previewValues.flip ? -1 : 1})`, filter: previewFilter }} />
             {crop.enabled && !showOriginalPreview && (
-              <div className="crop-overlay" style={{ position: "absolute", left: `${crop.x*100}%`, top: `${crop.y*100}%`, width: `${crop.width*100}%`, height: `${crop.height*100}%`, border: "2px solid #fff", boxShadow: "0 0 0 9999px rgba(0,0,0,.45)", cursor: "move" }} onPointerDown={(e) => startDrag("move", e)}>
-                <span className="crop-handle br" style={{ position: "absolute", right: -6, bottom: -6, width: 12, height: 12, background: "#fff", border: "1px solid #333", cursor: "nwse-resize", borderRadius: 2 }} onPointerDown={(e) => { e.stopPropagation(); startDrag("resize", e); }} />
+              <div className="crop-overlay" style={{ position: "absolute", left: `${crop.x*100}%`, top: `${crop.y*100}%`, width: `${crop.width*100}%`, height: `${crop.height*100}%`, border: "2px solid #fff", boxShadow: "0 0 0 9999px rgba(0,0,0,.45)", cursor: "move" }} tabIndex={0} role="application" aria-label="Crop frame" onKeyDown={(e) => {
+                const step = e.shiftKey ? 0.05 : 0.01;
+                if (e.key === "ArrowLeft") { e.preventDefault(); props.onSetCrop({ x: Math.max(0, crop.x - step) }); }
+                else if (e.key === "ArrowRight") { e.preventDefault(); props.onSetCrop({ x: Math.min(1 - crop.width, crop.x + step) }); }
+                else if (e.key === "ArrowUp") { e.preventDefault(); props.onSetCrop({ y: Math.max(0, crop.y - step) }); }
+                else if (e.key === "ArrowDown") { e.preventDefault(); props.onSetCrop({ y: Math.min(1 - crop.height, crop.y + step) }); }
+              }} onPointerDown={(e) => startDrag("move", e)}>
+                <span className="crop-handle br" style={{ position: "absolute", right: -6, bottom: -6, width: 12, height: 12, background: "#fff", border: "1px solid #333", cursor: "nwse-resize", borderRadius: 2 }} tabIndex={0} role="button" aria-label="Resize crop" onKeyDown={(e) => {
+                  const step = e.shiftKey ? 0.05 : 0.01;
+                  if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); props.onSetCrop({ width: Math.min(1 - crop.x, crop.width + step), height: Math.min(1 - crop.y, crop.height + step) }); }
+                  else if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); props.onSetCrop({ width: Math.max(0.05, crop.width - step), height: Math.max(0.05, crop.height - step) }); }
+                }} onPointerDown={(e) => { e.stopPropagation(); startDrag("resize", e); }} />
               </div>
             )}
           </div>
