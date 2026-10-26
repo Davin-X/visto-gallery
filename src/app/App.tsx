@@ -1,4 +1,12 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo, useDeferredValue, memo } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  useMemo,
+  useDeferredValue,
+  memo,
+} from "react";
 import { useFocusTrap } from "../design/hooks/useFocusTrap";
 import EditScreen from "../screens/EditScreen";
 import ViewerScreen from "../screens/ViewerScreen";
@@ -14,7 +22,12 @@ import { KindBadge, KindDot } from "../design/components/KindBadge";
 import { createPortal } from "react-dom";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { save, open as openFileDialog } from "@tauri-apps/plugin-dialog";
-import { currentMonitor, getCurrentWindow, LogicalSize, PhysicalPosition } from "@tauri-apps/api/window";
+import {
+  currentMonitor,
+  getCurrentWindow,
+  LogicalSize,
+  PhysicalPosition,
+} from "@tauri-apps/api/window";
 import { tauri, events } from "../engine/commands/tauri";
 import {
   useLibraryStore,
@@ -40,8 +53,21 @@ import { getTypeIdentity, formatBytesSimple } from "../engine/utils/mediaTypes";
 // Helper: render a kind badge using centralized type identity
 
 // Helper: get icon for kind
-function KindIcon({ kind, size = 14 }: { kind: "photo" | "video" | "raw"; size?: number }) {
-  const common = { width: size, height: size, viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: 1.8 };
+function KindIcon({
+  kind,
+  size = 14,
+}: {
+  kind: "photo" | "video" | "raw";
+  size?: number;
+}) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 16 16",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+  };
   if (kind === "photo") {
     return (
       <span>
@@ -66,7 +92,10 @@ function KindIcon({ kind, size = 14 }: { kind: "photo" | "video" | "raw"; size?:
  * Apply the item's saved edit draft to a preview image. Passing the shared map
  * keeps this synchronous and avoids a localStorage read per tile.
  */
-function draftImageStyle(transforms: Map<string, DraftTransform> | undefined, itemId: string) {
+function draftImageStyle(
+  transforms: Map<string, DraftTransform> | undefined,
+  itemId: string,
+) {
   const transform = draftTransformStyle(transforms?.get(itemId));
   return transform ? { transform } : undefined;
 }
@@ -79,23 +108,142 @@ function startConfiguredSlideshow(items: MediaItem[], startId?: string | null) {
   slideshow.setLoop(preferences.slideshowLoop);
   slideshow.open(items, startId);
 }
-import type { MediaItem, MediaKind, DuplicateGroup, Album, Filter, LayoutMode, EditValues, CropRect } from "../engine/types/media";
+import type {
+  MediaItem,
+  MediaKind,
+  DuplicateGroup,
+  Album,
+  Filter,
+  LayoutMode,
+  EditValues,
+  CropRect,
+} from "../engine/types/media";
 import type { LibraryFolder } from "../engine/types/commands";
 import { SettingsScreen } from "../design/components/SettingsScreen";
 import { SourcesManager } from "../design/components/SourcesManager";
 import { SlideshowOverlay } from "../design/components/SlideshowOverlay";
 import { ContextMenu } from "../design/components/ContextMenu";
 import { BrandMark } from "../design/components/BrandMark";
-import { GearIcon, SunIcon, MoonIcon, LibraryIcon, AlbumsIcon, ViewerIcon, DuplicatesIcon, EditIcon, BatchIcon, SearchIcon, PlusIcon, MinusIcon, MoreIcon, InspectorIcon, FolderIcon, GridIcon, OverviewIcon, DetailsIcon, TimelineIcon, HeartIcon, EyeIcon, EyeOffIcon, FullscreenIcon, RotateIcon, CropIcon, FlipIcon, PlayIcon, PauseIcon, SparkleIcon, UsersIcon, TagIcon, ImageOffIcon, ShareIcon, CheckIcon, StopIcon, TrashIcon, VolumeIcon } from "../design/components/icons";
+import {
+  GearIcon,
+  SunIcon,
+  MoonIcon,
+  LibraryIcon,
+  AlbumsIcon,
+  ViewerIcon,
+  DuplicatesIcon,
+  EditIcon,
+  BatchIcon,
+  SearchIcon,
+  PlusIcon,
+  MinusIcon,
+  MoreIcon,
+  InspectorIcon,
+  FolderIcon,
+  GridIcon,
+  OverviewIcon,
+  DetailsIcon,
+  TimelineIcon,
+  HeartIcon,
+  EyeIcon,
+  EyeOffIcon,
+  FullscreenIcon,
+  RotateIcon,
+  CropIcon,
+  FlipIcon,
+  PlayIcon,
+  PauseIcon,
+  SparkleIcon,
+  UsersIcon,
+  TagIcon,
+  ImageOffIcon,
+  ShareIcon,
+  CheckIcon,
+  StopIcon,
+  TrashIcon,
+  VolumeIcon,
+} from "../design/components/icons";
 
-type Screen = "Library" | "Albums" | "Viewer" | "Duplicates" | "Edit" | "Batch" | "Hidden" | "Settings";
+type Screen =
+  | "Library"
+  | "Albums"
+  | "Viewer"
+  | "Duplicates"
+  | "Edit"
+  | "Batch"
+  | "Hidden"
+  | "Settings";
 
-const initialEdits = { exposure: 0, contrast: 0, warmth: 0, shadows: 0, highlights: 0, saturation: 0, rotation: 0, flip: false };
+const initialEdits = {
+  exposure: 0,
+  contrast: 0,
+  warmth: 0,
+  shadows: 0,
+  highlights: 0,
+  saturation: 0,
+  rotation: 0,
+  flip: false,
+};
 
 const MEDIA_EXTENSIONS = [
-  "avif", "bmp", "gif", "heic", "heif", "jfif", "jpe", "jpeg", "jpg", "jxl", "png", "tif", "tiff", "webp",
-  "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf", "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf", "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f",
-  "m4v", "mov", "mp4", "mpeg", "mpg", "webm",
+  "avif",
+  "bmp",
+  "gif",
+  "heic",
+  "heif",
+  "jfif",
+  "jpe",
+  "jpeg",
+  "jpg",
+  "jxl",
+  "png",
+  "tif",
+  "tiff",
+  "webp",
+  "3fr",
+  "ari",
+  "arw",
+  "bay",
+  "cap",
+  "cr2",
+  "cr3",
+  "dcs",
+  "dcr",
+  "dng",
+  "drf",
+  "eip",
+  "erf",
+  "fff",
+  "gpr",
+  "iiq",
+  "k25",
+  "kdc",
+  "mdc",
+  "mef",
+  "mos",
+  "mrw",
+  "nef",
+  "nrw",
+  "obm",
+  "orf",
+  "pef",
+  "ptx",
+  "pxn",
+  "r3d",
+  "raf",
+  "raw",
+  "rw2",
+  "rwl",
+  "sr2",
+  "srf",
+  "srw",
+  "x3f",
+  "m4v",
+  "mov",
+  "mp4",
+  "mpeg",
+  "mpg",
+  "webm",
 ];
 
 /** Tauri rejects with a plain string, but anything else can surface too. */
@@ -110,14 +258,18 @@ function describeError(error: unknown): string {
 }
 
 function isWarningNotice(text: string): boolean {
-  return /failed|could not|cannot access|not a folder|could not read|no media files found|no supported media/i.test(text);
+  return /failed|could not|cannot access|not a folder|could not read|no media files found|no supported media/i.test(
+    text,
+  );
 }
 
 /** Modifier glyph for the "focus search" hint - Command on macOS, Ctrl elsewhere. */
 function searchShortcutLabel(): string {
   if (typeof navigator === "undefined") return "⌘F";
   // `userAgentData` is not in the default TS lib yet, so read it defensively.
-  const uaData = (navigator as unknown as { userAgentData?: { platform?: string } }).userAgentData;
+  const uaData = (
+    navigator as unknown as { userAgentData?: { platform?: string } }
+  ).userAgentData;
   const platform = uaData?.platform || navigator.platform || "";
   return /mac|iphone|ipad|ipod/i.test(platform) ? "⌘F" : "Ctrl F";
 }
@@ -136,7 +288,11 @@ function App() {
   };
   // Context menu state (declared here because the component references it in
   // JSX but it was previously an implicit global, which left the render blank).
-  const [contextMenu, setContextMenu] = useState<{ items: any[]; x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    items: any[];
+    x: number;
+    y: number;
+  } | null>(null);
   const systemDark = useSystemDark();
   const appearance = useSettingsStore((s) => s.appearance);
   const accentColor = useSettingsStore((s) => s.accentColor);
@@ -144,7 +300,9 @@ function App() {
   // Resolved appearance: the user's choice, or the OS setting when "system".
   const dark = appearance === "dark" || (appearance === "system" && systemDark);
   const [albumDialogOpen, setAlbumDialogOpen] = useState(false);
-  const [albumDialogMode, setAlbumDialogMode] = useState<"create" | "rename">("create");
+  const [albumDialogMode, setAlbumDialogMode] = useState<"create" | "rename">(
+    "create",
+  );
   const [albumName, setAlbumName] = useState("");
   const [albumSeedIds, setAlbumSeedIds] = useState<string[] | null>(null);
   const [renamingAlbumId, setRenamingAlbumId] = useState<string | null>(null);
@@ -155,16 +313,23 @@ function App() {
   const deleteItemDialogRef = useRef<HTMLDivElement | null>(null);
   const removeFolderDialogRef = useRef<HTMLDivElement | null>(null);
 
-  const [albumPendingDelete, setAlbumPendingDelete] = useState<any | null>(null);
-  const [itemPendingDeleteCount, setItemPendingDeleteCount] = useState<number>(0);
+  const [albumPendingDelete, setAlbumPendingDelete] = useState<any | null>(
+    null,
+  );
+  const [itemPendingDeleteCount, setItemPendingDeleteCount] =
+    useState<number>(0);
   const itemPendingDeleteRef = useRef<string[] | null>(null);
   const folderChangedTimerRef = useRef<number | null>(null);
-  const [albumRemovePending, setAlbumRemovePending] = useState<{ albumId: string; itemIds: string[] } | null>(null);
+  const [albumRemovePending, setAlbumRemovePending] = useState<{
+    albumId: string;
+    itemIds: string[];
+  } | null>(null);
   const [deletingAlbum, setDeletingAlbum] = useState(false);
 
   // Removing a folder is confirmed through its own dialog so a stray click in
   // the sidebar can never drop a chunk of the library.
-  const [folderPendingRemove, setFolderPendingRemove] = useState<LibraryFolder | null>(null);
+  const [folderPendingRemove, setFolderPendingRemove] =
+    useState<LibraryFolder | null>(null);
   const [removingFolder, setRemovingFolder] = useState(false);
   const [sourcesSheetOpen, setSourcesSheetOpen] = useState(false);
   useFocusTrap(albumDialogOpen, albumDialogRef);
@@ -184,19 +349,30 @@ function App() {
   const albumSearchRef = useRef<HTMLInputElement | null>(null);
   const [albumDragOver, setAlbumDragOver] = useState(false);
   const [appVersion, setAppVersion] = useState("");
-const [aboutOpen, setAboutOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   useEffect(() => {
     if (!aboutOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setAboutOpen(false); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAboutOpen(false);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [aboutOpen]);
   useEffect(() => {
     let cancelled = false;
-    tauri.app.getVersion().then((v) => { if (!cancelled) setAppVersion(v); }).catch(() => {});
-    return () => { cancelled = true; };
+    tauri.app
+      .getVersion()
+      .then((v) => {
+        if (!cancelled) setAppVersion(v);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, []);
-  const importPathsIntoAlbumRef = useRef<(paths: string[], albumId: string) => Promise<void>>(async () => {});
+  const importPathsIntoAlbumRef = useRef<
+    (paths: string[], albumId: string) => Promise<void>
+  >(async () => {});
 
   // Opening our own menu has to cancel the event, otherwise the webview shows
   // its default menu (Reload / Copy / Open in new tab) on top of it.
@@ -214,7 +390,8 @@ const [aboutOpen, setAboutOpen] = useState(false);
       if (!el) return;
       const editable =
         el.isContentEditable ||
-        ((el.tagName === "INPUT" || el.tagName === "TEXTAREA") && !el.hasAttribute("disabled"));
+        ((el.tagName === "INPUT" || el.tagName === "TEXTAREA") &&
+          !el.hasAttribute("disabled"));
       if (!editable) e.preventDefault();
     };
     document.addEventListener("contextmenu", suppress);
@@ -232,15 +409,30 @@ const [aboutOpen, setAboutOpen] = useState(false);
     if (settingsHydrated && screen === "Library" && !library.activeAlbum) {
       library.setLayout(defaultLayout);
     }
-  }, [settingsHydrated, screen, defaultLayout, library.activeAlbum, library.setLayout]);
+  }, [
+    settingsHydrated,
+    screen,
+    defaultLayout,
+    library.activeAlbum,
+    library.setLayout,
+  ]);
 
   // Sidebar summary in one pass. The rows used to run a filter + reduce over
   // the whole library each, i.e. a dozen scans per render, which is costly at
   // 10k+ items and made every unrelated state change feel slow.
   const libraryStats = useMemo(() => {
     const stats = {
-      photos: 0, videos: 0, raws: 0, favorites: 0, hidden: 0,
-      photoSize: 0, videoSize: 0, rawSize: 0, favoriteSize: 0, hiddenSize: 0, totalSize: 0,
+      photos: 0,
+      videos: 0,
+      raws: 0,
+      favorites: 0,
+      hidden: 0,
+      photoSize: 0,
+      videoSize: 0,
+      rawSize: 0,
+      favoriteSize: 0,
+      hiddenSize: 0,
+      totalSize: 0,
     };
     for (const item of library.items) {
       // Hidden items are a separate collection. Keeping them out of the
@@ -252,10 +444,20 @@ const [aboutOpen, setAboutOpen] = useState(false);
         continue;
       }
       stats.totalSize += item.size;
-      if (item.favorite) { stats.favorites += 1; stats.favoriteSize += item.size; }
-      if (item.kind === "photo") { stats.photos += 1; stats.photoSize += item.size; }
-      else if (item.kind === "video") { stats.videos += 1; stats.videoSize += item.size; }
-      else if (item.kind === "raw") { stats.raws += 1; stats.rawSize += item.size; }
+      if (item.favorite) {
+        stats.favorites += 1;
+        stats.favoriteSize += item.size;
+      }
+      if (item.kind === "photo") {
+        stats.photos += 1;
+        stats.photoSize += item.size;
+      } else if (item.kind === "video") {
+        stats.videos += 1;
+        stats.videoSize += item.size;
+      } else if (item.kind === "raw") {
+        stats.raws += 1;
+        stats.rawSize += item.size;
+      }
     }
     return stats;
   }, [library.items]);
@@ -268,7 +470,9 @@ const [aboutOpen, setAboutOpen] = useState(false);
   // A video keeps playing when the user switches tabs. To do that the viewer
   // must stay mounted (off-screen) and keep showing the item it was playing,
   // even if the library inspection moves to another photo in the meantime.
-  const [frozenViewerItem, setFrozenViewerItem] = useState<MediaItem | null>(null);
+  const [frozenViewerItem, setFrozenViewerItem] = useState<MediaItem | null>(
+    null,
+  );
   const lastViewerItemRef = useRef<MediaItem | null>(null);
   const viewerHostRef = useRef<HTMLDivElement | null>(null);
 
@@ -299,7 +503,8 @@ const [aboutOpen, setAboutOpen] = useState(false);
   // The hidden player must not be reachable with Tab or a screen reader.
   useEffect(() => {
     const host = viewerHostRef.current;
-    if (host) (host as HTMLElement & { inert: boolean }).inert = screen !== "Viewer";
+    if (host)
+      (host as HTMLElement & { inert: boolean }).inert = screen !== "Viewer";
   }, [screen, viewer.isOpen]);
 
   // Ensure screen state matches viewer state on mount/hydration.
@@ -319,13 +524,22 @@ const [aboutOpen, setAboutOpen] = useState(false);
   // (not on mousedown) so a double-click is not mistaken for a drag, then use
   // double-click to toggle fill / centered small window. preventDefault keeps
   // the status text from being selected by the first click.
-  const dragCandidateRef = useRef<{ x: number; y: number; dragging: boolean } | null>(null);
+  const dragCandidateRef = useRef<{
+    x: number;
+    y: number;
+    dragging: boolean;
+  } | null>(null);
   const preFillSizeRef = useRef<{ width: number; height: number } | null>(null);
 
   const beginTopbarDrag = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement | null;
-    if (target?.closest("button, a, input, select, textarea, [role='button'], [data-no-drag]")) return;
+    if (
+      target?.closest(
+        "button, a, input, select, textarea, [role='button'], [data-no-drag]",
+      )
+    )
+      return;
     e.preventDefault();
     if (e.detail > 1) return;
     dragCandidateRef.current = { x: e.clientX, y: e.clientY, dragging: false };
@@ -337,7 +551,9 @@ const [aboutOpen, setAboutOpen] = useState(false);
       if (!drag || drag.dragging) return;
       if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 4) return;
       drag.dragging = true;
-      getCurrentWindow().startDragging().catch(() => {});
+      getCurrentWindow()
+        .startDragging()
+        .catch(() => {});
     };
     const clear = () => {
       dragCandidateRef.current = null;
@@ -356,34 +572,59 @@ const [aboutOpen, setAboutOpen] = useState(false);
   // The next one restores the saved inner size and centers it.
   const handleTopbarDoubleClick = useCallback(async (e: React.MouseEvent) => {
     const target = e.target as HTMLElement | null;
-    if (target?.closest("button, a, input, select, textarea, [role='button']")) return;
+    if (target?.closest("button, a, input, select, textarea, [role='button']"))
+      return;
     e.preventDefault();
     e.stopPropagation();
     try {
       const win = getCurrentWindow();
       const monitor = await currentMonitor();
       if (!monitor) return;
-      const work = monitor.workArea ?? { position: monitor.position, size: monitor.size };
+      const work = monitor.workArea ?? {
+        position: monitor.position,
+        size: monitor.size,
+      };
       const scale = monitor.scaleFactor || 1;
       const workWidth = work.size.width / scale;
       const workHeight = work.size.height / scale;
       const outer = await win.outerSize();
-      const filled = outer.width >= work.size.width - 8 && outer.height >= work.size.height - 8;
+      const filled =
+        outer.width >= work.size.width - 8 &&
+        outer.height >= work.size.height - 8;
 
       if (filled) {
         const saved = preFillSizeRef.current;
-        const width = saved?.width && saved.width < workWidth - 40 ? saved.width : Math.min(1280, workWidth - 80);
-        const height = saved?.height && saved.height < workHeight - 40 ? saved.height : Math.min(852, workHeight - 80);
+        const width =
+          saved?.width && saved.width < workWidth - 40
+            ? saved.width
+            : Math.min(1280, workWidth - 80);
+        const height =
+          saved?.height && saved.height < workHeight - 40
+            ? saved.height
+            : Math.min(852, workHeight - 80);
         await win.setSize(new LogicalSize(width, height));
         await win.center();
         preFillSizeRef.current = null;
       } else {
         const inner = await win.innerSize();
         const outerBefore = await win.outerSize();
-        const chromeHeight = Math.max(0, (outerBefore.height - inner.height) / scale);
-        preFillSizeRef.current = { width: inner.width / scale, height: inner.height / scale };
-        await win.setPosition(new PhysicalPosition(work.position.x, work.position.y));
-        await win.setSize(new LogicalSize(Math.max(1, workWidth - 2), Math.max(1, workHeight - chromeHeight - 2)));
+        const chromeHeight = Math.max(
+          0,
+          (outerBefore.height - inner.height) / scale,
+        );
+        preFillSizeRef.current = {
+          width: inner.width / scale,
+          height: inner.height / scale,
+        };
+        await win.setPosition(
+          new PhysicalPosition(work.position.x, work.position.y),
+        );
+        await win.setSize(
+          new LogicalSize(
+            Math.max(1, workWidth - 2),
+            Math.max(1, workHeight - chromeHeight - 2),
+          ),
+        );
       }
     } catch {
       // Ignore: the browser preview has no Tauri window to resize.
@@ -412,15 +653,26 @@ const [aboutOpen, setAboutOpen] = useState(false);
       try {
         const monitor = await currentMonitor();
         if (!monitor) return;
-        const work = monitor.workArea ?? { position: monitor.position, size: monitor.size };
+        const work = monitor.workArea ?? {
+          position: monitor.position,
+          size: monitor.size,
+        };
         const outer = await win.outerSize();
         const pos = await win.outerPosition();
-        const filled = outer.width >= work.size.width - 8 && outer.height >= work.size.height - 8;
+        const filled =
+          outer.width >= work.size.width - 8 &&
+          outer.height >= work.size.height - 8;
 
         if (filled) {
           wasFilled = true;
-          const maxX = Math.max(work.position.x, work.position.x + work.size.width - outer.width);
-          const maxY = Math.max(work.position.y, work.position.y + work.size.height - outer.height);
+          const maxX = Math.max(
+            work.position.x,
+            work.position.x + work.size.width - outer.width,
+          );
+          const maxY = Math.max(
+            work.position.y,
+            work.position.y + work.size.height - outer.height,
+          );
           const x = Math.min(Math.max(pos.x, work.position.x), maxX);
           const y = Math.min(Math.max(pos.y, work.position.y), maxY);
           if (x !== pos.x || y !== pos.y) {
@@ -465,7 +717,12 @@ const [aboutOpen, setAboutOpen] = useState(false);
   // Convert local file path to Tauri asset URL
   const assetUrl = useCallback((path: string) => {
     if (!path) return "";
-    if (path.startsWith("blob:") || path.startsWith("data:") || path.startsWith("http")) return path;
+    if (
+      path.startsWith("blob:") ||
+      path.startsWith("data:") ||
+      path.startsWith("http")
+    )
+      return path;
     try {
       return convertFileSrc(path);
     } catch {
@@ -474,8 +731,34 @@ const [aboutOpen, setAboutOpen] = useState(false);
   }, []);
 
   // Latest render values, so long-lived event handlers never read stale stores.
-  const liveRef = useRef({ library, viewer, edit, settings, screen, viewerOrigin, albumDialogOpen, albumPickerOpen, albumPendingDelete, itemPendingDeleteCount, folderPendingRemove, sourcesSheetOpen });
-  liveRef.current = { library, viewer, edit, settings, screen, viewerOrigin, albumDialogOpen, albumPickerOpen, albumPendingDelete, itemPendingDeleteCount, folderPendingRemove, sourcesSheetOpen };
+  const liveRef = useRef({
+    library,
+    viewer,
+    edit,
+    settings,
+    screen,
+    viewerOrigin,
+    albumDialogOpen,
+    albumPickerOpen,
+    albumPendingDelete,
+    itemPendingDeleteCount,
+    folderPendingRemove,
+    sourcesSheetOpen,
+  });
+  liveRef.current = {
+    library,
+    viewer,
+    edit,
+    settings,
+    screen,
+    viewerOrigin,
+    albumDialogOpen,
+    albumPickerOpen,
+    albumPendingDelete,
+    itemPendingDeleteCount,
+    folderPendingRemove,
+    sourcesSheetOpen,
+  };
 
   // Handlers are declared further down; stable listeners reach them through a ref.
   const handlersRef = useRef<{
@@ -502,15 +785,27 @@ const [aboutOpen, setAboutOpen] = useState(false);
         if (cancelled) unlisten();
         else unlisteners.push(unlisten);
       };
-      await register("menu-open-folder", () => handlersRef.current.importFolder());
-      await register("menu-import-files", () => handlersRef.current.importFiles());
-      await register("menu-export", () => handlersRef.current.showNotice("Export - coming soon"));
-      await register("menu-toggle-sidebar", () => liveRef.current.library.toggleSidebar());
-      await register("menu-toggle-inspector", () => liveRef.current.library.toggleInspector());
+      await register("menu-open-folder", () =>
+        handlersRef.current.importFolder(),
+      );
+      await register("menu-import-files", () =>
+        handlersRef.current.importFiles(),
+      );
+      await register("menu-export", () =>
+        handlersRef.current.showNotice("Export - coming soon"),
+      );
+      await register("menu-toggle-sidebar", () =>
+        liveRef.current.library.toggleSidebar(),
+      );
+      await register("menu-toggle-inspector", () =>
+        liveRef.current.library.toggleInspector(),
+      );
       await register("menu-zoom-in", () => liveRef.current.viewer.zoomIn());
       await register("menu-zoom-out", () => liveRef.current.viewer.zoomOut());
       await register("menu-about", () => setAboutOpen(true));
-      await register("menu-check-updates", () => handlersRef.current.showNotice("Check for updates - coming soon"));
+      await register("menu-check-updates", () =>
+        handlersRef.current.showNotice("Check for updates - coming soon"),
+      );
 
       // Listen for native import progress events from scan/import commands.
       const unlistenProgress = await events.onImportProgress((progress) => {
@@ -535,7 +830,8 @@ const [aboutOpen, setAboutOpen] = useState(false);
       });
       const unlistenFolderChanged = await events.onFolderChanged((path) => {
         // Debounce rapid filesystem events into a single catalog refresh.
-        if (folderChangedTimerRef.current) window.clearTimeout(folderChangedTimerRef.current);
+        if (folderChangedTimerRef.current)
+          window.clearTimeout(folderChangedTimerRef.current);
         folderChangedTimerRef.current = window.setTimeout(() => {
           liveRef.current.library.loadLibrary().catch(() => {});
         }, 500);
@@ -546,7 +842,18 @@ const [aboutOpen, setAboutOpen] = useState(false);
 
     // Keyboard shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
-      const { library, viewer, screen, viewerOrigin, albumDialogOpen, albumPickerOpen, albumPendingDelete, itemPendingDeleteCount, folderPendingRemove, sourcesSheetOpen } = liveRef.current;
+      const {
+        library,
+        viewer,
+        screen,
+        viewerOrigin,
+        albumDialogOpen,
+        albumPickerOpen,
+        albumPendingDelete,
+        itemPendingDeleteCount,
+        folderPendingRemove,
+        sourcesSheetOpen,
+      } = liveRef.current;
       const mod = e.metaKey || e.ctrlKey;
       const key = e.key.toLowerCase();
 
@@ -556,33 +863,80 @@ const [aboutOpen, setAboutOpen] = useState(false);
 
       // While a modal is open, every key belongs to it (the dialogs own Enter
       // and Escape) instead of the global shortcut map.
-      if (albumDialogOpen || albumPickerOpen || albumPendingDelete || itemPendingDeleteCount > 0 || folderPendingRemove || sourcesSheetOpen) return;
+      if (
+        albumDialogOpen ||
+        albumPickerOpen ||
+        albumPendingDelete ||
+        itemPendingDeleteCount > 0 ||
+        folderPendingRemove ||
+        sourcesSheetOpen
+      )
+        return;
 
-      if (mod && key === "o") { e.preventDefault(); handlersRef.current.importFolder(); return; }
-      if (mod && key === "i") { e.preventDefault(); handlersRef.current.importFiles(); return; }
-      if (mod && key === "e") { e.preventDefault(); handlersRef.current.showNotice("Export - coming soon"); return; }
-      if (mod && e.key === "\\") { e.preventDefault(); library.toggleSidebar(); return; }
-      if (mod && e.altKey && key === "i") { e.preventDefault(); library.toggleInspector(); return; }
+      if (mod && key === "o") {
+        e.preventDefault();
+        handlersRef.current.importFolder();
+        return;
+      }
+      if (mod && key === "i") {
+        e.preventDefault();
+        handlersRef.current.importFiles();
+        return;
+      }
+      if (mod && key === "e") {
+        e.preventDefault();
+        handlersRef.current.showNotice("Export - coming soon");
+        return;
+      }
+      if (mod && e.key === "\\") {
+        e.preventDefault();
+        library.toggleSidebar();
+        return;
+      }
+      if (mod && e.altKey && key === "i") {
+        e.preventDefault();
+        library.toggleInspector();
+        return;
+      }
       if (mod && key === "a") {
         const target = e.target as HTMLElement;
-        const isEditable = target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
-        if (!isEditable && (screen === "Library" || screen === "Hidden" || screen === "Albums")) {
+        const isEditable =
+          target.isContentEditable ||
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT";
+        if (
+          !isEditable &&
+          (screen === "Library" || screen === "Hidden" || screen === "Albums")
+        ) {
           e.preventDefault();
-          const items = screen === "Hidden" ? library.hiddenItems : library.visibleItems;
+          const items =
+            screen === "Hidden" ? library.hiddenItems : library.visibleItems;
           const selectedSet = new Set(library.selectedIds);
-          const allSelected = items.length > 0 && items.every((item: any) => selectedSet.has(item.id));
-          library.setSelectedIds(allSelected ? [] : items.map((item: any) => item.id));
+          const allSelected =
+            items.length > 0 &&
+            items.every((item: any) => selectedSet.has(item.id));
+          library.setSelectedIds(
+            allSelected ? [] : items.map((item: any) => item.id),
+          );
           return;
         }
       }
       if (mod && key === "f") {
         const target = e.target as HTMLElement;
-        const isEditable = target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
+        const isEditable =
+          target.isContentEditable ||
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT";
         if (!isEditable) {
           e.preventDefault();
           const focusSearch = () => {
-            const input = searchInputRef.current
-              || (document.querySelector(".search-field input") as HTMLInputElement | null);
+            const input =
+              searchInputRef.current ||
+              (document.querySelector(
+                ".search-field input",
+              ) as HTMLInputElement | null);
             input?.focus();
             input?.select();
           };
@@ -592,8 +946,11 @@ const [aboutOpen, setAboutOpen] = useState(false);
             setScreen("Library");
             let attempts = 0;
             const tryFocus = () => {
-              const input = searchInputRef.current
-                || (document.querySelector(".search-field input") as HTMLInputElement | null);
+              const input =
+                searchInputRef.current ||
+                (document.querySelector(
+                  ".search-field input",
+                ) as HTMLInputElement | null);
               if (input) {
                 input.focus();
                 input.select();
@@ -610,7 +967,11 @@ const [aboutOpen, setAboutOpen] = useState(false);
       }
       if (screen === "Viewer" && !e.defaultPrevented) {
         const target = e.target as HTMLElement;
-        const isEditable = target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
+        const isEditable =
+          target.isContentEditable ||
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT";
         if (!isEditable && e.key === "ArrowRight") viewer.navigate(1);
         if (!isEditable && e.key === "ArrowLeft") viewer.navigate(-1);
       }
@@ -622,14 +983,28 @@ const [aboutOpen, setAboutOpen] = useState(false);
           library.toggleInspector();
         }
       }
-      if (e.key === "Enter" && mod && screen === "Hidden" && library.inspectedId) {
+      if (
+        e.key === "Enter" &&
+        mod &&
+        screen === "Hidden" &&
+        library.inspectedId
+      ) {
         // HiddenScreen owns the reveal confirmation, so route the shortcut
         // through it instead of opening the viewer directly.
         e.preventDefault();
-        window.dispatchEvent(new CustomEvent("mac-gallery:open-hidden", { detail: { id: library.inspectedId } }));
+        window.dispatchEvent(
+          new CustomEvent("mac-gallery:open-hidden", {
+            detail: { id: library.inspectedId },
+          }),
+        );
         return;
       }
-      if (e.key === "Enter" && mod && screen === "Library" && library.inspectedId) {
+      if (
+        e.key === "Enter" &&
+        mod &&
+        screen === "Library" &&
+        library.inspectedId
+      ) {
         setViewerOrigin("Library");
         library.setViewerScope("library");
         viewer.open();
@@ -675,63 +1050,95 @@ const [aboutOpen, setAboutOpen] = useState(false);
     };
   }, [dark, appearance, accentColor, systemDark]);
 
-  const showNotice = useCallback((text: string) => {
-    library.showNotice(text);
-  }, [library]);
+  const showNotice = useCallback(
+    (text: string) => {
+      library.showNotice(text);
+    },
+    [library],
+  );
 
   // Single entry point for "open this item in the player". Used by tiles, the
   // inspector and by Play on a video-only selection.
-  const openViewer = useCallback((id?: string, origin: Screen = "Library", scope: "library" | "hidden" = "library") => {
-    setViewerOrigin(origin);
-    library.setViewerScope(scope);
-    viewer.open(id);
-    setScreen("Viewer");
-  }, [library, viewer]);
+  const openViewer = useCallback(
+    (
+      id?: string,
+      origin: Screen = "Library",
+      scope: "library" | "hidden" = "library",
+    ) => {
+      setViewerOrigin(origin);
+      library.setViewerScope(scope);
+      viewer.open(id);
+      setScreen("Viewer");
+    },
+    [library, viewer],
+  );
 
   // Slideshow is a mode over the current context, not a separate screen:
   // play the selection when there is one, otherwise the collection on screen
   // (album, folder, filter or search results).
-  const playSlideshow = useCallback((ids?: string[]) => {
-    const selection = ids && ids.length ? new Set(ids) : null;
-    // A selection is authoritative: play every selected item, even one the
-    // current filter/album is not showing. Ordering follows the grid for the
-    // items on screen, then appends the rest so nothing selected is dropped.
-    const visibleSelection = selection
-      ? library.visibleItems.filter((item: MediaItem) => selection.has(item.id))
-      : [];
-    const visibleSelectionIds = new Set(visibleSelection.map((item) => item.id));
-    const offscreenSelection = selection
-      ? library.items.filter((item: MediaItem) => selection.has(item.id) && !visibleSelectionIds.has(item.id))
-      : [];
-    const scope = selection
-      ? [...visibleSelection, ...offscreenSelection]
-      : library.visibleItems;
-    if (scope.length === 0) {
-      showNotice("Add photos or videos to start a slideshow.");
-      return;
-    }
-    // A video-only selection belongs in the player: seeking, volume and
-    // auto-advance are what people expect from a video, while a slideshow is
-    // built for sequencing photos. Mixed selections still use the slideshow,
-    // because it is the only mode that can play both kinds.
-    if (selection && scope.every((item) => item.kind === "video")) {
-      openViewer(scope[0].id);
-      return;
-    }
-    // Close any open viewer so its media can't keep playing underneath the show.
-    if (viewer.isOpen) {
-      viewer.close();
-      setScreen(viewerOrigin || "Library");
-    }
-    // Pause any other playing videos (e.g. inspector preview) to avoid parallel audio.
-    document.querySelectorAll("video").forEach((v) => { try { v.pause(); } catch {} });
-    // Read the action off the store instead of subscribing to it: advancing
-    // slides should only re-render the overlay, never the whole app.
-    // An explicit selection starts at its first item; only the no-selection
-    // case resumes from whatever was last inspected, so a video that was
-    // playing in the background cannot hijack the start of a new selection.
-    startConfiguredSlideshow(scope, selection ? null : library.inspectedId);
-  }, [library.items, library.visibleItems, library.inspectedId, showNotice, viewer, viewerOrigin, openViewer]);
+  const playSlideshow = useCallback(
+    (ids?: string[]) => {
+      const selection = ids && ids.length ? new Set(ids) : null;
+      // A selection is authoritative: play every selected item, even one the
+      // current filter/album is not showing. Ordering follows the grid for the
+      // items on screen, then appends the rest so nothing selected is dropped.
+      const visibleSelection = selection
+        ? library.visibleItems.filter((item: MediaItem) =>
+            selection.has(item.id),
+          )
+        : [];
+      const visibleSelectionIds = new Set(
+        visibleSelection.map((item) => item.id),
+      );
+      const offscreenSelection = selection
+        ? library.items.filter(
+            (item: MediaItem) =>
+              selection.has(item.id) && !visibleSelectionIds.has(item.id),
+          )
+        : [];
+      const scope = selection
+        ? [...visibleSelection, ...offscreenSelection]
+        : library.visibleItems;
+      if (scope.length === 0) {
+        showNotice("Add photos or videos to start a slideshow.");
+        return;
+      }
+      // A video-only selection belongs in the player: seeking, volume and
+      // auto-advance are what people expect from a video, while a slideshow is
+      // built for sequencing photos. Mixed selections still use the slideshow,
+      // because it is the only mode that can play both kinds.
+      if (selection && scope.every((item) => item.kind === "video")) {
+        openViewer(scope[0].id);
+        return;
+      }
+      // Close any open viewer so its media can't keep playing underneath the show.
+      if (viewer.isOpen) {
+        viewer.close();
+        setScreen(viewerOrigin || "Library");
+      }
+      // Pause any other playing videos (e.g. inspector preview) to avoid parallel audio.
+      document.querySelectorAll("video").forEach((v) => {
+        try {
+          v.pause();
+        } catch {}
+      });
+      // Read the action off the store instead of subscribing to it: advancing
+      // slides should only re-render the overlay, never the whole app.
+      // An explicit selection starts at its first item; only the no-selection
+      // case resumes from whatever was last inspected, so a video that was
+      // playing in the background cannot hijack the start of a new selection.
+      startConfiguredSlideshow(scope, selection ? null : library.inspectedId);
+    },
+    [
+      library.items,
+      library.visibleItems,
+      library.inspectedId,
+      showNotice,
+      viewer,
+      viewerOrigin,
+      openViewer,
+    ],
+  );
 
   const openAlbumDialog = useCallback((seedIds?: string[]) => {
     setAlbumDialogMode("create");
@@ -799,23 +1206,28 @@ const [aboutOpen, setAboutOpen] = useState(false);
       setAlbumDialogMode("create");
     } catch (error) {
       showNotice(
-        `Could not ${albumDialogMode === "rename" ? "rename" : "create"} album: ${describeError(error)}`
+        `Could not ${albumDialogMode === "rename" ? "rename" : "create"} album: ${describeError(error)}`,
       );
     } finally {
       setCreatingAlbum(false);
     }
   };
 
-  const openAlbumPicker = useCallback((itemIds?: string[]) => {
-    const ids = (itemIds && itemIds.length ? itemIds : library.selectedIds).filter(Boolean);
-    if (!ids.length) {
-      showNotice("Select photos first, then add them to an album.");
-      return;
-    }
-    setAlbumPickerItemIds(ids);
-    setAlbumSearch("");
-    setAlbumPickerOpen(true);
-  }, [library.selectedIds, showNotice]);
+  const openAlbumPicker = useCallback(
+    (itemIds?: string[]) => {
+      const ids = (
+        itemIds && itemIds.length ? itemIds : library.selectedIds
+      ).filter(Boolean);
+      if (!ids.length) {
+        showNotice("Select photos first, then add them to an album.");
+        return;
+      }
+      setAlbumPickerItemIds(ids);
+      setAlbumSearch("");
+      setAlbumPickerOpen(true);
+    },
+    [library.selectedIds, showNotice],
+  );
 
   useEffect(() => {
     if (!albumPickerOpen) return;
@@ -854,8 +1266,13 @@ const [aboutOpen, setAboutOpen] = useState(false);
   const confirmRemoveFromAlbum = async () => {
     if (!albumRemovePending) return;
     try {
-      await library.removeFromAlbum(albumRemovePending.albumId, albumRemovePending.itemIds);
-      showNotice(`Removed ${albumRemovePending.itemIds.length} item${albumRemovePending.itemIds.length === 1 ? "" : "s"} from album.`);
+      await library.removeFromAlbum(
+        albumRemovePending.albumId,
+        albumRemovePending.itemIds,
+      );
+      showNotice(
+        `Removed ${albumRemovePending.itemIds.length} item${albumRemovePending.itemIds.length === 1 ? "" : "s"} from album.`,
+      );
       setAlbumRemovePending(null);
     } catch (error) {
       showNotice(`Could not remove: ${describeError(error)}`);
@@ -871,7 +1288,9 @@ const [aboutOpen, setAboutOpen] = useState(false);
     void (async () => {
       try {
         await library.deleteItems(ids);
-        showNotice(`Moved ${ids.length.toLocaleString()} item${ids.length === 1 ? "" : "s"} to Trash.`);
+        showNotice(
+          `Moved ${ids.length.toLocaleString()} item${ids.length === 1 ? "" : "s"} to Trash.`,
+        );
       } catch (error) {
         const msg = String(error);
         if (msg !== "Cancelled") {
@@ -899,7 +1318,9 @@ const [aboutOpen, setAboutOpen] = useState(false);
     try {
       await library.deleteAlbum(albumPendingDelete.id);
       if (wasActiveAlbum) setScreen("Albums");
-      showNotice(`Deleted album "${albumPendingDelete.name}". Your photos remain in the library.`);
+      showNotice(
+        `Deleted album "${albumPendingDelete.name}". Your photos remain in the library.`,
+      );
       setAlbumPendingDelete(null);
     } catch (error) {
       showNotice(`Could not delete album: ${describeError(error)}`);
@@ -927,7 +1348,7 @@ const [aboutOpen, setAboutOpen] = useState(false);
       showNotice(
         removed > 0
           ? `Removed “${folderPendingRemove.name}” from VistoGallery. ${removed.toLocaleString()} item${removed === 1 ? "" : "s"} dropped from the library — your files are still on disk.`
-          : `Removed empty folder “${folderPendingRemove.name}” from VistoGallery.`
+          : `Removed empty folder “${folderPendingRemove.name}” from VistoGallery.`,
       );
       setFolderPendingRemove(null);
     } catch (error) {
@@ -970,17 +1391,29 @@ const [aboutOpen, setAboutOpen] = useState(false);
     if (!paths.length) return;
 
     try {
-      showNotice(`Importing ${paths.length.toLocaleString()} file(s) into "${album.name}"…`);
+      showNotice(
+        `Importing ${paths.length.toLocaleString()} file(s) into "${album.name}"…`,
+      );
       library.setBusy(true);
-      library.setProgress({ phase: "importing", processed: 0, total: paths.length });
+      library.setProgress({
+        phase: "importing",
+        processed: 0,
+        total: paths.length,
+      });
       const result = await tauri.library.importFiles(paths);
       if (result.cancelled) {
-        if (result.items.length) await tauri.albums.addItems(albumId, result.items.map((item: any) => item.id));
+        if (result.items.length)
+          await tauri.albums.addItems(
+            albumId,
+            result.items.map((item: any) => item.id),
+          );
         await library.loadLibrary();
         library.setActiveAlbum(albumId);
         library.setBusy(false);
         library.setProgress(null);
-        showNotice(`Import cancelled. Kept ${result.items.length.toLocaleString()} item(s) already imported.`);
+        showNotice(
+          `Import cancelled. Kept ${result.items.length.toLocaleString()} item(s) already imported.`,
+        );
         return;
       }
       if (!result.items.length) {
@@ -989,7 +1422,10 @@ const [aboutOpen, setAboutOpen] = useState(false);
         showNotice("No supported media files selected.");
         return;
       }
-      await tauri.albums.addItems(albumId, result.items.map((item: any) => item.id));
+      await tauri.albums.addItems(
+        albumId,
+        result.items.map((item: any) => item.id),
+      );
       await library.loadLibrary();
       library.setActiveAlbum(albumId);
       library.setBusy(false);
@@ -997,7 +1433,7 @@ const [aboutOpen, setAboutOpen] = useState(false);
       library.setFilter("All");
       setScreen("Library");
       showNotice(
-        `Added ${result.items.length.toLocaleString()} ${result.items.length === 1 ? "item" : "items"} to "${album.name}".`
+        `Added ${result.items.length.toLocaleString()} ${result.items.length === 1 ? "item" : "items"} to "${album.name}".`,
       );
     } catch (error) {
       library.setBusy(false);
@@ -1106,9 +1542,13 @@ const [aboutOpen, setAboutOpen] = useState(false);
         { label: "Rename Album…", onClick: () => openRenameAlbumDialog(album) },
         { label: "Add Items…", onClick: () => addItemsToAlbum(album.id) },
         { divider: true },
-        { label: "Delete Album…", danger: true, onClick: () => setAlbumPendingDelete(album) },
+        {
+          label: "Delete Album…",
+          danger: true,
+          onClick: () => setAlbumPendingDelete(album),
+        },
       ],
-      e
+      e,
     );
   };
 
@@ -1138,7 +1578,9 @@ const [aboutOpen, setAboutOpen] = useState(false);
       // hidden item the library grid does not contain.
       setViewerOrigin("Library");
       library.setViewerScope("library");
-      const inspected = library.items.find((i: MediaItem) => i.id === library.inspectedId);
+      const inspected = library.items.find(
+        (i: MediaItem) => i.id === library.inspectedId,
+      );
       if (inspected?.hidden) library.inspectItem(null);
       viewer.open();
     }
@@ -1152,11 +1594,15 @@ const [aboutOpen, setAboutOpen] = useState(false);
       // Leaving Hidden drops the hidden selection and any hidden inspector
       // focus, so the next screen cannot show an item it cannot display.
       library.clearSelection();
-      const inspected = library.items.find((i: MediaItem) => i.id === library.inspectedId);
+      const inspected = library.items.find(
+        (i: MediaItem) => i.id === library.inspectedId,
+      );
       if (inspected?.hidden) library.inspectItem(null);
     }
     if (next === "Edit") {
-      const selectedItem = library.items.find(i => i.id === library.inspectedId);
+      const selectedItem = library.items.find(
+        (i) => i.id === library.inspectedId,
+      );
       if (selectedItem && selectedItem.kind === "photo") {
         edit.open(selectedItem);
       }
@@ -1169,100 +1615,116 @@ const [aboutOpen, setAboutOpen] = useState(false);
 
   const navigatePhoto = (delta: number) => {
     if (library.playableItems.length === 0) return;
-    const nextIndex = (library.currentIndex + delta + library.playableItems.length) % library.playableItems.length;
+    const nextIndex =
+      (library.currentIndex + delta + library.playableItems.length) %
+      library.playableItems.length;
     // Arrow keys move inspection only - the multi-selection survives.
     library.inspectItem(library.playableItems[nextIndex].id);
   };
 
-
-const importFiles = async () => {
-  let paths: string[];
-  try {
-    const selected = await openFileDialog({
-      directory: false,
-      multiple: true,
-      filters: [{ name: "Media", extensions: MEDIA_EXTENSIONS }]
-    });
-    if (!selected) return;
-    paths = Array.isArray(selected) ? selected : [selected];
-  } catch (e) {
-    showNotice(`Could not open the file picker: ${describeError(e)}`);
-    return;
-  }
-
-  try {
-    showNotice(`Importing ${paths.length.toLocaleString()} file(s)…`);
-    library.setBusy(true);
-    library.setProgress({ phase: "importing", processed: 0, total: paths.length });
-    const result = await tauri.library.importFiles(paths);
-    await library.loadLibrary();
-    library.setBusy(false);
-    library.setProgress(null);
-    showNotice(
-      result.cancelled
-        ? `Import cancelled. Kept ${result.items.length.toLocaleString()} item(s) already imported.`
-        : result.items.length
-        ? `Imported ${result.items.length.toLocaleString()} file(s).`
-        : "No supported media files selected."
-    );
-  } catch (e) {
-    library.setBusy(false);
-    library.setProgress(null);
-    showNotice(`Import failed: ${describeError(e)}`);
-  }
-};
-
-const importFolder = async () => {
-  let selectedPaths: string[];
-  try {
-    const selected = await openFileDialog({
-      directory: true,
-      multiple: true,
-      title: "Choose source folders",
-    });
-    if (!selected) return;
-    selectedPaths = Array.isArray(selected) ? selected : [selected];
-  } catch (e) {
-    showNotice(`Could not open the folder picker: ${describeError(e)}`);
-    return;
-  }
-  if (!selectedPaths.length) return;
-
-  // Selecting a parent and one of its children would scan the child twice
-  // and register two overlapping sources. Keep only the outermost folders.
-  const rootPaths = [...new Set(selectedPaths)].sort().filter((path, _index, all) =>
-    !all.some((parent) => parent !== path && path.startsWith(`${parent.replace(/\/$/, "")}/`))
-  );
-
-  try {
-    showNotice(`Scanning ${rootPaths.length.toLocaleString()} source folder(s)…`);
-    library.setBusy(true);
-    library.setProgress({ phase: "scanning", processed: 0, total: 0 });
-    let discoveredCount = 0;
-    let cancelled = false;
-    for (const rootPath of rootPaths) {
-      const result = await tauri.library.scan(rootPath);
-      discoveredCount += result.discoveredCount;
-      if (result.cancelled) {
-        cancelled = true;
-        break;
-      }
+  const importFiles = async () => {
+    let paths: string[];
+    try {
+      const selected = await openFileDialog({
+        directory: false,
+        multiple: true,
+        filters: [{ name: "Media", extensions: MEDIA_EXTENSIONS }],
+      });
+      if (!selected) return;
+      paths = Array.isArray(selected) ? selected : [selected];
+    } catch (e) {
+      showNotice(`Could not open the file picker: ${describeError(e)}`);
+      return;
     }
-    await library.loadLibrary();
-    await library.loadFolders();
-    library.setBusy(false);
-    library.setProgress(null);
-    showNotice(cancelled
-      ? `Scan cancelled. Indexed ${discoveredCount.toLocaleString()} file(s) so far; you can resume by scanning these sources again.`
-      : discoveredCount
-        ? `Found ${discoveredCount.toLocaleString()} ${discoveredCount === 1 ? "media file" : "media files"} across ${rootPaths.length.toLocaleString()} source folder(s).`
-        : "No media files found in the selected folders.");
-  } catch (e) {
-    library.setBusy(false);
-    library.setProgress(null);
-    showNotice(`Scan failed: ${describeError(e)}`);
-  }
-};
+
+    try {
+      showNotice(`Importing ${paths.length.toLocaleString()} file(s)…`);
+      library.setBusy(true);
+      library.setProgress({
+        phase: "importing",
+        processed: 0,
+        total: paths.length,
+      });
+      const result = await tauri.library.importFiles(paths);
+      await library.loadLibrary();
+      library.setBusy(false);
+      library.setProgress(null);
+      showNotice(
+        result.cancelled
+          ? `Import cancelled. Kept ${result.items.length.toLocaleString()} item(s) already imported.`
+          : result.items.length
+            ? `Imported ${result.items.length.toLocaleString()} file(s).`
+            : "No supported media files selected.",
+      );
+    } catch (e) {
+      library.setBusy(false);
+      library.setProgress(null);
+      showNotice(`Import failed: ${describeError(e)}`);
+    }
+  };
+
+  const importFolder = async () => {
+    let selectedPaths: string[];
+    try {
+      const selected = await openFileDialog({
+        directory: true,
+        multiple: true,
+        title: "Choose source folders",
+      });
+      if (!selected) return;
+      selectedPaths = Array.isArray(selected) ? selected : [selected];
+    } catch (e) {
+      showNotice(`Could not open the folder picker: ${describeError(e)}`);
+      return;
+    }
+    if (!selectedPaths.length) return;
+
+    // Selecting a parent and one of its children would scan the child twice
+    // and register two overlapping sources. Keep only the outermost folders.
+    const rootPaths = [...new Set(selectedPaths)]
+      .sort()
+      .filter(
+        (path, _index, all) =>
+          !all.some(
+            (parent) =>
+              parent !== path &&
+              path.startsWith(`${parent.replace(/\/$/, "")}/`),
+          ),
+      );
+
+    try {
+      showNotice(
+        `Scanning ${rootPaths.length.toLocaleString()} source folder(s)…`,
+      );
+      library.setBusy(true);
+      library.setProgress({ phase: "scanning", processed: 0, total: 0 });
+      let discoveredCount = 0;
+      let cancelled = false;
+      for (const rootPath of rootPaths) {
+        const result = await tauri.library.scan(rootPath);
+        discoveredCount += result.discoveredCount;
+        if (result.cancelled) {
+          cancelled = true;
+          break;
+        }
+      }
+      await library.loadLibrary();
+      await library.loadFolders();
+      library.setBusy(false);
+      library.setProgress(null);
+      showNotice(
+        cancelled
+          ? `Scan cancelled. Indexed ${discoveredCount.toLocaleString()} file(s) so far; you can resume by scanning these sources again.`
+          : discoveredCount
+            ? `Found ${discoveredCount.toLocaleString()} ${discoveredCount === 1 ? "media file" : "media files"} across ${rootPaths.length.toLocaleString()} source folder(s).`
+            : "No media files found in the selected folders.",
+      );
+    } catch (e) {
+      library.setBusy(false);
+      library.setProgress(null);
+      showNotice(`Scan failed: ${describeError(e)}`);
+    }
+  };
 
   const rescanSource = async (folder: any) => {
     if (rescanInProgress.current) return;
@@ -1270,13 +1732,22 @@ const importFolder = async () => {
     try {
       library.setBusy(true);
       await tauri.library.cancelScan();
-      library.setProgress({ phase: "scanning", processed: 0, total: 1, currentFile: folder.path });
+      library.setProgress({
+        phase: "scanning",
+        processed: 0,
+        total: 1,
+        currentFile: folder.path,
+      });
       const result = await tauri.library.scan(folder.path, true);
       await library.loadLibrary();
       await library.loadFolders();
       library.setProgress(null);
       library.setBusy(false);
-      showNotice(result?.cancelled ? `Rescan cancelled for ${folder.name}.` : `Rescanned ${folder.name}.`);
+      showNotice(
+        result?.cancelled
+          ? `Rescan cancelled for ${folder.name}.`
+          : `Rescanned ${folder.name}.`,
+      );
     } catch (e) {
       showNotice(`Rescan failed: ${describeError(e)}`);
     } finally {
@@ -1286,70 +1757,82 @@ const importFolder = async () => {
     }
   };
 
-const rescanSources = async () => {
-  // Prevent concurrent rescans (e.g. double-click on the button)
-  if (rescanInProgress.current) return;
-  rescanInProgress.current = true;
-  try {
-    library.setBusy(true);
-    // Ensure any previous cancel is cleared before starting new scan
-    await tauri.library.cancelScan();
-    await library.loadFolders();
-    const folders = useLibraryStore.getState().folders;
-    let cancelled = false;
-    let totalDiscovered = 0;
+  const rescanSources = async () => {
+    // Prevent concurrent rescans (e.g. double-click on the button)
+    if (rescanInProgress.current) return;
+    rescanInProgress.current = true;
+    try {
+      library.setBusy(true);
+      // Ensure any previous cancel is cleared before starting new scan
+      await tauri.library.cancelScan();
+      await library.loadFolders();
+      const folders = useLibraryStore.getState().folders;
+      let cancelled = false;
+      let totalDiscovered = 0;
 
-    for (let i = 0; i < folders.length; i++) {
-      const folder = folders[i];
-      // Show which source is being scanned
-      library.setProgress({
-        phase: "scanning",
-        processed: i,
-        total: folders.length,
-        currentFile: folder.path,
-      });
-      const result = await tauri.library.scan(folder.path, true);
-      totalDiscovered += result.discoveredCount || 0;
-      if (result.cancelled) {
-        cancelled = true;
-        break;
+      for (let i = 0; i < folders.length; i++) {
+        const folder = folders[i];
+        // Show which source is being scanned
+        library.setProgress({
+          phase: "scanning",
+          processed: i,
+          total: folders.length,
+          currentFile: folder.path,
+        });
+        const result = await tauri.library.scan(folder.path, true);
+        totalDiscovered += result.discoveredCount || 0;
+        if (result.cancelled) {
+          cancelled = true;
+          break;
+        }
       }
+
+      await library.loadLibrary();
+      await library.loadFolders();
+      library.setProgress(null);
+      library.setBusy(false);
+      rescanInProgress.current = false;
+      showNotice(
+        cancelled
+          ? `Rescan cancelled. ${totalDiscovered.toLocaleString()} ${totalDiscovered === 1 ? "item" : "items"} processed from completed sources.`
+          : `Sources rescanned. ${totalDiscovered.toLocaleString()} ${totalDiscovered === 1 ? "item" : "items"} processed.`,
+      );
+    } catch (e) {
+      showNotice(`Rescan failed: ${describeError(e)}`);
+    } finally {
+      library.setBusy(false);
+      library.setProgress(null);
+      rescanInProgress.current = false;
     }
+  };
 
-    await library.loadLibrary();
-    await library.loadFolders();
-    library.setProgress(null);
-    library.setBusy(false);
-    rescanInProgress.current = false;
-    showNotice(cancelled
-      ? `Rescan cancelled. ${totalDiscovered.toLocaleString()} ${totalDiscovered === 1 ? "item" : "items"} processed from completed sources.`
-      : `Sources rescanned. ${totalDiscovered.toLocaleString()} ${totalDiscovered === 1 ? "item" : "items"} processed.`);
-  } catch (e) {
-    showNotice(`Rescan failed: ${describeError(e)}`);
-  } finally {
-    library.setBusy(false);
-    library.setProgress(null);
-    rescanInProgress.current = false;
-  }
-};
-
-handlersRef.current = { importFolder, importFiles, showNotice };
-
+  handlersRef.current = { importFolder, importFiles, showNotice };
 
   return (
     <div
       className={`app-frame ${dark ? "dark" : ""}`}
       style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
     >
-      <a className="skip-to-content" href="#main-content">Skip to main content</a>
-      <header className="topbar" onMouseDown={beginTopbarDrag} onDoubleClick={handleTopbarDoubleClick}>
-        <div className="topbar-brand"><BrandMark size={26} /><b>VistoGallery</b></div>
+      <a className="skip-to-content" href="#main-content">
+        Skip to main content
+      </a>
+      <header
+        className="topbar"
+        onMouseDown={beginTopbarDrag}
+        onDoubleClick={handleTopbarDoubleClick}
+      >
+        <div className="topbar-brand">
+          <BrandMark size={26} />
+          <b>VistoGallery</b>
+        </div>
         <div className="topbar-context">
           {(() => {
             const activeAlbumRecord = library.activeAlbum
               ? library.albums.find((a: any) => a.id === library.activeAlbum)
               : null;
-            const activeAlbumName = library.activeAlbum ? activeAlbumRecord?.name : null;
+            const activeAlbumName = library.activeAlbum
+              ? activeAlbumRecord?.name
+              : null;
             const inAlbum = Boolean(library.activeAlbum);
             if (screen === "Library") {
               if (inAlbum) return <span>{activeAlbumName ?? "Album"}</span>;
@@ -1360,7 +1843,11 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           })()}
           {library.busy && (
             <span className="topbar-busy">
-              {library.progress?.phase === "hashing" ? "Checking duplicates…" : library.progress?.phase === "reading" ? "Loading library…" : "Indexing…"}
+              {library.progress?.phase === "hashing"
+                ? "Checking duplicates…"
+                : library.progress?.phase === "reading"
+                  ? "Loading library…"
+                  : "Indexing…"}
             </span>
           )}
         </div>
@@ -1370,7 +1857,9 @@ handlersRef.current = { importFolder, importFiles, showNotice };
             type="button"
             aria-label={library.sidebarOpen ? "Hide sidebar" : "Show sidebar"}
             aria-pressed={library.sidebarOpen}
-            title={library.sidebarOpen ? "Hide sidebar (⌥⌘S)" : "Show sidebar (⌥⌘S)"}
+            title={
+              library.sidebarOpen ? "Hide sidebar (⌥⌘S)" : "Show sidebar (⌥⌘S)"
+            }
             onClick={() => library.toggleSidebar()}
           >
             <LibraryIcon size={18} />
@@ -1378,14 +1867,25 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           <button
             className="icon-button"
             type="button"
-            aria-label={screen !== "Library" && screen !== "Hidden"
-              ? "Inspector available in Library and Hidden"
-              : (library.showInspector ? "Hide inspector" : "Show inspector")}
-            aria-pressed={(screen === "Library" || screen === "Hidden") && library.showInspector}
+            aria-label={
+              screen !== "Library" && screen !== "Hidden"
+                ? "Inspector available in Library and Hidden"
+                : library.showInspector
+                  ? "Hide inspector"
+                  : "Show inspector"
+            }
+            aria-pressed={
+              (screen === "Library" || screen === "Hidden") &&
+              library.showInspector
+            }
             disabled={screen !== "Library" && screen !== "Hidden"}
-            title={screen === "Library" || screen === "Hidden"
-              ? (library.showInspector ? "Hide inspector (⌥⌘I)" : "Show inspector (⌥⌘I)")
-              : "Inspector is available in Library and Hidden"}
+            title={
+              screen === "Library" || screen === "Hidden"
+                ? library.showInspector
+                  ? "Hide inspector (⌥⌘I)"
+                  : "Show inspector (⌥⌘I)"
+                : "Inspector is available in Library and Hidden"
+            }
             onClick={() => library.toggleInspector()}
           >
             <InspectorIcon size={18} />
@@ -1393,139 +1893,197 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           <button
             className="icon-button"
             type="button"
-            aria-label={dark ? "Switch to light appearance" : "Switch to dark appearance"}
-            title={dark ? "Switch to light appearance" : "Switch to dark appearance"}
-            onClick={() => settings.update("appearance", dark ? "light" : "dark")}
+            aria-label={
+              dark ? "Switch to light appearance" : "Switch to dark appearance"
+            }
+            title={
+              dark ? "Switch to light appearance" : "Switch to dark appearance"
+            }
+            onClick={() =>
+              settings.update("appearance", dark ? "light" : "dark")
+            }
           >
             {dark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
           </button>
-          <button className="icon-button" type="button" aria-label="Settings" title="Settings" onClick={() => openScreen("Settings")}>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Settings"
+            title="Settings"
+            onClick={() => openScreen("Settings")}
+          >
             <GearIcon size={18} />
           </button>
         </div>
       </header>
 
-      <div className={`app-body ${library.sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
+      <div
+        className={`app-body ${library.sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}
+      >
         <aside className="sidebar">
           <div className="sidebar-scroll">
-          <div className="sidebar-header">
-            <div className="sidebar-label">WORKSPACE</div>
-            <nav className="primary-nav" aria-label="Main navigation">
-              {[
-                { label: "Library", Icon: LibraryIcon, screen: "Library" as Screen },
-                { label: "Albums", Icon: AlbumsIcon, screen: "Albums" as Screen },
-                { label: "Viewer", Icon: ViewerIcon, screen: "Viewer" as Screen },
-                { label: "Duplicates", Icon: DuplicatesIcon, screen: "Duplicates" as Screen },
-                { label: "Edit", Icon: EditIcon, screen: "Edit" as Screen },
-                { label: "Batch", Icon: BatchIcon, screen: "Batch" as Screen },
-                { label: "Hidden", Icon: EyeOffIcon, screen: "Hidden" as Screen },
-              ].map(({ label, Icon, screen: target }) => (
-                <button
-                  key={label}
-                  type="button"
-                  className={`nav-item ${screen === target ? "active" : ""}`}
-                  aria-label={label}
-                  title={label}
-                  aria-current={screen === target ? "page" : undefined}
-                  onClick={() => openScreen(target)}
-                >
-                  <span className="nav-icon"><Icon size={18} /></span>
-                  <span>{label}</span>
-                  {(label === "Library" && library.items.length - library.hiddenCount > 0) ||
-                  (label === "Albums" && library.albums.length > 0) ||
-                  (label === "Hidden" && library.hiddenCount > 0) ? (
-                    <span className="nav-badge">
-                      {label === "Library"
-                        ? library.items.length - library.hiddenCount
-                        : label === "Albums"
-                          ? library.albums.length
-                          : library.hiddenCount}
+            <div className="sidebar-header">
+              <div className="sidebar-label">WORKSPACE</div>
+              <nav className="primary-nav" aria-label="Main navigation">
+                {[
+                  {
+                    label: "Library",
+                    Icon: LibraryIcon,
+                    screen: "Library" as Screen,
+                  },
+                  {
+                    label: "Albums",
+                    Icon: AlbumsIcon,
+                    screen: "Albums" as Screen,
+                  },
+                  {
+                    label: "Viewer",
+                    Icon: ViewerIcon,
+                    screen: "Viewer" as Screen,
+                  },
+                  {
+                    label: "Duplicates",
+                    Icon: DuplicatesIcon,
+                    screen: "Duplicates" as Screen,
+                  },
+                  { label: "Edit", Icon: EditIcon, screen: "Edit" as Screen },
+                  {
+                    label: "Batch",
+                    Icon: BatchIcon,
+                    screen: "Batch" as Screen,
+                  },
+                  {
+                    label: "Hidden",
+                    Icon: EyeOffIcon,
+                    screen: "Hidden" as Screen,
+                  },
+                ].map(({ label, Icon, screen: target }) => (
+                  <button
+                    key={label}
+                    type="button"
+                    className={`nav-item ${screen === target ? "active" : ""}`}
+                    aria-label={label}
+                    title={label}
+                    aria-current={screen === target ? "page" : undefined}
+                    onClick={() => openScreen(target)}
+                  >
+                    <span className="nav-icon">
+                      <Icon size={18} />
                     </span>
-                  ) : null}
-                </button>
-              ))}
-            </nav>
-          </div>
+                    <span>{label}</span>
+                    {(label === "Library" &&
+                      library.items.length - library.hiddenCount > 0) ||
+                    (label === "Albums" && library.albums.length > 0) ||
+                    (label === "Hidden" && library.hiddenCount > 0) ? (
+                      <span className="nav-badge">
+                        {label === "Library"
+                          ? library.items.length - library.hiddenCount
+                          : label === "Albums"
+                            ? library.albums.length
+                            : library.hiddenCount}
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+              </nav>
+            </div>
 
-          <div className="sidebar-divider" aria-hidden="true" />
+            <div className="sidebar-divider" aria-hidden="true" />
 
-          <div className="sidebar-section sources-entry-section">
-            <button
-              type="button"
-              className={`sources-entry${sourcesSheetOpen ? " open" : ""}`}
-              onClick={() => setSourcesSheetOpen(true)}
-              title="Manage library sources"
-              aria-haspopup="dialog"
-              aria-expanded={sourcesSheetOpen}
-            >
-              <span className="sources-entry-icon"><FolderIcon size={16} /></span>
-              <span className="sources-entry-text">
-                <span className="sources-entry-name">Sources</span>
-                <span className="sources-entry-count">
-                  {library.folders.length === 0
-                    ? "No sources yet"
-                    : `${library.folders.length.toLocaleString()} folder${library.folders.length === 1 ? "" : "s"} · ${library.folders.reduce((total: number, folder: LibraryFolder) => total + folder.itemCount, 0).toLocaleString()} items`}
+            <div className="sidebar-section sources-entry-section">
+              <button
+                type="button"
+                className={`sources-entry${sourcesSheetOpen ? " open" : ""}`}
+                onClick={() => setSourcesSheetOpen(true)}
+                title="Manage library sources"
+                aria-haspopup="dialog"
+                aria-expanded={sourcesSheetOpen}
+              >
+                <span className="sources-entry-icon">
+                  <FolderIcon size={16} />
                 </span>
-              </span>
-              <span className="sources-entry-action">
-                <span className="sources-entry-chevron" aria-hidden="true">›</span>
-              </span>
-            </button>
-          </div>
+                <span className="sources-entry-text">
+                  <span className="sources-entry-name">Sources</span>
+                  <span className="sources-entry-count">
+                    {library.folders.length === 0
+                      ? "No sources yet"
+                      : `${library.folders.length.toLocaleString()} folder${library.folders.length === 1 ? "" : "s"} · ${library.folders.reduce((total: number, folder: LibraryFolder) => total + folder.itemCount, 0).toLocaleString()} items`}
+                  </span>
+                </span>
+                <span className="sources-entry-action">
+                  <span className="sources-entry-chevron" aria-hidden="true">
+                    ›
+                  </span>
+                </span>
+              </button>
+            </div>
 
-          <div className="sidebar-divider" aria-hidden="true" />
+            <div className="sidebar-divider" aria-hidden="true" />
 
-          <div className="sidebar-section">
-            <div className="sidebar-section-label">LIBRARY</div>
-            <div className="library-stats">
-              <div className="stat-row">
-                <KindDot kind="photo" />
-                <span className="stat-label">Photos</span>
-                <span className="stat-value">
-                  {libraryStats.photos.toLocaleString()}
-                  <span className="stat-size">· {formatBytesSimple(libraryStats.photoSize)}</span>
-                </span>
-              </div>
-              <div className="stat-row">
-                <KindDot kind="video" />
-                <span className="stat-label">Videos</span>
-                <span className="stat-value">
-                  {libraryStats.videos.toLocaleString()}
-                  <span className="stat-size">· {formatBytesSimple(libraryStats.videoSize)}</span>
-                </span>
-              </div>
-              <div className="stat-row">
-                <KindDot kind="raw" />
-                <span className="stat-label">RAW</span>
-                <span className="stat-value">
-                  {libraryStats.raws.toLocaleString()}
-                  <span className="stat-size">· {formatBytesSimple(libraryStats.rawSize)}</span>
-                </span>
-              </div>
-              <div className="stat-row">
-                <KindDot kind="photo" />
-                <span className="stat-label">Favorites</span>
-                <span className="stat-value">
-                  {libraryStats.favorites.toLocaleString()}
-                  <span className="stat-size">· {formatBytesSimple(libraryStats.favoriteSize)}</span>
-                </span>
-              </div>
-              <div className="stat-row hidden">
-                <KindDot kind="photo" />
-                <span className="stat-label">Hidden</span>
-                <span className="stat-value">
-                  {libraryStats.hidden.toLocaleString()}
-                  <span className="stat-size">· {formatBytesSimple(libraryStats.hiddenSize)}</span>
-                </span>
-              </div>
-              <div className="stat-row size">
-                <span className="stat-label">Total</span>
-                <span className="stat-value">
-                  {(library.items.length - library.hiddenCount).toLocaleString()} · {formatBytesSimple(libraryStats.totalSize)}
-                </span>
+            <div className="sidebar-section">
+              <div className="sidebar-section-label">LIBRARY</div>
+              <div className="library-stats">
+                <div className="stat-row">
+                  <KindDot kind="photo" />
+                  <span className="stat-label">Photos</span>
+                  <span className="stat-value">
+                    {libraryStats.photos.toLocaleString()}
+                    <span className="stat-size">
+                      · {formatBytesSimple(libraryStats.photoSize)}
+                    </span>
+                  </span>
+                </div>
+                <div className="stat-row">
+                  <KindDot kind="video" />
+                  <span className="stat-label">Videos</span>
+                  <span className="stat-value">
+                    {libraryStats.videos.toLocaleString()}
+                    <span className="stat-size">
+                      · {formatBytesSimple(libraryStats.videoSize)}
+                    </span>
+                  </span>
+                </div>
+                <div className="stat-row">
+                  <KindDot kind="raw" />
+                  <span className="stat-label">RAW</span>
+                  <span className="stat-value">
+                    {libraryStats.raws.toLocaleString()}
+                    <span className="stat-size">
+                      · {formatBytesSimple(libraryStats.rawSize)}
+                    </span>
+                  </span>
+                </div>
+                <div className="stat-row">
+                  <KindDot kind="photo" />
+                  <span className="stat-label">Favorites</span>
+                  <span className="stat-value">
+                    {libraryStats.favorites.toLocaleString()}
+                    <span className="stat-size">
+                      · {formatBytesSimple(libraryStats.favoriteSize)}
+                    </span>
+                  </span>
+                </div>
+                <div className="stat-row hidden">
+                  <KindDot kind="photo" />
+                  <span className="stat-label">Hidden</span>
+                  <span className="stat-value">
+                    {libraryStats.hidden.toLocaleString()}
+                    <span className="stat-size">
+                      · {formatBytesSimple(libraryStats.hiddenSize)}
+                    </span>
+                  </span>
+                </div>
+                <div className="stat-row size">
+                  <span className="stat-label">Total</span>
+                  <span className="stat-value">
+                    {(
+                      library.items.length - library.hiddenCount
+                    ).toLocaleString()}{" "}
+                    · {formatBytesSimple(libraryStats.totalSize)}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
           </div>
           <div className="sidebar-footer">
             <span className="sidebar-health">
@@ -1536,7 +2094,12 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           </div>
         </aside>
 
-        <main id="main-content" className="main-content" tabIndex={-1} style={{ position: "relative" }}>
+        <main
+          id="main-content"
+          className="main-content"
+          tabIndex={-1}
+          style={{ position: "relative" }}
+        >
           {screenHistory.length > 0 && (
             <button
               className="icon-button"
@@ -1544,77 +2107,103 @@ handlersRef.current = { importFolder, importFiles, showNotice };
               aria-label="Go back"
               title="Go back"
               onClick={goBack}
-              style={{ position: "absolute", top: 10, right: 10, zIndex: 5, width: 32, height: 32, padding: 0, borderRadius: 8, opacity: 0.8 }}
+              style={{
+                position: "absolute",
+                top: 10,
+                right: 10,
+                zIndex: 5,
+                width: 32,
+                height: 32,
+                padding: 0,
+                borderRadius: 8,
+                opacity: 0.8,
+              }}
             >
               ←
             </button>
           )}
-          {screen === "Library" && <LibraryScreen
-            items={library.visibleItems}
-            inspectedId={library.inspectedId}
-            selectedIds={library.selectedIds}
-            filter={library.filter}
-            query={library.query}
-            layout={library.layout}
-            showInspector={library.showInspector}
-            activeAlbum={library.activeAlbum}
-            albums={library.albums}
-            onInspectItem={library.inspectItem}
-            onToggleSelect={library.toggleSelection}
-            onSelectRange={library.selectRange}
-            onSetSelection={library.setSelectedIds}
-            onToggleSelectAll={library.toggleSelectAll}
-            onClearSelection={library.clearSelection}
-            onOpenBatch={() => openScreen("Batch")}
-            onChangeFilter={library.setFilter}
-            onChangeQuery={library.setQuery}
-            onChangeLayout={library.setLayout}
-            onToggleInspector={library.toggleInspector}
-            onSetActiveAlbum={library.setActiveAlbum}
-            onOpenAlbums={() => openScreen("Albums")}
-            onAddItems={(albumId: string) => addItemsToAlbum(albumId)}
-            onOpenAlbumPicker={(itemIds?: string[]) => openAlbumPicker(itemIds)}
-            onAlbumMenu={(e: React.MouseEvent) => {
-              const album = library.albums.find((a: any) => a.id === library.activeAlbum);
-              if (album) openAlbumMenu(album, e);
-            }}
-            albumDragOver={albumDragOver}
-            onToggleFavorite={library.toggleFavorite}
-            onToggleHidden={library.toggleHidden}
-            onSetFavoriteForIds={library.setFavoriteForIds}
-            onSetHiddenForIds={library.setHiddenForIds}
-            onUpdateTags={library.updateItemTags}
-            onDeleteItems={library.deleteItems}
-            onRequestDeleteItems={(ids: string[]) => { itemPendingDeleteRef.current = ids; setItemPendingDeleteCount(ids.length); }}
-            onRequestRemoveFromAlbum={(albumId: string, itemIds: string[]) => setAlbumRemovePending({ albumId, itemIds })}
-            onOpenViewer={(id?: string) => openViewer(id, "Library")}
-            onOpenEdit={(item: any) => { edit.open(item); setScreen("Edit"); }}
-            onImportFolder={() => importFolder()}
-            onImportFiles={() => importFiles()}
-            onPlaySlideshow={playSlideshow}
-            onCreateAlbum={openAlbumDialog}
-            searchInputRef={searchInputRef}
-            onContextMenu={openContextMenu}
-            busy={library.busy}
-            progress={library.progress}
-            notice={showNotice}
-            assetUrl={assetUrl}
-            hiddenCount={library.hiddenCount}
-          />}
+          {screen === "Library" && (
+            <LibraryScreen
+              items={library.visibleItems}
+              inspectedId={library.inspectedId}
+              selectedIds={library.selectedIds}
+              filter={library.filter}
+              query={library.query}
+              layout={library.layout}
+              showInspector={library.showInspector}
+              activeAlbum={library.activeAlbum}
+              albums={library.albums}
+              onInspectItem={library.inspectItem}
+              onToggleSelect={library.toggleSelection}
+              onSelectRange={library.selectRange}
+              onSetSelection={library.setSelectedIds}
+              onToggleSelectAll={library.toggleSelectAll}
+              onClearSelection={library.clearSelection}
+              onOpenBatch={() => openScreen("Batch")}
+              onChangeFilter={library.setFilter}
+              onChangeQuery={library.setQuery}
+              onChangeLayout={library.setLayout}
+              onToggleInspector={library.toggleInspector}
+              onSetActiveAlbum={library.setActiveAlbum}
+              onOpenAlbums={() => openScreen("Albums")}
+              onAddItems={(albumId: string) => addItemsToAlbum(albumId)}
+              onOpenAlbumPicker={(itemIds?: string[]) =>
+                openAlbumPicker(itemIds)
+              }
+              onAlbumMenu={(e: React.MouseEvent) => {
+                const album = library.albums.find(
+                  (a: any) => a.id === library.activeAlbum,
+                );
+                if (album) openAlbumMenu(album, e);
+              }}
+              albumDragOver={albumDragOver}
+              onToggleFavorite={library.toggleFavorite}
+              onToggleHidden={library.toggleHidden}
+              onSetFavoriteForIds={library.setFavoriteForIds}
+              onSetHiddenForIds={library.setHiddenForIds}
+              onUpdateTags={library.updateItemTags}
+              onDeleteItems={library.deleteItems}
+              onRequestDeleteItems={(ids: string[]) => {
+                itemPendingDeleteRef.current = ids;
+                setItemPendingDeleteCount(ids.length);
+              }}
+              onRequestRemoveFromAlbum={(albumId: string, itemIds: string[]) =>
+                setAlbumRemovePending({ albumId, itemIds })
+              }
+              onOpenViewer={(id?: string) => openViewer(id, "Library")}
+              onOpenEdit={(item: any) => {
+                edit.open(item);
+                setScreen("Edit");
+              }}
+              onImportFolder={() => importFolder()}
+              onImportFiles={() => importFiles()}
+              onPlaySlideshow={playSlideshow}
+              onCreateAlbum={openAlbumDialog}
+              searchInputRef={searchInputRef}
+              onContextMenu={openContextMenu}
+              busy={library.busy}
+              progress={library.progress}
+              notice={showNotice}
+              assetUrl={assetUrl}
+              hiddenCount={library.hiddenCount}
+            />
+          )}
 
-          {screen === "Albums" && <AlbumsScreen
-            albums={library.albums}
-            items={library.items}
-            assetUrl={assetUrl}
-            onCreateAlbum={openAlbumDialog}
-            onAlbumContextMenu={openAlbumMenu}
-            onOpenAlbum={(albumId: string) => {
-              library.setActiveAlbum(albumId);
-              library.setFilter("All");
-              library.setQuery("");
-              setScreen("Library");
-            }}
-          />}
+          {screen === "Albums" && (
+            <AlbumsScreen
+              albums={library.albums}
+              items={library.items}
+              assetUrl={assetUrl}
+              onCreateAlbum={openAlbumDialog}
+              onAlbumContextMenu={openAlbumMenu}
+              onOpenAlbum={(albumId: string) => {
+                library.setActiveAlbum(albumId);
+                library.setFilter("All");
+                library.setQuery("");
+                setScreen("Library");
+              }}
+            />
+          )}
 
           {(screen === "Viewer" || viewer.isOpen) && (
             <div
@@ -1625,7 +2214,11 @@ handlersRef.current = { importFolder, importFiles, showNotice };
               <ViewerScreen
                 active={screen === "Viewer"}
                 items={library.viewerItems}
-                selected={screen === "Viewer" ? library.viewerSelected : (frozenViewerItem ?? lastViewerItemRef.current)}
+                selected={
+                  screen === "Viewer"
+                    ? library.viewerSelected
+                    : (frozenViewerItem ?? lastViewerItemRef.current)
+                }
                 zoom={viewer.zoom}
                 fitMode={viewer.fitMode}
                 rotation={viewer.rotation}
@@ -1644,261 +2237,416 @@ handlersRef.current = { importFolder, importFiles, showNotice };
                 onClose={viewer.close}
                 onToggleFavorite={library.toggleFavorite}
                 onToggleHidden={library.toggleHidden}
-                onOpenEdit={(item: any) => { edit.open(item); setScreen("Edit"); }}
+                onOpenEdit={(item: any) => {
+                  edit.open(item);
+                  setScreen("Edit");
+                }}
                 onContextMenu={openContextMenu}
                 assetUrl={assetUrl}
               />
             </div>
           )}
 
-          {screen === "Edit" && <EditScreen
-            item={edit.item}
-            values={edit.values}
-            crop={edit.crop}
-            history={edit.history}
-            historyIndex={edit.historyIndex}
-            onSetValue={edit.setValue}
-            onSetValues={edit.setValues}
-            onReset={edit.reset}
-            onAuto={edit.auto}
-            onRotate={edit.rotate}
-            onFlip={edit.flip}
-            onSetCrop={edit.setCrop}
-            onResetCrop={edit.resetCrop}
-            onUndo={edit.undo}
-            onRedo={edit.redo}
-            canUndo={edit.canUndo}
-            canRedo={edit.canRedo}
-            onClose={edit.close}
-            onSaveDraft={edit.saveDraft}
-            onBack={() => setScreen("Library")}
-            onExport={async (inPlace = false) => {
-              const item = edit.item;
-              if (!item) return;
-              const sourceExtension = String(item.extension || item.name.split(".").pop() || "").toLowerCase();
-              if (inPlace) {
-                if (!(["jpg", "jpeg", "png", "webp"].includes(sourceExtension))) {
-                  showNotice("Replace original supports JPEG, PNG, and WebP. Save a copy instead.");
-                  return;
-                }
-              }
-              try {
-                const v = edit.values || {};
-                const crop = edit.crop || { enabled: false, x: 0, y: 0, width: 1, height: 1 };
-                
-                // Build render request for native backend
-                const request = {
-                  sourcePath: item.path,
-                  edits: v,
-                  outputFormat: (inPlace ? "in_place" : "image/jpeg") as "jpeg" | "png" | "webp" | "heic" | "avif" | "in_place",
-                  quality: 0.92,
-                  stripMetadata: false,
-                  crop: crop.enabled ? crop : undefined,
-                };
-                
-                const result = await tauri.editing.render(request);
-                
-                if (!inPlace) {
-                  // For save-copy, backend wrote to temp; now show save dialog
-                  const suggestedName = String(item.name).replace(/\.[^.]+$/, "") + "_edited.jpg";
-                  const finalPath = await save({
-                    defaultPath: suggestedName,
-                    filters: [{ name: "JPEG image", extensions: ["jpg", "jpeg"] }],
-                  });
-                  if (!finalPath) { 
-                    showNotice("Export cancelled"); 
-                    return; 
+          {screen === "Edit" && (
+            <EditScreen
+              item={edit.item}
+              values={edit.values}
+              crop={edit.crop}
+              history={edit.history}
+              historyIndex={edit.historyIndex}
+              onSetValue={edit.setValue}
+              onSetValues={edit.setValues}
+              onReset={edit.reset}
+              onAuto={edit.auto}
+              onRotate={edit.rotate}
+              onFlip={edit.flip}
+              onSetCrop={edit.setCrop}
+              onResetCrop={edit.resetCrop}
+              onUndo={edit.undo}
+              onRedo={edit.redo}
+              canUndo={edit.canUndo}
+              canRedo={edit.canRedo}
+              onClose={edit.close}
+              onSaveDraft={edit.saveDraft}
+              onBack={() => setScreen("Library")}
+              onExport={async (inPlace = false) => {
+                const item = edit.item;
+                if (!item) return;
+                const sourceExtension = String(
+                  item.extension || item.name.split(".").pop() || "",
+                ).toLowerCase();
+                if (inPlace) {
+                  if (
+                    !["jpg", "jpeg", "png", "webp"].includes(sourceExtension)
+                  ) {
+                    showNotice(
+                      "Replace original supports JPEG, PNG, and WebP. Save a copy instead.",
+                    );
+                    return;
                   }
-                  // Move temp file to final destination
-                  await tauri.editing.moveExportedFile(result.outputPath, finalPath);
                 }
-                
-                clearEditDraft(item.id);
-                if (inPlace) await library.loadLibrary();
-                showNotice(inPlace ? "Replaced original" : "Exported edited copy");
-              } catch (e) {
-                if (String(e).includes("cancelled")) {
-                  showNotice("Export cancelled");
-                } else {
-                  showNotice("Export failed: " + String(e));
+                try {
+                  const v = edit.values || {};
+                  const crop = edit.crop || {
+                    enabled: false,
+                    x: 0,
+                    y: 0,
+                    width: 1,
+                    height: 1,
+                  };
+
+                  // Build render request for native backend
+                  const request = {
+                    sourcePath: item.path,
+                    edits: v,
+                    outputFormat: (inPlace ? "in_place" : "image/jpeg") as
+                      "jpeg" | "png" | "webp" | "heic" | "avif" | "in_place",
+                    quality: 0.92,
+                    stripMetadata: false,
+                    crop: crop.enabled ? crop : undefined,
+                  };
+
+                  const result = await tauri.editing.render(request);
+
+                  if (!inPlace) {
+                    // For save-copy, backend wrote to temp; now show save dialog
+                    const suggestedName =
+                      String(item.name).replace(/\.[^.]+$/, "") + "_edited.jpg";
+                    const finalPath = await save({
+                      defaultPath: suggestedName,
+                      filters: [
+                        { name: "JPEG image", extensions: ["jpg", "jpeg"] },
+                      ],
+                    });
+                    if (!finalPath) {
+                      showNotice("Export cancelled");
+                      return;
+                    }
+                    // Move temp file to final destination
+                    await tauri.editing.moveExportedFile(
+                      result.outputPath,
+                      finalPath,
+                    );
+                  }
+
+                  clearEditDraft(item.id);
+                  if (inPlace) await library.loadLibrary();
+                  showNotice(
+                    inPlace ? "Replaced original" : "Exported edited copy",
+                  );
+                } catch (e) {
+                  if (String(e).includes("cancelled")) {
+                    showNotice("Export cancelled");
+                  } else {
+                    showNotice("Export failed: " + String(e));
+                  }
                 }
+              }}
+              onClearDraft={edit.clearDraft}
+              onNotice={showNotice}
+              assetUrl={assetUrl}
+              items={library.items.filter(
+                (i: any) => i.kind === "photo" && !i.hidden,
+              )}
+              onOpenEdit={(item: any) => {
+                edit.saveDraft();
+                edit.open(item);
+              }}
+            />
+          )}
+
+          {screen === "Batch" && (
+            <BatchScreen
+              items={library.items.filter((i: any) =>
+                library.selectedIds.includes(i.id),
+              )}
+              selectedIds={library.selectedIds}
+              config={batch}
+              state={batch}
+              onSetPattern={batch.setPattern}
+              onSetFormat={batch.setFormat}
+              onSetQuality={batch.setQuality}
+              onSetStripMetadata={batch.setStripMetadata}
+              onSetMaxDimension={batch.setMaxDimension}
+              onSetStep={batch.setStep}
+              onChooseFolder={async () => {
+                const folder = await openFileDialog({
+                  directory: true,
+                  multiple: false,
+                  title: "Choose export folder",
+                });
+                if (typeof folder === "string") batch.setOutputFolder(folder);
+              }}
+              onOpenFolder={() => {
+                if (batch.outputFolder)
+                  tauri.items.openFolder(batch.outputFolder);
+              }}
+              onExportBatch={batch.exportBatch}
+              onCancelBatch={batch.cancelBatch}
+              onReset={batch.reset}
+              onOpenLibrary={() => setScreen("Library")}
+              onClearSelection={library.clearSelection}
+              onSelectAll={library.selectAll}
+              onSetSelection={library.setSelectedIds}
+              onRemoveItem={library.toggleSelection}
+              busy={batch.busy}
+              cancelRequested={batch.cancelRequested}
+              progress={batch.progress}
+              result={batch.result}
+              error={batch.error}
+              assetUrl={assetUrl}
+            />
+          )}
+
+          {screen === "Hidden" && (
+            <HiddenScreen
+              assetUrl={assetUrl}
+              searchInputRef={searchInputRef}
+              onContextMenu={openContextMenu}
+              onNavigate={openScreen}
+              onCreateAlbum={openAlbumDialog}
+              onOpenAlbumPicker={(itemIds?: string[]) =>
+                openAlbumPicker(itemIds)
               }
-            }}
-            onClearDraft={edit.clearDraft}
-            onNotice={showNotice}
-            assetUrl={assetUrl}
-            items={library.items.filter((i: any) => i.kind === "photo" && !i.hidden)}
-            onOpenEdit={(item: any) => { edit.saveDraft(); edit.open(item); }}
-          />}
+              onRequestDeleteItems={(ids: string[]) => {
+                itemPendingDeleteRef.current = ids;
+                setItemPendingDeleteCount(ids.length);
+              }}
+              onOpenEdit={(item: any) => {
+                edit.open(item);
+                setScreen("Edit");
+              }}
+              onOpenViewer={(id?: string) => openViewer(id, "Hidden", "hidden")}
+            />
+          )}
 
-          {screen === "Batch" && <BatchScreen
-            items={library.items.filter((i: any) => library.selectedIds.includes(i.id))}
-            selectedIds={library.selectedIds}
-            config={batch}
-            state={batch}
-            onSetPattern={batch.setPattern}
-            onSetFormat={batch.setFormat}
-            onSetQuality={batch.setQuality}
-            onSetStripMetadata={batch.setStripMetadata}
-            onSetMaxDimension={batch.setMaxDimension}
-            onSetStep={batch.setStep}
-            onChooseFolder={async () => {
-              const folder = await openFileDialog({ directory: true, multiple: false, title: "Choose export folder" });
-              if (typeof folder === "string") batch.setOutputFolder(folder);
-            }}
-            onOpenFolder={() => { if (batch.outputFolder) tauri.items.openFolder(batch.outputFolder); }}
-            onExportBatch={batch.exportBatch}
-            onCancelBatch={batch.cancelBatch}
-            onReset={batch.reset}
-            onOpenLibrary={() => setScreen("Library")}
-            onClearSelection={library.clearSelection}
-            onSelectAll={library.selectAll}
-            onSetSelection={library.setSelectedIds}
-            onRemoveItem={library.toggleSelection}
-            busy={batch.busy}
-            cancelRequested={batch.cancelRequested}
-            progress={batch.progress}
-            result={batch.result}
-            error={batch.error}
-            assetUrl={assetUrl}
-          />}
+          {screen === "Duplicates" && (
+            <DuplicatesScreen
+              groups={library.duplicates}
+              items={library.items}
+              onScan={library.scanDuplicates}
+              onClear={library.clearDuplicates}
+              busy={library.busy}
+              assetUrl={assetUrl}
+              onRequestDeleteItems={(ids: string[]) => {
+                itemPendingDeleteRef.current = ids;
+                setItemPendingDeleteCount(ids.length);
+              }}
+              onHideIds={async (ids: string[]) => {
+                if (!ids.length) return;
+                library.showNotice(
+                  `Hiding ${ids.length.toLocaleString()} item(s)…`,
+                );
+                await library.setHiddenForIds(ids, true);
+                library.showNotice(
+                  `Hidden ${ids.length.toLocaleString()} item(s).`,
+                );
+                await library.scanDuplicates();
+              }}
+            />
+          )}
 
-          {screen === "Hidden" && <HiddenScreen
-            assetUrl={assetUrl}
-            searchInputRef={searchInputRef}
-            onContextMenu={openContextMenu}
-            onNavigate={openScreen}
-            onCreateAlbum={openAlbumDialog}
-            onOpenAlbumPicker={(itemIds?: string[]) => openAlbumPicker(itemIds)}
-            onRequestDeleteItems={(ids: string[]) => { itemPendingDeleteRef.current = ids; setItemPendingDeleteCount(ids.length); }}
-            onOpenEdit={(item: any) => { edit.open(item); setScreen("Edit"); }}
-            onOpenViewer={(id?: string) => openViewer(id, "Hidden", "hidden")}
-          />}
-
-
-          {screen === "Duplicates" && <DuplicatesScreen
-            groups={library.duplicates}
-            items={library.items}
-            onScan={library.scanDuplicates}
-            onClear={library.clearDuplicates}
-            busy={library.busy}
-            assetUrl={assetUrl}
-            onRequestDeleteItems={(ids: string[]) => { itemPendingDeleteRef.current = ids; setItemPendingDeleteCount(ids.length); }}
-            onHideIds={async (ids: string[]) => {
-              if (!ids.length) return;
-              library.showNotice(`Hiding ${ids.length.toLocaleString()} item(s)…`);
-              await library.setHiddenForIds(ids, true);
-              library.showNotice(`Hidden ${ids.length.toLocaleString()} item(s).`);
-              await library.scanDuplicates();
-            }}
-          />}
-
-          {screen === "Settings" && <SettingsScreen
-            onAddFolder={() => importFolder()}
-            onRemoveFolder={(folder: LibraryFolder) => setFolderPendingRemove(folder)}
-            onRescan={() => { void rescanSources(); }}
-            onRescanFolder={(folder) => { void rescanSource(folder); }}
-          />}
+          {screen === "Settings" && (
+            <SettingsScreen
+              onAddFolder={() => importFolder()}
+              onRemoveFolder={(folder: LibraryFolder) =>
+                setFolderPendingRemove(folder)
+              }
+              onRescan={() => {
+                void rescanSources();
+              }}
+              onRescanFolder={(folder) => {
+                void rescanSource(folder);
+              }}
+            />
+          )}
         </main>
       </div>
 
       {library.busy && library.progress && (
-        <div className={`busy-indicator ${library.progress.phase === "hashing" ? "busy-indicator-hashing" : ""}`} role="status">
+        <div
+          className={`busy-indicator ${library.progress.phase === "hashing" ? "busy-indicator-hashing" : ""}`}
+          role="status"
+        >
           <span className="spinner" />
-          {library.progress.phase === "hashing" ? (() => {
-            const bytesProcessed = library.progress.bytesProcessed ?? 0;
-            const bytesTotal = library.progress.bytesTotal ?? 0;
-            const filesProcessed = library.progress.filesProcessed ?? library.progress.processed;
-            const filesTotal = library.progress.filesTotal ?? library.progress.total;
-            const percent = bytesTotal > 0 ? Math.min(100, Math.round((bytesProcessed / bytesTotal) * 100)) : 0;
-            return (
-              <div className="busy-indicator-progress-copy">
-                <b>
-                  {bytesTotal > 0
-                    ? `Checking duplicates · ${percent}%`
-                    : filesTotal > 0 ? "Hashing candidates…" : "Finding duplicate candidates…"}
-                </b>
-                <small>
-                  {filesProcessed.toLocaleString()} of {filesTotal.toLocaleString()} candidate files
-                  {bytesTotal > 0 && ` · ${formatBytesSimple(bytesProcessed)} of ${formatBytesSimple(bytesTotal)}`}
-                </small>
-                <div className="busy-indicator-progress-track" role="progressbar" aria-label="Duplicate scan progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
-                  <span style={{ width: `${percent}%` }} />
-                </div>
-                {library.progress.currentFile && <small className="busy-indicator-current-file" title={library.progress.currentFile}>{library.progress.currentFile}</small>}
-              </div>
-            );
-          })() : library.progress.phase === "trashing" ? (() => {
-            const processed = library.progress.processed ?? 0;
-            const total = library.progress.total ?? 0;
-            const percent = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
-            return (
-              <div className="busy-indicator-progress-copy">
-                <b>Moving to Trash · {percent}%</b>
-                <small>{processed.toLocaleString()} of {total.toLocaleString()} files</small>
-                <div className="busy-indicator-progress-track" role="progressbar" aria-label="Trash progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
-                  <span style={{ width: `${percent}%` }} />
-                </div>
-              </div>
-            );
-          })() : library.progress.phase === "reading" ? (() => (
-            <div className="busy-indicator-progress-copy">
-              <b>Loading library…</b>
-              <small>Reading database</small>
-              <div className="busy-indicator-progress-track" role="progressbar" aria-label="Loading library" aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}>
-                <span style={{ width: "0%" }} />
-              </div>
-            </div>
-          ))() : library.progress.phase === "scanning" ? (() => {
-            // Distinguish source-level vs file-level progress:
-            // - source-level: total <= number of folders (frontend sets it)
-            // - file-level: total = files in current folder (backend sets it)
-            // Heuristic: if currentFile is a directory path, it's source-level.
-            const isSourceLevel = library.progress.currentFile
-              ? library.progress.currentFile.endsWith("/") || 
-                !library.progress.currentFile.includes(".")
-              : true;
-            const processed = library.progress.processed ?? 0;
-            const total = library.progress.total ?? 0;
-            const percent = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
-            
-            // Extract just the folder/file name from path
-            const getName = (path: string) => path.split("/").pop() || path;
-            
-            if (isSourceLevel) {
-              return (
-                <div className="busy-indicator-progress-copy">
-                  <b>Scanning source {processed + 1} of {total} · {percent}%</b>
-                  <small>{library.progress.currentFile ? getName(library.progress.currentFile) : "Preparing…"}</small>
-                  <div className="busy-indicator-progress-track" role="progressbar" aria-label="Scan progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
-                    <span style={{ width: `${percent}%` }} />
+          {library.progress.phase === "hashing"
+            ? (() => {
+                const bytesProcessed = library.progress.bytesProcessed ?? 0;
+                const bytesTotal = library.progress.bytesTotal ?? 0;
+                const filesProcessed =
+                  library.progress.filesProcessed ?? library.progress.processed;
+                const filesTotal =
+                  library.progress.filesTotal ?? library.progress.total;
+                const percent =
+                  bytesTotal > 0
+                    ? Math.min(
+                        100,
+                        Math.round((bytesProcessed / bytesTotal) * 100),
+                      )
+                    : 0;
+                return (
+                  <div className="busy-indicator-progress-copy">
+                    <b>
+                      {bytesTotal > 0
+                        ? `Checking duplicates · ${percent}%`
+                        : filesTotal > 0
+                          ? "Hashing candidates…"
+                          : "Finding duplicate candidates…"}
+                    </b>
+                    <small>
+                      {filesProcessed.toLocaleString()} of{" "}
+                      {filesTotal.toLocaleString()} candidate files
+                      {bytesTotal > 0 &&
+                        ` · ${formatBytesSimple(bytesProcessed)} of ${formatBytesSimple(bytesTotal)}`}
+                    </small>
+                    <div
+                      className="busy-indicator-progress-track"
+                      role="progressbar"
+                      aria-label="Duplicate scan progress"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={percent}
+                    >
+                      <span style={{ width: `${percent}%` }} />
+                    </div>
+                    {library.progress.currentFile && (
+                      <small
+                        className="busy-indicator-current-file"
+                        title={library.progress.currentFile}
+                      >
+                        {library.progress.currentFile}
+                      </small>
+                    )}
                   </div>
-                </div>
-              );
-            } else {
-              // Show source folder + file progress in two lines
-              const currentFileName = library.progress.currentFile
-                ? library.progress.currentFile.split("/").pop() || library.progress.currentFile
-                : "files";
-              // Extract source folder from current file path
-              let sourceFolder = "files";
-              if (library.progress.currentFile) {
-                const parts = library.progress.currentFile.split("/");
-                if (parts.length >= 2) {
-                  sourceFolder = parts[parts.length - 2]; // parent folder name
-                }
-              }
-              return (
-                <div className="busy-indicator-progress-copy">
-                  <b>Scanning {sourceFolder} · {processed.toLocaleString()} of {total.toLocaleString()} · {percent}%</b>
-                  <small>{currentFileName}</small>
-                  <div className="busy-indicator-progress-track" role="progressbar" aria-label="File scan progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
-                    <span style={{ width: `${percent}%` }} />
-                  </div>
-                </div>
-              );
-            }
-          })() : `${library.progress.phase} ${library.progress.processed}/${library.progress.total}`}
+                );
+              })()
+            : library.progress.phase === "trashing"
+              ? (() => {
+                  const processed = library.progress.processed ?? 0;
+                  const total = library.progress.total ?? 0;
+                  const percent =
+                    total > 0
+                      ? Math.min(100, Math.round((processed / total) * 100))
+                      : 0;
+                  return (
+                    <div className="busy-indicator-progress-copy">
+                      <b>Moving to Trash · {percent}%</b>
+                      <small>
+                        {processed.toLocaleString()} of {total.toLocaleString()}{" "}
+                        files
+                      </small>
+                      <div
+                        className="busy-indicator-progress-track"
+                        role="progressbar"
+                        aria-label="Trash progress"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={percent}
+                      >
+                        <span style={{ width: `${percent}%` }} />
+                      </div>
+                    </div>
+                  );
+                })()
+              : library.progress.phase === "reading"
+                ? (() => (
+                    <div className="busy-indicator-progress-copy">
+                      <b>Loading library…</b>
+                      <small>Reading database</small>
+                      <div
+                        className="busy-indicator-progress-track"
+                        role="progressbar"
+                        aria-label="Loading library"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={0}
+                      >
+                        <span style={{ width: "0%" }} />
+                      </div>
+                    </div>
+                  ))()
+                : library.progress.phase === "scanning"
+                  ? (() => {
+                      // Distinguish source-level vs file-level progress:
+                      // - source-level: total <= number of folders (frontend sets it)
+                      // - file-level: total = files in current folder (backend sets it)
+                      // Heuristic: if currentFile is a directory path, it's source-level.
+                      const isSourceLevel = library.progress.currentFile
+                        ? library.progress.currentFile.endsWith("/") ||
+                          !library.progress.currentFile.includes(".")
+                        : true;
+                      const processed = library.progress.processed ?? 0;
+                      const total = library.progress.total ?? 0;
+                      const percent =
+                        total > 0
+                          ? Math.min(100, Math.round((processed / total) * 100))
+                          : 0;
+
+                      // Extract just the folder/file name from path
+                      const getName = (path: string) =>
+                        path.split("/").pop() || path;
+
+                      if (isSourceLevel) {
+                        return (
+                          <div className="busy-indicator-progress-copy">
+                            <b>
+                              Scanning source {processed + 1} of {total} ·{" "}
+                              {percent}%
+                            </b>
+                            <small>
+                              {library.progress.currentFile
+                                ? getName(library.progress.currentFile)
+                                : "Preparing…"}
+                            </small>
+                            <div
+                              className="busy-indicator-progress-track"
+                              role="progressbar"
+                              aria-label="Scan progress"
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-valuenow={percent}
+                            >
+                              <span style={{ width: `${percent}%` }} />
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        // Show source folder + file progress in two lines
+                        const currentFileName = library.progress.currentFile
+                          ? library.progress.currentFile.split("/").pop() ||
+                            library.progress.currentFile
+                          : "files";
+                        // Extract source folder from current file path
+                        let sourceFolder = "files";
+                        if (library.progress.currentFile) {
+                          const parts = library.progress.currentFile.split("/");
+                          if (parts.length >= 2) {
+                            sourceFolder = parts[parts.length - 2]; // parent folder name
+                          }
+                        }
+                        return (
+                          <div className="busy-indicator-progress-copy">
+                            <b>
+                              Scanning {sourceFolder} ·{" "}
+                              {processed.toLocaleString()} of{" "}
+                              {total.toLocaleString()} · {percent}%
+                            </b>
+                            <small>{currentFileName}</small>
+                            <div
+                              className="busy-indicator-progress-track"
+                              role="progressbar"
+                              aria-label="File scan progress"
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-valuenow={percent}
+                            >
+                              <span style={{ width: `${percent}%` }} />
+                            </div>
+                          </div>
+                        );
+                      }
+                    })()
+                  : `${library.progress.phase} ${library.progress.processed}/${library.progress.total}`}
           <button
             className="busy-indicator-cancel"
             type="button"
@@ -1917,28 +2665,51 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           aria-live={isWarningNotice(library.notice) ? "assertive" : "polite"}
           onClick={() => library.showNotice("")}
         >
-          <span aria-hidden="true">{isWarningNotice(library.notice) ? "!" : "✓"}</span>{library.notice}
+          <span aria-hidden="true">
+            {isWarningNotice(library.notice) ? "!" : "✓"}
+          </span>
+          {library.notice}
         </div>
       )}
 
-{aboutOpen && (
+      {aboutOpen && (
         <div
           className="dialog-backdrop"
           role="presentation"
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setAboutOpen(false); }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setAboutOpen(false);
+          }}
         >
-          <div className="album-dialog" role="dialog" aria-modal="true" aria-labelledby="about-dialog-title">
+          <div
+            className="album-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="about-dialog-title"
+          >
             <div className="dialog-heading">
               <div>
                 <p className="eyebrow">ABOUT</p>
                 <h2 id="about-dialog-title">VistoGallery</h2>
               </div>
-              <button type="button" className="dialog-close" aria-label="Close" onClick={() => setAboutOpen(false)}>×</button>
+              <button
+                type="button"
+                className="dialog-close"
+                aria-label="Close"
+                onClick={() => setAboutOpen(false)}
+              >
+                ×
+              </button>
             </div>
             <p className="dialog-hint">Native macOS photo gallery.</p>
             <p className="dialog-hint">Version {appVersion || "0.1.1"}</p>
             <div className="dialog-actions">
-              <button type="button" className="dialog-button" onClick={() => setAboutOpen(false)}>Close</button>
+              <button
+                type="button"
+                className="dialog-button"
+                onClick={() => setAboutOpen(false)}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -1994,20 +2765,36 @@ handlersRef.current = { importFolder, importFiles, showNotice };
               {albumDialogMode === "rename"
                 ? "This only changes the album name. Photos stay in this album."
                 : (() => {
-                    const count = albumSeedIds?.length ?? (library.selectedIds.length || (library.inspectedId ? 1 : 0));
+                    const count =
+                      albumSeedIds?.length ??
+                      (library.selectedIds.length ||
+                        (library.inspectedId ? 1 : 0));
                     return count
                       ? `Adds ${count.toLocaleString()} item${count === 1 ? "" : "s"} to the new album.`
                       : "You can add photos to it from the library or an album at any time.";
                   })()}
             </p>
             <div className="dialog-actions">
-              <button type="button" className="quiet-button" onClick={closeAlbumDialog} disabled={creatingAlbum}>
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={closeAlbumDialog}
+                disabled={creatingAlbum}
+              >
                 Cancel
               </button>
-              <button type="submit" className="primary-button" disabled={!albumName.trim() || creatingAlbum}>
+              <button
+                type="submit"
+                className="primary-button"
+                disabled={!albumName.trim() || creatingAlbum}
+              >
                 {creatingAlbum
-                  ? albumDialogMode === "rename" ? "Saving…" : "Creating…"
-                  : albumDialogMode === "rename" ? "Save name" : "Create album"}
+                  ? albumDialogMode === "rename"
+                    ? "Saving…"
+                    : "Creating…"
+                  : albumDialogMode === "rename"
+                    ? "Save name"
+                    : "Create album"}
               </button>
             </div>
           </form>
@@ -2019,7 +2806,8 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           className="dialog-backdrop"
           role="presentation"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget && !addingToAlbumId) setAlbumPickerOpen(false);
+            if (e.target === e.currentTarget && !addingToAlbumId)
+              setAlbumPickerOpen(false);
           }}
         >
           <div
@@ -2044,7 +2832,8 @@ handlersRef.current = { importFolder, importFiles, showNotice };
               </button>
             </div>
             <p className="album-picker-subtitle">
-              {albumPickerItemIds.length.toLocaleString()} selected item{albumPickerItemIds.length === 1 ? "" : "s"}
+              {albumPickerItemIds.length.toLocaleString()} selected item
+              {albumPickerItemIds.length === 1 ? "" : "s"}
             </p>
 
             <div className="album-picker-search">
@@ -2072,20 +2861,29 @@ handlersRef.current = { importFolder, importFiles, showNotice };
               )}
             </div>
 
-            <div className="album-picker-list" role="listbox" aria-label="Albums">
+            <div
+              className="album-picker-list"
+              role="listbox"
+              aria-label="Albums"
+            >
               {(() => {
                 const selectedItems = library.items.filter((item: any) =>
-                  albumPickerItemIds.includes(item.id)
+                  albumPickerItemIds.includes(item.id),
                 );
                 const query = albumSearch.trim().toLowerCase();
-                const matching = library.albums.filter((album: any) =>
-                  !query || album.name.toLowerCase().includes(query)
+                const matching = library.albums.filter(
+                  (album: any) =>
+                    !query || album.name.toLowerCase().includes(query),
                 );
                 if (!matching.length) {
                   return (
                     <div className="album-picker-empty">
                       <AlbumsIcon size={24} />
-                      <b>{library.albums.length ? "No matching albums" : "No albums yet"}</b>
+                      <b>
+                        {library.albums.length
+                          ? "No matching albums"
+                          : "No albums yet"}
+                      </b>
                       <p>
                         {library.albums.length
                           ? "Try a different search."
@@ -2095,9 +2893,11 @@ handlersRef.current = { importFolder, importFiles, showNotice };
                   );
                 }
                 return matching.map((album: any, index: number) => {
-                  const alreadyAdded = selectedItems.length > 0 && selectedItems.every((item: any) =>
-                    item.albumIds?.includes(album.id)
-                  );
+                  const alreadyAdded =
+                    selectedItems.length > 0 &&
+                    selectedItems.every((item: any) =>
+                      item.albumIds?.includes(album.id),
+                    );
                   const busy = addingToAlbumId === album.id;
                   return (
                     <button
@@ -2109,7 +2909,9 @@ handlersRef.current = { importFolder, importFiles, showNotice };
                       role="option"
                       aria-selected="false"
                     >
-                      <i className={`album-dot ${["coral", "violet", "blue", "green"][index % 4]}`} />
+                      <i
+                        className={`album-dot ${["coral", "violet", "blue", "green"][index % 4]}`}
+                      />
                       <span className="album-picker-name">{album.name}</span>
                       <span className="album-picker-count">
                         {alreadyAdded
@@ -2119,7 +2921,9 @@ handlersRef.current = { importFolder, importFiles, showNotice };
                               return `${count.toLocaleString()} ${count === 1 ? "item" : "items"}`;
                             })()}
                       </span>
-                      {busy && <span className="spinner album-picker-spinner" />}
+                      {busy && (
+                        <span className="spinner album-picker-spinner" />
+                      )}
                     </button>
                   );
                 });
@@ -2153,7 +2957,8 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           className="dialog-backdrop"
           role="presentation"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget && !deletingAlbum) setAlbumPendingDelete(null);
+            if (e.target === e.currentTarget && !deletingAlbum)
+              setAlbumPendingDelete(null);
           }}
         >
           <div
@@ -2180,13 +2985,16 @@ handlersRef.current = { importFolder, importFiles, showNotice };
               </button>
             </div>
             <p className="delete-album-copy">
-              Are you sure you want to delete <b>“{albumPendingDelete.name}”</b>?
+              Are you sure you want to delete <b>“{albumPendingDelete.name}”</b>
+              ?
             </p>
             <div className="delete-album-safety" id="delete-album-description">
-              <span><AlbumsIcon size={19} /></span>
+              <span>
+                <AlbumsIcon size={19} />
+              </span>
               <p>
-                <b>Your photos are safe.</b> This only removes the album and its grouping.
-                {" "}
+                <b>Your photos are safe.</b> This only removes the album and its
+                grouping.{" "}
                 {albumPendingDelete.itemCount
                   ? `${albumPendingDelete.itemCount.toLocaleString()} item${albumPendingDelete.itemCount === 1 ? "" : "s"} will remain in your library.`
                   : "The items remain in your library."}
@@ -2218,43 +3026,114 @@ handlersRef.current = { importFolder, importFiles, showNotice };
         <div
           className="dialog-backdrop"
           role="presentation"
-          onMouseDown={(e) => { if (e.target === e.currentTarget) { setItemPendingDeleteCount(0); itemPendingDeleteRef.current = null; } }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setItemPendingDeleteCount(0);
+              itemPendingDeleteRef.current = null;
+            }
+          }}
         >
-          <div ref={deleteItemDialogRef} className="album-dialog delete-album-dialog" role="alertdialog" aria-modal="true">
+          <div
+            ref={deleteItemDialogRef}
+            className="album-dialog delete-album-dialog"
+            role="alertdialog"
+            aria-modal="true"
+          >
             <div className="dialog-heading">
               <div>
                 <p className="eyebrow">PHOTO</p>
                 <h2>Delete Item?</h2>
               </div>
-              <button type="button" className="dialog-close" aria-label="Close" onClick={() => { setItemPendingDeleteCount(0); itemPendingDeleteRef.current = null; }}>×</button>
+              <button
+                type="button"
+                className="dialog-close"
+                aria-label="Close"
+                onClick={() => {
+                  setItemPendingDeleteCount(0);
+                  itemPendingDeleteRef.current = null;
+                }}
+              >
+                ×
+              </button>
             </div>
             <p className="delete-album-copy">
-              Are you sure you want to delete <b>{itemPendingDeleteCount} item{itemPendingDeleteCount === 1 ? "" : "s"}</b>? They will be moved to Trash.
+              Are you sure you want to delete{" "}
+              <b>
+                {itemPendingDeleteCount} item
+                {itemPendingDeleteCount === 1 ? "" : "s"}
+              </b>
+              ? They will be moved to Trash.
             </p>
             <div className="dialog-actions">
-              <button type="button" className="quiet-button" onClick={() => { setItemPendingDeleteCount(0); itemPendingDeleteRef.current = null; }}>Cancel</button>
-              <button type="button" className="danger-button" onClick={confirmDeleteItem}>Delete</button>
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={() => {
+                  setItemPendingDeleteCount(0);
+                  itemPendingDeleteRef.current = null;
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="danger-button"
+                onClick={confirmDeleteItem}
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {albumRemovePending && (
-        <div className="dialog-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setAlbumRemovePending(null); }}>
-          <div className="album-dialog delete-album-dialog" role="alertdialog" aria-modal="true">
+        <div
+          className="dialog-backdrop"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setAlbumRemovePending(null);
+          }}
+        >
+          <div
+            className="album-dialog delete-album-dialog"
+            role="alertdialog"
+            aria-modal="true"
+          >
             <div className="dialog-heading">
               <div>
                 <p className="eyebrow">ALBUM</p>
                 <h2>Remove from Album?</h2>
               </div>
-              <button type="button" className="dialog-close" aria-label="Close" onClick={() => setAlbumRemovePending(null)}>×</button>
+              <button
+                type="button"
+                className="dialog-close"
+                aria-label="Close"
+                onClick={() => setAlbumRemovePending(null)}
+              >
+                ×
+              </button>
             </div>
             <p className="delete-album-copy">
-              Remove {albumRemovePending.itemIds.length} item{albumRemovePending.itemIds.length === 1 ? "" : "s"} from this album?
+              Remove {albumRemovePending.itemIds.length} item
+              {albumRemovePending.itemIds.length === 1 ? "" : "s"} from this
+              album?
             </p>
             <div className="dialog-actions">
-              <button type="button" className="quiet-button" onClick={() => setAlbumRemovePending(null)}>Cancel</button>
-              <button type="button" className="danger-button" onClick={confirmRemoveFromAlbum}>Remove</button>
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={() => setAlbumRemovePending(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="danger-button"
+                onClick={confirmRemoveFromAlbum}
+              >
+                Remove
+              </button>
             </div>
           </div>
         </div>
@@ -2291,10 +3170,19 @@ handlersRef.current = { importFolder, importFiles, showNotice };
             <SourcesManager
               variant="sheet"
               onAddFolder={() => importFolder()}
-              onRemoveFolder={(folder: LibraryFolder) => setFolderPendingRemove(folder)}
-              onFilterSource={() => { setScreen("Library"); setSourcesSheetOpen(false); }}
-              onRescan={() => { void rescanSources(); }}
-             onRescanFolder={(folder) => { void rescanSource(folder); }}
+              onRemoveFolder={(folder: LibraryFolder) =>
+                setFolderPendingRemove(folder)
+              }
+              onFilterSource={() => {
+                setScreen("Library");
+                setSourcesSheetOpen(false);
+              }}
+              onRescan={() => {
+                void rescanSources();
+              }}
+              onRescanFolder={(folder) => {
+                void rescanSource(folder);
+              }}
             />
             <div className="dialog-actions">
               <button
@@ -2314,7 +3202,8 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           className="dialog-backdrop"
           role="presentation"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget && !removingFolder) setFolderPendingRemove(null);
+            if (e.target === e.currentTarget && !removingFolder)
+              setFolderPendingRemove(null);
           }}
         >
           <div
@@ -2344,13 +3233,16 @@ handlersRef.current = { importFolder, importFiles, showNotice };
               Remove <b>“{folderPendingRemove.name}”</b> from VistoGallery?
             </p>
             <div className="delete-album-safety" id="remove-folder-description">
-              <span><FolderIcon size={19} /></span>
+              <span>
+                <FolderIcon size={19} />
+              </span>
               <p>
                 <b>Your files are safe.</b>{" "}
                 {folderPendingRemove.itemCount > 0
                   ? `This only unstages the folder and its ${folderPendingRemove.itemCount.toLocaleString()} item${folderPendingRemove.itemCount === 1 ? "" : "s"} from the library.`
                   : "This only removes the empty folder entry from the library."}{" "}
-                Nothing is deleted from disk — import the folder again to bring it back.
+                Nothing is deleted from disk — import the folder again to bring
+                it back.
               </p>
             </div>
             <div className="dialog-actions">
@@ -2409,7 +3301,15 @@ handlersRef.current = { importFolder, importFiles, showNotice };
 // tile used to render solid black. Seeking a fraction of a second after the
 // metadata arrives makes the webview decode and paint a real frame.
 
-function PickerThumbnail({ itemId, name, style }: { itemId: string; name: string; style?: React.CSSProperties }) {
+function PickerThumbnail({
+  itemId,
+  name,
+  style,
+}: {
+  itemId: string;
+  name: string;
+  style?: React.CSSProperties;
+}) {
   return (
     <CachedThumbnail
       itemId={itemId}
@@ -2421,8 +3321,6 @@ function PickerThumbnail({ itemId, name, style }: { itemId: string; name: string
     />
   );
 }
-
-
 
 // How many tiles to mount before the user scrolls further. Small enough to
 // keep filtering/typing snappy, large enough to fill a tall window.
@@ -2477,7 +3375,8 @@ function HiddenScreen(props: HiddenScreenProps) {
       setPendingReveal({ kind: "viewer", id });
     };
     window.addEventListener("mac-gallery:open-hidden", onOpenHidden);
-    return () => window.removeEventListener("mac-gallery:open-hidden", onOpenHidden);
+    return () =>
+      window.removeEventListener("mac-gallery:open-hidden", onOpenHidden);
   }, []);
 
   useEffect(() => {
@@ -2493,12 +3392,16 @@ function HiddenScreen(props: HiddenScreenProps) {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [pendingReveal]);
 
-  const requestViewer = (id?: string) => setPendingReveal({ kind: "viewer", id });
-  const requestEdit = (item: MediaItem) => setPendingReveal({ kind: "edit", item });
+  const requestViewer = (id?: string) =>
+    setPendingReveal({ kind: "viewer", id });
+  const requestEdit = (item: MediaItem) =>
+    setPendingReveal({ kind: "edit", item });
 
   const requestSlideshow = (ids?: string[]) => {
     const selection = ids && ids.length ? new Set(ids) : null;
-    const scope = selection ? items.filter((item) => selection.has(item.id)) : items;
+    const scope = selection
+      ? items.filter((item) => selection.has(item.id))
+      : items;
     if (scope.length === 0) {
       library.showNotice("Add photos or videos to start a slideshow.");
       return;
@@ -2548,12 +3451,19 @@ function HiddenScreen(props: HiddenScreenProps) {
   })();
 
   const toggleSelectAll = () => {
-    const allSelected = items.length > 0 && items.every((item) => library.selectedIds.includes(item.id));
+    const allSelected =
+      items.length > 0 &&
+      items.every((item) => library.selectedIds.includes(item.id));
     if (allSelected) {
       const visible = new Set(items.map((item) => item.id));
-      library.setSelectedIds(library.selectedIds.filter((id) => !visible.has(id)));
+      library.setSelectedIds(
+        library.selectedIds.filter((id) => !visible.has(id)),
+      );
     } else {
-      library.setSelectedIds([...library.selectedIds, ...items.map((item) => item.id)]);
+      library.setSelectedIds([
+        ...library.selectedIds,
+        ...items.map((item) => item.id),
+      ]);
     }
   };
 
@@ -2562,7 +3472,10 @@ function HiddenScreen(props: HiddenScreenProps) {
     const end = items.findIndex((item) => item.id === endId);
     if (start < 0 || end < 0) return;
     const [from, to] = start <= end ? [start, end] : [end, start];
-    library.setSelectedIds([...library.selectedIds, ...items.slice(from, to + 1).map((item) => item.id)]);
+    library.setSelectedIds([
+      ...library.selectedIds,
+      ...items.slice(from, to + 1).map((item) => item.id),
+    ]);
   };
 
   return (
@@ -2626,12 +3539,32 @@ function HiddenScreen(props: HiddenScreenProps) {
                 <p className="eyebrow">HIDDEN ITEM</p>
                 <h2 id="hidden-reveal-title">{revealCopy.title}</h2>
               </div>
-              <button type="button" className="dialog-close" onClick={() => setPendingReveal(null)} aria-label="Cancel">×</button>
+              <button
+                type="button"
+                className="dialog-close"
+                onClick={() => setPendingReveal(null)}
+                aria-label="Cancel"
+              >
+                ×
+              </button>
             </div>
             <p className="dialog-body">{revealCopy.body}</p>
             <div className="dialog-actions">
-              <button className="quiet-button" type="button" onClick={() => setPendingReveal(null)}>Cancel</button>
-              <button className="primary-button" type="button" autoFocus onClick={confirmReveal}>{revealCopy.action}</button>
+              <button
+                className="quiet-button"
+                type="button"
+                onClick={() => setPendingReveal(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="primary-button"
+                type="button"
+                autoFocus
+                onClick={confirmReveal}
+              >
+                {revealCopy.action}
+              </button>
             </div>
           </div>
         </div>
@@ -2674,7 +3607,10 @@ interface LibraryScreenProps {
   onRequestRemoveFromAlbum?: (albumId: string, itemIds: string[]) => void;
   onSelectRange: (startId: string, endId: string) => void;
   onSetActiveAlbum: (albumId: string | null) => void;
-  onSetFavoriteForIds: (ids: string[], favorite: boolean) => void | Promise<void>;
+  onSetFavoriteForIds: (
+    ids: string[],
+    favorite: boolean,
+  ) => void | Promise<void>;
   onSetHiddenForIds: (ids: string[], hidden: boolean) => void | Promise<void>;
   onSetSelection: (ids: string[]) => void;
   onToggleFavorite: (id: string) => void | Promise<void>;
@@ -2700,7 +3636,8 @@ function LibraryScreen(props: LibraryScreenProps) {
   // The grid can request a cached JPEG instead of decoding the original. Use
   // roughly 2x the CSS tile width so retina displays stay sharp; the details
   // preview is only 42-52 px, so a 128 px thumbnail is plenty there.
-  const thumbnailPixels = props.layout === "overview" ? 1024 : props.layout === "details" ? 128 : 512;
+  const thumbnailPixels =
+    props.layout === "overview" ? 1024 : props.layout === "details" ? 128 : 512;
   // Hidden items are masked by default. A pointer-down reveals just that tile
   // while it is held; releasing (or leaving the tile) puts the veil back.
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
@@ -2737,37 +3674,48 @@ function LibraryScreen(props: LibraryScreenProps) {
       window.removeEventListener("blur", concealAll);
     };
   }, [props.hiddenView, concealAll]);
-  const masked = (item: any) => Boolean(props.hiddenView) && !revealedIds.has(item.id);
+  const masked = (item: any) =>
+    Boolean(props.hiddenView) && !revealedIds.has(item.id);
   const tileAlt = (item: any) => (masked(item) ? "Hidden item" : item.name);
-  const holdHandlers = (id: string) => props.hiddenView ? {
-    onPointerDown: () => revealItem(id),
-    onPointerUp: () => concealItem(id),
-    onPointerLeave: () => concealItem(id),
-    onPointerCancel: () => concealItem(id),
-    onKeyDown: (event: React.KeyboardEvent) => {
-      if (event.key === " " || event.key === "Enter") revealItem(id);
-    },
-    onKeyUp: (event: React.KeyboardEvent) => {
-      if (event.key === " " || event.key === "Enter") concealItem(id);
-    },
-  } : {};
+  const holdHandlers = (id: string) =>
+    props.hiddenView
+      ? {
+          onPointerDown: () => revealItem(id),
+          onPointerUp: () => concealItem(id),
+          onPointerLeave: () => concealItem(id),
+          onPointerCancel: () => concealItem(id),
+          onKeyDown: (event: React.KeyboardEvent) => {
+            if (event.key === " " || event.key === "Enter") revealItem(id);
+          },
+          onKeyUp: (event: React.KeyboardEvent) => {
+            if (event.key === " " || event.key === "Enter") concealItem(id);
+          },
+        }
+      : {};
   const assetUrl = props.assetUrl;
   // `activeAlbum` is the album id; the heading needs its display name.
   const activeAlbumRecord = props.activeAlbum
     ? props.albums?.find((album: any) => album.id === props.activeAlbum)
     : null;
-  const activeAlbumName = props.activeAlbum ? activeAlbumRecord?.name ?? "Album" : null;
+  const activeAlbumName = props.activeAlbum
+    ? (activeAlbumRecord?.name ?? "Album")
+    : null;
   const inAlbum = Boolean(props.activeAlbum);
   const activeAlbumItems = useMemo(
-    () => props.activeAlbum
-      ? library.items.filter((item: any) => item.albumIds?.includes(props.activeAlbum) && !item.hidden)
-      : [],
+    () =>
+      props.activeAlbum
+        ? library.items.filter(
+            (item: any) =>
+              item.albumIds?.includes(props.activeAlbum) && !item.hidden,
+          )
+        : [],
     [library.items, props.activeAlbum],
   );
   const activeAlbumPhotos = useMemo(
-    () => activeAlbumItems
-      .filter((item: any) => item.kind === "photo" || item.kind === "video")
-      .slice(0, 3),
+    () =>
+      activeAlbumItems
+        .filter((item: any) => item.kind === "photo" || item.kind === "video")
+        .slice(0, 3),
     [activeAlbumItems],
   );
   // Hidden items do not count toward an album while they are hidden; the
@@ -2781,9 +3729,15 @@ function LibraryScreen(props: LibraryScreenProps) {
     if (!library.activeSource) return library.items;
     const prefix = `${library.activeSource.replace(/\/$/, "")}/`;
     return library.items.filter(
-      (item: any) => item.path === library.activeSource || item.path.startsWith(prefix),
+      (item: any) =>
+        item.path === library.activeSource || item.path.startsWith(prefix),
     );
-  }, [library.items, library.hiddenItems, library.activeSource, props.hiddenView]);
+  }, [
+    library.items,
+    library.hiddenItems,
+    library.activeSource,
+    props.hiddenView,
+  ]);
   const filterSource = inAlbum ? activeAlbumItems : sourceItems;
   // The SHOW row used to run one full filter pass per chip on every render.
   // One pass keeps the counts in sync and is O(n) instead of 6 × O(n).
@@ -2810,7 +3764,13 @@ function LibraryScreen(props: LibraryScreenProps) {
       const nothingHidden = props.hiddenCount === 0;
       return (
         <div className="empty-state" style={{ gridColumn: "1/-1" }}>
-          <span>{nothingHidden ? <EyeOffIcon size={28} /> : <ImageOffIcon size={28} />}</span>
+          <span>
+            {nothingHidden ? (
+              <EyeOffIcon size={28} />
+            ) : (
+              <ImageOffIcon size={28} />
+            )}
+          </span>
           <b>{nothingHidden ? "Nothing is hidden" : "No hidden items match"}</b>
           <p>
             {nothingHidden
@@ -2818,11 +3778,17 @@ function LibraryScreen(props: LibraryScreenProps) {
               : "Try another filter or search."}
           </p>
           {nothingHidden ? (
-            <button className="primary-button" type="button" onClick={() => props.onBrowseLibrary?.()}>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => props.onBrowseLibrary?.()}
+            >
               Browse Library
             </button>
           ) : (
-            <button type="button" onClick={clearEmptyView}>Clear filters</button>
+            <button type="button" onClick={clearEmptyView}>
+              Clear filters
+            </button>
           )}
         </div>
       );
@@ -2832,8 +3798,16 @@ function LibraryScreen(props: LibraryScreenProps) {
         className={`empty-state${albumEmpty ? " album-empty-dropzone" : ""}${albumEmpty && props.albumDragOver ? " is-dragging" : ""}`}
         style={{ gridColumn: "1/-1" }}
       >
-        <span>{albumEmpty ? <AlbumsIcon size={30} /> : <ImageOffIcon size={28} />}</span>
-        <b>{albumEmpty ? (props.albumDragOver ? "Drop to add to this album" : "This album is empty") : "No photos match"}</b>
+        <span>
+          {albumEmpty ? <AlbumsIcon size={30} /> : <ImageOffIcon size={28} />}
+        </span>
+        <b>
+          {albumEmpty
+            ? props.albumDragOver
+              ? "Drop to add to this album"
+              : "This album is empty"
+            : "No photos match"}
+        </b>
         <p>
           {albumEmpty
             ? "Drag files here or use Add Items. You can also select photos in Library and choose Add to album."
@@ -2844,7 +3818,9 @@ function LibraryScreen(props: LibraryScreenProps) {
             <button
               className="primary-button"
               type="button"
-              onClick={() => props.activeAlbum && props.onAddItems?.(props.activeAlbum)}
+              onClick={() =>
+                props.activeAlbum && props.onAddItems?.(props.activeAlbum)
+              }
             >
               <PlusIcon size={14} /> Add Items
             </button>
@@ -2862,13 +3838,22 @@ function LibraryScreen(props: LibraryScreenProps) {
           </div>
         ) : props.items?.length === 0 ? (
           <>
-            <p>Your library is empty. Add a folder to start indexing photos and videos.</p>
-            <button className="primary-button" type="button" onClick={() => props.onImportFolder?.()}>
+            <p>
+              Your library is empty. Add a folder to start indexing photos and
+              videos.
+            </p>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => props.onImportFolder?.()}
+            >
               <PlusIcon size={14} /> Add a folder
             </button>
           </>
         ) : (
-          <button type="button" onClick={clearEmptyView}>Clear filters</button>
+          <button type="button" onClick={clearEmptyView}>
+            Clear filters
+          </button>
         )}
       </div>
     );
@@ -2885,7 +3870,13 @@ function LibraryScreen(props: LibraryScreenProps) {
   useEffect(() => {
     setRenderLimit(GALLERY_PAGE_SIZE);
     scrollRef.current?.scrollTo({ top: 0 });
-  }, [props.filter, props.query, props.activeAlbum, library.activeSource, props.layout]);
+  }, [
+    props.filter,
+    props.query,
+    props.activeAlbum,
+    library.activeSource,
+    props.layout,
+  ]);
 
   const loadMore = () => {
     setRenderLimit((n) => Math.min(n + GALLERY_PAGE_SIZE, props.items.length));
@@ -2896,34 +3887,47 @@ function LibraryScreen(props: LibraryScreenProps) {
     if (!el || renderLimit >= props.items.length) return;
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 800) loadMore();
   };
-  const handleGridKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    const rawTarget = (e.target as HTMLElement) || (document.activeElement as HTMLElement);
-    const button = (rawTarget?.closest?.(".tile-open-button") as HTMLButtonElement | null)
-      || (document.activeElement as HTMLElement | null)?.closest?.(".tile-open-button") as HTMLButtonElement | null;
-    if (!button) return;
-    const buttons = Array.from(scrollRef.current?.querySelectorAll<HTMLButtonElement>(".tile-open-button") ?? []);
-    const currentIndex = buttons.indexOf(button);
-    if (currentIndex < 0) return;
-    let columns = 1;
-    const firstTop = buttons[0]?.offsetTop;
-    for (let i = 1; i < buttons.length; i++) {
-      if (buttons[i].offsetTop === firstTop) columns += 1;
-      else break;
-    }
-    if (columns < 1) columns = 1;
-    let nextIndex = currentIndex;
-    if (e.key === "ArrowRight") nextIndex = currentIndex + 1;
-    else if (e.key === "ArrowLeft") nextIndex = currentIndex - 1;
-    else if (e.key === "ArrowDown") nextIndex = currentIndex + columns;
-    else if (e.key === "ArrowUp") nextIndex = currentIndex - columns;
-    else return;
-    if (nextIndex < 0 || nextIndex >= buttons.length) return;
-    e.preventDefault();
-    const nextButton = buttons[nextIndex];
-    nextButton.focus();
-    const itemId = nextButton.getAttribute("data-item-id");
-    if (itemId) props.onInspectItem?.(itemId);
-  }, [props.onInspectItem]);
+  const handleGridKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const rawTarget =
+        (e.target as HTMLElement) || (document.activeElement as HTMLElement);
+      const button =
+        (rawTarget?.closest?.(
+          ".tile-open-button",
+        ) as HTMLButtonElement | null) ||
+        ((document.activeElement as HTMLElement | null)?.closest?.(
+          ".tile-open-button",
+        ) as HTMLButtonElement | null);
+      if (!button) return;
+      const buttons = Array.from(
+        scrollRef.current?.querySelectorAll<HTMLButtonElement>(
+          ".tile-open-button",
+        ) ?? [],
+      );
+      const currentIndex = buttons.indexOf(button);
+      if (currentIndex < 0) return;
+      let columns = 1;
+      const firstTop = buttons[0]?.offsetTop;
+      for (let i = 1; i < buttons.length; i++) {
+        if (buttons[i].offsetTop === firstTop) columns += 1;
+        else break;
+      }
+      if (columns < 1) columns = 1;
+      let nextIndex = currentIndex;
+      if (e.key === "ArrowRight") nextIndex = currentIndex + 1;
+      else if (e.key === "ArrowLeft") nextIndex = currentIndex - 1;
+      else if (e.key === "ArrowDown") nextIndex = currentIndex + columns;
+      else if (e.key === "ArrowUp") nextIndex = currentIndex - columns;
+      else return;
+      if (nextIndex < 0 || nextIndex >= buttons.length) return;
+      e.preventDefault();
+      const nextButton = buttons[nextIndex];
+      nextButton.focus();
+      const itemId = nextButton.getAttribute("data-item-id");
+      if (itemId) props.onInspectItem?.(itemId);
+    },
+    [props.onInspectItem],
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -2933,33 +3937,57 @@ function LibraryScreen(props: LibraryScreenProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [handleGridKeyDown]);
 
-  const renderedItems = useMemo(() => props.items.slice(0, renderLimit), [props.items, renderLimit]);
-  const selectedIdSet = useMemo(() => new Set(props.selectedIds), [props.selectedIds]);
+  const renderedItems = useMemo(
+    () => props.items.slice(0, renderLimit),
+    [props.items, renderLimit],
+  );
+  const selectedIdSet = useMemo(
+    () => new Set(props.selectedIds),
+    [props.selectedIds],
+  );
 
   // Timeline groups use the photo's capture date when available, with file
   // modification time as a reliable fallback for screenshots and videos.
-  const timelineGroups: { key: string; label: string; items: any[]; count: number }[] = useMemo(() => props.layout === "timeline"
-    ? (() => {
-        const grouped = new Map<string, { timestamp: number; items: any[] }>();
-        for (const item of props.items) {
-          const timestamp = item.capturedAt ?? item.modifiedAt;
-          const date = new Date(timestamp);
-          const key = `${date.getFullYear()}-${date.getMonth()}`;
-          const group = grouped.get(key) ?? { timestamp, items: [] as any[] };
-          group.timestamp = Math.max(group.timestamp, timestamp);
-          group.items.push(item);
-          grouped.set(key, group);
-        }
-        return [...grouped.entries()]
-          .sort((a, b) => b[1].timestamp - a[1].timestamp)
-          .map(([key, group]) => ({
-            key,
-            label: new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(group.timestamp),
-            items: group.items,
-            count: group.items.length,
-          }));
-      })()
-    : [], [props.items, props.layout]);
+  const timelineGroups: {
+    key: string;
+    label: string;
+    items: any[];
+    count: number;
+  }[] = useMemo(
+    () =>
+      props.layout === "timeline"
+        ? (() => {
+            const grouped = new Map<
+              string,
+              { timestamp: number; items: any[] }
+            >();
+            for (const item of props.items) {
+              const timestamp = item.capturedAt ?? item.modifiedAt;
+              const date = new Date(timestamp);
+              const key = `${date.getFullYear()}-${date.getMonth()}`;
+              const group = grouped.get(key) ?? {
+                timestamp,
+                items: [] as any[],
+              };
+              group.timestamp = Math.max(group.timestamp, timestamp);
+              group.items.push(item);
+              grouped.set(key, group);
+            }
+            return [...grouped.entries()]
+              .sort((a, b) => b[1].timestamp - a[1].timestamp)
+              .map(([key, group]) => ({
+                key,
+                label: new Intl.DateTimeFormat(undefined, {
+                  month: "long",
+                  year: "numeric",
+                }).format(group.timestamp),
+                items: group.items,
+                count: group.items.length,
+              }));
+          })()
+        : [],
+    [props.items, props.layout],
+  );
   const visibleTimelineGroups = useMemo(() => {
     if (!timelineGroups.length) return [];
     const visibleItemsByMonth = new Map<string, any[]>();
@@ -2979,21 +4007,38 @@ function LibraryScreen(props: LibraryScreenProps) {
 
   const captureDate = (item: any) => item.capturedAt ?? item.modifiedAt;
   const sortDetailsBy = (sortBy: typeof library.sortBy) => {
-    library.setSort(sortBy, library.sortBy === sortBy && library.sortOrder === "asc" ? "desc" : "asc");
+    library.setSort(
+      sortBy,
+      library.sortBy === sortBy && library.sortOrder === "asc" ? "desc" : "asc",
+    );
   };
   const detailsHeader = (label: string, sortBy?: typeof library.sortBy) => (
     <div className="details-col">
       {sortBy ? (
-        <button type="button" className="details-sort-header" onClick={() => sortDetailsBy(sortBy)}>
-          {label}<span aria-hidden="true">{library.sortBy === sortBy ? (library.sortOrder === "asc" ? "↑" : "↓") : "↕"}</span>
+        <button
+          type="button"
+          className="details-sort-header"
+          onClick={() => sortDetailsBy(sortBy)}
+        >
+          {label}
+          <span aria-hidden="true">
+            {library.sortBy === sortBy
+              ? library.sortOrder === "asc"
+                ? "↑"
+                : "↓"
+              : "↕"}
+          </span>
         </button>
-      ) : label}
+      ) : (
+        label
+      )}
     </div>
   );
   const toggleTimelineGroup = (items: any[]) => {
     const groupIds = items.map((item) => item.id);
     const groupIdSet = new Set(groupIds);
-    const allSelected = groupIds.length > 0 && groupIds.every((id) => selectedIdSet.has(id));
+    const allSelected =
+      groupIds.length > 0 && groupIds.every((id) => selectedIdSet.has(id));
     const next = allSelected
       ? props.selectedIds.filter((id: string) => !groupIdSet.has(id))
       : [...new Set([...props.selectedIds, ...groupIds])];
@@ -3009,7 +4054,11 @@ function LibraryScreen(props: LibraryScreenProps) {
   //  - double click → inspect + open the viewer on exactly that item
   //  - checkbox → toggle selection membership only
   const handleTileClick = (item: any, e: React.MouseEvent) => {
-    if (e.shiftKey && lastClickedRef.current && lastClickedRef.current !== item.id) {
+    if (
+      e.shiftKey &&
+      lastClickedRef.current &&
+      lastClickedRef.current !== item.id
+    ) {
       props.onSelectRange?.(lastClickedRef.current, item.id);
       return;
     }
@@ -3035,22 +4084,48 @@ function LibraryScreen(props: LibraryScreenProps) {
   // membership. The picker itself carries the album list and search.
   const itemContextMenu = (item: any) => [
     { label: "Open", onClick: () => props.onOpenViewer(item.id) },
-    ...(item.kind === "photo" ? [{ label: "Edit", onClick: () => { props.onOpenEdit?.(item); } }] : []),
-    { label: "Open in Finder", onClick: () => tauri.items.revealInFinder(item.path) },
+    ...(item.kind === "photo"
+      ? [
+          {
+            label: "Edit",
+            onClick: () => {
+              props.onOpenEdit?.(item);
+            },
+          },
+        ]
+      : []),
+    {
+      label: "Open in Finder",
+      onClick: () => tauri.items.revealInFinder(item.path),
+    },
     { divider: true },
-    { label: "Add to Album…", onClick: () => props.onOpenAlbumPicker?.([item.id]) },
+    {
+      label: "Add to Album…",
+      onClick: () => props.onOpenAlbumPicker?.([item.id]),
+    },
     ...(props.activeAlbum
-      ? [{
-          label: "Remove from this Album",
-          danger: true,
-          onClick: () => props.activeAlbum && props.onRequestRemoveFromAlbum?.(props.activeAlbum, [item.id]),
-        }]
+      ? [
+          {
+            label: "Remove from this Album",
+            danger: true,
+            onClick: () =>
+              props.activeAlbum &&
+              props.onRequestRemoveFromAlbum?.(props.activeAlbum, [item.id]),
+          },
+        ]
       : []),
     { label: "New Album…", onClick: () => props.onCreateAlbum?.([item.id]) },
     { divider: true },
     { label: "Favorite", onClick: () => props.onToggleFavorite(item.id) },
-    { label: item.hidden ? "Unhide" : "Hide", onClick: () => props.onToggleHidden(item.id) },
-    { label: "Delete", danger: true, onClick: () => props.onRequestDeleteItems?.([item.id]) },
+    {
+      label: item.hidden ? "Unhide" : "Hide",
+      onClick: () => props.onToggleHidden(item.id),
+    },
+    {
+      label: "Delete",
+      danger: true,
+      onClick: () => props.onRequestDeleteItems?.([item.id]),
+    },
   ];
 
   // Batch actions live in the contextual selection bar, so resolve the
@@ -3064,39 +4139,64 @@ function LibraryScreen(props: LibraryScreenProps) {
   const anySelectedHidden = selectedItems.some((i: any) => i.hidden);
   // Play on a video-only selection opens the player; anything with a photo
   // starts a slideshow. The label follows the action so it is never a surprise.
-  const selectionPlaysInViewer = selectedItems.length > 0 && selectedItems.every((i: any) => i.kind === "video");
+  const selectionPlaysInViewer =
+    selectedItems.length > 0 &&
+    selectedItems.every((i: any) => i.kind === "video");
   // Say what is actually in the selection: "3 photos · 2 videos" explains the
   // Play/Slideshow label and avoids surprises when a filter hides some of them.
   const selectedKindCounts = useMemo(() => {
     const counts: Record<string, number> = { photo: 0, video: 0, raw: 0 };
-    for (const item of selectedItems) counts[item.kind] = (counts[item.kind] || 0) + 1;
+    for (const item of selectedItems)
+      counts[item.kind] = (counts[item.kind] || 0) + 1;
     return counts;
   }, [selectedItems]);
   const selectedKindSummary = [
-    selectedKindCounts.photo ? `${selectedKindCounts.photo} photo${selectedKindCounts.photo === 1 ? "" : "s"}` : "",
-    selectedKindCounts.video ? `${selectedKindCounts.video} video${selectedKindCounts.video === 1 ? "" : "s"}` : "",
+    selectedKindCounts.photo
+      ? `${selectedKindCounts.photo} photo${selectedKindCounts.photo === 1 ? "" : "s"}`
+      : "",
+    selectedKindCounts.video
+      ? `${selectedKindCounts.video} video${selectedKindCounts.video === 1 ? "" : "s"}`
+      : "",
     selectedKindCounts.raw ? `${selectedKindCounts.raw} RAW` : "",
-  ].filter(Boolean).join(" · ");
+  ]
+    .filter(Boolean)
+    .join(" · ");
   // Select-all now lives in the selection bar and is scoped to the items the
   // screen is actually showing (including the Hidden and album views).
-  const allVisibleSelected = props.items.length > 0 && props.items.every((item: any) => selectedIdSet.has(item.id));
+  const allVisibleSelected =
+    props.items.length > 0 &&
+    props.items.every((item: any) => selectedIdSet.has(item.id));
   const toggleSelectAllVisible = () => {
-    props.onSetSelection?.(allVisibleSelected ? [] : props.items.map((item: any) => item.id));
+    props.onSetSelection?.(
+      allVisibleSelected ? [] : props.items.map((item: any) => item.id),
+    );
   };
 
   return (
-    <div className={`library-layout ${props.showInspector ? "with-inspector" : ""}`}>
+    <div
+      className={`library-layout ${props.showInspector ? "with-inspector" : ""}`}
+    >
       <section className="library-center">
         <header className="library-header">
           {inAlbum ? (
             <div className="album-detail-top">
-              <button className="album-breadcrumb" type="button" onClick={() => props.onOpenAlbums?.()}>
+              <button
+                className="album-breadcrumb"
+                type="button"
+                onClick={() => props.onOpenAlbums?.()}
+              >
                 <AlbumsIcon size={15} /> All albums
               </button>
               <div className="album-detail-heading">
-                <div className={`album-detail-cover${activeAlbumPhotos.length ? "" : " is-empty"}`}>
+                <div
+                  className={`album-detail-cover${activeAlbumPhotos.length ? "" : " is-empty"}`}
+                >
                   {activeAlbumPhotos.length ? (
-                    <AlbumPhotoStack photos={activeAlbumPhotos} assetUrl={assetUrl} albumItems={activeAlbumItems} />
+                    <AlbumPhotoStack
+                      photos={activeAlbumPhotos}
+                      assetUrl={assetUrl}
+                      albumItems={activeAlbumItems}
+                    />
                   ) : (
                     <AlbumsIcon size={27} />
                   )}
@@ -3105,7 +4205,8 @@ function LibraryScreen(props: LibraryScreenProps) {
                   <p className="eyebrow">ALBUM</p>
                   <h1>{activeAlbumName}</h1>
                   <p className="page-subtitle">
-                    {activeAlbumCount.toLocaleString()} {activeAlbumCount === 1 ? "item" : "items"}
+                    {activeAlbumCount.toLocaleString()}{" "}
+                    {activeAlbumCount === 1 ? "item" : "items"}
                     {" · "}
                     {props.items.length.toLocaleString()} shown
                   </p>
@@ -3116,14 +4217,20 @@ function LibraryScreen(props: LibraryScreenProps) {
                     type="button"
                     onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
                     disabled={props.busy || props.items.length === 0}
-                    title={props.selectedIds.length ? "Play the selected items" : "Play this album as a slideshow"}
+                    title={
+                      props.selectedIds.length
+                        ? "Play the selected items"
+                        : "Play this album as a slideshow"
+                    }
                   >
                     <PlayIcon size={14} /> Play
                   </button>
                   <button
                     className="primary-button"
                     type="button"
-                    onClick={() => props.activeAlbum && props.onAddItems?.(props.activeAlbum)}
+                    onClick={() =>
+                      props.activeAlbum && props.onAddItems?.(props.activeAlbum)
+                    }
                     disabled={props.busy}
                   >
                     <PlusIcon size={15} /> Add Items
@@ -3143,7 +4250,9 @@ function LibraryScreen(props: LibraryScreenProps) {
           ) : (
             <header className="library-header-row">
               <div className="header-left">
-                <p className="eyebrow">{props.hiddenView ? "OUT OF THE GALLERY" : "YOUR COLLECTION"}</p>
+                <p className="eyebrow">
+                  {props.hiddenView ? "OUT OF THE GALLERY" : "YOUR COLLECTION"}
+                </p>
                 <div className="header-title-row">
                   <h1>{props.hiddenView ? "Hidden" : "All Photos"}</h1>
                   <p className="page-subtitle">
@@ -3151,7 +4260,9 @@ function LibraryScreen(props: LibraryScreenProps) {
                     {props.hiddenView
                       ? `${(props.hiddenCount || 0).toLocaleString()} hidden`
                       : `${(library.items.length - library.hiddenCount).toLocaleString()} in library`}
-                    {!props.hiddenView && props.hiddenCount ? ` · ${props.hiddenCount.toLocaleString()} hidden` : ""}
+                    {!props.hiddenView && props.hiddenCount
+                      ? ` · ${props.hiddenCount.toLocaleString()} hidden`
+                      : ""}
                   </p>
                 </div>
               </div>
@@ -3168,25 +4279,48 @@ function LibraryScreen(props: LibraryScreenProps) {
                 </button>
                 {!props.hiddenView && (
                   <>
-                    <label className="source-select" title="Filter the library by source">
+                    <label
+                      className="source-select"
+                      title="Filter the library by source"
+                    >
                       <FolderIcon size={14} />
                       <span className="source-select-label">Source</span>
                       <select
                         value={library.activeSource ?? ""}
-                        onChange={(e) => library.setActiveSource(e.target.value || null)}
+                        onChange={(e) =>
+                          library.setActiveSource(e.target.value || null)
+                        }
                         aria-label="Filter the library by source"
                       >
                         <option value="">All sources</option>
                         {library.folders.map((folder: LibraryFolder) => (
-                          <option key={folder.path} value={folder.path}>{folder.name}</option>
+                          <option key={folder.path} value={folder.path}>
+                            {folder.name}
+                          </option>
                         ))}
                       </select>
                     </label>
-                    <button className="quiet-button" type="button" onClick={() => props.onImportFolder?.()} disabled={props.busy} title="Open folder (⌘O)" aria-label="Open folder">
-                      <FolderIcon size={15} /><span className="btn-label">Open folder</span>
+                    <button
+                      className="quiet-button"
+                      type="button"
+                      onClick={() => props.onImportFolder?.()}
+                      disabled={props.busy}
+                      title="Open folder (⌘O)"
+                      aria-label="Open folder"
+                    >
+                      <FolderIcon size={15} />
+                      <span className="btn-label">Open folder</span>
                     </button>
-                    <button className="primary-button" type="button" onClick={() => props.onImportFiles?.()} disabled={props.busy} title="Add files (⌘I)" aria-label="Add files">
-                      <PlusIcon size={15} /><span className="btn-label">Add files</span>
+                    <button
+                      className="primary-button"
+                      type="button"
+                      onClick={() => props.onImportFiles?.()}
+                      disabled={props.busy}
+                      title="Add files (⌘I)"
+                      aria-label="Add files"
+                    >
+                      <PlusIcon size={15} />
+                      <span className="btn-label">Add files</span>
                     </button>
                   </>
                 )}
@@ -3198,28 +4332,41 @@ function LibraryScreen(props: LibraryScreenProps) {
             <div className="hidden-disclaimer" role="note">
               <EyeOffIcon size={15} />
               <span>
-                Hidden from the gallery only. Files stay on disk at their original paths and
-                are not encrypted.
+                Hidden from the gallery only. Files stay on disk at their
+                original paths and are not encrypted.
               </span>
             </div>
           )}
 
           <div className="collection-toolbar">
             <div className="search-field">
-              <span className="search-icon"><SearchIcon size={15} /></span>
+              <span className="search-icon">
+                <SearchIcon size={15} />
+              </span>
               <input
                 ref={props.searchInputRef}
                 value={props.query}
                 onChange={(e) => props.onChangeQuery(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Escape" && props.query) props.onChangeQuery(""); }}
-                placeholder={props.hiddenView ? "Search hidden items…" : "Search filenames, tags, camera…"}
-                aria-label={props.hiddenView ? "Search hidden items" : "Search library"}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape" && props.query)
+                    props.onChangeQuery("");
+                }}
+                placeholder={
+                  props.hiddenView
+                    ? "Search hidden items…"
+                    : "Search filenames, tags, camera…"
+                }
+                aria-label={
+                  props.hiddenView ? "Search hidden items" : "Search library"
+                }
               />
               {props.query ? (
                 <button
                   type="button"
                   className="clear-btn visible"
-                  onClick={() => { props.onChangeQuery(""); }}
+                  onClick={() => {
+                    props.onChangeQuery("");
+                  }}
                   aria-label="Clear search"
                   title="Clear (Esc)"
                 >
@@ -3232,14 +4379,35 @@ function LibraryScreen(props: LibraryScreenProps) {
             <div className="toolbar-right">
               <div className="toolbar-actions">
                 {!props.hiddenView && (
-                  <button className="toolbar-button" type="button" onClick={() => props.onCreateAlbum?.()} title="Create album (⌘N)"><PlusIcon size={14} /> Album</button>
+                  <button
+                    className="toolbar-button"
+                    type="button"
+                    onClick={() => props.onCreateAlbum?.()}
+                    title="Create album (⌘N)"
+                  >
+                    <PlusIcon size={14} /> Album
+                  </button>
                 )}
                 <span className="toolbar-divider" aria-hidden="true" />
                 <div className="layout-switcher" aria-label="Gallery layout">
                   {(["grid", "details", "timeline"] as const).map((l) => {
-                    const Icon = l === "grid" ? GridIcon : l === "details" ? DetailsIcon : TimelineIcon;
+                    const Icon =
+                      l === "grid"
+                        ? GridIcon
+                        : l === "details"
+                          ? DetailsIcon
+                          : TimelineIcon;
                     return (
-                      <button key={l} type="button" aria-label={l} title={l} className={props.layout === l ? "selected" : ""} onClick={() => props.onChangeLayout(l)}><Icon size={14} /></button>
+                      <button
+                        key={l}
+                        type="button"
+                        aria-label={l}
+                        title={l}
+                        className={props.layout === l ? "selected" : ""}
+                        onClick={() => props.onChangeLayout(l)}
+                      >
+                        <Icon size={14} />
+                      </button>
                     );
                   })}
                 </div>
@@ -3250,7 +4418,13 @@ function LibraryScreen(props: LibraryScreenProps) {
                       type="button"
                       className={`zoom-step ${thumbnailSize === s ? "selected" : ""}`}
                       onClick={() => settingsStore.update("thumbnailSize", s)}
-                      title={s === "small" ? "Small thumbnails" : s === "medium" ? "Medium thumbnails" : "Large thumbnails"}
+                      title={
+                        s === "small"
+                          ? "Small thumbnails"
+                          : s === "medium"
+                            ? "Medium thumbnails"
+                            : "Large thumbnails"
+                      }
                     >
                       {s === "small" ? "S" : s === "medium" ? "M" : "L"}
                     </button>
@@ -3261,7 +4435,12 @@ function LibraryScreen(props: LibraryScreenProps) {
                     <select
                       aria-label="Sort library"
                       value={library.sortBy}
-                      onChange={(e) => library.setSort(e.target.value as typeof library.sortBy, library.sortOrder)}
+                      onChange={(e) =>
+                        library.setSort(
+                          e.target.value as typeof library.sortBy,
+                          library.sortOrder,
+                        )
+                      }
                     >
                       <option value="capturedAt">Date captured</option>
                       <option value="modifiedAt">Date modified</option>
@@ -3271,9 +4450,20 @@ function LibraryScreen(props: LibraryScreenProps) {
                     </select>
                     <button
                       type="button"
-                      aria-label={library.sortOrder === "asc" ? "Sort ascending" : "Sort descending"}
-                      title={library.sortOrder === "asc" ? "Ascending" : "Descending"}
-                      onClick={() => library.setSort(library.sortBy, library.sortOrder === "asc" ? "desc" : "asc")}
+                      aria-label={
+                        library.sortOrder === "asc"
+                          ? "Sort ascending"
+                          : "Sort descending"
+                      }
+                      title={
+                        library.sortOrder === "asc" ? "Ascending" : "Descending"
+                      }
+                      onClick={() =>
+                        library.setSort(
+                          library.sortBy,
+                          library.sortOrder === "asc" ? "desc" : "asc",
+                        )
+                      }
                     >
                       {library.sortOrder === "asc" ? "↑" : "↓"}
                     </button>
@@ -3285,31 +4475,53 @@ function LibraryScreen(props: LibraryScreenProps) {
 
           <div className="filter-cluster">
             <span className="smart-label">SHOW</span>
-            {(["All", "Photos", "Videos", "RAW", "Favorites"] as string[]).map((f) => {
-              const count = filterCounts[f as keyof typeof filterCounts] ?? 0;
-              return (
-                <button key={f} type="button" className={`quick-filter ${props.filter === f ? "active" : ""}`} onClick={() => props.onChangeFilter(f as Filter)}>
-                  {f}
-                  <span className="filter-count">{count}</span>
-                </button>
-              );
-            })}
+            {(["All", "Photos", "Videos", "RAW", "Favorites"] as string[]).map(
+              (f) => {
+                const count = filterCounts[f as keyof typeof filterCounts] ?? 0;
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    className={`quick-filter ${props.filter === f ? "active" : ""}`}
+                    onClick={() => props.onChangeFilter(f as Filter)}
+                  >
+                    {f}
+                    <span className="filter-count">{count}</span>
+                  </button>
+                );
+              },
+            )}
           </div>
 
           {props.selectedIds.length > 0 && (
-            <div className="selection-bar" role="toolbar" aria-label="Selection actions">
+            <div
+              className="selection-bar"
+              role="toolbar"
+              aria-label="Selection actions"
+            >
               <div className="selection-bar-left">
                 <span className="selection-bar-count">
                   {props.selectedIds.length.toLocaleString()} selected
                 </span>
                 <span className="selection-bar-divider" aria-hidden="true" />
                 <span className="selection-bar-size">
-                  {formatBytesSimple(selectedItems.reduce((sum: number, item: any) => sum + (item.size || 0), 0))} selected
+                  {formatBytesSimple(
+                    selectedItems.reduce(
+                      (sum: number, item: any) => sum + (item.size || 0),
+                      0,
+                    ),
+                  )}{" "}
+                  selected
                 </span>
                 {selectedKindSummary && (
                   <>
-                    <span className="selection-bar-divider" aria-hidden="true" />
-                    <span className="selection-bar-kinds">{selectedKindSummary}</span>
+                    <span
+                      className="selection-bar-divider"
+                      aria-hidden="true"
+                    />
+                    <span className="selection-bar-kinds">
+                      {selectedKindSummary}
+                    </span>
                   </>
                 )}
               </div>
@@ -3327,81 +4539,125 @@ function LibraryScreen(props: LibraryScreenProps) {
                   type="button"
                   className="selection-bar-action"
                   onClick={toggleSelectAllVisible}
-                  title={allVisibleSelected ? "Deselect all shown items" : "Select all shown items"}
+                  title={
+                    allVisibleSelected
+                      ? "Deselect all shown items"
+                      : "Select all shown items"
+                  }
                 >
                   <CheckIcon size={12} />
                   {allVisibleSelected ? "Deselect all" : "Select all"}
                 </button>
-              <button
-                type="button"
-                className="selection-bar-action"
-                onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
-                title={selectionPlaysInViewer ? "Play the selected videos in the viewer" : "Play selected items as a slideshow"}
-              >
-                <PlayIcon size={13} /> {selectionPlaysInViewer ? "Play" : "Slideshow"}
-              </button>
-              <button
-                type="button"
-                className="selection-bar-action"
-                onClick={() => props.onSetFavoriteForIds(props.selectedIds, !anySelectedFavorite)}
-                title={anySelectedFavorite ? "Remove favorite from all selected" : "Favorite all selected"}
-              >
-                <HeartIcon size={13} filled={anySelectedFavorite} />
-                {anySelectedFavorite ? "Unfavorite" : "Favorite"}
-              </button>
-              <button
-                type="button"
-                className="selection-bar-action"
-                onClick={() => props.onSetHiddenForIds(props.selectedIds, !anySelectedHidden)}
-                title={anySelectedHidden ? "Unhide all selected" : "Hide all selected"}
-              >
-                {anySelectedHidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
-                {anySelectedHidden ? "Unhide" : "Hide"}
-              </button>
-              <button
-                type="button"
-                className="selection-bar-action"
-                onClick={() => props.onOpenAlbumPicker?.(props.selectedIds)}
-                title="Add selected items to an album"
-              >
-                <AlbumsIcon size={13} /> Add to album
-              </button>
-              {inAlbum && (
                 <button
                   type="button"
                   className="selection-bar-action"
-                  onClick={() => props.activeAlbum && library.removeFromAlbum(props.activeAlbum, props.selectedIds)}
-                  title="Remove selected items from this album (photos stay in the library)"
+                  onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
+                  title={
+                    selectionPlaysInViewer
+                      ? "Play the selected videos in the viewer"
+                      : "Play selected items as a slideshow"
+                  }
                 >
-                  <MinusIcon size={13} /> Remove from album
+                  <PlayIcon size={13} />{" "}
+                  {selectionPlaysInViewer ? "Play" : "Slideshow"}
                 </button>
-              )}
-              {!props.hiddenView && (
                 <button
                   type="button"
                   className="selection-bar-action"
-                  onClick={() => props.onOpenBatch?.(props.selectedIds)}
-                  title="Send the selected items to Batch export"
+                  onClick={() =>
+                    props.onSetFavoriteForIds(
+                      props.selectedIds,
+                      !anySelectedFavorite,
+                    )
+                  }
+                  title={
+                    anySelectedFavorite
+                      ? "Remove favorite from all selected"
+                      : "Favorite all selected"
+                  }
                 >
-                  <BatchIcon size={13} /> Batch
+                  <HeartIcon size={13} filled={anySelectedFavorite} />
+                  {anySelectedFavorite ? "Unfavorite" : "Favorite"}
                 </button>
-              )}
-{!props.hiddenView && (
                 <button
                   type="button"
-                  className="selection-bar-action selection-bar-action-danger"
-                  onClick={() => props.onRequestDeleteItems?.(props.selectedIds)}
-                  title="Move selected items to Trash"
+                  className="selection-bar-action"
+                  onClick={() =>
+                    props.onSetHiddenForIds(
+                      props.selectedIds,
+                      !anySelectedHidden,
+                    )
+                  }
+                  title={
+                    anySelectedHidden
+                      ? "Unhide all selected"
+                      : "Hide all selected"
+                  }
                 >
-                  <TrashIcon size={13} /> Delete
+                  {anySelectedHidden ? (
+                    <EyeOffIcon size={13} />
+                  ) : (
+                    <EyeIcon size={13} />
+                  )}
+                  {anySelectedHidden ? "Unhide" : "Hide"}
                 </button>
-              )}
+                <button
+                  type="button"
+                  className="selection-bar-action"
+                  onClick={() => props.onOpenAlbumPicker?.(props.selectedIds)}
+                  title="Add selected items to an album"
+                >
+                  <AlbumsIcon size={13} /> Add to album
+                </button>
+                {inAlbum && (
+                  <button
+                    type="button"
+                    className="selection-bar-action"
+                    onClick={() =>
+                      props.activeAlbum &&
+                      library.removeFromAlbum(
+                        props.activeAlbum,
+                        props.selectedIds,
+                      )
+                    }
+                    title="Remove selected items from this album (photos stay in the library)"
+                  >
+                    <MinusIcon size={13} /> Remove from album
+                  </button>
+                )}
+                {!props.hiddenView && (
+                  <button
+                    type="button"
+                    className="selection-bar-action"
+                    onClick={() => props.onOpenBatch?.(props.selectedIds)}
+                    title="Send the selected items to Batch export"
+                  >
+                    <BatchIcon size={13} /> Batch
+                  </button>
+                )}
+                {!props.hiddenView && (
+                  <button
+                    type="button"
+                    className="selection-bar-action selection-bar-action-danger"
+                    onClick={() =>
+                      props.onRequestDeleteItems?.(props.selectedIds)
+                    }
+                    title="Move selected items to Trash"
+                  >
+                    <TrashIcon size={13} /> Delete
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
           )}
         </header>
 
-        <div className="library-grid-container" ref={scrollRef} onScroll={handleGridScroll} onKeyDown={handleGridKeyDown}>
+        <div
+          className="library-grid-container"
+          ref={scrollRef}
+          onScroll={handleGridScroll}
+          onKeyDown={handleGridKeyDown}
+        >
           {props.layout === "details" && (
             <div className="details-header-sticky">
               <div className="details-col details-preview-heading">Preview</div>
@@ -3415,30 +4671,97 @@ function LibraryScreen(props: LibraryScreenProps) {
             if (props.layout === "details") {
               return (
                 <div className="gallery-grid layout-details">
-                    {renderedItems.map((item: any) => (
-                    <article key={item.id} className={tileClass(item)} onContextMenu={(e: any) => { concealItem(item.id); props.onContextMenu(itemContextMenu(item), e); }}>
+                  {renderedItems.map((item: any) => (
+                    <article
+                      key={item.id}
+                      className={tileClass(item)}
+                      onContextMenu={(e: any) => {
+                        concealItem(item.id);
+                        props.onContextMenu(itemContextMenu(item), e);
+                      }}
+                    >
                       <div className="tile-select-check">
-                        <input type="checkbox" checked={selectedIdSet.has(item.id)} onChange={() => props.onToggleSelect(item.id)} title={selectedIdSet.has(item.id) ? "Remove from selection" : "Add to selection"} onClick={(e: any) => e.stopPropagation()} />
+                        <input
+                          type="checkbox"
+                          checked={selectedIdSet.has(item.id)}
+                          onChange={() => props.onToggleSelect(item.id)}
+                          title={
+                            selectedIdSet.has(item.id)
+                              ? "Remove from selection"
+                              : "Add to selection"
+                          }
+                          onClick={(e: any) => e.stopPropagation()}
+                        />
                         <CheckIcon size={12} />
                       </div>
-                      <button type="button" className="tile-open-button" data-item-id={item.id} onClick={(e) => { e.currentTarget.focus(); handleTileClick(item, e); }} onDoubleClick={() => handleTileDoubleClick(item)} {...holdHandlers(item.id)}>
+                      <button
+                        type="button"
+                        className="tile-open-button"
+                        data-item-id={item.id}
+                        onClick={(e) => {
+                          e.currentTarget.focus();
+                          handleTileClick(item, e);
+                        }}
+                        onDoubleClick={() => handleTileDoubleClick(item)}
+                        {...holdHandlers(item.id)}
+                      >
                         <span className="tile-image">
-                          {item.kind === "video" ? <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} /> : item.kind === "photo" ? <CachedThumbnail itemId={item.id} name={tileAlt(item)} size={thumbnailPixels} style={draftImageStyle(draftTransforms, item.id)} fallbackSrc={assetUrl(item.path)} /> : <span className="raw-tile"><KindBadge kind={item.kind} /></span>}
-                          {item.kind === "video" && <span className="video-label"><PlayIcon size={10} /></span>}
-                          {item.kind === "raw" && <span className="format-label"><KindBadge kind={item.kind} /></span>}
+                          {item.kind === "video" ? (
+                            <VideoThumb
+                              src={assetUrl(item.path)}
+                              name={tileAlt(item)}
+                            />
+                          ) : item.kind === "photo" ? (
+                            <CachedThumbnail
+                              itemId={item.id}
+                              name={tileAlt(item)}
+                              size={thumbnailPixels}
+                              style={draftImageStyle(draftTransforms, item.id)}
+                              fallbackSrc={assetUrl(item.path)}
+                            />
+                          ) : (
+                            <span className="raw-tile">
+                              <KindBadge kind={item.kind} />
+                            </span>
+                          )}
+                          {item.kind === "video" && (
+                            <span className="video-label">
+                              <PlayIcon size={10} />
+                            </span>
+                          )}
+                          {item.kind === "raw" && (
+                            <span className="format-label">
+                              <KindBadge kind={item.kind} />
+                            </span>
+                          )}
                           {item.favorite && !masked(item) ? (
-                            <span className="tile-favorite" aria-label="Favorite"><HeartIcon size={11} filled /></span>
+                            <span
+                              className="tile-favorite"
+                              aria-label="Favorite"
+                            >
+                              <HeartIcon size={11} filled />
+                            </span>
                           ) : null}
                         </span>
-                        <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
-                                <b>{masked(item) ? "Hidden item" : item.name}</b>
-                                <small className="tile-date">{new Date(captureDate(item)).toLocaleDateString()}</small>
-                                <small className="tile-kind">
-                                  <KindDot kind={item.kind} />
-                                  {item.kind === 'video' ? 'Video' : item.kind === 'raw' ? 'RAW' : 'Photo'}
-                                </small>
-                                <small className="tile-size">{formatBytesSimple(item.size)}</small>
-                              </span>
+                        <span
+                          className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
+                        >
+                          <b>{masked(item) ? "Hidden item" : item.name}</b>
+                          <small className="tile-date">
+                            {new Date(captureDate(item)).toLocaleDateString()}
+                          </small>
+                          <small className="tile-kind">
+                            <KindDot kind={item.kind} />
+                            {item.kind === "video"
+                              ? "Video"
+                              : item.kind === "raw"
+                                ? "RAW"
+                                : "Photo"}
+                          </small>
+                          <small className="tile-size">
+                            {formatBytesSimple(item.size)}
+                          </small>
+                        </span>
                       </button>
                     </article>
                   ))}
@@ -3448,81 +4771,250 @@ function LibraryScreen(props: LibraryScreenProps) {
             }
             if (props.layout === "timeline") {
               return (
-                <div className={`gallery-grid layout-timeline thumb-${thumbnailSize}`}>
-                  {timelineGroups.length === 0 ? emptyView() : (
-                    visibleTimelineGroups.map(({ key, label, items, count, visibleItems }) => {
-                      const allSelected = items.length > 0 && items.every((item: any) => selectedIdSet.has(item.id));
-                      return <React.Fragment key={key}>
-                        <div className="timeline-group">
-                          <div className="timeline-date-marker" aria-hidden="true"><span /></div>
-                          <h3>{label}</h3>
-                          <span className="timeline-count">{count} {count === 1 ? "item" : "items"}</span>
-                          <button
-                            type="button"
-                            className="timeline-select-group"
-                            aria-pressed={allSelected}
-                            onClick={() => toggleTimelineGroup(items)}
-                            title={`Select or deselect all ${label} items`}
-                          >
-                            <span className="timeline-select-box">{allSelected ? <CheckIcon size={11} /> : null}</span>{allSelected ? "Selected" : "Select all"}
-                          </button>
-                        </div>
-                        {visibleItems.map((item: any) => (
-                          <article key={item.id} className={tileClass(item)} onContextMenu={(e: any) => { concealItem(item.id); props.onContextMenu(itemContextMenu(item), e); }}>
-                            <div className="tile-select-check">
-                              <input type="checkbox" checked={selectedIdSet.has(item.id)} onChange={() => props.onToggleSelect(item.id)} title={selectedIdSet.has(item.id) ? "Remove from selection" : "Add to selection"} onClick={(e: any) => e.stopPropagation()} />
-                        <CheckIcon size={12} />
-                            </div>
-                            <button type="button" className="tile-open-button" data-item-id={item.id} onClick={(e) => { e.currentTarget.focus(); handleTileClick(item, e); }} onDoubleClick={() => handleTileDoubleClick(item)} {...holdHandlers(item.id)}>
-                              <span className="tile-image">
-                                {item.kind === "video" ? <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} /> : item.kind === "photo" ? <CachedThumbnail itemId={item.id} name={tileAlt(item)} size={thumbnailPixels} style={draftImageStyle(draftTransforms, item.id)} fallbackSrc={assetUrl(item.path)} /> : <span className="raw-tile"><KindBadge kind={item.kind} /></span>}
-                                {item.kind === "video" && <span className="video-label"><PlayIcon size={10} /></span>}
-                                {item.kind === "raw" && <span className="format-label"><KindBadge kind={item.kind} /></span>}
-                          {item.favorite && !masked(item) ? (
-                            <span className="tile-favorite" aria-label="Favorite"><HeartIcon size={11} filled /></span>
-                          ) : null}
-                              </span>
-                              <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
-                                  <b>{item.name}</b>
-                                  <small className="tile-date">{new Date(captureDate(item)).toLocaleDateString()}</small>
-                                  <small className="tile-kind">
-                                    <KindDot kind={item.kind} />
-                                    {item.kind === 'video' ? 'Video' : item.kind === 'raw' ? 'RAW' : 'Photo'}
-                                  </small>
-                                  <small className="tile-size">{formatBytesSimple(item.size)}</small>
+                <div
+                  className={`gallery-grid layout-timeline thumb-${thumbnailSize}`}
+                >
+                  {timelineGroups.length === 0
+                    ? emptyView()
+                    : visibleTimelineGroups.map(
+                        ({ key, label, items, count, visibleItems }) => {
+                          const allSelected =
+                            items.length > 0 &&
+                            items.every((item: any) =>
+                              selectedIdSet.has(item.id),
+                            );
+                          return (
+                            <React.Fragment key={key}>
+                              <div className="timeline-group">
+                                <div
+                                  className="timeline-date-marker"
+                                  aria-hidden="true"
+                                >
+                                  <span />
+                                </div>
+                                <h3>{label}</h3>
+                                <span className="timeline-count">
+                                  {count} {count === 1 ? "item" : "items"}
                                 </span>
-                            </button>
-                          </article>
-                        ))}
-                      </React.Fragment>;
-                    })
-                  )}
+                                <button
+                                  type="button"
+                                  className="timeline-select-group"
+                                  aria-pressed={allSelected}
+                                  onClick={() => toggleTimelineGroup(items)}
+                                  title={`Select or deselect all ${label} items`}
+                                >
+                                  <span className="timeline-select-box">
+                                    {allSelected ? (
+                                      <CheckIcon size={11} />
+                                    ) : null}
+                                  </span>
+                                  {allSelected ? "Selected" : "Select all"}
+                                </button>
+                              </div>
+                              {visibleItems.map((item: any) => (
+                                <article
+                                  key={item.id}
+                                  className={tileClass(item)}
+                                  onContextMenu={(e: any) => {
+                                    concealItem(item.id);
+                                    props.onContextMenu(
+                                      itemContextMenu(item),
+                                      e,
+                                    );
+                                  }}
+                                >
+                                  <div className="tile-select-check">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedIdSet.has(item.id)}
+                                      onChange={() =>
+                                        props.onToggleSelect(item.id)
+                                      }
+                                      title={
+                                        selectedIdSet.has(item.id)
+                                          ? "Remove from selection"
+                                          : "Add to selection"
+                                      }
+                                      onClick={(e: any) => e.stopPropagation()}
+                                    />
+                                    <CheckIcon size={12} />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="tile-open-button"
+                                    data-item-id={item.id}
+                                    onClick={(e) => {
+                                      e.currentTarget.focus();
+                                      handleTileClick(item, e);
+                                    }}
+                                    onDoubleClick={() =>
+                                      handleTileDoubleClick(item)
+                                    }
+                                    {...holdHandlers(item.id)}
+                                  >
+                                    <span className="tile-image">
+                                      {item.kind === "video" ? (
+                                        <VideoThumb
+                                          src={assetUrl(item.path)}
+                                          name={tileAlt(item)}
+                                        />
+                                      ) : item.kind === "photo" ? (
+                                        <CachedThumbnail
+                                          itemId={item.id}
+                                          name={tileAlt(item)}
+                                          size={thumbnailPixels}
+                                          style={draftImageStyle(
+                                            draftTransforms,
+                                            item.id,
+                                          )}
+                                          fallbackSrc={assetUrl(item.path)}
+                                        />
+                                      ) : (
+                                        <span className="raw-tile">
+                                          <KindBadge kind={item.kind} />
+                                        </span>
+                                      )}
+                                      {item.kind === "video" && (
+                                        <span className="video-label">
+                                          <PlayIcon size={10} />
+                                        </span>
+                                      )}
+                                      {item.kind === "raw" && (
+                                        <span className="format-label">
+                                          <KindBadge kind={item.kind} />
+                                        </span>
+                                      )}
+                                      {item.favorite && !masked(item) ? (
+                                        <span
+                                          className="tile-favorite"
+                                          aria-label="Favorite"
+                                        >
+                                          <HeartIcon size={11} filled />
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                    <span
+                                      className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
+                                    >
+                                      <b>{item.name}</b>
+                                      <small className="tile-date">
+                                        {new Date(
+                                          captureDate(item),
+                                        ).toLocaleDateString()}
+                                      </small>
+                                      <small className="tile-kind">
+                                        <KindDot kind={item.kind} />
+                                        {item.kind === "video"
+                                          ? "Video"
+                                          : item.kind === "raw"
+                                            ? "RAW"
+                                            : "Photo"}
+                                      </small>
+                                      <small className="tile-size">
+                                        {formatBytesSimple(item.size)}
+                                      </small>
+                                    </span>
+                                  </button>
+                                </article>
+                              ))}
+                            </React.Fragment>
+                          );
+                        },
+                      )}
                 </div>
               );
             }
             return (
-              <div className={`gallery-grid layout-${props.layout} thumb-${thumbnailSize}`}>
+              <div
+                className={`gallery-grid layout-${props.layout} thumb-${thumbnailSize}`}
+              >
                 {renderedItems.map((item: any) => (
-                  <article key={item.id} className={tileClass(item)} onContextMenu={(e: any) => { concealItem(item.id); props.onContextMenu(itemContextMenu(item), e); }}>
+                  <article
+                    key={item.id}
+                    className={tileClass(item)}
+                    onContextMenu={(e: any) => {
+                      concealItem(item.id);
+                      props.onContextMenu(itemContextMenu(item), e);
+                    }}
+                  >
                     <div className="tile-select-check">
-                      <input type="checkbox" checked={selectedIdSet.has(item.id)} onChange={() => props.onToggleSelect(item.id)} title={selectedIdSet.has(item.id) ? "Remove from selection" : "Add to selection"} onClick={(e: any) => e.stopPropagation()} />
-                        <CheckIcon size={12} />
+                      <input
+                        type="checkbox"
+                        checked={selectedIdSet.has(item.id)}
+                        onChange={() => props.onToggleSelect(item.id)}
+                        title={
+                          selectedIdSet.has(item.id)
+                            ? "Remove from selection"
+                            : "Add to selection"
+                        }
+                        onClick={(e: any) => e.stopPropagation()}
+                      />
+                      <CheckIcon size={12} />
                     </div>
-                    <button type="button" className="tile-open-button" data-item-id={item.id} onClick={(e) => { e.currentTarget.focus(); handleTileClick(item, e); }} onDoubleClick={() => handleTileDoubleClick(item)} {...holdHandlers(item.id)}>
+                    <button
+                      type="button"
+                      className="tile-open-button"
+                      data-item-id={item.id}
+                      onClick={(e) => {
+                        e.currentTarget.focus();
+                        handleTileClick(item, e);
+                      }}
+                      onDoubleClick={() => handleTileDoubleClick(item)}
+                      {...holdHandlers(item.id)}
+                    >
                       <span className="tile-image">
-                        {item.kind === "video" ? <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} /> : item.kind === "photo" ? <CachedThumbnail itemId={item.id} name={tileAlt(item)} size={thumbnailPixels} style={draftImageStyle(draftTransforms, item.id)} fallbackSrc={assetUrl(item.path)} /> : <span className="raw-tile"><KindBadge kind={item.kind} /></span>}
-                        {item.kind === "video" && <span className="video-label"><PlayIcon size={10} /></span>}
-                        {item.kind === "raw" && <span className="format-label"><KindBadge kind={item.kind} /></span>}
-                          {item.favorite && !masked(item) ? (
-                            <span className="tile-favorite" aria-label="Favorite"><HeartIcon size={11} filled /></span>
-                          ) : null}
+                        {item.kind === "video" ? (
+                          <VideoThumb
+                            src={assetUrl(item.path)}
+                            name={tileAlt(item)}
+                          />
+                        ) : item.kind === "photo" ? (
+                          <CachedThumbnail
+                            itemId={item.id}
+                            name={tileAlt(item)}
+                            size={thumbnailPixels}
+                            style={draftImageStyle(draftTransforms, item.id)}
+                            fallbackSrc={assetUrl(item.path)}
+                          />
+                        ) : (
+                          <span className="raw-tile">
+                            <KindBadge kind={item.kind} />
+                          </span>
+                        )}
+                        {item.kind === "video" && (
+                          <span className="video-label">
+                            <PlayIcon size={10} />
+                          </span>
+                        )}
+                        {item.kind === "raw" && (
+                          <span className="format-label">
+                            <KindBadge kind={item.kind} />
+                          </span>
+                        )}
+                        {item.favorite && !masked(item) ? (
+                          <span className="tile-favorite" aria-label="Favorite">
+                            <HeartIcon size={11} filled />
+                          </span>
+                        ) : null}
                       </span>
-                      <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
-                                <b>{item.name}</b>
-                                <small className="tile-date">{new Date(captureDate(item)).toLocaleDateString()}</small>
-                                <small className="tile-kind">{item.kind === 'video' ? 'Video' : item.kind === 'raw' ? 'RAW' : 'Photo'}</small>
-                                <small className="tile-size">{formatBytesSimple(item.size)}</small>
-                              </span>
+                      <span
+                        className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
+                      >
+                        <b>{item.name}</b>
+                        <small className="tile-date">
+                          {new Date(captureDate(item)).toLocaleDateString()}
+                        </small>
+                        <small className="tile-kind">
+                          {item.kind === "video"
+                            ? "Video"
+                            : item.kind === "raw"
+                              ? "RAW"
+                              : "Photo"}
+                        </small>
+                        <small className="tile-size">
+                          {formatBytesSimple(item.size)}
+                        </small>
+                      </span>
                     </button>
                   </article>
                 ))}
@@ -3533,7 +5025,8 @@ function LibraryScreen(props: LibraryScreenProps) {
           {renderLimit < props.items.length && (
             <div className="grid-more">
               <button type="button" className="quiet-button" onClick={loadMore}>
-                Show more · {(props.items.length - renderLimit).toLocaleString()} remaining
+                Show more ·{" "}
+                {(props.items.length - renderLimit).toLocaleString()} remaining
               </button>
             </div>
           )}
@@ -3542,9 +5035,12 @@ function LibraryScreen(props: LibraryScreenProps) {
 
       {props.showInspector && (
         <aside className="photo-inspector">
-          {props.inspectedId && library.items.find((i: any) => i.id === props.inspectedId) ? (
+          {props.inspectedId &&
+          library.items.find((i: any) => i.id === props.inspectedId) ? (
             (() => {
-              const sel = library.items.find((i: any) => i.id === props.inspectedId);
+              const sel = library.items.find(
+                (i: any) => i.id === props.inspectedId,
+              );
               if (!sel) return null;
               // Inspection is independent of selection: the Inspector always
               // shows the inspected item, even when a larger multi-selection
@@ -3554,29 +5050,74 @@ function LibraryScreen(props: LibraryScreenProps) {
                 <>
                   <div className="inspector-top">
                     <div>
-                      <small>{props.selectedIds.length > 1 && isSelected ? "SELECTED · INSPECTING" : "INSPECTING"}</small>
-                      <h2 title={masked(sel) ? "Hidden item" : sel.name}>{masked(sel) ? "Hidden item" : sel.name}</h2>
+                      <small>
+                        {props.selectedIds.length > 1 && isSelected
+                          ? "SELECTED · INSPECTING"
+                          : "INSPECTING"}
+                      </small>
+                      <h2 title={masked(sel) ? "Hidden item" : sel.name}>
+                        {masked(sel) ? "Hidden item" : sel.name}
+                      </h2>
                       {props.selectedIds.length > 1 && (
-                        <span className="inspector-selection-note">{props.selectedIds.length} selected · inspection independent</span>
+                        <span className="inspector-selection-note">
+                          {props.selectedIds.length} selected · inspection
+                          independent
+                        </span>
                       )}
                     </div>
-                    <button type="button" className="inspector-close-btn" onClick={props.onToggleInspector} title="Close Inspector (⌥⌘I)">×</button>
+                    <button
+                      type="button"
+                      className="inspector-close-btn"
+                      onClick={props.onToggleInspector}
+                      title="Close Inspector (⌥⌘I)"
+                    >
+                      ×
+                    </button>
                   </div>
-                  <button className={`inspector-image${masked(sel) ? " hidden-obscured" : ""}`} type="button" aria-label={masked(sel) ? "Hold to reveal preview; double-click to open" : `Open ${sel.name} in viewer`} onDoubleClick={() => props.onOpenViewer(sel.id)} title={masked(sel) ? "Hold to reveal preview · double-click to open" : "Double-click to open in viewer"} {...holdHandlers(sel.id)}>
+                  <button
+                    className={`inspector-image${masked(sel) ? " hidden-obscured" : ""}`}
+                    type="button"
+                    aria-label={
+                      masked(sel)
+                        ? "Hold to reveal preview; double-click to open"
+                        : `Open ${sel.name} in viewer`
+                    }
+                    onDoubleClick={() => props.onOpenViewer(sel.id)}
+                    title={
+                      masked(sel)
+                        ? "Hold to reveal preview · double-click to open"
+                        : "Double-click to open in viewer"
+                    }
+                    {...holdHandlers(sel.id)}
+                  >
                     {sel.kind === "photo" ? (
-                      <img src={assetUrl(sel.path)} alt={tileAlt(sel)} style={draftImageStyle(draftTransforms, sel.id)} />
+                      <img
+                        src={assetUrl(sel.path)}
+                        alt={tileAlt(sel)}
+                        style={draftImageStyle(draftTransforms, sel.id)}
+                      />
                     ) : sel.kind === "video" ? (
                       <video src={assetUrl(sel.path)} controls />
                     ) : (
-                      <span className="raw-tile"><KindBadge kind={sel.kind} /></span>
+                      <span className="raw-tile">
+                        <KindBadge kind={sel.kind} />
+                      </span>
                     )}
                     <span>Double-click to view</span>
-                    <span className="inspector-type-badge">{sel.kind === "video" ? "Video" : sel.kind === "raw" ? "RAW" : "Photo"}</span>
+                    <span className="inspector-type-badge">
+                      {sel.kind === "video"
+                        ? "Video"
+                        : sel.kind === "raw"
+                          ? "RAW"
+                          : "Photo"}
+                    </span>
                   </button>
                   <div className="inspector-actions">
                     <button
                       className={`inspector-action ${sel.favorite ? "favorite active" : ""}`}
-                      onClick={() => props.onToggleFavorite(props.inspectedId as string)}
+                      onClick={() =>
+                        props.onToggleFavorite(props.inspectedId as string)
+                      }
                       title={sel.favorite ? "Unfavorite" : "Favorite"}
                     >
                       <HeartIcon size={14} filled={!!sel.favorite} />
@@ -3584,92 +5125,187 @@ function LibraryScreen(props: LibraryScreenProps) {
                     </button>
                     <button
                       className="inspector-action"
-                      onClick={() => props.onToggleHidden(props.inspectedId as string)}
+                      onClick={() =>
+                        props.onToggleHidden(props.inspectedId as string)
+                      }
                       title={sel.hidden ? "Unhide" : "Hide"}
                     >
-                      {sel.hidden ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
+                      {sel.hidden ? (
+                        <EyeOffIcon size={14} />
+                      ) : (
+                        <EyeIcon size={14} />
+                      )}
                       <span>{sel.hidden ? "Unhide" : "Hide"}</span>
                     </button>
                     <button
                       className={`inspector-action ${isSelected ? "active" : ""}`}
                       onClick={() => props.onToggleSelect(sel.id)}
-                      title={isSelected ? "Remove from selection" : "Add to selection"}
+                      title={
+                        isSelected
+                          ? "Remove from selection"
+                          : "Add to selection"
+                      }
                     >
-                      {isSelected ? <CheckIcon size={14} /> : <PlusIcon size={14} />}
+                      {isSelected ? (
+                        <CheckIcon size={14} />
+                      ) : (
+                        <PlusIcon size={14} />
+                      )}
                       <span>{isSelected ? "Selected" : "Select"}</span>
                     </button>
                   </div>
                   <div className="inspector-section">
-                    <div className="inspector-section-head"><b>File Info</b></div>
+                    <div className="inspector-section-head">
+                      <b>File Info</b>
+                    </div>
                     <div className="info-card">
                       {masked(sel) ? (
-                        <div className="inspector-hidden-note">Hold the preview to reveal file details.</div>
-                      ) : <>
-                      <div className="info-row">
-                        <span className="info-label">Name</span>
-                        <span className="info-value" title={sel.name}>{sel.name}</span>
-                      </div>
-                      <div className="info-row">
-                        <span className="info-label">Kind</span>
-                        <span className="info-value"><KindBadge kind={sel.kind} /></span>
-                      </div>
-                      <div className="info-row">
-                        <span className="info-label">Format</span>
-                        <span className="info-value">{sel.extension.toUpperCase()}</span>
-                      </div>
-                      <div className="info-row">
-                        <span className="info-label">Dimensions</span>
-                        <span className="info-value">{sel.width && sel.height ? `${sel.width} × ${sel.height}` : "Unknown"}</span>
-                      </div>
-                      <div className="info-row">
-                        <span className="info-label">Size</span>
-                        <span className="info-value">{formatBytesSimple(sel.size)}</span>
-                      </div>
-                      {sel.camera && <div className="info-row"><span className="info-label">Camera</span><span className="info-value" title={sel.camera}>{sel.camera}</span></div>}
-                      {sel.lens && <div className="info-row"><span className="info-label">Lens</span><span className="info-value" title={sel.lens}>{sel.lens}</span></div>}
-                      {sel.capturedAt && <div className="info-row"><span className="info-label">Captured</span><span className="info-value">{new Date(sel.capturedAt).toLocaleString()}</span></div>}
-                      <div className="info-row"><span className="info-label">Modified</span><span className="info-value">{new Date(sel.modifiedAt).toLocaleString()}</span></div>
-                      </>}
+                        <div className="inspector-hidden-note">
+                          Hold the preview to reveal file details.
+                        </div>
+                      ) : (
+                        <>
+                          <div className="info-row">
+                            <span className="info-label">Name</span>
+                            <span className="info-value" title={sel.name}>
+                              {sel.name}
+                            </span>
+                          </div>
+                          <div className="info-row">
+                            <span className="info-label">Kind</span>
+                            <span className="info-value">
+                              <KindBadge kind={sel.kind} />
+                            </span>
+                          </div>
+                          <div className="info-row">
+                            <span className="info-label">Format</span>
+                            <span className="info-value">
+                              {sel.extension.toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="info-row">
+                            <span className="info-label">Dimensions</span>
+                            <span className="info-value">
+                              {sel.width && sel.height
+                                ? `${sel.width} × ${sel.height}`
+                                : "Unknown"}
+                            </span>
+                          </div>
+                          <div className="info-row">
+                            <span className="info-label">Size</span>
+                            <span className="info-value">
+                              {formatBytesSimple(sel.size)}
+                            </span>
+                          </div>
+                          {sel.camera && (
+                            <div className="info-row">
+                              <span className="info-label">Camera</span>
+                              <span className="info-value" title={sel.camera}>
+                                {sel.camera}
+                              </span>
+                            </div>
+                          )}
+                          {sel.lens && (
+                            <div className="info-row">
+                              <span className="info-label">Lens</span>
+                              <span className="info-value" title={sel.lens}>
+                                {sel.lens}
+                              </span>
+                            </div>
+                          )}
+                          {sel.capturedAt && (
+                            <div className="info-row">
+                              <span className="info-label">Captured</span>
+                              <span className="info-value">
+                                {new Date(sel.capturedAt).toLocaleString()}
+                              </span>
+                            </div>
+                          )}
+                          <div className="info-row">
+                            <span className="info-label">Modified</span>
+                            <span className="info-value">
+                              {new Date(sel.modifiedAt).toLocaleString()}
+                            </span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
-                  {!masked(sel) && <div className="inspector-tags">
-                    <div className="inspector-section-head"><b>App Tags</b></div>
-                    <div className="tags-list">
-                      {sel.tags?.map((tag: string) => (
-                        <span className="app-tag" key={tag}>
-                          {tag}
-                          <button type="button" onClick={() => props.onUpdateTags(props.inspectedId as string, (sel.tags || []).filter((t: string) => t !== tag))}>×</button>
-                        </span>
-                      ))}
-                    </div>
-                    <input
-                      className="tag-input"
-                      aria-label="Add tag"
-                      placeholder="Add tag and press Enter…"
-                      onKeyDown={(e: any) => {
-                        if (e.key === "Enter" && e.currentTarget.value.trim()) {
-                          const newTag = e.currentTarget.value.trim();
-                          const currentTags = sel.tags || [];
-                          if (!currentTags.includes(newTag)) {
-                            props.onUpdateTags(props.inspectedId as string, [...currentTags, newTag]);
+                  {!masked(sel) && (
+                    <div className="inspector-tags">
+                      <div className="inspector-section-head">
+                        <b>App Tags</b>
+                      </div>
+                      <div className="tags-list">
+                        {sel.tags?.map((tag: string) => (
+                          <span className="app-tag" key={tag}>
+                            {tag}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                props.onUpdateTags(
+                                  props.inspectedId as string,
+                                  (sel.tags || []).filter(
+                                    (t: string) => t !== tag,
+                                  ),
+                                )
+                              }
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                      <input
+                        className="tag-input"
+                        aria-label="Add tag"
+                        placeholder="Add tag and press Enter…"
+                        onKeyDown={(e: any) => {
+                          if (
+                            e.key === "Enter" &&
+                            e.currentTarget.value.trim()
+                          ) {
+                            const newTag = e.currentTarget.value.trim();
+                            const currentTags = sel.tags || [];
+                            if (!currentTags.includes(newTag)) {
+                              props.onUpdateTags(props.inspectedId as string, [
+                                ...currentTags,
+                                newTag,
+                              ]);
+                            }
+                            e.currentTarget.value = "";
                           }
-                          e.currentTarget.value = "";
-                        }
-                      }}
-                    />
-                  </div>}
+                        }}
+                      />
+                    </div>
+                  )}
                 </>
               );
             })()
           ) : (
             <div className="inspector-empty-state">
               <div className="inspector-top">
-                <div><small>INSPECTOR</small><h2>No Inspection</h2></div>
-                <button type="button" className="inspector-close-btn" onClick={props.onToggleInspector} title="Close Inspector">×</button>
+                <div>
+                  <small>INSPECTOR</small>
+                  <h2>No Inspection</h2>
+                </div>
+                <button
+                  type="button"
+                  className="inspector-close-btn"
+                  onClick={props.onToggleInspector}
+                  title="Close Inspector"
+                >
+                  ×
+                </button>
               </div>
               <div className="inspector-empty-placeholder">
-                <span className="inspector-empty-icon"><DetailsIcon size={26} /></span>
-                <p>Single-click a photo or video to inspect its details. Selection is separate — use the checkbox or + to multi-select.</p>
+                <span className="inspector-empty-icon">
+                  <DetailsIcon size={26} />
+                </span>
+                <p>
+                  Single-click a photo or video to inspect its details.
+                  Selection is separate — use the checkbox or + to multi-select.
+                </p>
               </div>
             </div>
           )}
@@ -3678,6 +5314,5 @@ function LibraryScreen(props: LibraryScreenProps) {
     </div>
   );
 }
-
 
 export default App;

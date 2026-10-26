@@ -61,7 +61,8 @@ export const useBatchStore = create<BatchState>()(
       setOutputFolder: (outputFolder) => set({ outputFolder, error: null }),
       setPattern: (pattern) => set({ pattern }),
       setFormat: (format) => set({ format }),
-      setQuality: (quality) => set({ quality: Math.max(1, Math.min(100, quality)) }),
+      setQuality: (quality) =>
+        set({ quality: Math.max(1, Math.min(100, quality)) }),
       setStripMetadata: (stripMetadata) => set({ stripMetadata }),
       setMaxDimension: (maxDimension) => set({ maxDimension }),
       setStep: (step) => set({ step }),
@@ -70,14 +71,27 @@ export const useBatchStore = create<BatchState>()(
         const library = useLibraryStore.getState();
         const selected = new Set(library.selectedIds);
         const items = library.items.filter((item) => selected.has(item.id));
-        const { outputFolder, pattern, format, quality, stripMetadata, maxDimension } = get();
+        const {
+          outputFolder,
+          pattern,
+          format,
+          quality,
+          stripMetadata,
+          maxDimension,
+        } = get();
 
         if (items.length === 0) {
-          set({ error: "Select at least one item in the Library first.", result: null });
+          set({
+            error: "Select at least one item in the Library first.",
+            result: null,
+          });
           return;
         }
         if (!outputFolder.trim()) {
-          set({ error: "Choose an output folder before exporting.", result: null });
+          set({
+            error: "Choose an output folder before exporting.",
+            result: null,
+          });
           return;
         }
 
@@ -99,7 +113,10 @@ export const useBatchStore = create<BatchState>()(
         const armWatchdog = () => {
           if (watchdog) clearTimeout(watchdog);
           watchdog = setTimeout(() => {
-            set({ stalled: true, error: "Export appears stalled (no progress for 15s)." });
+            set({
+              stalled: true,
+              error: "Export appears stalled (no progress for 15s).",
+            });
           }, stallMs);
         };
         const clearWatchdog = () => {
@@ -136,7 +153,14 @@ export const useBatchStore = create<BatchState>()(
 
           const result = await tauri.batch.export(request);
           clearWatchdog();
-          set({ busy: false, cancelRequested: false, progress: null, result, step: 3, stalled: false });
+          set({
+            busy: false,
+            cancelRequested: false,
+            progress: null,
+            result,
+            step: 3,
+            stalled: false,
+          });
         } catch (e) {
           clearWatchdog();
           set({
@@ -160,7 +184,10 @@ export const useBatchStore = create<BatchState>()(
         try {
           await tauri.batch.cancel();
         } catch {
-          set({ cancelRequested: false, error: "Could not ask the export to stop." });
+          set({
+            cancelRequested: false,
+            error: "Could not ask the export to stop.",
+          });
         }
       },
 
@@ -178,25 +205,27 @@ export const useBatchStore = create<BatchState>()(
           stalled: false,
         }),
     }),
-    { name: "batch-store" }
-  )
+    { name: "batch-store" },
+  ),
 );
 
-export const useBatchConfig = () => useBatchStore((s) => ({
-  outputFolder: s.outputFolder,
-  pattern: s.pattern,
-  format: s.format,
-  quality: s.quality,
-  stripMetadata: s.stripMetadata,
-  maxDimension: s.maxDimension,
-}));
+export const useBatchConfig = () =>
+  useBatchStore((s) => ({
+    outputFolder: s.outputFolder,
+    pattern: s.pattern,
+    format: s.format,
+    quality: s.quality,
+    stripMetadata: s.stripMetadata,
+    maxDimension: s.maxDimension,
+  }));
 
-export const useBatchState = () => useBatchStore((s) => ({
-  step: s.step,
-  busy: s.busy,
-  cancelRequested: s.cancelRequested,
-  progress: s.progress,
-  stalled: s.stalled,
-  result: s.result,
-  error: s.error,
-}));
+export const useBatchState = () =>
+  useBatchStore((s) => ({
+    step: s.step,
+    busy: s.busy,
+    cancelRequested: s.cancelRequested,
+    progress: s.progress,
+    stalled: s.stalled,
+    result: s.result,
+    error: s.error,
+  }));

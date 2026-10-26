@@ -1,8 +1,14 @@
 import React from "react";
 import VideoThumb from "./VideoThumb";
-import { useDraftTransforms, draftTransformStyle } from "../../engine/stores/useEditStore";
+import {
+  useDraftTransforms,
+  draftTransformStyle,
+} from "../../engine/stores/useEditStore";
 
-function draftImageStyle(transforms: Map<string, any> | undefined, itemId: string) {
+function draftImageStyle(
+  transforms: Map<string, any> | undefined,
+  itemId: string,
+) {
   const transform = draftTransformStyle(transforms?.get(itemId));
   return transform ? { transform } : undefined;
 }
@@ -24,7 +30,15 @@ function albumStackPose(count: number, index: number) {
   return poses[index] || poses[0];
 }
 
-function AlbumPhotoStack({ photos, assetUrl, albumItems = [] }: { photos: any[]; assetUrl: (path: string) => string; albumItems?: any[] }) {
+function AlbumPhotoStack({
+  photos,
+  assetUrl,
+  albumItems = [],
+}: {
+  photos: any[];
+  assetUrl: (path: string) => string;
+  albumItems?: any[];
+}) {
   const draftTransforms = useDraftTransforms();
   return (
     <span className="album-stack">
@@ -34,20 +48,27 @@ function AlbumPhotoStack({ photos, assetUrl, albumItems = [] }: { photos: any[];
           <span
             key={item.id}
             className="album-stack-photo"
-            style={{
-              "--x": `${pose.x}%`,
-              "--y": `${pose.y}%`,
-              "--r": `${pose.r}deg`,
-              "--hx": `${pose.hx}%`,
-              "--hy": `${pose.hy}%`,
-              "--hr": `${pose.hr}deg`,
-              zIndex: photoIndex === 1 ? 3 : photoIndex === 2 ? 2 : 1,
-            } as React.CSSProperties}
+            style={
+              {
+                "--x": `${pose.x}%`,
+                "--y": `${pose.y}%`,
+                "--r": `${pose.r}deg`,
+                "--hx": `${pose.hx}%`,
+                "--hy": `${pose.hy}%`,
+                "--hr": `${pose.hr}deg`,
+                zIndex: photoIndex === 1 ? 3 : photoIndex === 2 ? 2 : 1,
+              } as React.CSSProperties
+            }
           >
             {albumItems[photoIndex]?.kind === "video" ? (
               <VideoThumb src={assetUrl(item.path)} name={item.name} />
             ) : (
-              <img src={assetUrl(item.path)} alt="" loading="lazy" style={draftImageStyle(draftTransforms, item.id)} />
+              <img
+                src={assetUrl(item.path)}
+                alt=""
+                loading="lazy"
+                style={draftImageStyle(draftTransforms, item.id)}
+              />
             )}
           </span>
         );
@@ -55,7 +76,6 @@ function AlbumPhotoStack({ photos, assetUrl, albumItems = [] }: { photos: any[];
     </span>
   );
 }
-
 
 export { AlbumPhotoStack };
 export default AlbumPhotoStack;

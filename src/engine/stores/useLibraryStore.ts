@@ -1,6 +1,16 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import type { MediaItem, Album, Tag, ImportSession, LibraryFilter, DuplicateGroup, Filter, LayoutMode, Screen } from "../types/media";
+import type {
+  MediaItem,
+  Album,
+  Tag,
+  ImportSession,
+  LibraryFilter,
+  DuplicateGroup,
+  Filter,
+  LayoutMode,
+  Screen,
+} from "../types/media";
 import type { LibraryFolder, LibraryFilterDTO } from "../types/commands";
 import { tauri } from "../commands/tauri";
 import { formatBytes } from "../commands/tauri";
@@ -21,8 +31,8 @@ function mergeDuplicateGroups(
     }
   }
   // Sort: largest groups first, then by size
-  return [...byHash.values()].sort((a, b) =>
-    b.items.length - a.items.length || b.size - a.size
+  return [...byHash.values()].sort(
+    (a, b) => b.items.length - a.items.length || b.size - a.size,
   );
 }
 
@@ -120,7 +130,10 @@ interface LibraryState {
   setQuery: (query: string) => void;
   setHiddenQuery: (query: string) => void;
   setLayout: (layout: LayoutMode) => void;
-  setSort: (sortBy: LibraryState["sortBy"], sortOrder: LibraryState["sortOrder"]) => void;
+  setSort: (
+    sortBy: LibraryState["sortBy"],
+    sortOrder: LibraryState["sortOrder"],
+  ) => void;
   setScreen: (screen: Screen) => void;
   setViewerScope: (scope: "library" | "hidden") => void;
   toggleInspector: () => void;
@@ -168,38 +181,83 @@ export function resetSortedItemsCache(): void {
   sortedCache = [];
 }
 
-function getSortedItems(items: MediaItem[], sortBy: LibraryState["sortBy"], sortOrder: LibraryState["sortOrder"]) {
-  if (items === sortedSource && sortBy === sortedBy && sortOrder === sortedOrder) return sortedCache;
+function getSortedItems(
+  items: MediaItem[],
+  sortBy: LibraryState["sortBy"],
+  sortOrder: LibraryState["sortOrder"],
+) {
+  if (
+    items === sortedSource &&
+    sortBy === sortedBy &&
+    sortOrder === sortedOrder
+  )
+    return sortedCache;
   sortedSource = items;
   sortedBy = sortBy;
   sortedOrder = sortOrder;
   sortedCache = [...items].sort((a, b) => {
     let comparison = 0;
     switch (sortBy) {
-      case "name": comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }); break;
-      case "size": comparison = a.size - b.size; break;
-      case "kind": comparison = a.kind.localeCompare(b.kind); break;
-      case "modifiedAt": comparison = a.modifiedAt - b.modifiedAt; break;
+      case "name":
+        comparison = a.name.localeCompare(b.name, undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+        break;
+      case "size":
+        comparison = a.size - b.size;
+        break;
+      case "kind":
+        comparison = a.kind.localeCompare(b.kind);
+        break;
+      case "modifiedAt":
+        comparison = a.modifiedAt - b.modifiedAt;
+        break;
       case "capturedAt":
-      default: comparison = (a.capturedAt ?? a.modifiedAt) - (b.capturedAt ?? b.modifiedAt); break;
+      default:
+        comparison =
+          (a.capturedAt ?? a.modifiedAt) - (b.capturedAt ?? b.modifiedAt);
+        break;
     }
-    if (comparison === 0) comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+    if (comparison === 0)
+      comparison = a.name.localeCompare(b.name, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
     return sortOrder === "asc" ? comparison : -comparison;
   });
   return sortedCache;
 }
 
 function computeInspectionDerived(state: LibraryState) {
-  const viewerSelected = state.viewerItems.find((item) => item.id === state.inspectedId) || state.viewerItems[0] || null;
+  const viewerSelected =
+    state.viewerItems.find((item) => item.id === state.inspectedId) ||
+    state.viewerItems[0] ||
+    null;
   return {
     viewerSelected,
-    currentIndex: Math.max(0, state.playableItems.findIndex((item) => item.id === state.inspectedId)),
-    viewerIndex: viewerSelected ? state.viewerItems.findIndex((item) => item.id === viewerSelected.id) : -1,
+    currentIndex: Math.max(
+      0,
+      state.playableItems.findIndex((item) => item.id === state.inspectedId),
+    ),
+    viewerIndex: viewerSelected
+      ? state.viewerItems.findIndex((item) => item.id === viewerSelected.id)
+      : -1,
   };
 }
 
 function computeDerived(state: LibraryState) {
-  const { items, filter, query, activeAlbum, activeSource, inspectedId, viewerScope, sortBy, sortOrder } = state;
+  const {
+    items,
+    filter,
+    query,
+    activeAlbum,
+    activeSource,
+    inspectedId,
+    viewerScope,
+    sortBy,
+    sortOrder,
+  } = state;
 
   // One sort for every derived collection. Hidden items are a separate,
   // first-class set: they never appear in the normal grid, viewer, album
@@ -226,27 +284,43 @@ function computeDerived(state: LibraryState) {
   if (query.trim()) {
     const normalized = query.trim().toLowerCase();
     visible = visible.filter((item) =>
-      `${item.name} ${item.path} ${item.extension} ${item.kind} ${item.camera || ""} ${item.lens || ""} ${(item.tags || []).join(" ")}`.toLowerCase().includes(normalized)
+      `${item.name} ${item.path} ${item.extension} ${item.kind} ${item.camera || ""} ${item.lens || ""} ${(item.tags || []).join(" ")}`
+        .toLowerCase()
+        .includes(normalized),
     );
   }
 
   // Source filter: only items physically inside the selected source folder.
   // Uses a real path boundary so /Photos never matches /Photos2.
   if (activeSource) {
-    const prefix = activeSource.endsWith("/") ? activeSource : `${activeSource}/`;
+    const prefix = activeSource.endsWith("/")
+      ? activeSource
+      : `${activeSource}/`;
     visible = visible.filter(
       (item) => item.path === activeSource || item.path.startsWith(prefix),
     );
   }
 
-  const playable = visible.filter((item) => item.kind === "photo" || item.kind === "video");
-  const viewerPool = viewerScope === "hidden" ? hiddenItems : sorted.filter((item) => !item.hidden);
-  const viewer = viewerPool.filter(
-    (item) => item.kind === "photo" || item.kind === "video" || item.kind === "raw",
+  const playable = visible.filter(
+    (item) => item.kind === "photo" || item.kind === "video",
   );
-  const viewerSelected = viewer.find((item) => item.id === inspectedId) || viewer[0] || null;
-  const currentIndex = Math.max(0, playable.findIndex((item) => item.id === inspectedId));
-  const viewerIndex = viewerSelected ? viewer.findIndex((item) => item.id === viewerSelected.id) : -1;
+  const viewerPool =
+    viewerScope === "hidden"
+      ? hiddenItems
+      : sorted.filter((item) => !item.hidden);
+  const viewer = viewerPool.filter(
+    (item) =>
+      item.kind === "photo" || item.kind === "video" || item.kind === "raw",
+  );
+  const viewerSelected =
+    viewer.find((item) => item.id === inspectedId) || viewer[0] || null;
+  const currentIndex = Math.max(
+    0,
+    playable.findIndex((item) => item.id === inspectedId),
+  );
+  const viewerIndex = viewerSelected
+    ? viewer.findIndex((item) => item.id === viewerSelected.id)
+    : -1;
 
   return {
     visibleItems: visible,
@@ -289,11 +363,11 @@ export const useLibraryStore = create<LibraryState>()(
       canceling: false,
       progress: null,
       notice: null,
-      
+
       // Pagination
       page: 0,
       pageSize: 0, // 0 = load all (no pagination)
-      
+
       // Computed (updated via subscribe in components)
       visibleItems: [],
       sortedItems: [],
@@ -307,47 +381,61 @@ export const useLibraryStore = create<LibraryState>()(
 
       // Data Loading
       loadLibrary: async (filter) => {
-        set({ busy: true, progress: { phase: "reading", processed: 0, total: 0 } });
+        set({
+          busy: true,
+          progress: { phase: "reading", processed: 0, total: 0 },
+        });
         try {
           const { page, pageSize, sortBy, sortOrder } = get();
           const usePagination = pageSize > 0;
-          const dto = filter ? {
-            kind: filter.kind,
-            favorite: filter.favorite,
-            hidden: filter.hidden,
-            albumId: filter.albumId,
-            query: filter.query,
-            dateFrom: filter.dateFrom,
-            dateTo: filter.dateTo,
-            sortBy: sortBy as LibraryFilterDTO["sortBy"],
-            sortOrder: sortOrder as LibraryFilterDTO["sortOrder"],
-            limit: usePagination ? pageSize : undefined,
-            offset: usePagination ? page * pageSize : undefined,
-          } : {
-            limit: usePagination ? pageSize : undefined,
-            offset: usePagination ? page * pageSize : undefined,
-          };
-          
-          const isTauri = typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+          const dto = filter
+            ? {
+                kind: filter.kind,
+                favorite: filter.favorite,
+                hidden: filter.hidden,
+                albumId: filter.albumId,
+                query: filter.query,
+                dateFrom: filter.dateFrom,
+                dateTo: filter.dateTo,
+                sortBy: sortBy as LibraryFilterDTO["sortBy"],
+                sortOrder: sortOrder as LibraryFilterDTO["sortOrder"],
+                limit: usePagination ? pageSize : undefined,
+                offset: usePagination ? page * pageSize : undefined,
+              }
+            : {
+                limit: usePagination ? pageSize : undefined,
+                offset: usePagination ? page * pageSize : undefined,
+              };
+
+          const isTauri =
+            typeof window !== "undefined" &&
+            ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
           if (!isTauri) {
-            if (import.meta.env.DEV) console.warn("Tauri IPC is not available in browser preview mode.");
+            if (import.meta.env.DEV)
+              console.warn(
+                "Tauri IPC is not available in browser preview mode.",
+              );
             set({ busy: false, progress: null });
             get().refreshDerived();
             return;
           }
-          
+
           const [items, albums, tags, folders] = await Promise.all([
             tauri.library.getItems(dto || {}),
             tauri.albums.get(),
             tauri.albums.getTags(),
             tauri.library.getFolders(),
           ]);
-          
+
           set({ items, albums, tags, folders, busy: false, progress: null });
           get().refreshDerived();
         } catch (e) {
           if (import.meta.env.DEV) console.error("loadLibrary failed:", e);
-          set({ busy: false, progress: null, notice: "Failed to load library: " + String(e) });
+          set({
+            busy: false,
+            progress: null,
+            notice: "Failed to load library: " + String(e),
+          });
         }
       },
 
@@ -356,7 +444,9 @@ export const useLibraryStore = create<LibraryState>()(
       },
 
       loadFolders: async () => {
-        const isTauri = typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+        const isTauri =
+          typeof window !== "undefined" &&
+          ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
         if (!isTauri) return;
         try {
           const folders = await tauri.library.getFolders();
@@ -374,7 +464,9 @@ export const useLibraryStore = create<LibraryState>()(
         const prefix = path.endsWith("/") ? path : `${path}/`;
         const removedIds = new Set(
           get()
-            .items.filter((item) => item.path === path || item.path.startsWith(prefix))
+            .items.filter(
+              (item) => item.path === path || item.path.startsWith(prefix),
+            )
             .map((item) => item.id),
         );
 
@@ -382,11 +474,15 @@ export const useLibraryStore = create<LibraryState>()(
           items: s.items.filter((item) => !removedIds.has(item.id)),
           selectedIds: s.selectedIds.filter((id) => !removedIds.has(id)),
           // Never leave inspection pointing at an item that no longer exists.
-          inspectedId: s.inspectedId && removedIds.has(s.inspectedId) ? null : s.inspectedId,
+          inspectedId:
+            s.inspectedId && removedIds.has(s.inspectedId)
+              ? null
+              : s.inspectedId,
           folders: s.folders.filter((folder) => folder.path !== path),
           // Drop a source filter that pointed into the removed folder.
           activeSource:
-            s.activeSource === path || (s.activeSource && s.activeSource.startsWith(prefix))
+            s.activeSource === path ||
+            (s.activeSource && s.activeSource.startsWith(prefix))
               ? null
               : s.activeSource,
         }));
@@ -438,20 +534,30 @@ export const useLibraryStore = create<LibraryState>()(
         const { playableItems, inspectedId: currentId } = get();
         if (playableItems.length === 0) return;
         const currentIndex = playableItems.findIndex((i) => i.id === currentId);
-        const nextIndex = (currentIndex + delta + playableItems.length) % playableItems.length;
+        const nextIndex =
+          (currentIndex + delta + playableItems.length) % playableItems.length;
         const state = get();
         const inspectedId = playableItems[nextIndex].id;
-        set({ inspectedId, ...computeInspectionDerived({ ...state, inspectedId }) });
+        set({
+          inspectedId,
+          ...computeInspectionDerived({ ...state, inspectedId }),
+        });
       },
 
       navigateViewerPhoto: (delta) => {
         const { viewerItems, viewerSelected } = get();
         if (viewerItems.length === 0 || !viewerSelected) return;
-        const currentIndex = viewerItems.findIndex((i) => i.id === viewerSelected.id);
-        const nextIndex = (currentIndex + delta + viewerItems.length) % viewerItems.length;
+        const currentIndex = viewerItems.findIndex(
+          (i) => i.id === viewerSelected.id,
+        );
+        const nextIndex =
+          (currentIndex + delta + viewerItems.length) % viewerItems.length;
         const state = get();
         const inspectedId = viewerItems[nextIndex].id;
-        set({ inspectedId, ...computeInspectionDerived({ ...state, inspectedId }) });
+        set({
+          inspectedId,
+          ...computeInspectionDerived({ ...state, inspectedId }),
+        });
       },
 
       selectRange: (startId, endId) => {
@@ -459,7 +565,7 @@ export const useLibraryStore = create<LibraryState>()(
         const start = visibleItems.findIndex((i) => i.id === startId);
         const end = visibleItems.findIndex((i) => i.id === endId);
         if (start === -1 || end === -1) return;
-        
+
         const [from, to] = start < end ? [start, end] : [end, start];
         const rangeIds = visibleItems.slice(from, to + 1).map((i) => i.id);
         set({ selectedIds: rangeIds });
@@ -493,7 +599,10 @@ export const useLibraryStore = create<LibraryState>()(
 
       // Filters & View
       setFilter: (filter) => {
-        set({ filter, activeAlbum: filter === "Favorites" ? null : get().activeAlbum });
+        set({
+          filter,
+          activeAlbum: filter === "Favorites" ? null : get().activeAlbum,
+        });
         get().refreshDerived();
       },
 
@@ -544,16 +653,22 @@ export const useLibraryStore = create<LibraryState>()(
         const next = !item.favorite;
         await tauri.items.toggleFavorite(id, next);
         set((s) => ({
-          items: s.items.map((i) => (i.id === id ? { ...i, favorite: next } : i)),
+          items: s.items.map((i) =>
+            i.id === id ? { ...i, favorite: next } : i,
+          ),
         }));
         get().refreshDerived();
       },
 
       setFavoriteForIds: async (ids, favorite) => {
         const targets = get().items.filter((i) => ids.includes(i.id));
-        await Promise.all(targets.map((i) => tauri.items.toggleFavorite(i.id, favorite)));
+        await Promise.all(
+          targets.map((i) => tauri.items.toggleFavorite(i.id, favorite)),
+        );
         set((s) => ({
-          items: s.items.map((i) => (ids.includes(i.id) ? { ...i, favorite } : i)),
+          items: s.items.map((i) =>
+            ids.includes(i.id) ? { ...i, favorite } : i,
+          ),
         }));
         get().refreshDerived();
       },
@@ -568,7 +683,9 @@ export const useLibraryStore = create<LibraryState>()(
         const hiding = hidden ? targets.filter((i) => !i.hidden) : [];
         const showing = hidden ? [] : targets.filter((i) => i.hidden);
 
-        await Promise.all(targets.map((i) => tauri.items.toggleHidden(i.id, hidden)));
+        await Promise.all(
+          targets.map((i) => tauri.items.toggleHidden(i.id, hidden)),
+        );
 
         // Folder counts describe the visible gallery, matching the backend.
         // Refresh them after the flag changes so the Sources summary cannot
@@ -582,7 +699,9 @@ export const useLibraryStore = create<LibraryState>()(
         }
 
         set((s) => ({
-          items: s.items.map((i) => (ids.includes(i.id) ? { ...i, hidden } : i)),
+          items: s.items.map((i) =>
+            ids.includes(i.id) ? { ...i, hidden } : i,
+          ),
           folders,
           albums: s.albums.map((album) => {
             const visibleDelta =
@@ -596,10 +715,13 @@ export const useLibraryStore = create<LibraryState>()(
           // The items just moved between collections, so they cannot stay
           // selected or inspected in the view they came from.
           selectedIds: s.selectedIds.filter((id) => !ids.includes(id)),
-          inspectedId: s.inspectedId && ids.includes(s.inspectedId) ? null : s.inspectedId,
+          inspectedId:
+            s.inspectedId && ids.includes(s.inspectedId) ? null : s.inspectedId,
           duplicates: s.duplicates.map((g) => ({
             ...g,
-            items: g.items.map((i) => (ids.includes(i.id) ? { ...i, hidden } : i)),
+            items: g.items.map((i) =>
+              ids.includes(i.id) ? { ...i, hidden } : i,
+            ),
           })),
         }));
         get().refreshDerived();
@@ -621,27 +743,42 @@ export const useLibraryStore = create<LibraryState>()(
 
       deleteItems: async (ids) => {
         const paths = get()
-            .items
-            .filter((i) => ids.includes(i.id))
-            .map((i) => i.path);
-        set({ busy: true, canceling: false, progress: { phase: "trashing", processed: 0, total: paths.length } });
+          .items.filter((i) => ids.includes(i.id))
+          .map((i) => i.path);
+        set({
+          busy: true,
+          canceling: false,
+          progress: { phase: "trashing", processed: 0, total: paths.length },
+        });
         try {
           const result = await tauri.items.moveToTrash(paths);
           // Only remove items that were successfully trashed
           const trashedIds = new Set(
-            get().items.filter((i) => result.trashed.includes(i.path)).map((i) => i.id)
+            get()
+              .items.filter((i) => result.trashed.includes(i.path))
+              .map((i) => i.id),
           );
           if (result.failed.length > 0) {
-            const errors = result.failed.map((f) => `${f.path}: ${f.error}`).join("; ");
-            get().showNotice(`Failed to trash ${result.failed.length} item(s): ${errors}`);
+            const errors = result.failed
+              .map((f) => `${f.path}: ${f.error}`)
+              .join("; ");
+            get().showNotice(
+              `Failed to trash ${result.failed.length} item(s): ${errors}`,
+            );
           }
           set({ busy: false, canceling: false, progress: null });
           set((s) => ({
             items: s.items.filter((i) => !trashedIds.has(i.id)),
             selectedIds: s.selectedIds.filter((id) => !trashedIds.has(id)),
-            inspectedId: s.inspectedId && trashedIds.has(s.inspectedId) ? null : s.inspectedId,
+            inspectedId:
+              s.inspectedId && trashedIds.has(s.inspectedId)
+                ? null
+                : s.inspectedId,
             duplicates: s.duplicates
-              .map((g) => ({ ...g, items: g.items.filter((i) => !trashedIds.has(i.id)) }))
+              .map((g) => ({
+                ...g,
+                items: g.items.filter((i) => !trashedIds.has(i.id)),
+              }))
               .filter((g) => (g.items?.length || 0) > 1),
           }));
         } catch (e) {
@@ -657,7 +794,13 @@ export const useLibraryStore = create<LibraryState>()(
         if (!trimmed) return;
 
         const album = await tauri.albums.create(trimmed);
-        const ids = itemIds ?? (get().selectedIds.length ? get().selectedIds : (get().inspectedId ? [get().inspectedId!] : []));
+        const ids =
+          itemIds ??
+          (get().selectedIds.length
+            ? get().selectedIds
+            : get().inspectedId
+              ? [get().inspectedId!]
+              : []);
         if (ids.length) await tauri.albums.addItems(album.id, ids);
 
         // Reflect the new membership immediately. The album response only
@@ -672,8 +815,13 @@ export const useLibraryStore = create<LibraryState>()(
           albums: [...s.albums, created],
           items: s.items.map((item) =>
             ids.includes(item.id)
-              ? { ...item, albumIds: Array.from(new Set([...(item.albumIds || []), created.id])) }
-              : item
+              ? {
+                  ...item,
+                  albumIds: Array.from(
+                    new Set([...(item.albumIds || []), created.id]),
+                  ),
+                }
+              : item,
           ),
           // An empty album created from the sidebar should not pull the user
           // out of the current view. Only jump into it when it contains the
@@ -685,7 +833,7 @@ export const useLibraryStore = create<LibraryState>()(
         get().showNotice(
           ids.length
             ? `Created album "${trimmed}" with ${ids.length} ${ids.length === 1 ? "item" : "items"}`
-            : `Created album "${trimmed}"`
+            : `Created album "${trimmed}"`,
         );
       },
 
@@ -698,8 +846,11 @@ export const useLibraryStore = create<LibraryState>()(
           albums: s.albums.filter((a) => a.id !== albumId),
           items: s.items.map((item) =>
             item.albumIds?.includes(albumId)
-              ? { ...item, albumIds: item.albumIds.filter((id) => id !== albumId) }
-              : item
+              ? {
+                  ...item,
+                  albumIds: item.albumIds.filter((id) => id !== albumId),
+                }
+              : item,
           ),
           activeAlbum: s.activeAlbum === albumId ? null : s.activeAlbum,
         }));
@@ -708,7 +859,9 @@ export const useLibraryStore = create<LibraryState>()(
 
       renameAlbum: async (albumId, name) => {
         await tauri.albums.rename(albumId, name);
-        set((s) => ({ albums: s.albums.map((a) => (a.id === albumId ? { ...a, name } : a)) }));
+        set((s) => ({
+          albums: s.albums.map((a) => (a.id === albumId ? { ...a, name } : a)),
+        }));
       },
 
       addToAlbum: async (albumId, itemIds = get().selectedIds) => {
@@ -731,21 +884,31 @@ export const useLibraryStore = create<LibraryState>()(
         set((s) => ({
           items: s.items.map((item) =>
             itemIds.includes(item.id)
-              ? { ...item, albumIds: Array.from(new Set([...(item.albumIds || []), albumId])) }
-              : item
+              ? {
+                  ...item,
+                  albumIds: Array.from(
+                    new Set([...(item.albumIds || []), albumId]),
+                  ),
+                }
+              : item,
           ),
           albums: s.albums.map((album) =>
             album.id === albumId
-              ? { ...album, itemCount: (album.itemCount || 0) + newlyAdded.length }
-              : album
+              ? {
+                  ...album,
+                  itemCount: (album.itemCount || 0) + newlyAdded.length,
+                }
+              : album,
           ),
         }));
         get().refreshDerived();
-        const albumName = current.albums.find((album) => album.id === albumId)?.name;
+        const albumName = current.albums.find(
+          (album) => album.id === albumId,
+        )?.name;
         get().showNotice(
           newlyLinked.length
             ? `Added ${newlyLinked.length} ${newlyLinked.length === 1 ? "item" : "items"}${albumName ? ` to "${albumName}"` : ""}`
-            : `Those photos are already${albumName ? ` in "${albumName}"` : " in that album"}.`
+            : `Those photos are already${albumName ? ` in "${albumName}"` : " in that album"}.`,
         );
       },
 
@@ -762,13 +925,24 @@ export const useLibraryStore = create<LibraryState>()(
         set((s) => ({
           items: s.items.map((item) =>
             itemIds.includes(item.id)
-              ? { ...item, albumIds: (item.albumIds || []).filter((id) => id !== albumId) }
-              : item
+              ? {
+                  ...item,
+                  albumIds: (item.albumIds || []).filter(
+                    (id) => id !== albumId,
+                  ),
+                }
+              : item,
           ),
           albums: s.albums.map((album) =>
             album.id === albumId
-              ? { ...album, itemCount: Math.max(0, (album.itemCount || 0) - removedIds.length) }
-              : album
+              ? {
+                  ...album,
+                  itemCount: Math.max(
+                    0,
+                    (album.itemCount || 0) - removedIds.length,
+                  ),
+                }
+              : album,
           ),
           // Removed photos are no longer visible in the open album, so don't
           // leave ghost selection or an inspector pointing at an absent tile.
@@ -777,14 +951,18 @@ export const useLibraryStore = create<LibraryState>()(
               ? s.selectedIds.filter((id) => !removedIds.includes(id))
               : s.selectedIds,
           inspectedId:
-            s.activeAlbum === albumId && s.inspectedId && removedIds.includes(s.inspectedId)
+            s.activeAlbum === albumId &&
+            s.inspectedId &&
+            removedIds.includes(s.inspectedId)
               ? null
               : s.inspectedId,
         }));
         get().refreshDerived();
-        const albumName = current.albums.find((album) => album.id === albumId)?.name;
+        const albumName = current.albums.find(
+          (album) => album.id === albumId,
+        )?.name;
         get().showNotice(
-          `Removed ${removedIds.length} ${removedIds.length === 1 ? "item" : "items"}${albumName ? ` from "${albumName}"` : " from the album"}`
+          `Removed ${removedIds.length} ${removedIds.length === 1 ? "item" : "items"}${albumName ? ` from "${albumName}"` : " from the album"}`,
         );
       },
 
@@ -792,7 +970,11 @@ export const useLibraryStore = create<LibraryState>()(
       scanDuplicates: async () => {
         // Keep previous results so we can merge partial results on cancel
         const previousDuplicates = get().duplicates;
-        set({ busy: true, canceling: false, progress: { phase: "hashing", processed: 0, total: 0 } });
+        set({
+          busy: true,
+          canceling: false,
+          progress: { phase: "hashing", processed: 0, total: 0 },
+        });
         try {
           const duplicates = await tauri.duplicates.scan();
           const cancelled = get().canceling;
@@ -801,13 +983,29 @@ export const useLibraryStore = create<LibraryState>()(
           const merged = cancelled
             ? mergeDuplicateGroups(previousDuplicates, duplicates)
             : duplicates;
-          set({ duplicates: merged, busy: false, canceling: false, progress: null });
-          get().showNotice(cancelled
-            ? `Duplicate scan cancelled. ${merged.length} group${merged.length === 1 ? "" : "s"} shown; completed hashes saved.`
-            : duplicates.length ? `Found ${duplicates.length} duplicate groups` : "No duplicates found");
+          set({
+            duplicates: merged,
+            busy: false,
+            canceling: false,
+            progress: null,
+          });
+          get().showNotice(
+            cancelled
+              ? `Duplicate scan cancelled. ${merged.length} group${merged.length === 1 ? "" : "s"} shown; completed hashes saved.`
+              : duplicates.length
+                ? `Found ${duplicates.length} duplicate groups`
+                : "No duplicates found",
+          );
         } catch (e) {
           const cancelled = get().canceling;
-          set({ busy: false, canceling: false, progress: null, notice: cancelled ? "Duplicate scan cancelled." : "Duplicate scan failed" });
+          set({
+            busy: false,
+            canceling: false,
+            progress: null,
+            notice: cancelled
+              ? "Duplicate scan cancelled."
+              : "Duplicate scan failed",
+          });
         }
       },
 
@@ -816,7 +1014,10 @@ export const useLibraryStore = create<LibraryState>()(
         try {
           await tauri.library.cancelScan();
         } catch (e) {
-          set({ canceling: false, notice: `Could not cancel scan: ${String(e)}` });
+          set({
+            canceling: false,
+            notice: `Could not cancel scan: ${String(e)}`,
+          });
         } finally {
           // Always clear canceling state - the backend flag is handled by next scan
           set({ canceling: false });
@@ -831,7 +1032,10 @@ export const useLibraryStore = create<LibraryState>()(
       showNotice: (text) => {
         set({ notice: text });
         if (text) {
-          const warning = /failed|could not|cannot access|not a folder|could not read|no media files found|no supported media/i.test(text);
+          const warning =
+            /failed|could not|cannot access|not a folder|could not read|no media files found|no supported media/i.test(
+              text,
+            );
           setTimeout(() => set({ notice: "" }), warning ? 8000 : 3600);
         }
       },
@@ -842,15 +1046,23 @@ export const useLibraryStore = create<LibraryState>()(
         set(derived);
       },
     }),
-    { name: "library-store" }
-  )
+    { name: "library-store" },
+  ),
 );
 
 // Selectors
 export const useVisibleItems = () => useLibraryStore((s) => s.visibleItems);
-export const useInspectedItem = () => useLibraryStore((s) => s.items.find((i) => i.id === s.inspectedId) || null);
-export const useSelectedItems = () => useLibraryStore((s) => s.selectedIds.map((id) => s.items.find((i) => i.id === id)).filter(Boolean) as MediaItem[]);
-export const useSelectionCount = () => useLibraryStore((s) => s.selectedIds.length);
+export const useInspectedItem = () =>
+  useLibraryStore((s) => s.items.find((i) => i.id === s.inspectedId) || null);
+export const useSelectedItems = () =>
+  useLibraryStore(
+    (s) =>
+      s.selectedIds
+        .map((id) => s.items.find((i) => i.id === id))
+        .filter(Boolean) as MediaItem[],
+  );
+export const useSelectionCount = () =>
+  useLibraryStore((s) => s.selectedIds.length);
 // Backwards-compatible alias: the "selected item" is the inspected one.
 export const useSelectedItem = useInspectedItem;
 export const useFilter = () => useLibraryStore((s) => s.filter);

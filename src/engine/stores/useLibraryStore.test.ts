@@ -3,13 +3,17 @@ import { vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
-vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: vi.fn(() => ({ listen: vi.fn() })) }));
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: vi.fn(() => ({ listen: vi.fn() })),
+}));
 
 vi.mock("../commands/tauri", () => ({
   tauri: {
     items: { toggleFavorite: vi.fn().mockResolvedValue(undefined) },
     albums: {
-      create: vi.fn().mockResolvedValue({ id: "album-1", name: "Trip", itemCount: 0 }),
+      create: vi
+        .fn()
+        .mockResolvedValue({ id: "album-1", name: "Trip", itemCount: 0 }),
       delete: vi.fn().mockResolvedValue(undefined),
       rename: vi.fn().mockResolvedValue(undefined),
       addItems: vi.fn().mockResolvedValue(undefined),
@@ -22,7 +26,12 @@ vi.mock("../commands/tauri", () => ({
 import { useLibraryStore } from "../../engine/stores/useLibraryStore";
 import type { MediaItem } from "../../engine/types/media";
 
-function makeItem(id: string, name: string, favorite = false, kind: "photo" | "video" = "photo"): MediaItem {
+function makeItem(
+  id: string,
+  name: string,
+  favorite = false,
+  kind: "photo" | "video" = "photo",
+): MediaItem {
   const now = Date.now();
   return {
     id,
@@ -50,10 +59,15 @@ test("setFilter narrows visible items", () => {
   const b = makeItem("b", "clip.mp4", false, "video");
   useLibraryStore.setState({ items: [a, b] });
   useLibraryStore.getState().refreshDerived();
-  expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual(["a", "b"]);
+  expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual([
+    "a",
+    "b",
+  ]);
 
   useLibraryStore.getState().setFilter("Videos");
-  expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual(["b"]);
+  expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual([
+    "b",
+  ]);
 });
 
 test("setQuery narrows visible items", () => {
@@ -63,7 +77,9 @@ test("setQuery narrows visible items", () => {
   useLibraryStore.getState().refreshDerived();
 
   useLibraryStore.getState().setQuery("sunset");
-  expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual(["a"]);
+  expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual([
+    "a",
+  ]);
 });
 
 test("toggleFavorite updates item and derived state", async () => {

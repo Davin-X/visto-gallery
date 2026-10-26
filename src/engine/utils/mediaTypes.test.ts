@@ -1,5 +1,9 @@
 /// <reference types="vitest/globals" />
-import { getTypeIdentity, getKindBadgeClass, getKindDotClass } from "./mediaTypes";
+import {
+  getTypeIdentity,
+  getKindBadgeClass,
+  getKindDotClass,
+} from "./mediaTypes";
 
 test("media types", () => {
   expect(getTypeIdentity("photo").label).toBe("Photo");

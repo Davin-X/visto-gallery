@@ -1,5 +1,13 @@
 import React, { useRef, useState, useEffect } from "react";
-function VideoThumb({ src, name, className }: { src: string; name?: string; className?: string }) {
+function VideoThumb({
+  src,
+  name,
+  className,
+}: {
+  src: string;
+  name?: string;
+  className?: string;
+}) {
   const ref = useRef<HTMLVideoElement | null>(null);
   const [nearViewport, setNearViewport] = useState(false);
 
@@ -10,12 +18,15 @@ function VideoThumb({ src, name, className }: { src: string; name?: string; clas
       setNearViewport(true);
       return;
     }
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        setNearViewport(true);
-        observer.disconnect();
-      }
-    }, { rootMargin: "180px" });
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setNearViewport(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "180px" },
+    );
     observer.observe(video);
     return () => observer.disconnect();
   }, []);

@@ -1,10 +1,32 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { useSettingsStore } from "../../engine/stores/useSettingsStore";
 import { usePlaybackStore } from "../../engine/stores/usePlaybackStore";
-import { MinusIcon, PlusIcon, VolumeIcon, StopIcon, FullscreenIcon, PlayIcon, PauseIcon } from "./icons";
+import {
+  MinusIcon,
+  PlusIcon,
+  VolumeIcon,
+  StopIcon,
+  FullscreenIcon,
+  PlayIcon,
+  PauseIcon,
+} from "./icons";
 import { formatDuration } from "../../engine/utils/time";
 
-function VideoPlayer({ itemId, active = true, src, name, onFullscreen, onNext }: { itemId: string; active?: boolean; src: string; name?: string; onFullscreen?: () => void; onNext?: () => void }) {
+function VideoPlayer({
+  itemId,
+  active = true,
+  src,
+  name,
+  onFullscreen,
+  onNext,
+}: {
+  itemId: string;
+  active?: boolean;
+  src: string;
+  name?: string;
+  onFullscreen?: () => void;
+  onNext?: () => void;
+}) {
   const videoAutoPlay = useSettingsStore((s) => s.videoAutoPlay);
   const videoLoop = useSettingsStore((s) => s.videoLoop);
   const registerPlayback = usePlaybackStore((s) => s.register);
@@ -43,7 +65,14 @@ function VideoPlayer({ itemId, active = true, src, name, onFullscreen, onNext }:
     if (!video) return;
 
     // Restore playback state from store if this is the same itemId
-    const { itemId: storeItemId, time, volume, muted, playing, duration } = usePlaybackStore.getState();
+    const {
+      itemId: storeItemId,
+      time,
+      volume,
+      muted,
+      playing,
+      duration,
+    } = usePlaybackStore.getState();
     if (storeItemId === itemId && duration > 0) {
       // Restore saved state
       video.currentTime = time;
@@ -191,11 +220,15 @@ function VideoPlayer({ itemId, active = true, src, name, onFullscreen, onNext }:
     const video = ref.current;
     if (!video) return;
     setPipSupported(
-      Boolean((document as any).pictureInPictureEnabled || (video as any).webkitSupportsPresentationMode?.("picture-in-picture"))
+      Boolean(
+        (document as any).pictureInPictureEnabled ||
+        (video as any).webkitSupportsPresentationMode?.("picture-in-picture"),
+      ),
     );
     const onEnter = () => setPip(true);
     const onLeave = () => setPip(false);
-    const onWebKitMode = () => setPip((video as any).webkitPresentationMode === "picture-in-picture");
+    const onWebKitMode = () =>
+      setPip((video as any).webkitPresentationMode === "picture-in-picture");
     video.addEventListener("enterpictureinpicture", onEnter);
     video.addEventListener("leavepictureinpicture", onLeave);
     video.addEventListener("webkitpresentationmodechanged", onWebKitMode);
@@ -213,7 +246,9 @@ function VideoPlayer({ itemId, active = true, src, name, onFullscreen, onNext }:
       const v = video as any;
       if (v.webkitSupportsPresentationMode?.("picture-in-picture")) {
         v.webkitSetPresentationMode(
-          v.webkitPresentationMode === "picture-in-picture" ? "inline" : "picture-in-picture"
+          v.webkitPresentationMode === "picture-in-picture"
+            ? "inline"
+            : "picture-in-picture",
         );
         return;
       }
@@ -223,7 +258,8 @@ function VideoPlayer({ itemId, active = true, src, name, onFullscreen, onNext }:
         await video.requestPictureInPicture();
       }
     } catch (err) {
-      if (import.meta.env.DEV) console.warn("Picture-in-picture unavailable", err);
+      if (import.meta.env.DEV)
+        console.warn("Picture-in-picture unavailable", err);
     }
   };
 
@@ -240,20 +276,34 @@ function VideoPlayer({ itemId, active = true, src, name, onFullscreen, onNext }:
     const video = ref.current;
     if (!video || !("mediaSession" in navigator)) return;
     const session = navigator.mediaSession;
-    session.metadata = new MediaMetadata({ title: name || "Video", artist: "VistoGallery" });
+    session.metadata = new MediaMetadata({
+      title: name || "Video",
+      artist: "VistoGallery",
+    });
     const play = () => void video.play().catch(() => {});
     const pause = () => video.pause();
     const seekBy = (delta: number) => {
-      const next = Math.min(Math.max(0, video.currentTime + delta), video.duration || 0);
+      const next = Math.min(
+        Math.max(0, video.currentTime + delta),
+        video.duration || 0,
+      );
       video.currentTime = next;
       setTime(next);
     };
     session.setActionHandler("play", play);
     session.setActionHandler("pause", pause);
-    session.setActionHandler("seekbackward", (details) => seekBy(-(details?.seekOffset || 10)));
-    session.setActionHandler("seekforward", (details) => seekBy(details?.seekOffset || 10));
-    const onPlay = () => { session.playbackState = "playing"; };
-    const onPause = () => { session.playbackState = "paused"; };
+    session.setActionHandler("seekbackward", (details) =>
+      seekBy(-(details?.seekOffset || 10)),
+    );
+    session.setActionHandler("seekforward", (details) =>
+      seekBy(details?.seekOffset || 10),
+    );
+    const onPlay = () => {
+      session.playbackState = "playing";
+    };
+    const onPause = () => {
+      session.playbackState = "paused";
+    };
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
     return () => {
@@ -300,11 +350,28 @@ function VideoPlayer({ itemId, active = true, src, name, onFullscreen, onNext }:
 
   return (
     <>
-      <video ref={ref} className="viewer-video" src={src} title={name} autoPlay={videoAutoPlay} loop={videoLoop && !autoAdvance} playsInline preload="metadata" onClick={handleVideoClick} onDoubleClick={() => onFullscreen?.()} tabIndex={0} />
+      <video
+        ref={ref}
+        className="viewer-video"
+        src={src}
+        title={name}
+        autoPlay={videoAutoPlay}
+        loop={videoLoop && !autoAdvance}
+        playsInline
+        preload="metadata"
+        onClick={handleVideoClick}
+        onDoubleClick={() => onFullscreen?.()}
+        tabIndex={0}
+      />
       {/* macOS hides a video's native control bar unless the pointer is over the
           frame, so playback gets a permanent bar of our own instead. */}
       <div className="viewer-video-controls">
-        <button type="button" onClick={toggle} aria-label={playing ? "Pause" : "Play"} title={playing ? "Pause" : "Play"}>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={playing ? "Pause" : "Play"}
+          title={playing ? "Pause" : "Play"}
+        >
           {playing ? <PauseIcon size={15} /> : <PlayIcon size={15} />}
         </button>
         <button
@@ -312,10 +379,24 @@ function VideoPlayer({ itemId, active = true, src, name, onFullscreen, onNext }:
           onClick={() => setAutoAdvance((v) => !v)}
           aria-pressed={autoAdvance}
           aria-label="Auto-advance to the next item"
-          title={autoAdvance ? "Auto-advance on: play the next item when this ends" : "Auto-advance off: stop at the end"}
+          title={
+            autoAdvance
+              ? "Auto-advance on: play the next item when this ends"
+              : "Auto-advance off: stop at the end"
+          }
         >
           {autoAdvance ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <polygon points="5 4 15 12 5 20 5 4" />
               <line x1="19" y1="5" x2="19" y2="19" />
             </svg>
@@ -334,10 +415,20 @@ function VideoPlayer({ itemId, active = true, src, name, onFullscreen, onNext }:
           aria-label="Seek"
         />
         <span className="video-time">{formatDuration(duration)}</span>
-        <button type="button" onClick={() => setMuted((m) => !m)} aria-label={muted ? "Unmute" : "Mute"} title={muted ? "Unmute" : "Mute"}>
+        <button
+          type="button"
+          onClick={() => setMuted((m) => !m)}
+          aria-label={muted ? "Unmute" : "Mute"}
+          title={muted ? "Unmute" : "Mute"}
+        >
           <VolumeIcon size={14} muted={muted || volume === 0} />
         </button>
-        <button type="button" onClick={() => adjustVolume(-0.1)} aria-label="Volume down" title="Volume down">
+        <button
+          type="button"
+          onClick={() => adjustVolume(-0.1)}
+          aria-label="Volume down"
+          title="Volume down"
+        >
           <MinusIcon size={12} />
         </button>
         <input
@@ -354,19 +445,51 @@ function VideoPlayer({ itemId, active = true, src, name, onFullscreen, onNext }:
           }}
           aria-label="Volume"
         />
-        <button type="button" onClick={() => adjustVolume(0.1)} aria-label="Volume up" title="Volume up">
+        <button
+          type="button"
+          onClick={() => adjustVolume(0.1)}
+          aria-label="Volume up"
+          title="Volume up"
+        >
           <PlusIcon size={12} />
         </button>
         {pipSupported && (
-          <button type="button" onClick={togglePip} aria-label={pip ? "Exit picture in picture" : "Picture in picture"} title="Picture in picture">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <button
+            type="button"
+            onClick={togglePip}
+            aria-label={pip ? "Exit picture in picture" : "Picture in picture"}
+            title="Picture in picture"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <rect x="2" y="4" width="20" height="16" rx="2" />
-              <rect x="12" y="12" width="8" height="6" fill={pip ? "currentColor" : "none"} />
+              <rect
+                x="12"
+                y="12"
+                width="8"
+                height="6"
+                fill={pip ? "currentColor" : "none"}
+              />
             </svg>
           </button>
         )}
         {onFullscreen && (
-          <button type="button" onClick={onFullscreen} aria-label="Full screen" title="Full screen"><FullscreenIcon size={14} /></button>
+          <button
+            type="button"
+            onClick={onFullscreen}
+            aria-label="Full screen"
+            title="Full screen"
+          >
+            <FullscreenIcon size={14} />
+          </button>
         )}
       </div>
     </>

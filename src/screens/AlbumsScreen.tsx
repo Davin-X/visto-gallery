@@ -16,8 +16,8 @@ function AlbumsScreen(props: AlbumsScreenProps) {
   const albums = React.useMemo(
     () =>
       (props.albums || []).map((album: any, index: number) => {
-        const albumItems = (props.items || []).filter((item: any) =>
-          item.albumIds?.includes(album.id) && !item.hidden
+        const albumItems = (props.items || []).filter(
+          (item: any) => item.albumIds?.includes(album.id) && !item.hidden,
         );
         // Skip RAW-only files for the cover fan; they have no poster frame.
         const photos = albumItems
@@ -34,7 +34,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
           color: ["coral", "violet", "blue", "green"][index % 4],
         };
       }),
-    [props.albums, props.items]
+    [props.albums, props.items],
   );
 
   return (
@@ -44,17 +44,28 @@ function AlbumsScreen(props: AlbumsScreenProps) {
           <p className="eyebrow">COLLECTIONS</p>
           <h1>Albums</h1>
           <p className="page-subtitle">
-            {albums.length.toLocaleString()} {albums.length === 1 ? "album" : "albums"} · Choose an album to see its photos.
+            {albums.length.toLocaleString()}{" "}
+            {albums.length === 1 ? "album" : "albums"} · Choose an album to see
+            its photos.
           </p>
         </div>
       </div>
 
       {albums.length === 0 ? (
         <div className="empty-state albums-empty">
-          <span><AlbumsIcon size={30} /></span>
+          <span>
+            <AlbumsIcon size={30} />
+          </span>
           <b>No albums yet</b>
-          <p>Create an album, then select photos in Library and choose Add to album.</p>
-          <button className="primary-button" type="button" onClick={() => props.onCreateAlbum?.()}>
+          <p>
+            Create an album, then select photos in Library and choose Add to
+            album.
+          </p>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => props.onCreateAlbum?.()}
+          >
             <PlusIcon size={14} /> Create album
           </button>
         </div>
@@ -69,9 +80,17 @@ function AlbumsScreen(props: AlbumsScreenProps) {
               onContextMenu={(e) => props.onAlbumContextMenu?.(album, e)}
               title={`Open ${album.name}`}
             >
-              <span className={`album-cover ${album.photos.length ? "" : "is-empty"}`}>
+              <span
+                className={`album-cover ${album.photos.length ? "" : "is-empty"}`}
+              >
                 {album.photos.length ? (
-                  <AlbumPhotoStack photos={album.photos} assetUrl={props.assetUrl} albumItems={(props.items || []).filter((i: any) => i.albumIds?.includes(album.id) && !i.hidden)} />
+                  <AlbumPhotoStack
+                    photos={album.photos}
+                    assetUrl={props.assetUrl}
+                    albumItems={(props.items || []).filter(
+                      (i: any) => i.albumIds?.includes(album.id) && !i.hidden,
+                    )}
+                  />
                 ) : (
                   <span className="album-cover-placeholder">
                     <AlbumsIcon size={30} />
@@ -85,7 +104,9 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   <span>{album.name}</span>
                 </span>
                 <span className="album-card-count">
-                  {album.count > 0 ? `${album.count.toLocaleString()} ${album.count === 1 ? "item" : "items"}` : "Empty"}
+                  {album.count > 0
+                    ? `${album.count.toLocaleString()} ${album.count === 1 ? "item" : "items"}`
+                    : "Empty"}
                 </span>
               </span>
             </button>
@@ -109,19 +130,40 @@ function AlbumsScreen(props: AlbumsScreenProps) {
   );
 }
 
-
 async function createMediaItemsBrowser(
   files: FileList | File[],
 ): Promise<MediaItem[]> {
   const items: MediaItem[] = [];
   for (const file of Array.from(files)) {
     if (!file.name || file.name.startsWith(".")) continue;
-    const relativePath = (file as File & { webkitRelativePath?: string })
-      .webkitRelativePath || file.name;
+    const relativePath =
+      (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
+      file.name;
     const ext = relativePath.split(".").pop()?.toLowerCase() ?? "";
     const videoExts = new Set(["m4v", "mov", "mp4", "mpeg", "mpg", "webm"]);
-    const rawExts = new Set(["arw", "cr2", "cr3", "dng", "nef", "raf", "raw", "rw2"]);
-    const imageExts = new Set(["avif", "bmp", "gif", "heic", "heif", "jpeg", "jpg", "png", "tif", "tiff", "webp"]);
+    const rawExts = new Set([
+      "arw",
+      "cr2",
+      "cr3",
+      "dng",
+      "nef",
+      "raf",
+      "raw",
+      "rw2",
+    ]);
+    const imageExts = new Set([
+      "avif",
+      "bmp",
+      "gif",
+      "heic",
+      "heif",
+      "jpeg",
+      "jpg",
+      "png",
+      "tif",
+      "tiff",
+      "webp",
+    ]);
     // "unsupported" is a sentinel for "no known kind" - it is not a MediaKind.
     let kind: MediaKind | "unsupported" = "unsupported";
     if (videoExts.has(ext)) kind = "video";
@@ -174,6 +216,5 @@ async function createMediaItemsBrowser(
   }
   return items;
 }
-
 
 export default AlbumsScreen;

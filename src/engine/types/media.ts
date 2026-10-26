@@ -2,13 +2,13 @@ export type MediaKind = "photo" | "video" | "raw";
 
 export interface MediaItem {
   id: string;
-  path: string;                    // Native: absolute file path
+  path: string; // Native: absolute file path
   name: string;
   extension: string;
   kind: MediaKind;
   size: number;
-  modifiedAt: number;              // File mtime (ms)
-  capturedAt?: number;             // EXIF DateTimeOriginal (ms)
+  modifiedAt: number; // File mtime (ms)
+  capturedAt?: number; // EXIF DateTimeOriginal (ms)
   width?: number;
   height?: number;
   camera?: string;
@@ -17,21 +17,21 @@ export interface MediaItem {
   iso?: number;
   latitude?: number;
   longitude?: number;
-  sha256?: string;                 // Content hash
+  sha256?: string; // Content hash
   favorite: boolean;
   hidden: boolean;
   tags: string[];
-  albumIds: string[];              // Album IDs this item belongs to
-  duration?: number;               // Video duration (seconds), hydrated client-side
+  albumIds: string[]; // Album IDs this item belongs to
+  duration?: number; // Video duration (seconds), hydrated client-side
   importSessionId?: string;
-  createdAt: number;               // When added to catalog
-  updatedAt: number;               // When metadata last changed
+  createdAt: number; // When added to catalog
+  updatedAt: number; // When metadata last changed
 }
 
 export interface Album {
   id: string;
   name: string;
-  colorIndex: number;              // 0-3 for dot colors
+  colorIndex: number; // 0-3 for dot colors
   itemCount: number;
   itemIds?: string[];
   createdAt: number;
@@ -125,8 +125,18 @@ export interface RenderRequest {
 }
 
 export type Filter = "All" | "Photos" | "Videos" | "RAW" | "Favorites";
-export type LayoutMode = "grid" | "filmstrip" | "overview" | "details" | "timeline";
-export type Screen = "Library" | "Viewer" | "Explore" | "Duplicates" | "Edit" | "Batch" | "Hidden" | "Slideshow" | "Settings";
+export type LayoutMode =
+  "grid" | "filmstrip" | "overview" | "details" | "timeline";
+export type Screen =
+  | "Library"
+  | "Viewer"
+  | "Explore"
+  | "Duplicates"
+  | "Edit"
+  | "Batch"
+  | "Hidden"
+  | "Slideshow"
+  | "Settings";
 
 export interface LibraryFilter {
   kind?: MediaKind;

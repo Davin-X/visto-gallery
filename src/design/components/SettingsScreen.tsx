@@ -1,5 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { useSettingsStore, useAppearance, useAccentColor, useSidebarWidth, useDefaultLayout, useLibraryStore, useSystemDark, ACCENT_PALETTE } from "../../engine/stores";
+import {
+  useSettingsStore,
+  useAppearance,
+  useAccentColor,
+  useSidebarWidth,
+  useDefaultLayout,
+  useLibraryStore,
+  useSystemDark,
+  ACCENT_PALETTE,
+} from "../../engine/stores";
 import { tauri } from "../../engine/commands/tauri";
 import type { LibraryFolder } from "../../engine/types/commands";
 import { GeneralPanel } from "./settings/GeneralPanel";
@@ -32,14 +41,15 @@ export function SettingsScreen(props: {
   const [deletingLibrary, setDeletingLibrary] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  
+
   // Settings values
   const appearance = useAppearance();
   const accentColor = useAccentColor();
   // Which accent variant (light/dark) is live, so the swatches preview the
   // color that will actually be applied.
   const systemDark = useSystemDark();
-  const isDark = appearance === "dark" || (appearance === "system" && systemDark);
+  const isDark =
+    appearance === "dark" || (appearance === "system" && systemDark);
   const defaultLayout = useDefaultLayout();
   const autoImport = useSettingsStore((s) => s.autoImport);
   const pairRawJpeg = useSettingsStore((s) => s.pairRawJpeg);
@@ -59,7 +69,7 @@ export function SettingsScreen(props: {
   const thumbnailQuality = useSettingsStore((s) => s.thumbnailQuality);
   const debugLogging = useSettingsStore((s) => s.enableDebugLogging);
   const showNativeWarnings = useSettingsStore((s) => s.showNativeLimitWarnings);
-  
+
   const update = useSettingsStore((s) => s.update);
   const updateMany = useSettingsStore((s) => s.updateMany);
   const resetSettings = useSettingsStore((s) => s.reset);
@@ -84,9 +94,13 @@ export function SettingsScreen(props: {
     try {
       await tauri.library.deleteDatabase();
       await loadLibrary();
-      showNotice("Library database deleted. Original files were left untouched.");
+      showNotice(
+        "Library database deleted. Original files were left untouched.",
+      );
     } catch (e) {
-      showNotice(`Could not delete the library database: ${e instanceof Error ? e.message : String(e)}`);
+      showNotice(
+        `Could not delete the library database: ${e instanceof Error ? e.message : String(e)}`,
+      );
     } finally {
       setDeletingLibrary(false);
     }
@@ -106,9 +120,13 @@ export function SettingsScreen(props: {
         await tauri.library.scan(folder.path, true);
       }
       await loadLibrary();
-      showNotice(`Rebuilt ${folders.length} folder${folders.length === 1 ? "" : "s"}.`);
+      showNotice(
+        `Rebuilt ${folders.length} folder${folders.length === 1 ? "" : "s"}.`,
+      );
     } catch (e) {
-      showNotice(`Rebuild failed: ${e instanceof Error ? e.message : String(e)}`);
+      showNotice(
+        `Rebuild failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
     } finally {
       setRebuilding(false);
     }
@@ -143,7 +161,7 @@ export function SettingsScreen(props: {
     name: string,
     value: string,
     options: { id: string; label: string }[],
-    onChange: (v: string) => void
+    onChange: (v: string) => void,
   ) => (
     <div className="radio-group" role="radiogroup" aria-label={name}>
       {options.map((opt) => (
@@ -194,16 +212,24 @@ export function SettingsScreen(props: {
         <div>
           <p className="eyebrow">PREFERENCES</p>
           <h1>Settings</h1>
-          <p className="page-subtitle">Customize VistoGallery to match your workflow.</p>
+          <p className="page-subtitle">
+            Customize VistoGallery to match your workflow.
+          </p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="settings-tabs" role="tablist" aria-label="Settings categories">
+      <div
+        className="settings-tabs"
+        role="tablist"
+        aria-label="Settings categories"
+      >
         {TABS.map((tab, index) => (
           <button
             key={tab.id}
-            ref={(el) => { tabRefs.current[index] = el; }}
+            ref={(el) => {
+              tabRefs.current[index] = el;
+            }}
             role="tab"
             aria-selected={activeTab === tab.id}
             aria-controls={activeTab === tab.id ? `panel-${tab.id}` : undefined}
@@ -220,88 +246,144 @@ export function SettingsScreen(props: {
       </div>
 
       {/* Panels */}
-      <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`} className="settings-panel">
-        {activeTab === "general" && <GeneralPanel
-          appearance={appearance}
-          accentColor={accentColor}
-          sidebarWidth={sidebarWidth}
-          animateTransitions={animateTransitions}
-          showExtensions={showExtensions}
-          startupView={startupView}
-          openLastFolder={openLastFolder}
-          restoreWindow={restoreWindow}
-          onChange={update}
-          onSidebarWidthChange={handleSidebarWidthChange}
-          renderRadioGroup={renderRadioGroup}
-          renderAccentPicker={renderAccentPicker}
-        />}
-        {activeTab === "viewing" && <ViewingPanel
-          defaultLayout={defaultLayout}
-          thumbnailSize={thumbnailSize}
-          slideshowInterval={slideshowInterval}
-          slideshowShuffle={slideshowShuffle}
-          slideshowLoop={slideshowLoop}
-          videoAutoPlay={videoAutoPlay}
-          videoLoop={videoLoop}
-          onChange={update}
-          renderRadioGroup={renderRadioGroup}
-        />}
-        {activeTab === "library" && <LibraryPanel
-          autoImport={autoImport}
-          pairRawJpeg={pairRawJpeg}
-          stackBursts={stackBursts}
-          onAddFolder={props.onAddFolder}
-          onRemoveFolder={props.onRemoveFolder}
-          onRescan={props.onRescan}
-          onRescanFolder={props.onRescanFolder}
-          onChange={update}
-        />}
+      <div
+        role="tabpanel"
+        id={`panel-${activeTab}`}
+        aria-labelledby={`tab-${activeTab}`}
+        className="settings-panel"
+      >
+        {activeTab === "general" && (
+          <GeneralPanel
+            appearance={appearance}
+            accentColor={accentColor}
+            sidebarWidth={sidebarWidth}
+            animateTransitions={animateTransitions}
+            showExtensions={showExtensions}
+            startupView={startupView}
+            openLastFolder={openLastFolder}
+            restoreWindow={restoreWindow}
+            onChange={update}
+            onSidebarWidthChange={handleSidebarWidthChange}
+            renderRadioGroup={renderRadioGroup}
+            renderAccentPicker={renderAccentPicker}
+          />
+        )}
+        {activeTab === "viewing" && (
+          <ViewingPanel
+            defaultLayout={defaultLayout}
+            thumbnailSize={thumbnailSize}
+            slideshowInterval={slideshowInterval}
+            slideshowShuffle={slideshowShuffle}
+            slideshowLoop={slideshowLoop}
+            videoAutoPlay={videoAutoPlay}
+            videoLoop={videoLoop}
+            onChange={update}
+            renderRadioGroup={renderRadioGroup}
+          />
+        )}
+        {activeTab === "library" && (
+          <LibraryPanel
+            autoImport={autoImport}
+            pairRawJpeg={pairRawJpeg}
+            stackBursts={stackBursts}
+            onAddFolder={props.onAddFolder}
+            onRemoveFolder={props.onRemoveFolder}
+            onRescan={props.onRescan}
+            onRescanFolder={props.onRescanFolder}
+            onChange={update}
+          />
+        )}
         {activeTab === "privacy" && <PrivacyPanel />}
-        {activeTab === "advanced" && <AdvancedPanel
-          maxCacheSize={maxCacheSize}
-          thumbnailQuality={thumbnailQuality}
-          debugLogging={debugLogging}
-          showNativeWarnings={showNativeWarnings}
-          onChange={update}
-          setShowResetConfirm={setShowResetConfirm}
-          setShowDeleteConfirm={setShowDeleteConfirm}
-          deleting={deletingLibrary}
-          onRebuild={handleRebuildLibrary}
-          rebuilding={rebuilding}
-        />}
+        {activeTab === "advanced" && (
+          <AdvancedPanel
+            maxCacheSize={maxCacheSize}
+            thumbnailQuality={thumbnailQuality}
+            debugLogging={debugLogging}
+            showNativeWarnings={showNativeWarnings}
+            onChange={update}
+            setShowResetConfirm={setShowResetConfirm}
+            setShowDeleteConfirm={setShowDeleteConfirm}
+            deleting={deletingLibrary}
+            onRebuild={handleRebuildLibrary}
+            rebuilding={rebuilding}
+          />
+        )}
       </div>
 
       {/* Confirmation Dialogs */}
       {showResetConfirm && (
-        <div className="dialog-backdrop" onClick={() => setShowResetConfirm(false)}>
-          <div className="album-dialog confirm-dialog" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="dialog-backdrop"
+          onClick={() => setShowResetConfirm(false)}
+        >
+          <div
+            className="album-dialog confirm-dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="dialog-heading">
               <div>
                 <p className="eyebrow">RESET</p>
                 <h2>Reset All Settings?</h2>
               </div>
             </div>
-            <p className="dialog-body">This will restore all preferences to their defaults. Your library, albums, and tags will not be affected.</p>
+            <p className="dialog-body">
+              This will restore all preferences to their defaults. Your library,
+              albums, and tags will not be affected.
+            </p>
             <div className="dialog-actions">
-              <button type="button" className="quiet-button" onClick={() => setShowResetConfirm(false)}>Cancel</button>
-              <button type="button" className="danger-button" onClick={handleResetSettings}>Reset</button>
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={() => setShowResetConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="danger-button"
+                onClick={handleResetSettings}
+              >
+                Reset
+              </button>
             </div>
           </div>
         </div>
       )}
       {showDeleteConfirm && (
-        <div className="dialog-backdrop" onClick={() => setShowDeleteConfirm(false)}>
-          <div className="album-dialog delete-album-dialog confirm-dialog" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="dialog-backdrop"
+          onClick={() => setShowDeleteConfirm(false)}
+        >
+          <div
+            className="album-dialog delete-album-dialog confirm-dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="dialog-heading">
               <div>
                 <p className="eyebrow">DELETE</p>
                 <h2>Delete Library Database?</h2>
               </div>
             </div>
-            <p className="dialog-body">This removes the catalog, albums, tags, and all metadata. <b>Original files on disk are not affected.</b> You can re-import folders to rebuild.</p>
+            <p className="dialog-body">
+              This removes the catalog, albums, tags, and all metadata.{" "}
+              <b>Original files on disk are not affected.</b> You can re-import
+              folders to rebuild.
+            </p>
             <div className="dialog-actions">
-              <button type="button" className="quiet-button" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
-              <button type="button" className="danger-button" onClick={handleDeleteLibrary}>Delete</button>
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="danger-button"
+                onClick={handleDeleteLibrary}
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>

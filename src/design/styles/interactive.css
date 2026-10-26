@@ -53,20 +53,21 @@
       (Matches the Light/gear buttons in the top bar.)
    -------------------------------------------------------------------------- */
 
-.app-frame :is(
-  .toolbar-button,
-  .quiet-button,
-  .outline-button,
-  .theme-button,
-  .icon-button,
-  .inspector-action,
-  .selection-toolbar button,
-  .duplicate-group-head button,
-  .auto-adjust button,
-  .album-label button,
-  .filmstrip button,
-  .filmstrip-preview button
-):hover:not(:disabled) {
+.app-frame
+  :is(
+    .toolbar-button,
+    .quiet-button,
+    .outline-button,
+    .theme-button,
+    .icon-button,
+    .inspector-action,
+    .selection-toolbar button,
+    .duplicate-group-head button,
+    .auto-adjust button,
+    .album-label button,
+    .filmstrip button,
+    .filmstrip-preview button
+  ):hover:not(:disabled) {
   border-color: var(--blue);
   color: var(--accent-text);
   background-color: var(--surface-2);
@@ -101,7 +102,12 @@
    heaviest argument, which made the cascade here unpredictable.)
    -------------------------------------------------------------------------- */
 
-.app-frame :is(.edit-tabs button, .canvas-actions button, .edit-more-controls button):not(.active):hover:not(:disabled) {
+.app-frame
+  :is(
+    .edit-tabs button,
+    .canvas-actions button,
+    .edit-more-controls button
+  ):not(.active):hover:not(:disabled) {
   background-color: var(--i-tint);
   color: var(--ink);
 }
@@ -119,7 +125,12 @@
 }
 
 /* Inline "view all" style links read as links on hover. */
-.app-frame :is(.date-group-heading > button, .inspector-section-head button, .finder-tags button):hover:not(:disabled) {
+.app-frame
+  :is(
+    .date-group-heading > button,
+    .inspector-section-head button,
+    .finder-tags button
+  ):hover:not(:disabled) {
   background: transparent;
   color: var(--accent-text);
   text-decoration: underline;
@@ -133,7 +144,8 @@
 }
 
 /* Nav + album rows already tint; make the unselected one react on press too. */
-.app-frame :is(.nav-item, .album-nav button):not(.active):active:not(:disabled) {
+.app-frame
+  :is(.nav-item, .album-nav button):not(.active):active:not(:disabled) {
   background-color: var(--i-tint);
 }
 
@@ -216,24 +228,25 @@
       transform (the viewer arrows are, so they are excluded).
    -------------------------------------------------------------------------- */
 
-.app-frame :is(
-  .primary-button,
-  .danger-button,
-  .quiet-button,
-  .toolbar-button,
-  .outline-button,
-  .theme-button,
-  .inspector-action,
-  .selection-toolbar button,
-  .duplicate-group-head button,
-  .auto-adjust button,
-  .quick-filter,
-  .edit-tabs button,
-  .layout-switcher button,
-  .filmstrip button,
-  .context-menu-item,
-  .settings-tab
-):active:not(:disabled) {
+.app-frame
+  :is(
+    .primary-button,
+    .danger-button,
+    .quiet-button,
+    .toolbar-button,
+    .outline-button,
+    .theme-button,
+    .inspector-action,
+    .selection-toolbar button,
+    .duplicate-group-head button,
+    .auto-adjust button,
+    .quick-filter,
+    .edit-tabs button,
+    .layout-switcher button,
+    .filmstrip button,
+    .context-menu-item,
+    .settings-tab
+  ):active:not(:disabled) {
   transform: scale(0.975);
 }
 
@@ -241,15 +254,16 @@
    8. Disabled.
    -------------------------------------------------------------------------- */
 
-.app-frame :is(
-  .danger-button,
-  .toolbar-button,
-  .outline-button,
-  .icon-button,
-  .theme-button,
-  .inspector-action,
-  .settings-select
-):disabled {
+.app-frame
+  :is(
+    .danger-button,
+    .toolbar-button,
+    .outline-button,
+    .icon-button,
+    .theme-button,
+    .inspector-action,
+    .settings-select
+  ):disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -263,7 +277,13 @@
       did not already cover.
    -------------------------------------------------------------------------- */
 
-.app-frame :is(a, summary, [role="button"], [tabindex]:not(.context-menu-item)):focus-visible {
+.app-frame
+  :is(
+    a,
+    summary,
+    [role="button"],
+    [tabindex]:not(.context-menu-item)
+  ):focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
 }

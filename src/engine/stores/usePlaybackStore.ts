@@ -23,7 +23,10 @@ interface PlaybackSnapshot {
 interface PlaybackState extends PlaybackSnapshot {
   element: HTMLVideoElement | null;
 
-  register: (element: HTMLVideoElement, meta: { itemId: string; name: string }) => void;
+  register: (
+    element: HTMLVideoElement,
+    meta: { itemId: string; name: string },
+  ) => void;
   unregister: (element: HTMLVideoElement) => void;
   sync: (patch: Partial<PlaybackSnapshot>) => void;
 

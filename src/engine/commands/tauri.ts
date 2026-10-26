@@ -49,14 +49,12 @@ export const tauri = {
     unwatchFolder: (path: string): Promise<void> =>
       invoke("unwatch_folder", { path }),
 
-    getFolders: (): Promise<LibraryFolder[]> =>
-      invoke("get_library_folders"),
+    getFolders: (): Promise<LibraryFolder[]> => invoke("get_library_folders"),
 
     removeFolder: (path: string, deleteFiles = false): Promise<number> =>
       invoke("remove_library_folder", { path, deleteFiles }),
 
-    deleteDatabase: (): Promise<void> =>
-      invoke("delete_library_database"),
+    deleteDatabase: (): Promise<void> => invoke("delete_library_database"),
   },
 
   items: {
@@ -72,8 +70,7 @@ export const tauri = {
     moveToTrash: (paths: string[]): Promise<TrashResult> =>
       invoke("move_to_trash", { paths }),
 
-    cancelMoveToTrash: (): Promise<void> =>
-      invoke("cancel_move_to_trash"),
+    cancelMoveToTrash: (): Promise<void> => invoke("cancel_move_to_trash"),
 
     revealInFinder: (path: string): Promise<void> =>
       invoke("reveal_in_finder", { path }),
@@ -83,11 +80,9 @@ export const tauri = {
   },
 
   albums: {
-    get: (): Promise<Album[]> =>
-      invoke("get_albums"),
+    get: (): Promise<Album[]> => invoke("get_albums"),
 
-    getTags: (): Promise<Tag[]> =>
-      invoke("get_tags"),
+    getTags: (): Promise<Tag[]> => invoke("get_tags"),
 
     create: (name: string, colorIndex?: number): Promise<Album> =>
       invoke("create_album", { name, colorIndex }),
@@ -117,7 +112,10 @@ export const tauri = {
     render: (request: RenderRequest): Promise<ExportResult> =>
       invoke("render_edited", { request }),
 
-    moveExportedFile: (sourcePath: string, destinationPath: string): Promise<void> =>
+    moveExportedFile: (
+      sourcePath: string,
+      destinationPath: string,
+    ): Promise<void> =>
       invoke("move_exported_file", { sourcePath, destinationPath }),
   },
 
@@ -125,16 +123,13 @@ export const tauri = {
     export: (request: BatchExportRequest): Promise<BatchExportResult> =>
       invoke("batch_export", { request }),
 
-    cancel: (): Promise<void> =>
-      invoke("cancel_batch_export"),
+    cancel: (): Promise<void> => invoke("cancel_batch_export"),
   },
 
   duplicates: {
-    scan: (): Promise<DuplicateGroup[]> =>
-      invoke("find_duplicates"),
+    scan: (): Promise<DuplicateGroup[]> => invoke("find_duplicates"),
 
-    cancel: (): Promise<void> =>
-      invoke("cancel_find_duplicates"),
+    cancel: (): Promise<void> => invoke("cancel_find_duplicates"),
   },
 
   finder: {
@@ -146,25 +141,34 @@ export const tauri = {
   },
 
   settings: {
-    get: (): Promise<AppSettings> =>
-      invoke("get_settings"),
+    get: (): Promise<AppSettings> => invoke("get_settings"),
 
     save: (settings: Partial<AppSettings>): Promise<AppSettings> =>
       invoke("save_settings", { settings }),
   },
 
   app: {
-    getVersion: (): Promise<string> =>
-      invoke("get_version"),
+    getVersion: (): Promise<string> => invoke("get_version"),
 
-    checkUpdates: (): Promise<{ available: boolean; version: string; notes: string }> =>
-      invoke("check_updates"),
+    checkUpdates: (): Promise<{
+      available: boolean;
+      version: string;
+      notes: string;
+    }> => invoke("check_updates"),
 
     openExternal: (url: string): Promise<void> =>
       invoke("open_external", { url }),
 
-    exportBytes: (suggestedName: string, bytes: Uint8Array, backup?: boolean): Promise<string> =>
-      invoke("export_bytes", { suggestedName, bytes: Array.from(bytes), backup }),
+    exportBytes: (
+      suggestedName: string,
+      bytes: Uint8Array,
+      backup?: boolean,
+    ): Promise<string> =>
+      invoke("export_bytes", {
+        suggestedName,
+        bytes: Array.from(bytes),
+        backup,
+      }),
   },
 };
 
@@ -220,8 +224,12 @@ export function formatBytes(bytes: number): string {
 }
 
 // Helper: Format dimensions
-export function formatDimensions(item: Pick<MediaItem, "width" | "height">): string {
-  return item.width && item.height ? `${item.width.toLocaleString()} × ${item.height.toLocaleString()}` : "Unavailable";
+export function formatDimensions(
+  item: Pick<MediaItem, "width" | "height">,
+): string {
+  return item.width && item.height
+    ? `${item.width.toLocaleString()} × ${item.height.toLocaleString()}`
+    : "Unavailable";
 }
 
 // Helper: Format date
