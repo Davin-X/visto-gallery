@@ -131,6 +131,11 @@ button {
   background: var(--surface);
   color: var(--text);
 }
+.topbar-actions .icon-button {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+}
 .app-body {
   display: grid;
   grid-template-columns: var(--sidebar-width, 220px) minmax(0, 1fr);
