@@ -93,7 +93,9 @@ function VideoPlayer({
       setPlaying(false);
       setTime(0);
       setDuration(0);
-      setVolume(1);
+      const lastVolume = usePlaybackStore.getState().lastVolume;
+      setVolume(lastVolume);
+      video.volume = lastVolume;
       setMuted(false);
     }
 
