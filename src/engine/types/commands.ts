@@ -11,7 +11,6 @@ export interface ScanResult {
   cancelled: boolean;
   albums: Album[];
   tags: Tag[];
-  sessions: ImportSession[];
   totalSize: number;
   duration: number;
 }

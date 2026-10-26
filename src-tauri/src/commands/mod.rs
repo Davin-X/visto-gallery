@@ -38,7 +38,6 @@ pub struct ScanResult {
     pub cancelled: bool,
     pub albums: Vec<Album>,
     pub tags: Vec<Tag>,
-    pub sessions: Vec<ImportSession>,
     pub total_size: i64,
     pub duration: i64,
 }
@@ -768,7 +767,6 @@ pub async fn scan_library(
         cancelled,
         albums,
         tags,
-        sessions: vec![],
         total_size,
         duration,
     })
@@ -886,7 +884,6 @@ pub async fn import_files(
         cancelled: SCAN_CANCEL.load(Ordering::SeqCst),
         albums,
         tags,
-        sessions: vec![],
         total_size,
         duration: start.elapsed().as_millis() as i64,
     })

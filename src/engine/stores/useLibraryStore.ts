@@ -31,7 +31,6 @@ interface LibraryState {
   items: MediaItem[];
   albums: Album[];
   tags: Tag[];
-  sessions: ImportSession[];
   duplicates: DuplicateGroup[];
   folders: LibraryFolder[];
 
@@ -262,7 +261,6 @@ export const useLibraryStore = create<LibraryState>()(
       items: [],
       albums: [],
       tags: [],
-      sessions: [],
       duplicates: [],
       folders: [],
       inspectedId: null,
