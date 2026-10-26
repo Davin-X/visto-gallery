@@ -2762,10 +2762,7 @@ pub async fn find_duplicates(
     let candidates: Vec<usize> = items
         .iter()
         .enumerate()
-        .filter(|(_, item)| {
-            item.sha256.as_deref().map(str::is_empty).unwrap_or(true)
-                && size_counts.get(&item.size).copied().unwrap_or(0) > 1
-        })
+        .filter(|(_, item)| size_counts.get(&item.size).copied().unwrap_or(0) > 1)
         .map(|(index, _)| index)
         .collect();
 
