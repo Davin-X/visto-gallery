@@ -2,9 +2,7 @@ use crate::AppState;
 use super::DuplicateGroup;
 use super::MediaItem;
 use serde_json::json;
-use sqlx::SqlitePool;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use tauri::{Emitter, State, Window};
 
