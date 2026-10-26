@@ -144,7 +144,7 @@ export const tauri = {
     get: (): Promise<AppSettings> => invoke("get_settings"),
 
     save: (settings: Partial<AppSettings>): Promise<AppSettings> =>
-      invoke("save_settings", { settings }),
+      invoke("save_settings", { patch: settings }),
   },
 
   app: {
