@@ -128,6 +128,16 @@ function searchShortcutLabel(): string {
 
 function App() {
   const [screen, setScreen] = useState<Screen>("Library");
+  const [screenHistory, setScreenHistory] = useState<Screen[]>([]);
+
+  const goBack = () => {
+    setScreenHistory((prev) => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      setScreen(last);
+      return prev.slice(0, -1);
+    });
+  };
   // Context menu state (declared here because the component references it in
   // JSX but it was previously an implicit global, which left the render blank).
   const [contextMenu, setContextMenu] = useState<{ items: any[]; x: number; y: number } | null>(null);
@@ -1155,6 +1165,9 @@ const [aboutOpen, setAboutOpen] = useState(false);
         edit.open(selectedItem);
       }
     }
+    if (next !== screen) {
+      setScreenHistory((prev) => [...prev, screen]);
+    }
     setScreen(next);
   };
 
@@ -1527,7 +1540,19 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           </div>
         </aside>
 
-        <main id="main-content" className="main-content" tabIndex={-1}>
+        <main id="main-content" className="main-content" tabIndex={-1} style={{ position: "relative" }}>
+          {screenHistory.length > 0 && (
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Go back"
+              title="Go back"
+              onClick={goBack}
+              style={{ position: "absolute", top: 10, right: 10, zIndex: 5, width: 32, height: 32, padding: 0, borderRadius: 8, opacity: 0.8 }}
+            >
+              ←
+            </button>
+          )}
           {screen === "Library" && <LibraryScreen
             items={library.visibleItems}
             inspectedId={library.inspectedId}
