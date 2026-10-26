@@ -116,6 +116,9 @@ export const tauri = {
   editing: {
     render: (request: RenderRequest): Promise<ExportResult> =>
       invoke("render_edited", { request }),
+
+    moveExportedFile: (sourcePath: string, destinationPath: string): Promise<void> =>
+      invoke("move_exported_file", { sourcePath, destinationPath }),
   },
 
   batch: {
@@ -180,6 +183,9 @@ export const events = {
 
   onBatchProgress: (callback: (event: BatchProgressEvent) => void) =>
     listen("batch-progress", (e: any) => callback(e.payload)),
+
+  onFolderChanged: (callback: (path: string) => void) =>
+    listen("folder-changed", (e: any) => callback(e.payload)),
 };
 
 // Helper: Build thumbnail data URL from response

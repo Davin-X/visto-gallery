@@ -128,6 +128,7 @@ function App() {
   const [albumPendingDelete, setAlbumPendingDelete] = useState<any | null>(null);
   const [itemPendingDeleteCount, setItemPendingDeleteCount] = useState<number>(0);
   const itemPendingDeleteRef = useRef<string[] | null>(null);
+  const folderChangedTimerRef = useRef<number | null>(null);
   const [albumRemovePending, setAlbumRemovePending] = useState<{ albumId: string; itemIds: string[] } | null>(null);
   const [deletingAlbum, setDeletingAlbum] = useState(false);
 
@@ -490,7 +491,14 @@ function App() {
           liveRef.current.library.setProgress(null);
         }
       });
-      unlisteners.push(unlistenProgress);
+      const unlistenFolderChanged = await events.onFolderChanged((path) => {
+        // Debounce rapid filesystem events into a single catalog refresh.
+        if (folderChangedTimerRef.current) window.clearTimeout(folderChangedTimerRef.current);
+        folderChangedTimerRef.current = window.setTimeout(() => {
+          liveRef.current.library.loadLibrary().catch(() => {});
+        }, 500);
+      });
+      unlisteners.push(unlistenFolderChanged);
     };
     listen();
 
@@ -1645,8 +1653,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
                     return; 
                   }
                   // Move temp file to final destination
-                  const { rename } = await import("@tauri-apps/plugin-fs");
-                  await rename(result.outputPath, finalPath);
+                  await tauri.editing.moveExportedFile(result.outputPath, finalPath);
                 }
                 
                 clearEditDraft(item.id);
@@ -2737,7 +2744,7 @@ function VideoPlayer({ itemId, active = true, src, name, onFullscreen, onNext }:
         await video.requestPictureInPicture();
       }
     } catch (err) {
-      console.warn("Picture-in-picture unavailable", err);
+      if (import.meta.env.DEV) console.warn("Picture-in-picture unavailable", err);
     }
   };
 

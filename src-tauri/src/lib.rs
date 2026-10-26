@@ -177,6 +177,7 @@ pub fn run() {
             write_exif,
             // Editing
             render_edited,
+            move_exported_file,
             // Batch
             batch_export,
             cancel_batch_export,

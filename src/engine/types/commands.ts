@@ -1,7 +1,7 @@
 export type { MediaItem, Album, Tag, ImportSession, LibraryFilter, DuplicateGroup } from "./media";
 export type { AppSettings } from "./settings";
 
-import type { MediaItem, Album, Tag, ImportSession, LibraryFilter, DuplicateGroup } from "./media";
+import type { MediaItem, Album, Tag, ImportSession, LibraryFilter, DuplicateGroup, MediaKind } from "./media";
 import type { AppSettings } from "./settings";
 
 export interface ScanResult {
@@ -105,6 +105,8 @@ export interface BatchExportItem {
   id: string;
   sourcePath: string;
   index: number;
+  kind?: MediaKind;
+  date?: number;
 }
 
 export interface BatchExportResult {

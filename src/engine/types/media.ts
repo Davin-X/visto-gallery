@@ -22,6 +22,7 @@ export interface MediaItem {
   hidden: boolean;
   tags: string[];
   albumIds: string[];              // Album IDs this item belongs to
+  duration?: number;               // Video duration (seconds), hydrated client-side
   importSessionId?: string;
   createdAt: number;               // When added to catalog
   updatedAt: number;               // When metadata last changed

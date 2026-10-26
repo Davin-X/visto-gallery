@@ -36,7 +36,7 @@ function scheduleSave(patch: Partial<AppSettings>): void {
     try {
       await tauri.settings.save(toSave);
     } catch (e) {
-      console.error("Failed to save settings:", e);
+      if (import.meta.env.DEV) console.error("Failed to save settings:", e);
     }
   }, SAVE_DEBOUNCE_MS);
 }
@@ -119,7 +119,7 @@ export const useSettingsStore = create<SettingsState>()(
         try {
           await tauri.settings.save(defaultSettings);
         } catch (e) {
-          console.error("Failed to reset settings:", e);
+          if (import.meta.env.DEV) console.error("Failed to reset settings:", e);
         }
       },
     })

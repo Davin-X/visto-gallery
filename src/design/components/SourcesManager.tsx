@@ -34,7 +34,7 @@ export function SourcesManager(props: {
 
   const reveal = (folder: LibraryFolder) => {
     void tauri.items.revealInFinder(folder.path).catch((error: unknown) => {
-      console.error("reveal_in_finder failed:", error);
+      if (import.meta.env.DEV) console.error("reveal_in_finder failed:", error);
     });
   };
 

@@ -91,7 +91,7 @@ export const useViewerStore = create<ViewerState>()(
             await document.querySelector(".viewer-stage")?.requestFullscreen();
           }
         } catch {
-          console.warn("Fullscreen not available");
+          if (import.meta.env.DEV) console.warn("Fullscreen not available");
         }
       },
     }),

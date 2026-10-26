@@ -496,7 +496,7 @@ async fn upsert_media_batch(
             .push_bind(0i32);
     });
     query.push(
-        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, width = excluded.width, height = excluded.height, updated_at = excluded.updated_at",
+        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, width = excluded.width, height = excluded.height, updated_at = excluded.updated_at, sha256 = NULL",
     );
     query
         .build()
@@ -1600,12 +1600,21 @@ pub async fn move_to_trash(
     let mut trashed = Vec::new();
     let mut failed = Vec::new();
 
-    for (idx, path) in paths.iter().enumerate() {
+    // Trash in chunks using trash::delete_all, which moves many files in a
+    // single OS-level operation (much faster than one-by-one). Fall back to
+    // per-file deletes if a chunk fails so partial results are still reported.
+    const TRASH_CHUNK: usize = 50;
+    let total = paths.len();
+    let mut processed = 0usize;
+    for chunk in paths.chunks(TRASH_CHUNK) {
         if TRASH_CANCEL.load(Ordering::SeqCst) {
-            failed.push(TrashError {
-                path: path.clone(),
-                error: "Operation cancelled".to_string(),
-            });
+            for p in chunk {
+                failed.push(TrashError {
+                    path: p.clone(),
+                    error: "Operation cancelled".to_string(),
+                });
+            }
+            processed += chunk.len();
             continue;
         }
 
@@ -1613,26 +1622,50 @@ pub async fn move_to_trash(
             "import-progress",
             json!({
                 "phase": "trashing",
-                "processed": idx,
-                "total": paths.len(),
-                "currentFile": path,
+                "processed": processed,
+                "total": total,
+                "currentFile": chunk.first().cloned().unwrap_or_default(),
             }),
         );
 
-        match tokio::task::spawn_blocking({
-            let path = path.clone();
-            move || trash::delete(&path)
-        }).await {
-            Ok(Ok(())) => trashed.push(path.clone()),
-            Ok(Err(e)) => failed.push(TrashError {
-                path: path.clone(),
-                error: format!("Could not move to Trash: {}", e),
-            }),
-            Err(e) => failed.push(TrashError {
-                path: path.clone(),
-                error: format!("Trash task failed: {}", e),
-            }),
+        let chunk_paths: Vec<String> = chunk.to_vec();
+        let result = tokio::task::spawn_blocking(move || trash::delete_all(&chunk_paths)).await;
+
+        match result {
+            Ok(Ok(())) => {
+                trashed.extend(chunk.iter().cloned());
+            }
+            _ => {
+                // Fallback: try each file individually so partial successes count.
+                for path in chunk {
+                    if TRASH_CANCEL.load(Ordering::SeqCst) {
+                        failed.push(TrashError {
+                            path: path.clone(),
+                            error: "Operation cancelled".to_string(),
+                        });
+                        continue;
+                    }
+                    match tokio::task::spawn_blocking({
+                        let path = path.clone();
+                        move || trash::delete(&path)
+                    })
+                    .await
+                    {
+                        Ok(Ok(())) => trashed.push(path.clone()),
+                        Ok(Err(e)) => failed.push(TrashError {
+                            path: path.clone(),
+                            error: format!("Could not move to Trash: {}", e),
+                        }),
+                        Err(e) => failed.push(TrashError {
+                            path: path.clone(),
+                            error: format!("Trash task failed: {}", e),
+                        }),
+                    }
+                }
+            }
         }
+
+        processed += chunk.len();
     }
 
     let _ = window.emit(
@@ -1943,7 +1976,23 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
     
     let (final_width, final_height) = (img.width(), img.height());
     
-    // 7. Determine output path
+    // 7. Determine output format for writing (preserve source format for in-place edits)
+    let write_format = if request.output_format == "in_place" {
+        match source_path
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_lowercase())
+            .as_deref()
+        {
+            Some("png") => "image/png".to_string(),
+            Some("webp") => "image/webp".to_string(),
+            _ => "image/jpeg".to_string(),
+        }
+    } else {
+        request.output_format.clone()
+    };
+
+    // 8. Determine output path
     let output_path = if request.output_format == "in_place" {
         // In-place: write to temp next to source, then atomic rename
         let tmp_path = source_path.with_extension(format!(
@@ -1957,7 +2006,7 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
         let _ = std::fs::copy(&source_path, &backup_path);
         
         // Write to temp
-        write_image(&img, &tmp_path, &request.output_format, request.quality, request.strip_metadata, &exif_data)?;
+        write_image(&img, &tmp_path, &write_format, request.quality, request.strip_metadata, &exif_data)?;
         
         // Atomic rename
         std::fs::rename(&tmp_path, &source_path)
@@ -1982,7 +2031,7 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
         );
         let output_path = tmp_dir.join(output_name);
         
-        write_image(&img, &output_path, &request.output_format, request.quality, request.strip_metadata, &exif_data)?;
+        write_image(&img, &output_path, &write_format, request.quality, request.strip_metadata, &exif_data)?;
         
         output_path.to_string_lossy().into_owned()
     };
@@ -1997,6 +2046,31 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
         width: final_width as i32,
         height: final_height as i32,
     })
+}
+
+/// Move an exported temp file to its final destination.
+#[tauri::command]
+pub async fn move_exported_file(source_path: String, destination_path: String, _state: State<'_, AppState>) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        use std::path::PathBuf;
+        let src = PathBuf::from(&source_path);
+        let dst = PathBuf::from(&destination_path);
+
+        if let Some(parent) = dst.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("Could not create destination folder: {}", e))?;
+        }
+
+        // Prefer an atomic rename; fall back to copy+remove for cross-device moves.
+        if std::fs::rename(&src, &dst).is_ok() {
+            return Ok(());
+        }
+
+        std::fs::copy(&src, &dst).map_err(|e| format!("Could not copy exported file: {}", e))?;
+        let _ = std::fs::remove_file(&src);
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Check if any color adjustments are non-zero
@@ -2134,29 +2208,32 @@ fn write_image(
         _ => { // JPEG default
             // For JPEG, we can preserve EXIF by injecting it
             let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
-            
+
+            // JPEG only supports RGB; flatten any alpha channel.
+            let rgb = img.to_rgb8();
+
             if !strip_metadata {
                 if let Some(exif) = exif_data {
                     // Write JPEG with EXIF injection
-                    write_jpeg_with_exif(&mut file, img, quality, exif)?;
+                    write_jpeg_with_exif(&mut file, &rgb, quality, exif)?;
                 } else {
                     // No EXIF to preserve, write normally
                     let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut file, quality);
                     encoder.write_image(
-                        img.as_bytes(),
-                        img.width(),
-                        img.height(),
-                        img.color().into(),
+                        rgb.as_raw(),
+                        rgb.width(),
+                        rgb.height(),
+                        image::ExtendedColorType::Rgb8,
                     ).map_err(|e| e.to_string())?;
                 }
             } else {
                 // Strip metadata explicitly requested
                 let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut file, quality);
                 encoder.write_image(
-                    img.as_bytes(),
-                    img.width(),
-                    img.height(),
-                    img.color().into(),
+                    rgb.as_raw(),
+                    rgb.width(),
+                    rgb.height(),
+                    image::ExtendedColorType::Rgb8,
                 ).map_err(|e| e.to_string())?;
             }
             file.flush().map_err(|e| e.to_string())?;
@@ -2168,7 +2245,7 @@ fn write_image(
 /// Write JPEG with EXIF injection
 fn write_jpeg_with_exif(
     file: &mut std::fs::File,
-    img: &DynamicImage,
+    img: &image::RgbImage,
     quality: u8,
     exif: &[u8],
 ) -> Result<(), String> {
@@ -2179,10 +2256,10 @@ fn write_jpeg_with_exif(
     {
         let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buffer, quality);
         encoder.write_image(
-            img.as_bytes(),
+            img.as_raw(),
             img.width(),
             img.height(),
-            img.color().into(),
+            image::ExtendedColorType::Rgb8,
         ).map_err(|e| e.to_string())?;
     }
     
@@ -3329,7 +3406,7 @@ mod thumbnail_cache_tests {
             .await
             .expect("open in-memory database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, sha256 TEXT)",
         )
         .execute(&db)
         .await
@@ -3441,7 +3518,7 @@ mod batch_export_tests {
             .await
             .expect("open in-memory perf database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, sha256 TEXT)",
         )
         .execute(&db)
         .await
@@ -3540,6 +3617,7 @@ mod batch_export_tests {
             assert_eq!(large_video_size, 2 * 1024 * 1024 * 1024);
         }
         let label = if generated { "generated fixture" } else { "provided media folder" };
+#[cfg(debug_assertions)]
         println!(
             "Scan {label}: {} photos, {video_count} videos: per-file writes {:.2}s; batches of {BATCH}: {:.2}s; speedup {:.2}x",
             photo_count,

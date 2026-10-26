@@ -325,7 +325,7 @@ export const useLibraryStore = create<LibraryState>()(
           
           const isTauri = typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
           if (!isTauri) {
-            console.warn("Tauri IPC is not available in browser preview mode.");
+            if (import.meta.env.DEV) console.warn("Tauri IPC is not available in browser preview mode.");
             set({ busy: false, progress: null });
             get().refreshDerived();
             return;
@@ -341,7 +341,7 @@ export const useLibraryStore = create<LibraryState>()(
           set({ items, albums, tags, folders, busy: false, progress: null });
           get().refreshDerived();
         } catch (e) {
-          console.error("loadLibrary failed:", e);
+          if (import.meta.env.DEV) console.error("loadLibrary failed:", e);
           set({ busy: false, progress: null, notice: "Failed to load library: " + String(e) });
         }
       },
@@ -357,7 +357,7 @@ export const useLibraryStore = create<LibraryState>()(
           const folders = await tauri.library.getFolders();
           set({ folders });
         } catch (e) {
-          console.error("loadFolders failed:", e);
+          if (import.meta.env.DEV) console.error("loadFolders failed:", e);
         }
       },
 
