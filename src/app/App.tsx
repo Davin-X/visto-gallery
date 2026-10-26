@@ -1110,7 +1110,9 @@ function App() {
       // built for sequencing photos. Mixed selections still use the slideshow,
       // because it is the only mode that can play both kinds.
       if (selection && scope.every((item) => item.kind === "video")) {
-        openViewer(scope[0].id);
+        const slideshow = useSlideshowStore.getState();
+        slideshow.setShuffle(false);
+        startConfiguredSlideshow(scope, null);
         return;
       }
       // Close any open viewer so its media can't keep playing underneath the show.
@@ -1129,6 +1131,7 @@ function App() {
       // An explicit selection starts at its first item; only the no-selection
       // case resumes from whatever was last inspected, so a video that was
       // playing in the background cannot hijack the start of a new selection.
+      if (selection) useSlideshowStore.getState().setShuffle(false);
       startConfiguredSlideshow(scope, selection ? null : library.inspectedId);
     },
     [
