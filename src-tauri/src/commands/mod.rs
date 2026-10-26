@@ -1470,36 +1470,30 @@ let rows = sqlx::query(
         .collect();
 
     if delete_files.unwrap_or(false) && !targets.is_empty() {
-        // Chunk to avoid AppleScript command length limits.
-        const TRASH_CHUNK: usize = 200;
+        const TRASH_CHUNK: usize = 50;
         for chunk in targets.chunks(TRASH_CHUNK) {
-            // Escape paths for AppleScript string literals: backslashes and double quotes.
-            let posix_paths: Vec<String> = chunk
-                .iter()
-                .map(|(_, item_path)| {
-                    let escaped = item_path
-                        .replace('\\', "\\\\")
-                        .replace('"', "\\\"");
-                    format!("POSIX file \"{}\"", escaped)
-                })
-                .collect();
-            let script = format!(
-                "tell application \"Finder\" to delete {{{}}}",
-                posix_paths.join(", ")
-            );
-            // Run in blocking thread pool to avoid blocking async runtime.
-            tokio::task::spawn_blocking(move || {
-                std::process::Command::new("osascript")
-                    .arg("-e")
-                    .arg(&script)
-                    .status()
-            })
-            .await
-            .map_err(|e| format!("osascript task failed: {e}"))?
-            .map_err(|e| format!("Could not move files to Trash: {e}"))?;
+            let chunk_paths: Vec<String> = chunk.iter().map(|(_, item_path)| item_path.clone()).collect();
+            let chunk_paths_for_delete = chunk_paths.clone();
+            let result = tokio::task::spawn_blocking(move || trash::delete_all(&chunk_paths_for_delete)).await;
+            if let Err(_) = result {
+                for path in &chunk_paths {
+                    let p = path.clone();
+                    let r = tokio::task::spawn_blocking(move || trash::delete(&p)).await;
+                    if r.is_err() || r.unwrap().is_err() {
+                        return Err("Could not move files to Trash".to_string());
+                    }
+                }
+            } else if result.unwrap().is_err() {
+                for path in &chunk_paths {
+                    let p = path.clone();
+                    let r = tokio::task::spawn_blocking(move || trash::delete(&p)).await;
+                    if r.is_err() || r.unwrap().is_err() {
+                        return Err("Could not move files to Trash".to_string());
+                    }
+                }
+            }
         }
     }
-
     let mut tx = db.begin().await.map_err(|e| e.to_string())?;
 
     // Clean up join rows explicitly instead of relying on foreign-key cascades

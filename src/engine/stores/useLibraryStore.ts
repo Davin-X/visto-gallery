@@ -597,6 +597,10 @@ export const useLibraryStore = create<LibraryState>()(
           // selected or inspected in the view they came from.
           selectedIds: s.selectedIds.filter((id) => !ids.includes(id)),
           inspectedId: s.inspectedId && ids.includes(s.inspectedId) ? null : s.inspectedId,
+          duplicates: s.duplicates.map((g) => ({
+            ...g,
+            items: g.items.map((i) => (ids.includes(i.id) ? { ...i, hidden } : i)),
+          })),
         }));
         get().refreshDerived();
       },
@@ -636,6 +640,9 @@ export const useLibraryStore = create<LibraryState>()(
             items: s.items.filter((i) => !trashedIds.has(i.id)),
             selectedIds: s.selectedIds.filter((id) => !trashedIds.has(id)),
             inspectedId: s.inspectedId && trashedIds.has(s.inspectedId) ? null : s.inspectedId,
+            duplicates: s.duplicates
+              .map((g) => ({ ...g, items: g.items.filter((i) => !trashedIds.has(i.id)) }))
+              .filter((g) => (g.items?.length || 0) > 1),
           }));
         } catch (e) {
           set({ busy: false, canceling: false, progress: null });
