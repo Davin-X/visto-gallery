@@ -1092,14 +1092,16 @@ function LibraryScreen(props: LibraryScreenProps) {
                   )}
                   {anySelectedHidden ? "Unhide" : "Hide"}
                 </button>
-                <button
-                  type="button"
-                  className="selection-bar-action"
-                  onClick={() => props.onOpenAlbumPicker?.(props.selectedIds)}
-                  title="Add selected items to an album"
-                >
-                  <AlbumsIcon size={13} /> Add to album
-                </button>
+                {!inAlbum && (
+                  <button
+                    type="button"
+                    className="selection-bar-action"
+                    onClick={() => props.onOpenAlbumPicker?.(props.selectedIds)}
+                    title="Add selected items to an album"
+                  >
+                    <AlbumsIcon size={13} /> Add to album
+                  </button>
+                )}
                 {inAlbum && (
                   <button
                     type="button"
