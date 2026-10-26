@@ -83,7 +83,7 @@ function startConfiguredSlideshow(items: MediaItem[], startId?: string | null) {
   slideshow.setLoop(preferences.slideshowLoop);
   slideshow.open(items, startId);
 }
-import type { MediaItem, MediaKind, DuplicateGroup, Album, Filter, LayoutMode } from "../engine/types/media";
+import type { MediaItem, MediaKind, DuplicateGroup, Album, Filter, LayoutMode, EditValues, CropRect } from "../engine/types/media";
 import type { LibraryFolder } from "../engine/types/commands";
 import { SettingsScreen } from "../design/components/SettingsScreen";
 import { SourcesManager } from "../design/components/SourcesManager";
@@ -4493,7 +4493,36 @@ function ViewerScreen(props: ViewerScreenProps) {
   );
 }
 
-function EditScreen(props: any) {
+interface EditScreenProps {
+  item: MediaItem | null;
+  values: EditValues | null;
+  crop: { enabled: boolean; x: number; y: number; width: number; height: number; aspectRatio?: number | "free" };
+  history: any[];
+  historyIndex: number;
+  items: MediaItem[];
+  assetUrl: (path: string) => string;
+  canUndo: boolean;
+  canRedo: boolean;
+  onSetValue: (key: keyof EditValues, value: any) => void;
+  onSetValues: (values: EditValues) => void;
+  onReset: () => void;
+  onAuto: () => void;
+  onRotate: (deg: number) => void;
+  onFlip: () => void;
+  onSetCrop: (crop: Partial<{ enabled: boolean; x: number; y: number; width: number; height: number; aspectRatio?: number | "free" }>) => void;
+  onResetCrop: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onClose: () => void;
+  onSaveDraft: () => void;
+  onBack: () => void;
+  onExport: (inPlace?: boolean) => void | Promise<void>;
+  onClearDraft: (id: string) => void;
+  onNotice: (text: string) => void;
+  onOpenEdit: (item: MediaItem) => void;
+}
+
+function EditScreen(props: EditScreenProps) {
   const [pickerQuery, setPickerQuery] = useState("");
   const deferredPickerQuery = useDeferredValue(pickerQuery);
   const [pickerLimit, setPickerLimit] = useState(24);
@@ -4515,8 +4544,8 @@ function EditScreen(props: any) {
   const draftIds = useDraftIds();
   const stageRef = useRef<any>(null);
   const [drag, setDrag] = useState<any>(null);
-  const values = props.values || {};
-  const hasAdjustments = Object.entries(initialEdits).some(([key, value]) => values[key] !== value);
+  const values = (props.values || {}) as EditValues;
+  const hasAdjustments = Object.entries(initialEdits).some(([key, value]) => (values as any)[key] !== value);
   const crop = props.crop || { enabled:false, x:0,y:0,width:1,height:1 };
   const savedDraftItems = useMemo(
     () => (props.items || []).filter((item: any) => draftIds.has(item.id) && !item.hidden),
@@ -4596,7 +4625,7 @@ function EditScreen(props: any) {
         if (!sel) return;
         const path = Array.isArray(sel) ? sel[0] : sel;
         const name = String(path).split(/[\\/]/).pop() || "photo";
-        props.onOpenEdit?.({ id: path, name, path, kind: "photo" });
+        props.onOpenEdit?.({ id: path, name, path, kind: "photo" } as any);
       } catch (e) { props.onNotice?.("Could not open file"); }
     };
     return (
@@ -4765,7 +4794,7 @@ function EditScreen(props: any) {
           ))}
           </>}
           <div className="edit-footer">
-            <button className="quiet-button" type="button" onClick={props.onClearDraft}>Discard draft</button>
+            <button className="quiet-button" type="button" onClick={() => props.item && props.onClearDraft(props.item.id)}>Discard draft</button>
             <button className="quiet-button" type="button" onClick={props.onSaveDraft}>Save draft</button>
             <button className="quiet-button" type="button" style={{ color: "#d33" }} disabled={!(["jpg", "jpeg", "png", "webp"].includes(String(props.item.extension || props.item.name.split(".").pop() || "").toLowerCase()))} title="Replace original is available for JPEG, PNG, and WebP files" onClick={() => setConfirmReplace(true)}>Replace original</button>
             <button className="primary-button" type="button" onClick={() => props.onExport(false)}>Save copy</button>
