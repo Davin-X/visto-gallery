@@ -336,6 +336,7 @@ function App() {
     useState<LibraryFolder | null>(null);
   const [removingFolder, setRemovingFolder] = useState(false);
   const [sourcesSheetOpen, setSourcesSheetOpen] = useState(false);
+  const [removeAllSourcesDialogOpen, setRemoveAllSourcesDialogOpen] = useState(false);
   useFocusTrap(albumDialogOpen, albumDialogRef);
   useFocusTrap(!!albumPendingDelete, deleteAlbumDialogRef);
   useFocusTrap(itemPendingDeleteCount > 0, deleteItemDialogRef);
@@ -1767,7 +1768,6 @@ function App() {
   const removeAllSources = async () => {
     const folders = library.folders;
     if (folders.length === 0) return;
-    if (!window.confirm(`Remove all ${folders.length} source(s)? Files stay on disk.`)) return;
     library.setBusy(true);
     try {
       for (const folder of folders) {
@@ -3245,7 +3245,7 @@ function App() {
                 type="button"
                 className="danger-button"
                 disabled={library.busy || library.folders.length === 0}
-                onClick={() => void removeAllSources()}
+                onClick={() => setRemoveAllSourcesDialogOpen(true)}
               >
                 Remove all sources
               </button>
@@ -3257,6 +3257,19 @@ function App() {
               >
                 Done
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {removeAllSourcesDialogOpen && (
+        <div className='dialog-backdrop' role='presentation' onMouseDown={(e) => { if (e.target === e.currentTarget) setRemoveAllSourcesDialogOpen(false); }}>
+          <div className='album-dialog' role='dialog' aria-modal='true'>
+            <div className='dialog-heading'><h2>Remove all sources?</h2></div>
+            <div className='dialog-body'>This removes all source folders from the library. Files stay on disk.</div>
+            <div className='dialog-actions'>
+              <button type='button' className='quiet-button' onClick={() => setRemoveAllSourcesDialogOpen(false)}>Cancel</button>
+              <button type='button' className='danger-button' onClick={() => { setRemoveAllSourcesDialogOpen(false); void removeAllSources(); }}>Remove all</button>
             </div>
           </div>
         </div>
