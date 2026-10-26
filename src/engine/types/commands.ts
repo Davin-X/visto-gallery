@@ -1,7 +1,22 @@
-export type { MediaItem, Album, Tag, ImportSession, LibraryFilter, DuplicateGroup } from "./media";
+export type {
+  MediaItem,
+  Album,
+  Tag,
+  ImportSession,
+  LibraryFilter,
+  DuplicateGroup,
+} from "./media";
 export type { AppSettings } from "./settings";
 
-import type { MediaItem, Album, Tag, ImportSession, LibraryFilter, DuplicateGroup, MediaKind } from "./media";
+import type {
+  MediaItem,
+  Album,
+  Tag,
+  ImportSession,
+  LibraryFilter,
+  DuplicateGroup,
+  MediaKind,
+} from "./media";
 import type { AppSettings } from "./settings";
 
 export interface ScanResult {
@@ -38,7 +53,7 @@ export interface ThumbnailRequest {
 
 export interface ThumbnailResponse {
   itemId: string;
-  dataUrl: string;           // base64 data URL
+  dataUrl: string; // base64 data URL
   width: number;
   height: number;
 }

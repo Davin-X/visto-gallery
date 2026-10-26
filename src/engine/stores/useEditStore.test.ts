@@ -3,9 +3,14 @@ import { vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
-vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: vi.fn(() => ({ listen: vi.fn() })) }));
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: vi.fn(() => ({ listen: vi.fn() })),
+}));
 
-import { useEditStore, resetDraftRevision } from "../../engine/stores/useEditStore";
+import {
+  useEditStore,
+  resetDraftRevision,
+} from "../../engine/stores/useEditStore";
 
 test("edit store rotate and flip", () => {
   localStorage.clear();

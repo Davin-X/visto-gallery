@@ -21,7 +21,9 @@ export function LibraryPanel(props: {
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Auto-import New Files</b>
-            <span className="settings-row-desc">Automatically add files when dropped or saved to watched folders</span>
+            <span className="settings-row-desc">
+              Automatically add files when dropped or saved to watched folders
+            </span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
@@ -38,7 +40,9 @@ export function LibraryPanel(props: {
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Pair RAW + JPEG</b>
-            <span className="settings-row-desc">Group RAW and JPEG files shot together as a single item</span>
+            <span className="settings-row-desc">
+              Group RAW and JPEG files shot together as a single item
+            </span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
@@ -46,7 +50,9 @@ export function LibraryPanel(props: {
                 type="checkbox"
                 aria-label="Pair RAW and JPEG files"
                 checked={props.pairRawJpeg}
-                onChange={(e) => props.onChange("pairRawJpeg", e.target.checked)}
+                onChange={(e) =>
+                  props.onChange("pairRawJpeg", e.target.checked)
+                }
               />
               <span className="toggle-track" />
             </label>
@@ -55,7 +61,9 @@ export function LibraryPanel(props: {
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Stack Burst Photos</b>
-            <span className="settings-row-desc">Group rapid-sequence shots (burst mode) into stacks</span>
+            <span className="settings-row-desc">
+              Group rapid-sequence shots (burst mode) into stacks
+            </span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
@@ -63,7 +71,9 @@ export function LibraryPanel(props: {
                 type="checkbox"
                 aria-label="Stack burst photos"
                 checked={props.stackBursts}
-                onChange={(e) => props.onChange("stackBursts", e.target.checked)}
+                onChange={(e) =>
+                  props.onChange("stackBursts", e.target.checked)
+                }
               />
               <span className="toggle-track" />
             </label>
@@ -80,10 +90,15 @@ export function LibraryPanel(props: {
       />
 
       <div className="settings-warning">
-        <span className="settings-warning-icon"><InfoIcon size={14} /></span>
-        <span>Folder watching requires granting Full Disk Access in System Settings → Privacy & Security. Without it, VistoGallery can only import files you explicitly select.</span>
+        <span className="settings-warning-icon">
+          <InfoIcon size={14} />
+        </span>
+        <span>
+          Folder watching requires granting Full Disk Access in System Settings
+          → Privacy & Security. Without it, VistoGallery can only import files
+          you explicitly select.
+        </span>
       </div>
     </>
   );
 }
-

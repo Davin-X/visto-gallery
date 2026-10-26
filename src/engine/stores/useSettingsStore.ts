@@ -69,70 +69,84 @@ interface SettingsState extends AppSettings {
 
   // Actions
   hydrate: () => Promise<void>;
-  update: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>;
+  update: <K extends keyof AppSettings>(
+    key: K,
+    value: AppSettings[K],
+  ) => Promise<void>;
   updateMany: (partial: Partial<AppSettings>) => Promise<void>;
   reset: () => Promise<void>;
 }
 
-export const useSettingsStore = create<SettingsState>()(
-  (set, get) => ({
-      ...defaultSettings,
-      _hydrated: false,
-      _loading: false,
+export const useSettingsStore = create<SettingsState>()((set, get) => ({
+  ...defaultSettings,
+  _hydrated: false,
+  _loading: false,
 
-      hydrate: async () => {
-        set({ _loading: true });
-        try {
-          const saved = await tauri.settings.get();
-          // Older builds exposed layout names that the library no longer
-          // supports. Keep persisted preferences safe when upgrading.
-          const savedLayout = (saved as Partial<AppSettings>)?.defaultLayout;
-          const defaultLayout = savedLayout === "details" || savedLayout === "timeline" ? savedLayout : "grid";
-          set({ ...saved, defaultLayout, _hydrated: true, _loading: false });
-        } catch {
-          // Tauri not available (web preview) - use persisted or defaults
-          set({ _hydrated: true, _loading: false });
-        }
-      },
+  hydrate: async () => {
+    set({ _loading: true });
+    try {
+      const saved = await tauri.settings.get();
+      // Older builds exposed layout names that the library no longer
+      // supports. Keep persisted preferences safe when upgrading.
+      const savedLayout = (saved as Partial<AppSettings>)?.defaultLayout;
+      const defaultLayout =
+        savedLayout === "details" || savedLayout === "timeline"
+          ? savedLayout
+          : "grid";
+      set({ ...saved, defaultLayout, _hydrated: true, _loading: false });
+    } catch {
+      // Tauri not available (web preview) - use persisted or defaults
+      set({ _hydrated: true, _loading: false });
+    }
+  },
 
-      update: async (key: keyof AppSettings, value: AppSettings[keyof AppSettings]) => {
-        if (key === "sidebarWidth") {
-          // Hard clamp so the layout stays within the bounds the CSS was authored
-          // for (180px - 360px).
-          value = Math.min(360, Math.max(180, Number(value) || 220)) as AppSettings["sidebarWidth"];
-        }
-        const patch: Partial<AppSettings> = { [key]: value } as Partial<AppSettings>;
-        // Optimistic update — the UI follows the thumb immediately.
-        set((state) => ({ ...state, ...patch }));
-        scheduleSave(patch);
-      },
+  update: async (
+    key: keyof AppSettings,
+    value: AppSettings[keyof AppSettings],
+  ) => {
+    if (key === "sidebarWidth") {
+      // Hard clamp so the layout stays within the bounds the CSS was authored
+      // for (180px - 360px).
+      value = Math.min(
+        360,
+        Math.max(180, Number(value) || 220),
+      ) as AppSettings["sidebarWidth"];
+    }
+    const patch: Partial<AppSettings> = {
+      [key]: value,
+    } as Partial<AppSettings>;
+    // Optimistic update — the UI follows the thumb immediately.
+    set((state) => ({ ...state, ...patch }));
+    scheduleSave(patch);
+  },
 
-      updateMany: async (partial: Partial<AppSettings>) => {
-        const next = { ...get(), ...partial };
-        if ("sidebarWidth" in partial) {
-          // Hard clamp so the layout stays within the bounds the CSS was
-          // authored for (180px - 360px).
-          next.sidebarWidth = Math.min(360, Math.max(180, Number(partial.sidebarWidth) || 220));
-        }
-        // Optimistic update with the fully-clamped merged state.
-        set(next);
-        scheduleSave(next);
-      },
+  updateMany: async (partial: Partial<AppSettings>) => {
+    const next = { ...get(), ...partial };
+    if ("sidebarWidth" in partial) {
+      // Hard clamp so the layout stays within the bounds the CSS was
+      // authored for (180px - 360px).
+      next.sidebarWidth = Math.min(
+        360,
+        Math.max(180, Number(partial.sidebarWidth) || 220),
+      );
+    }
+    // Optimistic update with the fully-clamped merged state.
+    set(next);
+    scheduleSave(next);
+  },
 
-      reset: async () => {
-        // Reset is a single committed action: flush any in-flight writes first
-        // so we don't race a pending save, then write the defaults immediately.
-        flushSettingsSaves();
-        set({ ...defaultSettings, _hydrated: true });
-        try {
-          await tauri.settings.save(defaultSettings);
-        } catch (e) {
-          if (import.meta.env.DEV) console.error("Failed to reset settings:", e);
-        }
-      },
-    })
-  )
-;
+  reset: async () => {
+    // Reset is a single committed action: flush any in-flight writes first
+    // so we don't race a pending save, then write the defaults immediately.
+    flushSettingsSaves();
+    set({ ...defaultSettings, _hydrated: true });
+    try {
+      await tauri.settings.save(defaultSettings);
+    } catch (e) {
+      if (import.meta.env.DEV) console.error("Failed to reset settings:", e);
+    }
+  },
+}));
 
 // Selectors for common use
 export const useAppearance = () => useSettingsStore((s) => s.appearance);
@@ -142,23 +156,29 @@ export const useDefaultLayout = () => useSettingsStore((s) => s.defaultLayout);
 export const useThumbnailSize = () => useSettingsStore((s) => s.thumbnailSize);
 
 // Memoization cache for applyTheme: key = `${accent}|${isDark}`
-const applyThemeCache = new Map<string, {
-  accent: string;
-  accentHover: string;
-  accentText: string;
-  accentSoft: string;
-  accentContrast: string;
-  fieldFocusInner: string;
-  surface: string;
-}>();
+const applyThemeCache = new Map<
+  string,
+  {
+    accent: string;
+    accentHover: string;
+    accentText: string;
+    accentSoft: string;
+    accentContrast: string;
+    fieldFocusInner: string;
+    surface: string;
+  }
+>();
 
 // Apply theme to the native app frame.
-export function applyTheme(settings: Pick<AppSettings, "appearance" | "accentColor">) {
+export function applyTheme(
+  settings: Pick<AppSettings, "appearance" | "accentColor">,
+) {
   const frame = document.querySelector<HTMLElement>(".app-frame");
   if (!frame) return;
   const isDark =
     settings.appearance === "dark" ||
-    (settings.appearance === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    (settings.appearance === "system" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   frame.classList.toggle("dark", isDark);
   const base = resolveAccent(settings.accentColor, isDark);
@@ -167,12 +187,17 @@ export function applyTheme(settings: Pick<AppSettings, "appearance" | "accentCol
   // Check cache
   const cacheKey = `${base}|${isDark}`;
   let tokens = applyThemeCache.get(cacheKey);
-  
+
   if (!tokens) {
     const toward = isDark ? "#ffffff" : "#000000";
     const soft = mixColors(base, surface, 0.88);
-    const text = accentTextFor(base, soft, isDark ? "#ffffff" : "#000000", surface);
-    
+    const text = accentTextFor(
+      base,
+      soft,
+      isDark ? "#ffffff" : "#000000",
+      surface,
+    );
+
     tokens = {
       accent: base,
       accentHover: mixColors(base, toward, isDark ? 0.16 : 0.12),
@@ -204,7 +229,12 @@ export function applyTheme(settings: Pick<AppSettings, "appearance" | "accentCol
 // The accent palette. Each accent has a light-mode and a dark-mode value so
 // the swatch shown in Settings matches the color that will actually be applied
 // to the running theme.
-export const ACCENT_PALETTE: { id: string; label: string; light: string; dark: string }[] = [
+export const ACCENT_PALETTE: {
+  id: string;
+  label: string;
+  light: string;
+  dark: string;
+}[] = [
   { id: "blue", label: "Blue", light: "#3474d4", dark: "#3b82f6" },
   { id: "purple", label: "Purple", light: "#8254ea", dark: "#b79bff" },
   { id: "green", label: "Green", light: "#27845f", dark: "#6bc69a" },
@@ -215,13 +245,12 @@ export const ACCENT_PALETTE: { id: string; label: string; light: string; dark: s
 
 // Resolve a single accent into its light / dark surface palette value.
 function resolveAccent(accent: string, isDark: boolean): string {
-  const palette = ACCENT_PALETTE.reduce<Record<string, { light: string; dark: string }>>(
-    (acc, entry) => {
-      acc[entry.id] = { light: entry.light, dark: entry.dark };
-      return acc;
-    },
-    {}
-  );
+  const palette = ACCENT_PALETTE.reduce<
+    Record<string, { light: string; dark: string }>
+  >((acc, entry) => {
+    acc[entry.id] = { light: entry.light, dark: entry.dark };
+    return acc;
+  }, {});
   const entry = palette[accent] ?? palette.blue;
   return isDark ? entry.dark : entry.light;
 }
@@ -280,7 +309,7 @@ function accentTextFor(
   base: string,
   soft: string,
   toward: string,
-  surface: string
+  surface: string,
 ): string {
   const target = 4.5;
   const baseRgb = parseColor(base);
@@ -289,7 +318,8 @@ function accentTextFor(
   const towardRgb = parseColor(toward);
 
   const ok = (c: [number, number, number]) =>
-    contrastRatio(c, surfaceRgb) >= target && contrastRatio(c, softRgb) >= target;
+    contrastRatio(c, surfaceRgb) >= target &&
+    contrastRatio(c, softRgb) >= target;
 
   // Already good as-is (common in dark mode, where the palette is pastel).
   if (ok(baseRgb)) return formatRgb(baseRgb);
@@ -311,7 +341,7 @@ function formatRgb(rgb: [number, number, number]): string {
 function blend(
   a: [number, number, number],
   b: [number, number, number],
-  ratio: number
+  ratio: number,
 ): [number, number, number] {
   return [
     Math.round(a[0] + (b[0] - a[0]) * ratio),
@@ -326,10 +356,17 @@ function relativeLuminance(rgb: [number, number, number]): number {
     const c = v / 255;
     return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
   };
-  return 0.2126 * channel(rgb[0]) + 0.7152 * channel(rgb[1]) + 0.0722 * channel(rgb[2]);
+  return (
+    0.2126 * channel(rgb[0]) +
+    0.7152 * channel(rgb[1]) +
+    0.0722 * channel(rgb[2])
+  );
 }
 
-function contrastRatio(a: [number, number, number], b: [number, number, number]): number {
+function contrastRatio(
+  a: [number, number, number],
+  b: [number, number, number],
+): number {
   const la = relativeLuminance(a);
   const lb = relativeLuminance(b);
   const hi = Math.max(la, lb);

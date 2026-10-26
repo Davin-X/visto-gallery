@@ -42,16 +42,20 @@ function clearTimer() {
 // slideshow can never stack intervals that outlive the overlay.
 function schedule() {
   clearTimer();
-  const { isOpen, playing, items, index, interval } = useSlideshowStore.getState();
+  const { isOpen, playing, items, index, interval } =
+    useSlideshowStore.getState();
   // Videos advance when playback ends; a fixed slide timer would cut off long
   // clips and skip short ones.
   if (items[index]?.kind === "video") return;
   if (!isOpen || !playing || items.length < 2) return;
-  slideshowTimer = setInterval(() => {
-    const state = useSlideshowStore.getState();
-    if (!state.isOpen || !state.playing) return;
-    state.next();
-  }, Math.max(1, interval) * 1000);
+  slideshowTimer = setInterval(
+    () => {
+      const state = useSlideshowStore.getState();
+      if (!state.isOpen || !state.playing) return;
+      state.next();
+    },
+    Math.max(1, interval) * 1000,
+  );
 }
 
 export const useSlideshowStore = create<SlideshowState>()(
@@ -69,14 +73,28 @@ export const useSlideshowStore = create<SlideshowState>()(
 
       open: (items, startId) => {
         if (items.length === 0) return;
-        const start = startId ? items.findIndex((item) => item.id === startId) : -1;
-        set({ isOpen: true, items, index: start >= 0 ? start : 0, playedCount: 1, playing: true });
+        const start = startId
+          ? items.findIndex((item) => item.id === startId)
+          : -1;
+        set({
+          isOpen: true,
+          items,
+          index: start >= 0 ? start : 0,
+          playedCount: 1,
+          playing: true,
+        });
         schedule();
       },
 
       close: () => {
         clearTimer();
-        set({ isOpen: false, items: [], index: 0, playedCount: 0, playing: false });
+        set({
+          isOpen: false,
+          items: [],
+          index: 0,
+          playedCount: 0,
+          playing: false,
+        });
       },
 
       next: () => {
@@ -89,7 +107,8 @@ export const useSlideshowStore = create<SlideshowState>()(
         }
         let nextIndex = index;
         if (shuffle) {
-          while (nextIndex === index) nextIndex = Math.floor(Math.random() * items.length);
+          while (nextIndex === index)
+            nextIndex = Math.floor(Math.random() * items.length);
         } else {
           nextIndex = (index + 1) % items.length;
         }
@@ -120,8 +139,8 @@ export const useSlideshowStore = create<SlideshowState>()(
       setLoop: (loop) => set({ loop }),
       setTransition: (transition) => set({ transition }),
     }),
-    { name: "slideshow-store" }
-  )
+    { name: "slideshow-store" },
+  ),
 );
 
 // Cleanup on unload (the timer lives outside React).

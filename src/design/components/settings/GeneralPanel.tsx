@@ -26,11 +26,16 @@ export function GeneralPanel(props: {
             <b>Theme</b>
           </div>
           <div className="settings-row-control">
-            {props.renderRadioGroup("theme", props.appearance, [
-              { id: "light", label: "Light" },
-              { id: "dark", label: "Dark" },
-              { id: "system", label: "System" },
-            ], (v: string) => props.onChange("appearance", v))}
+            {props.renderRadioGroup(
+              "theme",
+              props.appearance,
+              [
+                { id: "light", label: "Light" },
+                { id: "dark", label: "Dark" },
+                { id: "system", label: "System" },
+              ],
+              (v: string) => props.onChange("appearance", v),
+            )}
           </div>
         </div>
         <div className="settings-row">
@@ -38,27 +43,42 @@ export function GeneralPanel(props: {
             <b>Accent Color</b>
           </div>
           <div className="settings-row-control">
-            {props.renderAccentPicker(props.accentColor, (v: string) => props.onChange("accentColor", v))}
+            {props.renderAccentPicker(props.accentColor, (v: string) =>
+              props.onChange("accentColor", v),
+            )}
           </div>
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Sidebar Width</b>
-            <span className="settings-row-desc">Adjust the navigation sidebar size</span>
+            <span className="settings-row-desc">
+              Adjust the navigation sidebar size
+            </span>
           </div>
-          <div className="settings-row-control" style={{ alignItems: "center" }}>
+          <div
+            className="settings-row-control"
+            style={{ alignItems: "center" }}
+          >
             <input
               type="range"
               className="settings-slider"
-              style={{ "--slider-progress": `${((props.sidebarWidth - 180) / 180) * 100}%` } as CSSProperties}
+              style={
+                {
+                  "--slider-progress": `${((props.sidebarWidth - 180) / 180) * 100}%`,
+                } as CSSProperties
+              }
               min={180}
               max={360}
               step={4}
               value={props.sidebarWidth}
-              onChange={(e) => props.onSidebarWidthChange(Number(e.target.value))}
+              onChange={(e) =>
+                props.onSidebarWidthChange(Number(e.target.value))
+              }
               aria-label="Sidebar width"
             />
-            <span className="settings-slider-value">{props.sidebarWidth}px</span>
+            <span className="settings-slider-value">
+              {props.sidebarWidth}px
+            </span>
           </div>
         </div>
         <div className="settings-row">
@@ -71,7 +91,9 @@ export function GeneralPanel(props: {
                 type="checkbox"
                 aria-label="Show file extensions"
                 checked={props.showExtensions}
-                onChange={(e) => props.onChange("showExtensions", e.target.checked)}
+                onChange={(e) =>
+                  props.onChange("showExtensions", e.target.checked)
+                }
               />
               <span className="toggle-track" />
             </label>
@@ -80,7 +102,9 @@ export function GeneralPanel(props: {
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Animate Transitions</b>
-            <span className="settings-row-desc">Smooth animations for navigation and zoom</span>
+            <span className="settings-row-desc">
+              Smooth animations for navigation and zoom
+            </span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
@@ -88,7 +112,9 @@ export function GeneralPanel(props: {
                 type="checkbox"
                 aria-label="Animate transitions"
                 checked={props.animateTransitions}
-                onChange={(e) => props.onChange("animateTransitions", e.target.checked)}
+                onChange={(e) =>
+                  props.onChange("animateTransitions", e.target.checked)
+                }
               />
               <span className="toggle-track" />
             </label>
@@ -111,14 +137,20 @@ export function GeneralPanel(props: {
               value={props.startupView}
               onChange={(e) => props.onChange("startupView", e.target.value)}
             >
-              {STARTUP_VIEWS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+              {STARTUP_VIEWS.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.label}
+                </option>
+              ))}
             </select>
           </div>
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Open Last Library Folder</b>
-            <span className="settings-row-desc">Automatically load the last opened folder</span>
+            <span className="settings-row-desc">
+              Automatically load the last opened folder
+            </span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
@@ -126,7 +158,9 @@ export function GeneralPanel(props: {
                 type="checkbox"
                 aria-label="Open last library folder"
                 checked={props.openLastFolder}
-                onChange={(e) => props.onChange("openLastFolder", e.target.checked)}
+                onChange={(e) =>
+                  props.onChange("openLastFolder", e.target.checked)
+                }
               />
               <span className="toggle-track" />
             </label>
@@ -135,7 +169,9 @@ export function GeneralPanel(props: {
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Restore Window State</b>
-            <span className="settings-row-desc">Remember window size, position, and sidebar width</span>
+            <span className="settings-row-desc">
+              Remember window size, position, and sidebar width
+            </span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
@@ -143,7 +179,9 @@ export function GeneralPanel(props: {
                 type="checkbox"
                 aria-label="Restore window state"
                 checked={props.restoreWindow}
-                onChange={(e) => props.onChange("restoreWindowState", e.target.checked)}
+                onChange={(e) =>
+                  props.onChange("restoreWindowState", e.target.checked)
+                }
               />
               <span className="toggle-track" />
             </label>
@@ -153,7 +191,6 @@ export function GeneralPanel(props: {
     </>
   );
 }
-
 
 const STARTUP_VIEWS = [
   { id: "library", label: "Library" },

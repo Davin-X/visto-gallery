@@ -1,6 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSlideshowStore, useDraftTransforms, draftTransformStyle, type SlideshowTransition } from "../../engine/stores";
-import { GearIcon, PauseIcon, PlayIcon, StopIcon, PlusIcon, MinusIcon, RotateIcon, FlipIcon, FullscreenIcon, VolumeIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import {
+  useSlideshowStore,
+  useDraftTransforms,
+  draftTransformStyle,
+  type SlideshowTransition,
+} from "../../engine/stores";
+import {
+  GearIcon,
+  PauseIcon,
+  PlayIcon,
+  StopIcon,
+  PlusIcon,
+  MinusIcon,
+  RotateIcon,
+  FlipIcon,
+  FullscreenIcon,
+  VolumeIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from "./icons";
 
 interface SlideshowOverlayProps {
   assetUrl: (path: string) => string;
@@ -105,11 +123,15 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
       return;
     }
     setPipSupported(
-      Boolean((document as any).pictureInPictureEnabled || (video as any).webkitSupportsPresentationMode?.("picture-in-picture"))
+      Boolean(
+        (document as any).pictureInPictureEnabled ||
+        (video as any).webkitSupportsPresentationMode?.("picture-in-picture"),
+      ),
     );
     const onEnter = () => setPip(true);
     const onLeave = () => setPip(false);
-    const onWebKit = () => setPip((video as any).webkitPresentationMode === "picture-in-picture");
+    const onWebKit = () =>
+      setPip((video as any).webkitPresentationMode === "picture-in-picture");
     video.addEventListener("enterpictureinpicture", onEnter);
     video.addEventListener("leavepictureinpicture", onLeave);
     video.addEventListener("webkitpresentationmodechanged", onWebKit);
@@ -126,14 +148,19 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
     const v = video as any;
     try {
       if (v.webkitSupportsPresentationMode?.("picture-in-picture")) {
-        v.webkitSetPresentationMode(v.webkitPresentationMode === "picture-in-picture" ? "inline" : "picture-in-picture");
+        v.webkitSetPresentationMode(
+          v.webkitPresentationMode === "picture-in-picture"
+            ? "inline"
+            : "picture-in-picture",
+        );
       } else if (document.pictureInPictureElement === video) {
         void document.exitPictureInPicture();
       } else if (typeof video.requestPictureInPicture === "function") {
         void video.requestPictureInPicture();
       }
     } catch (err) {
-      if (import.meta.env.DEV) console.warn("Picture-in-picture unavailable", err);
+      if (import.meta.env.DEV)
+        console.warn("Picture-in-picture unavailable", err);
     }
   };
 
@@ -181,13 +208,21 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
         e.preventDefault();
         e.stopPropagation();
         toggle();
-      } else if (e.key === "ArrowUp" && item.kind === "video" && videoRef.current) {
+      } else if (
+        e.key === "ArrowUp" &&
+        item.kind === "video" &&
+        videoRef.current
+      ) {
         e.preventDefault();
         e.stopPropagation();
         const v = videoRef.current;
         v.volume = Math.min(1, v.volume + 0.1);
         if (v.volume > 0) v.muted = false;
-      } else if (e.key === "ArrowDown" && item.kind === "video" && videoRef.current) {
+      } else if (
+        e.key === "ArrowDown" &&
+        item.kind === "video" &&
+        videoRef.current
+      ) {
         e.preventDefault();
         e.stopPropagation();
         const v = videoRef.current;
@@ -200,7 +235,9 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
         e.preventDefault();
         e.stopPropagation();
         const v = videoRef.current;
-        if (v) { v.muted = !v.muted; }
+        if (v) {
+          v.muted = !v.muted;
+        }
       }
     };
     window.addEventListener("keydown", onKeyDown, true);
@@ -210,7 +247,8 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
   const toggleFullscreen = async () => {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
-      else await document.querySelector(".slideshow-overlay")?.requestFullscreen();
+      else
+        await document.querySelector(".slideshow-overlay")?.requestFullscreen();
     } catch {}
   };
 
@@ -265,7 +303,12 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
       aria-label="Slideshow"
       onMouseMove={poke}
     >
-      <div className="slideshow-media" key={item.id} onClick={toggle} title={playing ? "Pause" : "Play"}>
+      <div
+        className="slideshow-media"
+        key={item.id}
+        onClick={toggle}
+        title={playing ? "Pause" : "Play"}
+      >
         {isVideo ? (
           <video
             ref={videoRef}
@@ -280,7 +323,14 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
             style={{
               maxWidth: rotated ? "min(100%, 100cqh)" : undefined,
               maxHeight: rotated ? "min(100%, 100cqw)" : undefined,
-              transform: [`rotate(${imageRotation}deg)`, `scaleX(${flipX ? -1 : 1})`, draftTransformStyle(draftTransform), `scale(${zoom / 100})`].filter(Boolean).join(" "),
+              transform: [
+                `rotate(${imageRotation}deg)`,
+                `scaleX(${flipX ? -1 : 1})`,
+                draftTransformStyle(draftTransform),
+                `scale(${zoom / 100})`,
+              ]
+                .filter(Boolean)
+                .join(" "),
             }}
           />
         ) : (
@@ -291,7 +341,14 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
             style={{
               maxWidth: rotated ? "min(100%, 100cqh)" : undefined,
               maxHeight: rotated ? "min(100%, 100cqw)" : undefined,
-              transform: [`rotate(${imageRotation}deg)`, `scaleX(${flipX ? -1 : 1})`, draftTransformStyle(draftTransform), `scale(${zoom / 100})`].filter(Boolean).join(" "),
+              transform: [
+                `rotate(${imageRotation}deg)`,
+                `scaleX(${flipX ? -1 : 1})`,
+                draftTransformStyle(draftTransform),
+                `scale(${zoom / 100})`,
+              ]
+                .filter(Boolean)
+                .join(" "),
             }}
           />
         )}
@@ -301,15 +358,36 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
       <span className="slideshow-position">{position}</span>
 
       {/* Bottom controls bar - matches viewer style */}
-      <div className="slideshow-controls" onMouseEnter={holdHud} onMouseLeave={releaseHud} onFocusCapture={holdHud} onBlurCapture={releaseHud}>
+      <div
+        className="slideshow-controls"
+        onMouseEnter={holdHud}
+        onMouseLeave={releaseHud}
+        onFocusCapture={holdHud}
+        onBlurCapture={releaseHud}
+      >
         {/* Transport - all same style */}
-        <button type="button" onClick={previous} aria-label="Previous slide" title="Previous (←)">
+        <button
+          type="button"
+          onClick={previous}
+          aria-label="Previous slide"
+          title="Previous (←)"
+        >
           <ChevronLeftIcon size={18} />
         </button>
-        <button type="button" onClick={toggle} aria-label={playing ? "Pause" : "Play"} title={playing ? "Pause (Space)" : "Play (Space)"}>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={playing ? "Pause" : "Play"}
+          title={playing ? "Pause (Space)" : "Play (Space)"}
+        >
           {playing ? <PauseIcon size={18} /> : <PlayIcon size={18} />}
         </button>
-        <button type="button" onClick={next} aria-label="Next slide" title="Next (→)">
+        <button
+          type="button"
+          onClick={next}
+          aria-label="Next slide"
+          title="Next (→)"
+        >
           <ChevronRightIcon size={18} />
         </button>
 
@@ -332,7 +410,13 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
             <span className="slideshow-time">{formatTime(videoDuration)}</span>
 
             {/* Volume */}
-            <button type="button" className="slideshow-volume-btn" onClick={handleMuteToggle} aria-label={videoMuted ? "Unmute" : "Mute"} title={videoMuted ? "Unmute (M)" : "Mute (M)"}>
+            <button
+              type="button"
+              className="slideshow-volume-btn"
+              onClick={handleMuteToggle}
+              aria-label={videoMuted ? "Unmute" : "Mute"}
+              title={videoMuted ? "Unmute (M)" : "Mute (M)"}
+            >
               <VolumeIcon size={14} muted={videoMuted} />
             </button>
             <input
@@ -351,8 +435,26 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
         )}
 
         {/* Caption (filename/date) */}
-        <div className="slideshow-caption" style={{ flex: 1, textAlign: "center", maxWidth: 400, marginLeft: 16 }}>
-          <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</div>
+        <div
+          className="slideshow-caption"
+          style={{
+            flex: 1,
+            textAlign: "center",
+            maxWidth: 400,
+            marginLeft: 16,
+          }}
+        >
+          <div
+            style={{
+              fontWeight: 600,
+              fontSize: 13,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {item.name}
+          </div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>
             {new Date(item.modifiedAt).toLocaleDateString()}
             {item.extension ? ` · ${item.extension.toUpperCase()}` : ""}
@@ -361,18 +463,75 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
 
         {/* Right side actions - inline, no dropdown */}
         {/* Transform controls inline */}
-        <button type="button" onClick={() => setZoom((z) => Math.min(300, z + 25))} aria-label="Zoom in" title="Zoom in (+)"><PlusIcon size={14} /></button>
-        <button type="button" onClick={() => setZoom((z) => Math.max(25, z - 25))} aria-label="Zoom out" title="Zoom out (-)"><MinusIcon size={14} /></button>
+        <button
+          type="button"
+          onClick={() => setZoom((z) => Math.min(300, z + 25))}
+          aria-label="Zoom in"
+          title="Zoom in (+)"
+        >
+          <PlusIcon size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={() => setZoom((z) => Math.max(25, z - 25))}
+          aria-label="Zoom out"
+          title="Zoom out (-)"
+        >
+          <MinusIcon size={14} />
+        </button>
         <span className="slideshow-zoom-value">{zoom}%</span>
-        <button type="button" onClick={() => setRotation((r) => (r + 90) % 360)} aria-label="Rotate 90 degrees" title="Rotate (R)"><RotateIcon size={14} /></button>
-        <button type="button" className={flipX ? "active" : ""} onClick={() => setFlipX((f) => !f)} aria-label="Flip horizontally" title="Flip horizontal"><FlipIcon size={14} /></button>
+        <button
+          type="button"
+          onClick={() => setRotation((r) => (r + 90) % 360)}
+          aria-label="Rotate 90 degrees"
+          title="Rotate (R)"
+        >
+          <RotateIcon size={14} />
+        </button>
+        <button
+          type="button"
+          className={flipX ? "active" : ""}
+          onClick={() => setFlipX((f) => !f)}
+          aria-label="Flip horizontally"
+          title="Flip horizontal"
+        >
+          <FlipIcon size={14} />
+        </button>
         {(rotation !== 0 || flipX || zoom !== 100) && (
-          <button type="button" style={{ width: "auto", padding: "0 10px" }} onClick={() => { setZoom(100); setRotation(0); setFlipX(false); }} aria-label="Reset transform" title="Reset transform">Reset</button>
+          <button
+            type="button"
+            style={{ width: "auto", padding: "0 10px" }}
+            onClick={() => {
+              setZoom(100);
+              setRotation(0);
+              setFlipX(false);
+            }}
+            aria-label="Reset transform"
+            title="Reset transform"
+          >
+            Reset
+          </button>
         )}
 
         {isVideo && pipSupported && (
-          <button type="button" onClick={togglePip} aria-label={pip ? "Exit picture in picture" : "Picture in picture"} title="Picture in picture" className={pip ? "active" : ""}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <button
+            type="button"
+            onClick={togglePip}
+            aria-label={pip ? "Exit picture in picture" : "Picture in picture"}
+            title="Picture in picture"
+            className={pip ? "active" : ""}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <path d="M19 7V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h11" />
               <path d="M9 12v6" />
               <path d="M15 12v6" />
@@ -382,7 +541,14 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
           </button>
         )}
 
-        <button type="button" onClick={() => void toggleFullscreen()} aria-label="Full screen" title="Full screen (F)"><FullscreenIcon size={14} /></button>
+        <button
+          type="button"
+          onClick={() => void toggleFullscreen()}
+          aria-label="Full screen"
+          title="Full screen (F)"
+        >
+          <FullscreenIcon size={14} />
+        </button>
 
         <button
           type="button"
@@ -401,14 +567,26 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
 
       {/* Settings popover */}
       {settingsOpen && (
-        <div className="slideshow-settings-pop" role="dialog" aria-label="Slideshow settings">
+        <div
+          className="slideshow-settings-pop"
+          role="dialog"
+          aria-label="Slideshow settings"
+        >
           <div className="slideshow-settings-head">
             <b>Slideshow</b>
-            <button type="button" onClick={() => setSettingsOpen(false)} aria-label="Close settings">×</button>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(false)}
+              aria-label="Close settings"
+            >
+              ×
+            </button>
           </div>
 
           <label className="slideshow-setting">
-            <span>Interval <i>{interval}s</i></span>
+            <span>
+              Interval <i>{interval}s</i>
+            </span>
             <input
               type="range"
               min={2}
@@ -420,13 +598,22 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
           </label>
 
           <label className="slideshow-setting row">
-            <input type="checkbox" checked={shuffle} onChange={(e) => setShuffle(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={shuffle}
+              onChange={(e) => setShuffle(e.target.checked)}
+            />
             <span>Shuffle</span>
           </label>
 
           <label className="slideshow-setting">
             <span>Transition</span>
-            <select value={transition} onChange={(e) => setTransition(e.target.value as SlideshowTransition)}>
+            <select
+              value={transition}
+              onChange={(e) =>
+                setTransition(e.target.value as SlideshowTransition)
+              }
+            >
               <option value="fade">Fade</option>
               <option value="slide">Slide</option>
               <option value="none">None</option>
@@ -437,7 +624,8 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
 
       {hintsVisible && (
         <div className="slideshow-hints" role="status" aria-live="polite">
-          Space play/pause · ←/→ navigate · Esc close · F fullscreen · M mute · +/- zoom · R rotate
+          Space play/pause · ←/→ navigate · Esc close · F fullscreen · M mute ·
+          +/- zoom · R rotate
         </div>
       )}
     </div>

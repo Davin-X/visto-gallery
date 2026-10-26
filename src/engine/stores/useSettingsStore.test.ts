@@ -4,7 +4,9 @@ import { act } from "@testing-library/react";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
-vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: vi.fn(() => ({ listen: vi.fn() })) }));
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: vi.fn(() => ({ listen: vi.fn() })),
+}));
 
 vi.mock("../../commands/tauri", () => ({
   tauri: {
@@ -15,7 +17,11 @@ vi.mock("../../commands/tauri", () => ({
   },
 }));
 
-import { useSettingsStore, resetPendingSettingsSave, flushSettingsSaves } from "../../engine/stores/useSettingsStore";
+import {
+  useSettingsStore,
+  resetPendingSettingsSave,
+  flushSettingsSaves,
+} from "../../engine/stores/useSettingsStore";
 
 test("settings hydrate and update", async () => {
   resetPendingSettingsSave();

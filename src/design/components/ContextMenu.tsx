@@ -19,8 +19,17 @@ interface ContextMenuProps {
   onClose: () => void;
 }
 
-function ContextMenuContent({ items, onClose }: { items: ContextMenuItem[]; onClose: () => void }) {
-  const [submenuOpen, setSubmenuOpen] = useState<{ index: number; items: ContextMenuItem[] } | null>(null);
+function ContextMenuContent({
+  items,
+  onClose,
+}: {
+  items: ContextMenuItem[];
+  onClose: () => void;
+}) {
+  const [submenuOpen, setSubmenuOpen] = useState<{
+    index: number;
+    items: ContextMenuItem[];
+  } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const submenuRef = useRef<HTMLDivElement>(null);
 
@@ -39,7 +48,11 @@ function ContextMenuContent({ items, onClose }: { items: ContextMenuItem[]; onCl
       }
       if (e.key === "ArrowLeft" && submenuOpen) {
         setSubmenuOpen(null);
-        (menuRef.current?.querySelector(`[data-index="${submenuOpen.index}"]`) as HTMLElement)?.focus();
+        (
+          menuRef.current?.querySelector(
+            `[data-index="${submenuOpen.index}"]`,
+          ) as HTMLElement
+        )?.focus();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -62,25 +75,36 @@ function ContextMenuContent({ items, onClose }: { items: ContextMenuItem[]; onCl
       role="menu"
       tabIndex={-1}
       onKeyDown={(e) => {
-        const items = menuRef.current?.querySelectorAll('[role="menuitem"]:not([disabled])');
-        const current = Array.from(items || []).findIndex((el) => el === document.activeElement);
+        const items = menuRef.current?.querySelectorAll(
+          '[role="menuitem"]:not([disabled])',
+        );
+        const current = Array.from(items || []).findIndex(
+          (el) => el === document.activeElement,
+        );
         if (current === -1) return;
-        
+
         let next = current;
         if (e.key === "ArrowDown") next = (current + 1) % (items?.length || 1);
-        if (e.key === "ArrowUp") next = (current - 1 + (items?.length || 1)) % (items?.length || 1);
-        
+        if (e.key === "ArrowUp")
+          next = (current - 1 + (items?.length || 1)) % (items?.length || 1);
+
         if (next !== current) {
-          ((items as any)?.[next])?.focus();
+          (items as any)?.[next]?.focus();
           e.preventDefault();
         }
       }}
     >
       {(items || []).map((item, index) => {
         if (item.divider) {
-          return <div key={index} className="context-menu-separator" role="separator" />;
+          return (
+            <div
+              key={index}
+              className="context-menu-separator"
+              role="separator"
+            />
+          );
         }
-        
+
         if (item.submenu) {
           return (
             <div key={index} className="context-menu-submenu" role="none">
@@ -92,7 +116,10 @@ function ContextMenuContent({ items, onClose }: { items: ContextMenuItem[]; onCl
                 data-index={index}
                 className={`context-menu-item ${item.disabled ? "disabled" : ""}`}
                 disabled={item.disabled}
-                onClick={() => !item.disabled && setSubmenuOpen({ index, items: item.submenu! })}
+                onClick={() =>
+                  !item.disabled &&
+                  setSubmenuOpen({ index, items: item.submenu! })
+                }
                 onKeyDown={(e) => {
                   if (e.key === "ArrowRight" && !item.disabled) {
                     setSubmenuOpen({ index, items: item.submenu! });
@@ -102,16 +129,21 @@ function ContextMenuContent({ items, onClose }: { items: ContextMenuItem[]; onCl
               >
                 <span className="context-menu-icon">{item.icon || ""}</span>
                 <span>{item.label}</span>
-                {item.shortcut && <span className="context-menu-shortcut">{item.shortcut}</span>}
+                {item.shortcut && (
+                  <span className="context-menu-shortcut">{item.shortcut}</span>
+                )}
                 <span className="context-menu-submenu-indicator">›</span>
               </button>
               {submenuOpen?.index === index && (
-                <ContextMenuContent items={item.submenu} onClose={() => setSubmenuOpen(null)} />
+                <ContextMenuContent
+                  items={item.submenu}
+                  onClose={() => setSubmenuOpen(null)}
+                />
               )}
             </div>
           );
         }
-        
+
         return (
           <button
             key={index}
@@ -121,9 +153,13 @@ function ContextMenuContent({ items, onClose }: { items: ContextMenuItem[]; onCl
             disabled={item.disabled}
             onClick={() => handleItemClick(item)}
           >
-            {item.icon && <span className="context-menu-icon">{item.icon}</span>}
+            {item.icon && (
+              <span className="context-menu-icon">{item.icon}</span>
+            )}
             <span>{item.label}</span>
-            {item.shortcut && <span className="context-menu-shortcut">{item.shortcut}</span>}
+            {item.shortcut && (
+              <span className="context-menu-shortcut">{item.shortcut}</span>
+            )}
           </button>
         );
       })}
@@ -179,7 +215,7 @@ export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
     const handleClickOutside = (e: MouseEvent) => {
       if (!root.contains(e.target as Node)) onClose();
     };
-    
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -192,9 +228,7 @@ export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
     };
   }, [onClose, root]);
 
-  const content = (
-    <ContextMenuContent items={items} onClose={onClose} />
-  );
+  const content = <ContextMenuContent items={items} onClose={onClose} />;
 
   return createPortal(
     <div
@@ -209,13 +243,17 @@ export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
     >
       <div style={{ pointerEvents: "auto" }}>{content}</div>
     </div>,
-    root
+    root,
   );
 }
 
 // Hook for using context menu in components
 export function useContextMenu() {
-  const [menu, setMenu] = useState<{ items: ContextMenuItem[]; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{
+    items: ContextMenuItem[];
+    x: number;
+    y: number;
+  } | null>(null);
 
   const open = (items: ContextMenuItem[], e: React.MouseEvent) => {
     e.preventDefault();
@@ -225,5 +263,12 @@ export function useContextMenu() {
 
   const close = () => setMenu(null);
 
-  return { menu, open, close, ContextMenu: menu && <ContextMenu items={menu.items} x={menu.x} y={menu.y} onClose={close} /> };
+  return {
+    menu,
+    open,
+    close,
+    ContextMenu: menu && (
+      <ContextMenu items={menu.items} x={menu.x} y={menu.y} onClose={close} />
+    ),
+  };
 }
