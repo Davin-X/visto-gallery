@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo, useDeferredValue, memo } from "react";
+import { useFocusTrap } from "../design/hooks/useFocusTrap";
+
 import { createPortal } from "react-dom";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { save, open as openFileDialog } from "@tauri-apps/plugin-dialog";
@@ -142,6 +144,10 @@ function App() {
   const [renamingAlbumId, setRenamingAlbumId] = useState<string | null>(null);
   const [creatingAlbum, setCreatingAlbum] = useState(false);
   const albumInputRef = useRef<HTMLInputElement | null>(null);
+  const albumDialogRef = useRef<HTMLFormElement | null>(null);
+  const deleteAlbumDialogRef = useRef<HTMLDivElement | null>(null);
+  const deleteItemDialogRef = useRef<HTMLDivElement | null>(null);
+  const removeFolderDialogRef = useRef<HTMLDivElement | null>(null);
 
   const [albumPendingDelete, setAlbumPendingDelete] = useState<any | null>(null);
   const [itemPendingDeleteCount, setItemPendingDeleteCount] = useState<number>(0);
@@ -155,6 +161,11 @@ function App() {
   const [folderPendingRemove, setFolderPendingRemove] = useState<LibraryFolder | null>(null);
   const [removingFolder, setRemovingFolder] = useState(false);
   const [sourcesSheetOpen, setSourcesSheetOpen] = useState(false);
+  useFocusTrap(albumDialogOpen, albumDialogRef);
+  useFocusTrap(!!albumPendingDelete, deleteAlbumDialogRef);
+  useFocusTrap(itemPendingDeleteCount > 0, deleteItemDialogRef);
+  useFocusTrap(!!folderPendingRemove, removeFolderDialogRef);
+
   const rescanInProgress = useRef(false);
   // Where the viewer returns when it closes. Opening the viewer from Hidden
   // keeps the user in Hidden; the Library viewer returns to Library.
@@ -1921,6 +1932,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           }}
         >
           <form
+            ref={albumDialogRef}
             className="album-dialog"
             role="dialog"
             aria-modal="true"
@@ -2124,6 +2136,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           }}
         >
           <div
+            ref={deleteAlbumDialogRef}
             className="album-dialog delete-album-dialog"
             role="alertdialog"
             aria-modal="true"
@@ -2186,7 +2199,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           role="presentation"
           onMouseDown={(e) => { if (e.target === e.currentTarget) { setItemPendingDeleteCount(0); itemPendingDeleteRef.current = null; } }}
         >
-          <div className="album-dialog delete-album-dialog" role="alertdialog" aria-modal="true">
+          <div ref={deleteItemDialogRef} className="album-dialog delete-album-dialog" role="alertdialog" aria-modal="true">
             <div className="dialog-heading">
               <div>
                 <p className="eyebrow">PHOTO</p>
@@ -2284,6 +2297,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           }}
         >
           <div
+            ref={removeFolderDialogRef}
             className="album-dialog delete-album-dialog"
             role="alertdialog"
             aria-modal="true"
