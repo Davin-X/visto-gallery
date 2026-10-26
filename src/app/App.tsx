@@ -336,6 +336,7 @@ function App() {
     useState<LibraryFolder | null>(null);
   const [removingFolder, setRemovingFolder] = useState(false);
   const [sourcesSheetOpen, setSourcesSheetOpen] = useState(false);
+  const [removeAllSourcesArmed, setRemoveAllSourcesArmed] = useState(false);
   useFocusTrap(albumDialogOpen, albumDialogRef);
   useFocusTrap(!!albumPendingDelete, deleteAlbumDialogRef);
   useFocusTrap(itemPendingDeleteCount > 0, deleteItemDialogRef);
@@ -1767,7 +1768,6 @@ function App() {
   const removeAllSources = async () => {
     const folders = library.folders;
     if (folders.length === 0) return;
-    if (!window.confirm(`Remove all ${folders.length} source(s)? Files stay on disk.`)) return;
     library.setBusy(true);
     try {
       for (const folder of folders) {
@@ -3245,9 +3245,18 @@ function App() {
                 type="button"
                 className="danger-button"
                 disabled={library.busy || library.folders.length === 0}
-                onClick={() => void removeAllSources()}
+                onClick={() => {
+                  if (!removeAllSourcesArmed) {
+                    setRemoveAllSourcesArmed(true);
+                    library.showNotice("Click again to confirm removing all sources");
+                    window.setTimeout(() => setRemoveAllSourcesArmed(false), 4000);
+                    return;
+                  }
+                  setRemoveAllSourcesArmed(false);
+                  void removeAllSources();
+                }}
               >
-                Remove all sources
+                {removeAllSourcesArmed ? "Confirm remove all" : "Remove all sources"}
               </button>
               <div style={{ flex: 1 }} />
               <button
