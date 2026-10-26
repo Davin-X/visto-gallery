@@ -5173,7 +5173,6 @@ function AlbumsScreen(props: any) {
           .filter((item: any) => item.kind === "photo" || item.kind === "video")
           .slice(0, 3);
         if (false && photos.length) {
-          console.log(`[AlbumsScreen] Album "${album.name}" (${album.id}) cover photos:`, photos.map((p: any) => p.name));
         }
         return {
           ...album,

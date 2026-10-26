@@ -323,8 +323,6 @@ export const useLibraryStore = create<LibraryState>()(
             offset: usePagination ? page * pageSize : undefined,
           };
           
-          console.log("loadLibrary: starting", { dto });
-
           const isTauri = typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
           if (!isTauri) {
             console.warn("Tauri IPC is not available in browser preview mode.");
@@ -339,8 +337,6 @@ export const useLibraryStore = create<LibraryState>()(
             tauri.albums.getTags(),
             tauri.library.getFolders(),
           ]);
-          
-          console.log("loadLibrary: got items", { itemsCount: items.length, albumsCount: albums.length, tagsCount: tags.length });
           
           set({ items, albums, tags, folders, busy: false, progress: null });
           get().refreshDerived();
