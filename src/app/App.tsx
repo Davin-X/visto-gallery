@@ -2514,7 +2514,7 @@ function App() {
               onRescanFolder={(folder) => {
                 void rescanSource(folder);
               }}
-              onRemoveAllSources={() => void removeAllSources()}
+              onRemoveAllSources={() => setRemoveAllSourcesDialogOpen(true)}
             />
           )}
         </main>
