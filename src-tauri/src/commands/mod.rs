@@ -1174,12 +1174,7 @@ fn generate_cached_thumbnail(
         }
     }
     // Fallback: use image crate (used on non-macOS, and for small images on macOS)
-    let mut reader = image::ImageReader::open(source)
-        .map_err(|error| format!("Could not read photo: {error}"))?
-        .with_guessed_format()
-        .map_err(|error| format!("Could not identify photo format: {error}"))?;
-
-    let mut reader = image::ImageReader::open(source)
+    let reader = image::ImageReader::open(source)
         .map_err(|error| format!("Could not read photo: {error}"))?
         .with_guessed_format()
         .map_err(|error| format!("Could not identify photo format: {error}"))?;
