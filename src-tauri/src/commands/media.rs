@@ -1,19 +1,10 @@
-use crate::{AppState, models::*};
+use crate::AppState;
 use super::*;
-use serde::Serialize;
 use serde_json::json;
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use image::codecs::jpeg::JpegEncoder;
-use image::codecs::png::{CompressionType, FilterType, PngEncoder};
-use image::codecs::webp::WebPEncoder;
-use image::{DynamicImage, GenericImageView, ImageEncoder};
-use sqlx::{SqlitePool, QueryBuilder, Row};
-use std::collections::{HashMap, HashSet};
 use std::io::Write;
-use std::path::{Path, PathBuf};
-use tauri::{AppHandle, State, Window};
-use uuid::Uuid;
-use time::OffsetDateTime;
+use image::{DynamicImage, ImageEncoder};
+use std::path::PathBuf;
+use tauri::{State, Window};
 
 #[tauri::command]
 pub async fn move_to_trash(

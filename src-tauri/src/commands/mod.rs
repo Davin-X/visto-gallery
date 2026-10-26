@@ -12,8 +12,7 @@ pub use media::*;
 pub use duplicates::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tauri::{AppHandle, State, Manager, Emitter, Window};
-use tauri_plugin_dialog::DialogExt;
+use tauri::{AppHandle, State, Manager, Emitter};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use crate::{AppState, models::*};
 use notify::Watcher;
@@ -23,14 +22,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 use time::OffsetDateTime;
 use sqlx::{SqlitePool, Sqlite, QueryBuilder, Row};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::io::Write;
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::codecs::webp::WebPEncoder;
 use image::{DynamicImage, GenericImageView, ImageDecoder, ImageEncoder};
-use walkdir::WalkDir;
 
 // ===== Request/Response Types =====
 //

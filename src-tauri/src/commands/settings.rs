@@ -1,6 +1,5 @@
-use crate::{AppState, models::*};
+use crate::AppState;
 use super::*;
-use serde::Deserialize;
 use sqlx::SqlitePool;
 use tauri::State;
 
