@@ -1,7 +1,7 @@
-use crate::{AppState, models::*};
 use super::*;
+use crate::{models::*, AppState};
 use serde_json::json;
-use sqlx::{SqlitePool, QueryBuilder};
+use sqlx::{QueryBuilder, SqlitePool};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use tauri::{State, Window};
@@ -38,15 +38,13 @@ pub async fn scan_library(
     let known_files: HashMap<String, (i64, i64)> = if force {
         HashMap::new()
     } else {
-        sqlx::query_as::<_, (String, i64, i64)>(
-            "SELECT path, size, modified_at FROM media_items",
-        )
-        .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .map(|(path, size, modified_at)| (path, (size, modified_at)))
-        .collect()
+        sqlx::query_as::<_, (String, i64, i64)>("SELECT path, size, modified_at FROM media_items")
+            .fetch_all(&db)
+            .await
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .map(|(path, size, modified_at)| (path, (size, modified_at)))
+            .collect()
     };
 
     // Discover the media paths once. Keeping only paths avoids retaining the
@@ -59,7 +57,8 @@ pub async fn scan_library(
         }
         match entry {
             Ok(entry) if entry.file_type().is_file() => {
-                let ext = entry.path()
+                let ext = entry
+                    .path()
                     .extension()
                     .and_then(|ext| ext.to_str())
                     .unwrap_or("")
@@ -102,7 +101,10 @@ pub async fn scan_library(
                 break;
             }
             completed_in_batch += 1;
-            let Some(metadata) = std::fs::metadata(path).ok().filter(|metadata| metadata.is_file()) else {
+            let Some(metadata) = std::fs::metadata(path)
+                .ok()
+                .filter(|metadata| metadata.is_file())
+            else {
                 continue;
             };
             let size = metadata.len() as i64;
@@ -128,7 +130,10 @@ pub async fn scan_library(
 
         // Emit progress every two batches or on the last batch.
         if processed % 200 < SCAN_BATCH_SIZE as u64 || processed == total || cancelled {
-            let current_file = paths.last().map(|path| path.to_string_lossy().to_string()).unwrap_or_default();
+            let current_file = paths
+                .last()
+                .map(|path| path.to_string_lossy().to_string())
+                .unwrap_or_default();
             let _ = window.emit(
                 "import-progress",
                 json!({
@@ -225,7 +230,9 @@ pub async fn import_files(
                     if super::SCAN_CANCEL.load(Ordering::SeqCst) {
                         break;
                     }
-                    let Ok(entry) = entry else { continue; };
+                    let Ok(entry) = entry else {
+                        continue;
+                    };
                     if entry.file_type().is_file() {
                         if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
                             let ext = ext.to_lowercase();
@@ -310,7 +317,10 @@ pub async fn import_files(
 }
 
 #[tauri::command]
-pub async fn get_library_items(filter: Option<super::LibraryFilterDTO>, state: State<'_, AppState>) -> Result<Vec<MediaItem>, String> {
+pub async fn get_library_items(
+    filter: Option<super::LibraryFilterDTO>,
+    state: State<'_, AppState>,
+) -> Result<Vec<MediaItem>, String> {
     let db = super::get_db(&state)?;
     let f = filter.unwrap_or_default();
 
@@ -320,10 +330,12 @@ pub async fn get_library_items(filter: Option<super::LibraryFilterDTO>, state: S
         qb.push(" AND kind = ").push_bind(kind.clone());
     }
     if let Some(favorite) = f.favorite {
-        qb.push(" AND favorite = ").push_bind(if favorite { 1i32 } else { 0i32 });
+        qb.push(" AND favorite = ")
+            .push_bind(if favorite { 1i32 } else { 0i32 });
     }
     if let Some(hidden) = f.hidden {
-        qb.push(" AND hidden = ").push_bind(if hidden { 1i32 } else { 0i32 });
+        qb.push(" AND hidden = ")
+            .push_bind(if hidden { 1i32 } else { 0i32 });
     }
     if let Some(album_id) = &f.album_id {
         qb.push(" AND id IN (SELECT media_id FROM album_items WHERE album_id = ")
@@ -332,7 +344,10 @@ pub async fn get_library_items(filter: Option<super::LibraryFilterDTO>, state: S
     }
     if let Some(tags) = &f.tags {
         if !tags.is_empty() {
-            let placeholders = std::iter::repeat("?").take(tags.len()).collect::<Vec<_>>().join(",");
+            let placeholders = std::iter::repeat("?")
+                .take(tags.len())
+                .collect::<Vec<_>>()
+                .join(",");
             qb.push(format!(" AND id IN (SELECT mt.media_id FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE t.name IN ({}))", placeholders));
             for tag in tags {
                 qb.push_bind(tag.clone());
@@ -341,14 +356,19 @@ pub async fn get_library_items(filter: Option<super::LibraryFilterDTO>, state: S
     }
     if let Some(query) = &f.query {
         let like = format!("%{}%", query);
-        qb.push(" AND (name LIKE ").push_bind(like.clone())
-            .push(" OR path LIKE ").push_bind(like).push(")");
+        qb.push(" AND (name LIKE ")
+            .push_bind(like.clone())
+            .push(" OR path LIKE ")
+            .push_bind(like)
+            .push(")");
     }
     if let Some(from) = f.date_from {
-        qb.push(" AND COALESCE(captured_at, modified_at) >= ").push_bind(from);
+        qb.push(" AND COALESCE(captured_at, modified_at) >= ")
+            .push_bind(from);
     }
     if let Some(to) = f.date_to {
-        qb.push(" AND COALESCE(captured_at, modified_at) <= ").push_bind(to);
+        qb.push(" AND COALESCE(captured_at, modified_at) <= ")
+            .push_bind(to);
     }
 
     // Identifiers cannot be bound, so the sort column is whitelisted instead of
@@ -396,8 +416,11 @@ async fn hydrate_relations(db: &SqlitePool, items: &mut [MediaItem]) -> Result<(
 
     // Collect item IDs for IN clause
     let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
-    let placeholders = std::iter::repeat("?").take(ids.len()).collect::<Vec<_>>().join(",");
-    
+    let placeholders = std::iter::repeat("?")
+        .take(ids.len())
+        .collect::<Vec<_>>()
+        .join(",");
+
     // Tags with JOIN to get names
     let tag_sql = format!(
         "SELECT mt.media_id, t.name FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.media_id IN ({})",
@@ -480,14 +503,22 @@ pub async fn get_item_thumbnail(
     .map_err(|error| error.to_string())?
     .ok_or_else(|| "Photo not found in library".to_string())?;
 
-    let cache_root = app.path().app_cache_dir().map_err(|error| error.to_string())?.join("thumbnails");
-    tokio::fs::create_dir_all(&cache_root).await.map_err(|error| error.to_string())?;
+    let cache_root = app
+        .path()
+        .app_cache_dir()
+        .map_err(|error| error.to_string())?
+        .join("thumbnails");
+    tokio::fs::create_dir_all(&cache_root)
+        .await
+        .map_err(|error| error.to_string())?;
     let cache_key = thumbnail_cache_key(&request.item_id, item.1, item.2, request.size);
     let digest = ring::digest::digest(&ring::digest::SHA256, cache_key.as_bytes());
     let cache_path = cache_root.join(format!("{}.jpg", hex::encode(digest.as_ref())));
 
     let cached = if let Ok(bytes) = tokio::fs::read(&cache_path).await {
-        image::image_dimensions(&cache_path).ok().map(|(width, height)| (bytes, width, height))
+        image::image_dimensions(&cache_path)
+            .ok()
+            .map(|(width, height)| (bytes, width, height))
     } else {
         None
     };
@@ -518,7 +549,12 @@ pub async fn get_item_thumbnail(
 
 /// Cache identity must include every input that changes the rendered image.
 /// Thumbnails for the same photo at different sizes are distinct files.
-pub(crate) fn thumbnail_cache_key(item_id: &str, modified_at: i64, source_size: i64, thumbnail_size: u32) -> String {
+pub(crate) fn thumbnail_cache_key(
+    item_id: &str,
+    modified_at: i64,
+    source_size: i64,
+    thumbnail_size: u32,
+) -> String {
     format!("{item_id}:{modified_at}:{source_size}:{thumbnail_size}:v1")
 }
 
@@ -577,11 +613,11 @@ pub(crate) fn prune_thumbnail_cache(root: &Path, max_bytes: u64) -> (usize, u64,
 
     // Cache files are written once, so modified time is a good proxy for age.
     files.sort_by_key(|(_, _, modified)| *modified);
-    
+
     let mut deleted = 0;
     let mut bytes_freed = 0_u64;
     let mut failed = 0;
-    
+
     for (path, size, _) in files {
         if total <= max_bytes {
             break;
@@ -598,7 +634,7 @@ pub(crate) fn prune_thumbnail_cache(root: &Path, max_bytes: u64) -> (usize, u64,
             }
         }
     }
-    
+
     (deleted, bytes_freed, failed)
 }
 
@@ -627,7 +663,9 @@ pub(crate) fn generate_cached_thumbnail(
             return generate_with_macos_sips(source, destination, size, &reason);
         }
     };
-    let orientation = decoder.orientation().unwrap_or(image::metadata::Orientation::NoTransforms);
+    let orientation = decoder
+        .orientation()
+        .unwrap_or(image::metadata::Orientation::NoTransforms);
     let mut image = match DynamicImage::from_decoder(decoder) {
         Ok(image) => image,
         Err(error) => {
@@ -652,8 +690,13 @@ pub(crate) fn generate_cached_thumbnail(
 fn commit_thumbnail_file(temporary: &Path, destination: &Path) -> Result<(), String> {
     match std::fs::rename(&temporary, destination) {
         Ok(()) => {}
-        Err(_) if destination.exists() => { let _ = std::fs::remove_file(&temporary); }
-        Err(error) => { let _ = std::fs::remove_file(&temporary); return Err(error.to_string()); }
+        Err(_) if destination.exists() => {
+            let _ = std::fs::remove_file(&temporary);
+        }
+        Err(error) => {
+            let _ = std::fs::remove_file(&temporary);
+            return Err(error.to_string());
+        }
     }
     Ok(())
 }
@@ -661,7 +704,12 @@ fn commit_thumbnail_file(temporary: &Path, destination: &Path) -> Result<(), Str
 /// `sips` is a thin wrapper over macOS ImageIO, which downsamples during
 /// decode. That keeps memory flat for large photos and handles HEIC/HEIF.
 #[cfg(target_os = "macos")]
-fn generate_with_macos_sips(source: &str, destination: &Path, size: u32, reason: &str) -> Result<(Vec<u8>, u32, u32), String> {
+fn generate_with_macos_sips(
+    source: &str,
+    destination: &Path,
+    size: u32,
+    reason: &str,
+) -> Result<(Vec<u8>, u32, u32), String> {
     use std::process::Command;
 
     let temporary = destination.with_extension(format!("{}.tmp.jpg", Uuid::new_v4()));
@@ -671,11 +719,16 @@ fn generate_with_macos_sips(source: &str, destination: &Path, size: u32, reason:
         .arg("--out")
         .arg(&temporary)
         .output()
-        .map_err(|error| format!("Could not create thumbnail ({reason}); macOS ImageIO failed: {error}"))?;
+        .map_err(|error| {
+            format!("Could not create thumbnail ({reason}); macOS ImageIO failed: {error}")
+        })?;
     if !output.status.success() {
         let _ = std::fs::remove_file(&temporary);
         let detail = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Could not create thumbnail ({reason}): {}", detail.trim()));
+        return Err(format!(
+            "Could not create thumbnail ({reason}): {}",
+            detail.trim()
+        ));
     }
     let dimensions = match image::image_dimensions(&temporary) {
         Ok(dimensions) => dimensions,
@@ -696,22 +749,35 @@ fn generate_with_macos_sips(source: &str, destination: &Path, size: u32, reason:
 }
 
 #[cfg(not(target_os = "macos"))]
-fn generate_with_macos_sips(_source: &str, _destination: &Path, _size: u32, reason: &str) -> Result<(Vec<u8>, u32, u32), String> {
+fn generate_with_macos_sips(
+    _source: &str,
+    _destination: &Path,
+    _size: u32,
+    reason: &str,
+) -> Result<(Vec<u8>, u32, u32), String> {
     Err(format!("Could not create thumbnail ({reason})"))
 }
 
 #[tauri::command]
-pub async fn watch_folder(path: String, app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn watch_folder(
+    path: String,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let app_handle = app.clone();
     let watch_path = path.clone();
-    let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-        if res.is_ok() {
-            let _ = app_handle.emit("folder-changed", &watch_path);
-        }
-    })
-    .map_err(|e| e.to_string())?;
+    let mut watcher =
+        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+            if res.is_ok() {
+                let _ = app_handle.emit("folder-changed", &watch_path);
+            }
+        })
+        .map_err(|e| e.to_string())?;
     watcher
-        .watch(std::path::Path::new(&path), notify::RecursiveMode::Recursive)
+        .watch(
+            std::path::Path::new(&path),
+            notify::RecursiveMode::Recursive,
+        )
         .map_err(|e| e.to_string())?;
     let mut guard = state.watchers.lock().map_err(|e| e.to_string())?;
     guard.insert(path, watcher);
@@ -733,7 +799,9 @@ pub async fn unwatch_folder(path: String, state: State<'_, AppState>) -> Result<
 /// `/Applications/Safari.app`). This keeps the sidebar to a handful of rows
 /// instead of one row per leaf directory.
 fn inferred_folder_root(path: &str) -> Option<String> {
-    let home = std::env::var("HOME").ok().map(|h| super::normalize_root(&h))?;
+    let home = std::env::var("HOME")
+        .ok()
+        .map(|h| super::normalize_root(&h))?;
     let file = super::normalize_root(path);
 
     if super::path_is_inside(&file, &home) {
@@ -760,10 +828,11 @@ fn inferred_folder_root(path: &str) -> Option<String> {
 pub async fn get_library_folders(state: State<'_, AppState>) -> Result<Vec<LibraryFolder>, String> {
     let db = super::get_db(&state)?;
 
-    let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders ORDER BY path ASC")
-        .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+    let registered: Vec<String> =
+        sqlx::query_scalar("SELECT path FROM library_folders ORDER BY path ASC")
+            .fetch_all(&db)
+            .await
+            .map_err(|e| e.to_string())?;
 
     let rows = sqlx::query("SELECT path, size FROM media_items WHERE hidden = 0")
         .fetch_all(&db)
@@ -771,7 +840,7 @@ pub async fn get_library_folders(state: State<'_, AppState>) -> Result<Vec<Libra
         .map_err(|e| e.to_string())?;
 
     // One pass over the catalog: each item lands in exactly one folder.
-let mut registered_sorted = registered.clone();
+    let mut registered_sorted = registered.clone();
     registered_sorted.sort_by(|a, b| b.len().cmp(&a.len()));
 
     let mut tallies: HashMap<String, (i64, i64)> = HashMap::new();
@@ -800,7 +869,12 @@ let mut registered_sorted = registered.clone();
                 .map(|n| n.to_string_lossy().to_string())
                 .filter(|n| !n.is_empty())
                 .unwrap_or_else(|| path.clone());
-            LibraryFolder { path, name, item_count, total_size }
+            LibraryFolder {
+                path,
+                name,
+                item_count,
+                total_size,
+            }
         })
         .collect();
 
@@ -850,11 +924,14 @@ pub async fn remove_library_folder(
         .fetch_all(&db)
         .await
         .map_err(|e| e.to_string())?;
-    if !registered.iter().any(|registered_path| super::normalize_root(registered_path) == root) {
+    if !registered
+        .iter()
+        .any(|registered_path| super::normalize_root(registered_path) == root)
+    {
         return Err("Folder is not a registered library root.".to_string());
     }
 
-let rows = sqlx::query(
+    let rows = sqlx::query(
         "SELECT id, path FROM media_items \
          WHERE substr(path, 1, ?1) = ?2 AND length(path) > ?1 AND substr(path, ?1 + 1, 1) = '/'",
     )
@@ -872,9 +949,14 @@ let rows = sqlx::query(
     if delete_files.unwrap_or(false) && !targets.is_empty() {
         const TRASH_CHUNK: usize = 50;
         for chunk in targets.chunks(TRASH_CHUNK) {
-            let chunk_paths: Vec<String> = chunk.iter().map(|(_, item_path)| item_path.clone()).collect();
+            let chunk_paths: Vec<String> = chunk
+                .iter()
+                .map(|(_, item_path)| item_path.clone())
+                .collect();
             let chunk_paths_for_delete = chunk_paths.clone();
-            let result = tokio::task::spawn_blocking(move || trash::delete_all(&chunk_paths_for_delete)).await;
+            let result =
+                tokio::task::spawn_blocking(move || trash::delete_all(&chunk_paths_for_delete))
+                    .await;
             if let Err(_) = result {
                 for path in &chunk_paths {
                     let p = path.clone();
@@ -919,7 +1001,9 @@ let rows = sqlx::query(
         .await
         .map_err(|e| e.to_string())?;
     for registered_path in registered {
-        if super::normalize_root(&registered_path) == root || super::path_is_inside(&registered_path, &root) {
+        if super::normalize_root(&registered_path) == root
+            || super::path_is_inside(&registered_path, &root)
+        {
             sqlx::query("DELETE FROM library_folders WHERE path = ?")
                 .bind(&registered_path)
                 .execute(&mut *tx)
@@ -934,7 +1018,11 @@ let rows = sqlx::query(
 }
 
 #[tauri::command]
-pub async fn toggle_favorite(item_id: String, favorite: bool, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn toggle_favorite(
+    item_id: String,
+    favorite: bool,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let db = super::get_db(&state)?;
     sqlx::query("UPDATE media_items SET favorite = ?, updated_at = ? WHERE id = ?")
         .bind(if favorite { 1i32 } else { 0i32 })
@@ -947,7 +1035,11 @@ pub async fn toggle_favorite(item_id: String, favorite: bool, state: State<'_, A
 }
 
 #[tauri::command]
-pub async fn toggle_hidden(item_id: String, hidden: bool, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn toggle_hidden(
+    item_id: String,
+    hidden: bool,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let db = super::get_db(&state)?;
     sqlx::query("UPDATE media_items SET hidden = ?, updated_at = ? WHERE id = ?")
         .bind(if hidden { 1i32 } else { 0i32 })
@@ -960,7 +1052,11 @@ pub async fn toggle_hidden(item_id: String, hidden: bool, state: State<'_, AppSt
 }
 
 #[tauri::command]
-pub async fn update_item_tags(item_id: String, tags: Vec<String>, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn update_item_tags(
+    item_id: String,
+    tags: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let db = super::get_db(&state)?;
     sqlx::query("DELETE FROM media_tags WHERE media_id = ?")
         .bind(&item_id)
@@ -969,13 +1065,15 @@ pub async fn update_item_tags(item_id: String, tags: Vec<String>, state: State<'
         .map_err(|e| e.to_string())?;
     for tag_name in &tags {
         let tag_id = Uuid::new_v4().to_string();
-        sqlx::query("INSERT OR IGNORE INTO tags (id, name, color_index, created_at) VALUES (?, ?, 0, ?)")
-            .bind(&tag_id)
-            .bind(tag_name)
-            .bind(super::now_ms())
-            .execute(&db)
-            .await
-            .map_err(|e| e.to_string())?;
+        sqlx::query(
+            "INSERT OR IGNORE INTO tags (id, name, color_index, created_at) VALUES (?, ?, 0, ?)",
+        )
+        .bind(&tag_id)
+        .bind(tag_name)
+        .bind(super::now_ms())
+        .execute(&db)
+        .await
+        .map_err(|e| e.to_string())?;
         sqlx::query("INSERT INTO media_tags (media_id, tag_id) VALUES (?, ?)")
             .bind(&item_id)
             .bind(&tag_id)

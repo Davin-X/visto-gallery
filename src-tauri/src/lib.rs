@@ -5,9 +5,9 @@ use tauri::{Emitter, Manager, State};
 
 // Modules
 mod commands;
+mod db;
 mod menu;
 mod models;
-mod db;
 
 use commands::*;
 use db::Database;
@@ -20,7 +20,10 @@ struct AppState {
 
 impl Default for AppState {
     fn default() -> Self {
-        Self { db: Mutex::new(None), watchers: Mutex::new(HashMap::new()) }
+        Self {
+            db: Mutex::new(None),
+            watchers: Mutex::new(HashMap::new()),
+        }
     }
 }
 
@@ -30,17 +33,19 @@ pub fn run() {
         .try_init();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-.manage(AppState::default())
+        .manage(AppState::default())
         .setup(|app| {
             // Initialize database (await so it's ready before any invoke)
             let app_handle = app.handle().clone();
             let db = tauri::async_runtime::block_on(async {
                 let handle = app_handle.clone();
-                let db = Database::new(&handle).await.expect("Failed to initialize database");
-    for folder in db.registered_folders().await {
-        let _ = handle.asset_protocol_scope().allow_directory(&folder, true);
-    }
-    db
+                let db = Database::new(&handle)
+                    .await
+                    .expect("Failed to initialize database");
+                for folder in db.registered_folders().await {
+                    let _ = handle.asset_protocol_scope().allow_directory(&folder, true);
+                }
+                db
             });
             let state: State<'_, AppState> = app_handle.state();
             *state.db.lock().unwrap() = Some(db);
@@ -51,95 +56,93 @@ pub fn run() {
             app.set_menu(menu)?;
 
             // Handle menu events
-            app.on_menu_event(|app, event| {
-                match event.id().as_ref() {
-                    "file_open_folder" => {
-                        let app_handle = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("menu-open-folder", ());
-                            }
-                        });
-                    }
-                    "file_import_files" => {
-                        let app_handle = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("menu-import-files", ());
-                            }
-                        });
-                    }
-                    "file_export" => {
-                        let app_handle = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("menu-export", ());
-                            }
-                        });
-                    }
-                    "file_close_window" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.close();
+            app.on_menu_event(|app, event| match event.id().as_ref() {
+                "file_open_folder" => {
+                    let app_handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.emit("menu-open-folder", ());
                         }
-                    }
-                    "file_quit" => {
-                        app.exit(0);
-                    }
-                    "view_toggle_sidebar" => {
-                        let app_handle = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("menu-toggle-sidebar", ());
-                            }
-                        });
-                    }
-                    "view_toggle_inspector" => {
-                        let app_handle = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("menu-toggle-inspector", ());
-                            }
-                        });
-                    }
-                    "view_zoom_in" => {
-                        let app_handle = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("menu-zoom-in", ());
-                            }
-                        });
-                    }
-                    "view_zoom_out" => {
-                        let app_handle = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("menu-zoom-out", ());
-                            }
-                        });
-                    }
-                    "view_fullscreen" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.set_fullscreen(true);
-                        }
-                    }
-                    "help_about" => {
-                        let app_handle = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("menu-about", ());
-                            }
-                        });
-                    }
-                    "help_check_updates" => {
-                        let app_handle = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.emit("menu-check-updates", ());
-                            }
-                        });
-                    }
-                    _ => {}
+                    });
                 }
+                "file_import_files" => {
+                    let app_handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.emit("menu-import-files", ());
+                        }
+                    });
+                }
+                "file_export" => {
+                    let app_handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.emit("menu-export", ());
+                        }
+                    });
+                }
+                "file_close_window" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.close();
+                    }
+                }
+                "file_quit" => {
+                    app.exit(0);
+                }
+                "view_toggle_sidebar" => {
+                    let app_handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.emit("menu-toggle-sidebar", ());
+                        }
+                    });
+                }
+                "view_toggle_inspector" => {
+                    let app_handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.emit("menu-toggle-inspector", ());
+                        }
+                    });
+                }
+                "view_zoom_in" => {
+                    let app_handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.emit("menu-zoom-in", ());
+                        }
+                    });
+                }
+                "view_zoom_out" => {
+                    let app_handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.emit("menu-zoom-out", ());
+                        }
+                    });
+                }
+                "view_fullscreen" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.set_fullscreen(true);
+                    }
+                }
+                "help_about" => {
+                    let app_handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.emit("menu-about", ());
+                        }
+                    });
+                }
+                "help_check_updates" => {
+                    let app_handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.emit("menu-check-updates", ());
+                        }
+                    });
+                }
+                _ => {}
             });
             Ok(())
         })
@@ -183,7 +186,7 @@ pub fn run() {
             cancel_batch_export,
             // Duplicates
             find_duplicates,
-// (removed compute_hash stub)
+            // (removed compute_hash stub)
             // Finder
             write_finder_tags,
             read_finder_tags,

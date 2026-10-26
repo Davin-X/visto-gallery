@@ -1,8 +1,8 @@
-use crate::AppState;
 use super::*;
+use crate::AppState;
+use image::{DynamicImage, ImageEncoder};
 use serde_json::json;
 use std::io::Write;
-use image::{DynamicImage, ImageEncoder};
 use std::path::PathBuf;
 use tauri::{State, Window};
 
@@ -210,8 +210,12 @@ pub async fn read_exif(path: String, state: State<'_, AppState>) -> Result<ExifD
                 data.captured_at = Some(dt.and_utc().timestamp());
             }
         }
-        let make = exif.get_field(exif::Tag::Make, exif::In::PRIMARY).map(|f| f.display_value().to_string());
-        let model = exif.get_field(exif::Tag::Model, exif::In::PRIMARY).map(|f| f.display_value().to_string());
+        let make = exif
+            .get_field(exif::Tag::Make, exif::In::PRIMARY)
+            .map(|f| f.display_value().to_string());
+        let model = exif
+            .get_field(exif::Tag::Model, exif::In::PRIMARY)
+            .map(|f| f.display_value().to_string());
         data.camera = match (make, model) {
             (Some(m), Some(modl)) => Some(format!("{} {}", m.trim(), modl.trim())),
             (Some(m), None) => Some(m.trim().to_string()),
@@ -256,7 +260,11 @@ pub async fn read_exif(path: String, state: State<'_, AppState>) -> Result<ExifD
 }
 
 #[tauri::command]
-pub async fn write_exif(path: String, data: PartialExifData, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn write_exif(
+    path: String,
+    data: PartialExifData,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let db = super::get_db(&state)?;
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
         .fetch_all(&db)
@@ -270,13 +278,14 @@ pub async fn write_exif(path: String, data: PartialExifData, state: State<'_, Ap
 }
 
 #[tauri::command]
-pub async fn render_edited(request: RenderRequest, _state: State<'_, AppState>) -> Result<ExportResult, String> {
+pub async fn render_edited(
+    request: RenderRequest,
+    _state: State<'_, AppState>,
+) -> Result<ExportResult, String> {
     // Offload CPU-intensive image processing to blocking pool
-    tauri::async_runtime::spawn_blocking(move || {
-        render_edited_blocking(request)
-    })
-    .await
-    .map_err(|e| format!("Task failed: {}", e))?
+    tauri::async_runtime::spawn_blocking(move || render_edited_blocking(request))
+        .await
+        .map_err(|e| format!("Task failed: {}", e))?
 }
 
 /// Core image editing pipeline - runs in blocking pool
@@ -284,22 +293,23 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
     use std::path::PathBuf;
 
     let source_path = PathBuf::from(&request.source_path);
-    
+
     // 1. Load image with metadata
     let reader = image::ImageReader::open(&source_path)
         .map_err(|e| format!("Could not open image: {}", e))?
         .with_guessed_format()
         .map_err(|e| format!("Could not identify image format: {}", e))?;
-    
+
     let _format = reader.format().ok_or("Unknown image format")?;
-    let mut img = reader.decode()
+    let mut img = reader
+        .decode()
         .map_err(|e| format!("Could not decode image: {}", e))?;
-    
+
     let (orig_width, orig_height) = (img.width(), img.height());
-    
+
     // 2. Read EXIF data before any modifications (for preservation)
     let exif_data = read_exif_bytes(&source_path);
-    
+
     // 3. Apply crop in SOURCE space (before rotation/flip)
     // CropRect is normalized (0-1) against source dimensions
     if let Some(crop) = request.crop {
@@ -307,16 +317,16 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
         let crop_y = (crop.y * orig_height as f32).round() as u32;
         let crop_w = (crop.width * orig_width as f32).round() as u32;
         let crop_h = (crop.height * orig_height as f32).round() as u32;
-        
+
         // Clamp to image bounds
         let crop_x = crop_x.min(orig_width.saturating_sub(1));
         let crop_y = crop_y.min(orig_height.saturating_sub(1));
         let crop_w = crop_w.min(orig_width - crop_x).max(1);
         let crop_h = crop_h.min(orig_height - crop_y).max(1);
-        
+
         img = img.crop_imm(crop_x, crop_y, crop_w, crop_h);
     }
-    
+
     // 4. Apply rotation (in 90-degree increments)
     let rotation = ((request.edits.rotation % 360) + 360) % 360;
     match rotation {
@@ -325,21 +335,21 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
         270 => img = img.rotate270(),
         _ => {}
     }
-    
+
     // 5. Apply horizontal flip
     if request.edits.flip {
         img = img.fliph();
     }
-    
+
     // 6. Apply color adjustments
     // exposure, contrast, warmth, shadows, highlights, saturation
     // These are applied as linear RGB adjustments
     if has_color_adjustments(&request.edits) {
         img = apply_color_adjustments(img, &request.edits);
     }
-    
+
     let (final_width, final_height) = (img.width(), img.height());
-    
+
     // 7. Determine output format for writing (preserve source format for in-place edits)
     let write_format = if request.output_format == "in_place" {
         match source_path
@@ -359,26 +369,34 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
     // 8. Determine output path
     let output_path = if request.output_format == "in_place" {
         // In-place: write to temp next to source, then atomic rename
-        let tmp_path = source_path.with_extension(format!(
-            "tmp-{}",
-            uuid::Uuid::new_v4()
-        ));
-        
+        let tmp_path = source_path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
+
         // Create backup
-        let backup_path = source_path.with_extension(format!("{}.bak", 
-            source_path.extension().and_then(|s| s.to_str()).unwrap_or("bak")));
+        let backup_path = source_path.with_extension(format!(
+            "{}.bak",
+            source_path
+                .extension()
+                .and_then(|s| s.to_str())
+                .unwrap_or("bak")
+        ));
         let _ = std::fs::copy(&source_path, &backup_path);
-        
+
         // Write to temp
-        write_image(&img, &tmp_path, &write_format, request.quality, request.strip_metadata, &exif_data)?;
-        
+        write_image(
+            &img,
+            &tmp_path,
+            &write_format,
+            request.quality,
+            request.strip_metadata,
+            &exif_data,
+        )?;
+
         // Atomic rename
-        std::fs::rename(&tmp_path, &source_path)
-            .map_err(|e| {
-                let _ = std::fs::remove_file(&tmp_path);
-                format!("Failed to replace original: {}", e)
-            })?;
-        
+        std::fs::rename(&tmp_path, &source_path).map_err(|e| {
+            let _ = std::fs::remove_file(&tmp_path);
+            format!("Failed to replace original: {}", e)
+        })?;
+
         source_path.to_string_lossy().into_owned()
     } else {
         // Save a copy - caller handles path via dialog
@@ -386,7 +404,10 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
         let tmp_dir = std::env::temp_dir();
         let output_name = format!(
             "{}_edited.{}",
-            source_path.file_stem().and_then(|s| s.to_str()).unwrap_or("image"),
+            source_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("image"),
             match request.output_format.as_str() {
                 "image/png" => "png",
                 "image/webp" => "webp",
@@ -394,16 +415,24 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
             }
         );
         let output_path = tmp_dir.join(output_name);
-        
-        write_image(&img, &output_path, &write_format, request.quality, request.strip_metadata, &exif_data)?;
-        
+
+        write_image(
+            &img,
+            &output_path,
+            &write_format,
+            request.quality,
+            request.strip_metadata,
+            &exif_data,
+        )?;
+
         output_path.to_string_lossy().into_owned()
     };
-    
+
     // 8. Verify output
-    let metadata = std::fs::metadata(&output_path).map_err(|e| format!("Output verification failed: {}", e))?;
+    let metadata = std::fs::metadata(&output_path)
+        .map_err(|e| format!("Output verification failed: {}", e))?;
     let size = metadata.len() as i64;
-    
+
     Ok(ExportResult {
         output_path,
         size,
@@ -414,14 +443,19 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
 
 /// Move an exported temp file to its final destination.
 #[tauri::command]
-pub async fn move_exported_file(source_path: String, destination_path: String, _state: State<'_, AppState>) -> Result<(), String> {
+pub async fn move_exported_file(
+    source_path: String,
+    destination_path: String,
+    _state: State<'_, AppState>,
+) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         use std::path::PathBuf;
         let src = PathBuf::from(&source_path);
         let dst = PathBuf::from(&destination_path);
 
         if let Some(parent) = dst.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| format!("Could not create destination folder: {}", e))?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Could not create destination folder: {}", e))?;
         }
 
         // Prefer an atomic rename; fall back to copy+remove for cross-device moves.
@@ -439,15 +473,19 @@ pub async fn move_exported_file(source_path: String, destination_path: String, _
 
 /// Check if any color adjustments are non-zero
 fn has_color_adjustments(edits: &EditValues) -> bool {
-    edits.exposure != 0 || edits.contrast != 0 || edits.warmth != 0 ||
-    edits.shadows != 0 || edits.highlights != 0 || edits.saturation != 0
+    edits.exposure != 0
+        || edits.contrast != 0
+        || edits.warmth != 0
+        || edits.shadows != 0
+        || edits.highlights != 0
+        || edits.saturation != 0
 }
 
 /// Apply color adjustments to image
 fn apply_color_adjustments(img: DynamicImage, edits: &EditValues) -> DynamicImage {
     // Convert to RGBA for pixel manipulation
     let mut rgba = img.to_rgba8();
-    
+
     // Precompute factors
     let exposure = edits.exposure as f32 / 100.0;
     let contrast = edits.contrast as f32 / 100.0;
@@ -455,33 +493,33 @@ fn apply_color_adjustments(img: DynamicImage, edits: &EditValues) -> DynamicImag
     let shadows = edits.shadows as f32 / 100.0;
     let highlights = edits.highlights as f32 / 100.0;
     let saturation = edits.saturation as f32 / 100.0;
-    
+
     // Combined brightness factor
     let brightness = 1.0 + exposure + shadows * 0.22 + highlights * 0.1;
     let contrast_factor = 1.0 + contrast - shadows * 0.08 + highlights * 0.12;
     let saturation_factor = 1.0 + saturation;
-    
+
     for pixel in rgba.pixels_mut() {
         let mut r = pixel[0] as f32 / 255.0;
         let mut g = pixel[1] as f32 / 255.0;
         let mut b = pixel[2] as f32 / 255.0;
-        
+
         // Brightness
         r *= brightness;
         g *= brightness;
         b *= brightness;
-        
+
         // Contrast (around 0.5 midpoint)
         r = (r - 0.5) * contrast_factor + 0.5;
         g = (g - 0.5) * contrast_factor + 0.5;
         b = (b - 0.5) * contrast_factor + 0.5;
-        
+
         // Saturation
         let gray = 0.299 * r + 0.587 * g + 0.114 * b;
         r = gray + (r - gray) * saturation_factor;
         g = gray + (g - gray) * saturation_factor;
         b = gray + (b - gray) * saturation_factor;
-        
+
         // Warmth
         if warmth > 0.0 {
             r += warmth * 0.3;
@@ -490,13 +528,13 @@ fn apply_color_adjustments(img: DynamicImage, edits: &EditValues) -> DynamicImag
             b += -warmth * 0.3;
             r -= -warmth * 0.3;
         }
-        
+
         // Clamp and convert back
         pixel[0] = (r.clamp(0.0, 1.0) * 255.0).round() as u8;
         pixel[1] = (g.clamp(0.0, 1.0) * 255.0).round() as u8;
         pixel[2] = (b.clamp(0.0, 1.0) * 255.0).round() as u8;
     }
-    
+
     DynamicImage::ImageRgba8(rgba)
 }
 
@@ -516,10 +554,14 @@ fn read_exif_bytes(path: &PathBuf) -> Option<Vec<u8>> {
                         let len = ((buffer[i + 2] as usize) << 8) | (buffer[i + 3] as usize);
                         if i + 2 + len <= buffer.len() {
                             // Check for "Exif\0\0" signature
-                            if i + 8 < buffer.len() &&
-                               buffer[i + 4] == b'E' && buffer[i + 5] == b'x' &&
-                               buffer[i + 6] == b'i' && buffer[i + 7] == b'f' &&
-                               buffer[i + 8] == 0 && buffer[i + 9] == 0 {
+                            if i + 8 < buffer.len()
+                                && buffer[i + 4] == b'E'
+                                && buffer[i + 5] == b'x'
+                                && buffer[i + 6] == b'i'
+                                && buffer[i + 7] == b'f'
+                                && buffer[i + 8] == 0
+                                && buffer[i + 9] == 0
+                            {
                                 return Some(buffer[i..i + 2 + len].to_vec());
                             }
                         }
@@ -543,7 +585,7 @@ fn write_image(
     exif_data: &Option<Vec<u8>>,
 ) -> Result<(), String> {
     let quality = (quality * 100.0).round().clamp(1.0, 100.0) as u8;
-    
+
     match format {
         "image/png" => {
             let encoder = image::codecs::png::PngEncoder::new_with_quality(
@@ -551,25 +593,30 @@ fn write_image(
                 image::codecs::png::CompressionType::Default,
                 image::codecs::png::FilterType::default(),
             );
-            encoder.write_image(
-                img.as_bytes(),
-                img.width(),
-                img.height(),
-                img.color().into(),
-            ).map_err(|e| e.to_string())?;
+            encoder
+                .write_image(
+                    img.as_bytes(),
+                    img.width(),
+                    img.height(),
+                    img.color().into(),
+                )
+                .map_err(|e| e.to_string())?;
         }
         "image/webp" => {
             let encoder = image::codecs::webp::WebPEncoder::new_lossless(
-                std::fs::File::create(path).map_err(|e| e.to_string())?
+                std::fs::File::create(path).map_err(|e| e.to_string())?,
             );
-            encoder.write_image(
-                img.as_bytes(),
-                img.width(),
-                img.height(),
-                img.color().into(),
-            ).map_err(|e| e.to_string())?;
+            encoder
+                .write_image(
+                    img.as_bytes(),
+                    img.width(),
+                    img.height(),
+                    img.color().into(),
+                )
+                .map_err(|e| e.to_string())?;
         }
-        _ => { // JPEG default
+        _ => {
+            // JPEG default
             // For JPEG, we can preserve EXIF by injecting it
             let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
 
@@ -582,23 +629,29 @@ fn write_image(
                     write_jpeg_with_exif(&mut file, &rgb, quality, exif)?;
                 } else {
                     // No EXIF to preserve, write normally
-                    let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut file, quality);
-                    encoder.write_image(
+                    let encoder =
+                        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut file, quality);
+                    encoder
+                        .write_image(
+                            rgb.as_raw(),
+                            rgb.width(),
+                            rgb.height(),
+                            image::ExtendedColorType::Rgb8,
+                        )
+                        .map_err(|e| e.to_string())?;
+                }
+            } else {
+                // Strip metadata explicitly requested
+                let encoder =
+                    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut file, quality);
+                encoder
+                    .write_image(
                         rgb.as_raw(),
                         rgb.width(),
                         rgb.height(),
                         image::ExtendedColorType::Rgb8,
-                    ).map_err(|e| e.to_string())?;
-                }
-            } else {
-                // Strip metadata explicitly requested
-                let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut file, quality);
-                encoder.write_image(
-                    rgb.as_raw(),
-                    rgb.width(),
-                    rgb.height(),
-                    image::ExtendedColorType::Rgb8,
-                ).map_err(|e| e.to_string())?;
+                    )
+                    .map_err(|e| e.to_string())?;
             }
             file.flush().map_err(|e| e.to_string())?;
         }
@@ -614,41 +667,42 @@ fn write_jpeg_with_exif(
     exif: &[u8],
 ) -> Result<(), String> {
     use std::io::Write;
-    
+
     // Encode to memory buffer first
     let mut buffer = Vec::new();
     {
         let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buffer, quality);
-        encoder.write_image(
-            img.as_raw(),
-            img.width(),
-            img.height(),
-            image::ExtendedColorType::Rgb8,
-        ).map_err(|e| e.to_string())?;
+        encoder
+            .write_image(
+                img.as_raw(),
+                img.width(),
+                img.height(),
+                image::ExtendedColorType::Rgb8,
+            )
+            .map_err(|e| e.to_string())?;
     }
-    
+
     // Inject EXIF after SOI marker (0xFFD8)
     let mut output = Vec::new();
-    
+
     // Write SOI
     output.extend_from_slice(&[0xFF, 0xD8]);
-    
+
     // Skip any existing APP0 (JFIF) marker - check at buffer[2]
     if buffer.len() > 4 && buffer[2] == 0xFF && buffer[3] == 0xE0 {
         let len = ((buffer[4] as usize) << 8) | (buffer[5] as usize);
         output.extend_from_slice(&buffer[2..2 + 2 + len]);
     }
-    
+
     // Inject our EXIF (APP1)
     output.extend_from_slice(&[0xFF, 0xE1]);
     let exif_len = exif.len() + 2;
     output.extend_from_slice(&[(exif_len >> 8) as u8, (exif_len & 0xFF) as u8]);
     output.extend_from_slice(exif);
-    
+
     // Copy rest of buffer (skip SOI at buffer[0..2])
     output.extend_from_slice(&buffer[2..]);
-    
+
     file.write_all(&output).map_err(|e| e.to_string())?;
     Ok(())
 }
-

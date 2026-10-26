@@ -1,7 +1,7 @@
 use super::*;
 use std::path::PathBuf;
-use walkdir::WalkDir;
 use tauri_plugin_dialog::DialogExt;
+use walkdir::WalkDir;
 
 #[tauri::command]
 pub async fn cancel_batch_export() -> Result<(), String> {
@@ -34,15 +34,15 @@ pub async fn export_bytes(
 
     // 2. Optional backup of existing file (only if user chose to replace)
     if backup.unwrap_or(false) && path.exists() {
-        let bak = path.with_extension(format!("{}.bak", path.extension().and_then(|s| s.to_str()).unwrap_or("bak")));
+        let bak = path.with_extension(format!(
+            "{}.bak",
+            path.extension().and_then(|s| s.to_str()).unwrap_or("bak")
+        ));
         let _ = std::fs::copy(&path, &bak);
     }
 
     // 3. Atomic write: temp file next to destination, then rename
-    let tmp = path.with_extension(format!(
-        "tmp-{}",
-        uuid::Uuid::new_v4()
-    ));
+    let tmp = path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
     let mut file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
     file.write_all(&bytes).map_err(|e| e.to_string())?;
     file.sync_all().map_err(|e| e.to_string())?;
@@ -56,8 +56,8 @@ pub async fn export_bytes(
 
 #[cfg(test)]
 mod thumbnail_cache_tests {
-    use super::{prune_missing_items, upsert_media_batch, MediaItem};
     use super::library::{prune_thumbnail_cache, thumbnail_cache_key};
+    use super::{prune_missing_items, upsert_media_batch, MediaItem};
     use std::collections::HashSet;
     use std::fs;
     use uuid::Uuid;
@@ -75,10 +75,8 @@ mod thumbnail_cache_tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn large_sources_use_the_native_downsample_path() {
-        let root = std::env::temp_dir().join(format!(
-            "visto-gallery-thumb-sips-test-{}",
-            Uuid::new_v4()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("visto-gallery-thumb-sips-test-{}", Uuid::new_v4()));
         fs::create_dir_all(&root).expect("create test dir");
         let source = root.join("source.png");
         image::RgbaImage::from_pixel(64, 32, image::Rgba([40, 90, 150, 255]))
@@ -102,10 +100,8 @@ mod thumbnail_cache_tests {
 
     #[test]
     fn prune_keeps_cache_within_budget() {
-        let root = std::env::temp_dir().join(format!(
-            "visto-gallery-thumb-cache-test-{}",
-            Uuid::new_v4()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("visto-gallery-thumb-cache-test-{}", Uuid::new_v4()));
         fs::create_dir_all(&root).expect("create cache dir");
         for index in 0..3 {
             fs::write(root.join(format!("{index}.jpg")), [0_u8; 10]).expect("write cache file");
@@ -154,10 +150,8 @@ mod thumbnail_cache_tests {
         .await
         .expect("create album_items");
 
-        let root = std::env::temp_dir().join(format!(
-            "visto-gallery-prune-test-{}",
-            Uuid::new_v4()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("visto-gallery-prune-test-{}", Uuid::new_v4()));
         fs::create_dir_all(&root).expect("create test dir");
 
         // Create two real files
@@ -167,11 +161,41 @@ mod thumbnail_cache_tests {
         fs::write(&file2, b"fake jpeg").unwrap();
 
         // Insert three items: two with existing files, one with a deleted file
-        let item1 = MediaItem::new(file1.to_string_lossy().into_owned(), "photo1.jpg".into(), "jpg".into(), "photo".into(), 9, 1000);
-        let item2 = MediaItem::new(file2.to_string_lossy().into_owned(), "photo2.jpg".into(), "jpg".into(), "photo".into(), 9, 1000);
+        let item1 = MediaItem::new(
+            file1.to_string_lossy().into_owned(),
+            "photo1.jpg".into(),
+            "jpg".into(),
+            "photo".into(),
+            9,
+            1000,
+        );
+        let item2 = MediaItem::new(
+            file2.to_string_lossy().into_owned(),
+            "photo2.jpg".into(),
+            "jpg".into(),
+            "photo".into(),
+            9,
+            1000,
+        );
         let deleted_path = root.join("deleted.jpg").to_string_lossy().into_owned();
-        let mut item3 = MediaItem::new(deleted_path.clone(), "deleted.jpg".into(), "jpg".into(), "photo".into(), 9, 1000);
-        upsert_media_batch(&db, &[(item1.clone(), None, None), (item2.clone(), None, None), (item3.clone(), None, None)]).await.expect("insert items");
+        let mut item3 = MediaItem::new(
+            deleted_path.clone(),
+            "deleted.jpg".into(),
+            "jpg".into(),
+            "photo".into(),
+            9,
+            1000,
+        );
+        upsert_media_batch(
+            &db,
+            &[
+                (item1.clone(), None, None),
+                (item2.clone(), None, None),
+                (item3.clone(), None, None),
+            ],
+        )
+        .await
+        .expect("insert items");
 
         // Add some relations for item3
         sqlx::query("INSERT INTO media_tags (media_id, tag_id) VALUES (?, 'tag1')")
@@ -190,7 +214,9 @@ mod thumbnail_cache_tests {
         seen.insert(file1.to_string_lossy().into_owned());
         seen.insert(file2.to_string_lossy().into_owned());
 
-        let removed = prune_missing_items(&db, root.to_str().unwrap(), &seen).await.expect("prune should succeed");
+        let removed = prune_missing_items(&db, root.to_str().unwrap(), &seen)
+            .await
+            .expect("prune should succeed");
         assert_eq!(removed, 1, "should have removed the deleted file's row");
 
         // Verify item3 is gone from media_items
@@ -202,17 +228,19 @@ mod thumbnail_cache_tests {
         assert_eq!(count, 0);
 
         // Verify relations are also gone
-        let tag_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = ?")
-            .bind(&item3.id)
-            .fetch_one(&db)
-            .await
-            .expect("count tags");
+        let tag_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = ?")
+                .bind(&item3.id)
+                .fetch_one(&db)
+                .await
+                .expect("count tags");
         assert_eq!(tag_count, 0);
-        let album_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM album_items WHERE media_id = ?")
-            .bind(&item3.id)
-            .fetch_one(&db)
-            .await
-            .expect("count albums");
+        let album_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM album_items WHERE media_id = ?")
+                .bind(&item3.id)
+                .fetch_one(&db)
+                .await
+                .expect("count albums");
         assert_eq!(album_count, 0);
 
         // item1 and item2 should remain
@@ -275,7 +303,7 @@ mod batch_export_tests {
                 .expect("write seed image");
             for index in 0..FILES {
                 std::fs::copy(&seed, root.join(format!("image-{index:05}.png")))
-                .expect("generate synthetic image");
+                    .expect("generate synthetic image");
             }
             std::fs::remove_file(seed).ok();
             // Exercise large-file size handling without allocating gigabytes
@@ -292,20 +320,42 @@ mod batch_export_tests {
             .filter_map(|entry| entry.ok())
             .filter(|entry| entry.file_type().is_file())
             .filter(|entry| {
-                let ext = entry.path().extension().and_then(|value| value.to_str()).unwrap_or("").to_lowercase();
+                let ext = entry
+                    .path()
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
                 is_media_file(&ext)
             })
             .map(|entry| entry.into_path())
             .collect();
-        assert!(!paths.is_empty(), "fixture contains no supported media files");
-        let photo_count = paths.iter().filter(|path| {
-            let ext = path.extension().and_then(|value| value.to_str()).unwrap_or("").to_lowercase();
-            kind_for_ext(&ext) == "photo"
-        }).count();
-        let video_count = paths.iter().filter(|path| {
-            let ext = path.extension().and_then(|value| value.to_str()).unwrap_or("").to_lowercase();
-            kind_for_ext(&ext) == "video"
-        }).count();
+        assert!(
+            !paths.is_empty(),
+            "fixture contains no supported media files"
+        );
+        let photo_count = paths
+            .iter()
+            .filter(|path| {
+                let ext = path
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                kind_for_ext(&ext) == "photo"
+            })
+            .count();
+        let video_count = paths
+            .iter()
+            .filter(|path| {
+                let ext = path
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                kind_for_ext(&ext) == "video"
+            })
+            .count();
         let now = now_ms();
 
         let legacy_db = perf_db().await;
@@ -346,8 +396,12 @@ mod batch_export_tests {
             .expect("read large video size");
             assert_eq!(large_video_size, 2 * 1024 * 1024 * 1024);
         }
-        let label = if generated { "generated fixture" } else { "provided media folder" };
-#[cfg(debug_assertions)]
+        let label = if generated {
+            "generated fixture"
+        } else {
+            "provided media folder"
+        };
+        #[cfg(debug_assertions)]
         println!(
             "Scan {label}: {} photos, {video_count} videos: per-file writes {:.2}s; batches of {BATCH}: {:.2}s; speedup {:.2}x",
             photo_count,
@@ -373,7 +427,11 @@ mod batch_export_tests {
         }
     }
 
-    fn test_request(items: Vec<BatchExportItem>, folder: &Path, format: &str) -> BatchExportRequest {
+    fn test_request(
+        items: Vec<BatchExportItem>,
+        folder: &Path,
+        format: &str,
+    ) -> BatchExportRequest {
         BatchExportRequest {
             items,
             output_folder: folder.to_string_lossy().to_string(),
@@ -468,15 +526,19 @@ mod batch_export_tests {
         let output = export_batch_item(&item, &request, &folder, 85, &mut used)
             .expect("video should copy unchanged");
 
-        assert_eq!(std::fs::read(&output).unwrap(), std::fs::read(&source).unwrap());
+        assert_eq!(
+            std::fs::read(&output).unwrap(),
+            std::fs::read(&source).unwrap()
+        );
         std::fs::remove_dir_all(&folder).ok();
     }
 }
 
-
-
 #[tauri::command]
-pub async fn batch_export(app: tauri::AppHandle, request: BatchExportRequest) -> Result<BatchExportResult, String> {
+pub async fn batch_export(
+    app: tauri::AppHandle,
+    request: BatchExportRequest,
+) -> Result<BatchExportResult, String> {
     // A new run always starts un-cancelled.
     super::BATCH_CANCEL.store(false, Ordering::SeqCst);
 

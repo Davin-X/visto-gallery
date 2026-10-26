@@ -62,7 +62,6 @@ pub struct Tag {
     pub item_count: i64,
 }
 
-
 /// Hand-written row mapping.
 ///
 /// `tags` and `album_ids` are not columns — they are hydrated by the command
@@ -110,7 +109,14 @@ pub fn stable_id(path: &str) -> String {
 }
 
 impl MediaItem {
-    pub fn new(path: String, name: String, extension: String, kind: String, size: i64, modified_at: i64) -> Self {
+    pub fn new(
+        path: String,
+        name: String,
+        extension: String,
+        kind: String,
+        size: i64,
+        modified_at: i64,
+    ) -> Self {
         let now = (OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000) as i64;
         Self {
             id: stable_id(&path),
