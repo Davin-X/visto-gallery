@@ -18,6 +18,7 @@ interface PlaybackSnapshot {
   duration: number;
   muted: boolean;
   volume: number;
+  lastVolume: number;
 }
 
 interface PlaybackState extends PlaybackSnapshot {
@@ -29,6 +30,7 @@ interface PlaybackState extends PlaybackSnapshot {
   ) => void;
   unregister: (element: HTMLVideoElement) => void;
   sync: (patch: Partial<PlaybackSnapshot>) => void;
+  setLastVolume: (volume: number) => void;
 
   toggle: () => void;
   seek: (time: number) => void;
@@ -45,6 +47,7 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
   duration: 0,
   muted: false,
   volume: 1,
+  lastVolume: 1,
 
   register: (element, meta) =>
     set({ element, itemId: meta.itemId, name: meta.name }),
@@ -64,6 +67,8 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
   },
 
   sync: (patch) => set(patch),
+
+  setLastVolume: (volume) => set({ lastVolume: volume }),
 
   toggle: () => {
     const video = get().element;
