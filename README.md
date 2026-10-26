@@ -1,114 +1,54 @@
-# VistoGallery
+<p align="center">
+  <img src="src-tauri/icons/icon.png" width="128" alt="VistoGallery" />
+</p>
 
-A fast, local-first photo & video gallery for macOS — React, TypeScript, Vite, Tauri 2 (Rust).
+<h1 align="center">VistoGallery</h1>
 
-![VistoGallery icon](src-tauri/icons/icon.png)
+<p align="center">
+  A fast, private photo & video gallery for macOS.<br/>
+  Browse, edit, tag, and find duplicates — all on your disk.
+</p>
 
-> **Status:** Stable · `v0.1.1` · Local-first · macOS 13+ (Apple Silicon) · MIT
-
-## What VistoGallery is
-
-VistoGallery is your private photo library — on your Mac, under your control. It scans folders you choose, builds a local SQLite catalog, reads/writes EXIF metadata, lets you non-destructively edit and export, finds duplicates by SHA-256, and can hide sensitive items from the gallery.
-
-Nothing is uploaded. Nothing phones home. Your photos stay on your disk.
-
-| Layer | What it does |
-|-------|--------------|
-| **Frontend** (`src/`) | React 18 + TypeScript + Vite UI |
-| **Backend** (`src-tauri/`) | Tauri 2 + Rust + SQLite (`sqlx`) |
-| **Bridge** | Typed Tauri invoke layer |
+<p align="center">
+  <a href="https://github.com/Davin-X/visto-gallery/releases"><img alt="Download" src="https://img.shields.io/badge/Download-.dmg-blue?style=flat-square"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-green?style=flat-square"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/macOS-13%2B-lightgrey?style=flat-square">
+</p>
 
 ## Features
 
-- **Library views** — Grid, Details, Timeline, Filmstrip, and Overview layouts
-- **Sorting and selection** — sort by name, capture date, modified date, kind, or size; select across timeline groups
-- **Sources manager** — add multiple folders at once, filter and inspect sources, rescan, reveal in Finder, and remove sources without moving files
-- **Inspector** — preview a selected item and edit tags alongside file metadata
-- **Smart filters** — All / Photos / Videos / RAW / Favorites
-- **Search** — by filename, folder path, camera model, tags
-- **Viewer** — keyboard navigation, zoom, full-screen, video playback (volume, background playback, picture-in-picture), and a thumbnail filmstrip; controls auto-hide
-- **Non-destructive edits** — exposure, contrast, warmth, rotation, flip; export JPEG/PNG/HEIC/AVIF
-- **Duplicate detection** — SHA-256 scanner with live progress and cancellation
-- **Long-running scans** — cancel folder indexing, file imports, or duplicate hashing; completed work stays saved
-- **Batch tools** — rename, export, convert, strip metadata
-- **Slideshow** — configurable photo interval, shuffle and transitions; videos advance when playback ends; video volume controls, picture-in-picture, and auto-hiding controls
-- **Hidden** — conceal sensitive items and their metadata in the gallery; files stay on disk at their original paths (not encrypted)
-- **Dark / Light / System** appearance
-- **Finder tags** read/write
+- **Private by default** — Everything stays local. No cloud, no tracking.
+- **Browse effortlessly** — Grid, Details, Timeline, Filmstrip, and Overview views
+- **Organize** — Albums, tags, favorites, and hidden items
+- **Edit & export** — Non-destructive edits with JPEG, PNG, HEIC, and AVIF export
+- **Find duplicates** — SHA-256 powered detection with live progress & cancellation
+- **Native feel** — Finder tags, Reveal in Finder, dark/light/system themes
+- **Built for speed** — Fast scans, smart thumbnails, and large-library ready
 
-## Quick start
+## Download
 
-### Browser preview (no Rust needed)
+Grab the latest release from [**GitHub Releases**](https://github.com/Davin-X/visto-gallery/releases).
 
-```sh
-git clone https://github.com/Davin-X/visto-gallery.git
-cd visto-gallery
+## Build from source
+
+```bash
 npm install
-npm run dev        # open http://localhost:1420/harness.html
-npm run build      # dist/
-npm run preview    # open http://localhost:4173/harness.html
+npm run tauri dev    # Run in development
+npm run tauri build  # Build for macOS
 ```
 
-The browser preview uses a small Tauri API stub for UI review. Native file access, scanning, and Finder actions require the desktop app.
+## Privacy
 
-### Native macOS desktop app
-
-Requires Node.js, Rust toolchain, Tauri CLI.
-
-```sh
-npm install
-npm run tauri dev     # desktop app
-npm run tauri build   # .app bundle (macOS)
-```
-
-> Targets macOS 13+. Universal (Apple Silicon + Intel) builds supported.
-
-## Project structure
-
-```
-visto-gallery/
-├── src/              # React/Vite frontend
-├── src-tauri/        # Tauri 2 + Rust backend
-│   └── icons/        # App icons used by Tauri bundles
-├── scripts/          # Maintainer utilities
-├── index.html
-├── harness.html     # Browser preview with a Tauri API stub
-├── LICENSE
-├── package.json
-├── tsconfig.json
-├── vite.config.js
-└── README.md
-```
-
-## Current limitations
-
-- The browser preview does not have native file-system access; use the Tauri desktop app to index folders.
-- Hidden items are visually concealed in the app but are not encrypted and remain accessible at their original file paths.
-- Folder watching, network access, and crash reporting are not available yet.
-
-See [`CHANGELOG.md`](./CHANGELOG.md) for release notes and [`CONTRIBUTING.md`](./CONTRIBUTING.md) for development guidance.
+VistoGallery is fully local-first. It never uploads photos, metadata, or usage data. Hidden items are concealed in-app but remain at their original paths on disk.
 
 ## Contributing
 
-Contributions are reviewed through pull requests. Check the repository's current branch rules before opening one.
-
-1. Fork, create branch: `git checkout -b feature/your-feature`
-2. Run `npm run typecheck` to verify
-3. Commit: `feat:`, `fix:`, `chore:`, `docs:`
-4. Open a PR against `main`
-
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) · [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, testing, and PR guidelines.
 
 ## Security
 
-Local-first, no network requests by design. Disclose responsibly.
-
-See [`SECURITY.md`](./SECURITY.md).
+Report vulnerabilities via [SECURITY.md](./SECURITY.md).
 
 ## License
 
-MIT License. See [`LICENSE`](./LICENSE).
-
----
-
-**VistoGallery** — your photos, your Mac, your terms.
+[MIT License](./LICENSE)
