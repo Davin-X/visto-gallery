@@ -26,6 +26,7 @@
         "minimizable": true,
         "closable": true,
         "label": "main",
+        "devtools": false,
         "backgroundColor": "#171c23"
       }
     ],
