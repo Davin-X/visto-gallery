@@ -4725,6 +4725,7 @@ function BatchScreen(props: any) {
   const progress = props.state.progress;
   const error = props.state.error;
   const cancelRequested = Boolean(props.cancelRequested);
+  const stalled = Boolean(props.state.stalled);
   const config = props.config;
   const outputFolder = String(config.outputFolder || "");
   const step = result ? 3 : busy ? 3 : total > 0 ? 2 : 1;
@@ -4816,6 +4817,7 @@ function BatchScreen(props: any) {
             <span>{cancelRequested ? "Finishing the current file, then stopping." : "Finished copies are kept. The current file finishes before the export stops."}</span>
           </div>
           <p className="batch-note">Files are written one at a time. Keep this window open until the export finishes.</p>
+          {stalled && <p className="batch-error">No progress for 15s — export may be stalled. You can cancel and retry.</p>}
         </div>
       ) : result ? (
         <div className="batch-result">

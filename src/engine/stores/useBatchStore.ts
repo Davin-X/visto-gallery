@@ -20,6 +20,7 @@ interface BatchState {
   busy: boolean;
   cancelRequested: boolean;
   progress: { current: number; total: number; currentFile: string } | null;
+  stalled: boolean;
   result: BatchExportResult | null;
   error: string | null;
 
@@ -53,6 +54,7 @@ export const useBatchStore = create<BatchState>()(
       busy: false,
       cancelRequested: false,
       progress: null,
+      stalled: false,
       result: null,
       error: null,
 
@@ -86,14 +88,30 @@ export const useBatchStore = create<BatchState>()(
           result: null,
           step: 2,
           progress: { current: 0, total: items.length, currentFile: "" },
+          stalled: false,
         });
 
         // Progress arrives from Rust between files. The listener is best-effort:
         // if the event bridge is unavailable the export still completes.
         let unlisten: (() => void) | undefined;
+        let watchdog: ReturnType<typeof setTimeout> | undefined;
+        const stallMs = 15000;
+        const armWatchdog = () => {
+          if (watchdog) clearTimeout(watchdog);
+          watchdog = setTimeout(() => {
+            set({ stalled: true, error: "Export appears stalled (no progress for 15s)." });
+          }, stallMs);
+        };
+        const clearWatchdog = () => {
+          if (watchdog) clearTimeout(watchdog);
+          watchdog = undefined;
+        };
+        armWatchdog();
+
         try {
           unlisten = await events.onBatchProgress((progress) => {
-            set({ progress, busy: true });
+            set({ progress, busy: true, stalled: false, error: null });
+            armWatchdog();
           });
         } catch {
           unlisten = undefined;
@@ -117,8 +135,10 @@ export const useBatchStore = create<BatchState>()(
           };
 
           const result = await tauri.batch.export(request);
-          set({ busy: false, cancelRequested: false, progress: null, result, step: 3 });
+          clearWatchdog();
+          set({ busy: false, cancelRequested: false, progress: null, result, step: 3, stalled: false });
         } catch (e) {
+          clearWatchdog();
           set({
             busy: false,
             cancelRequested: false,
@@ -126,8 +146,10 @@ export const useBatchStore = create<BatchState>()(
             step: 2,
             error: String(e),
             result: null,
+            stalled: false,
           });
         } finally {
+          clearWatchdog();
           unlisten?.();
         }
       },
@@ -153,6 +175,7 @@ export const useBatchStore = create<BatchState>()(
           progress: null,
           result: null,
           error: null,
+          stalled: false,
         }),
     }),
     { name: "batch-store" }
@@ -173,6 +196,7 @@ export const useBatchState = () => useBatchStore((s) => ({
   busy: s.busy,
   cancelRequested: s.cancelRequested,
   progress: s.progress,
+  stalled: s.stalled,
   result: s.result,
   error: s.error,
 }));
