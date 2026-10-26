@@ -3285,6 +3285,10 @@ function LibraryScreen(props: any) {
               Browse Library
             </button>
           </div>
+        ) : props.items?.length === 0 ? (
+          <button className="primary-button" type="button" onClick={() => props.onImportFolder?.()}>
+            <PlusIcon size={14} /> Add a folder
+          </button>
         ) : (
           <button type="button" onClick={clearEmptyView}>Clear filters</button>
         )}
