@@ -145,6 +145,8 @@ pub fn run() {
             // Library
             scan_library,
             cancel_scan,
+            cancel_move_to_trash,
+            cancel_find_duplicates,
             import_files,
             get_library_items,
             get_albums,

@@ -171,6 +171,7 @@ export type TauriCommandSignature = {
   // Library
   scan_library: (rootPath: string, force: boolean) => ScanResult;
   cancel_scan: () => void;
+  cancel_move_to_trash: () => void;
   import_files: (paths: string[]) => ScanResult;
   get_library_items: (filter: LibraryFilterDTO) => MediaItem[];
   get_item_thumbnail: (request: ThumbnailRequest) => ThumbnailResponse;
@@ -207,6 +208,7 @@ export type TauriCommandSignature = {
 
   // Duplicates
   find_duplicates: () => DuplicateGroup[];
+  cancel_find_duplicates: () => void;
 
   // Finder
   write_finder_tags: (path: string, tags: string[]) => void;

@@ -322,10 +322,24 @@ const TAG_SELECT: &str = "SELECT t.id, t.name, t.color_index, t.created_at, \
 /// duplicate hashing. Each operation clears it before starting and checks it
 /// between filesystem work units.
 static SCAN_CANCEL: AtomicBool = AtomicBool::new(false);
+static TRASH_CANCEL: AtomicBool = AtomicBool::new(false);
+static DUPLICATE_CANCEL: AtomicBool = AtomicBool::new(false);
 
 #[tauri::command]
 pub async fn cancel_scan() -> Result<(), String> {
     SCAN_CANCEL.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cancel_move_to_trash() -> Result<(), String> {
+    TRASH_CANCEL.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cancel_find_duplicates() -> Result<(), String> {
+    DUPLICATE_CANCEL.store(true, Ordering::SeqCst);
     Ok(())
 }
 
@@ -1526,7 +1540,7 @@ pub async fn move_to_trash(
     state: State<'_, AppState>,
     window: Window,
 ) -> Result<TrashResult, String> {
-    SCAN_CANCEL.store(false, Ordering::SeqCst);
+    TRASH_CANCEL.store(false, Ordering::SeqCst);
 
     let db = get_db(&state)?;
 
@@ -1557,7 +1571,7 @@ pub async fn move_to_trash(
     let mut failed = Vec::new();
 
     for (idx, path) in paths.iter().enumerate() {
-        if SCAN_CANCEL.load(Ordering::SeqCst) {
+        if TRASH_CANCEL.load(Ordering::SeqCst) {
             failed.push(TrashError {
                 path: path.clone(),
                 error: "Operation cancelled".to_string(),
@@ -2518,7 +2532,7 @@ pub async fn find_duplicates(
     state: State<'_, AppState>,
     window: Window,
 ) -> Result<Vec<DuplicateGroup>, String> {
-    SCAN_CANCEL.store(false, Ordering::SeqCst);
+    DUPLICATE_CANCEL.store(false, Ordering::SeqCst);
     let db = get_db(&state)?;
 
     // Load the catalog (hidden items included — a duplicate doesn't stop being
@@ -2563,7 +2577,7 @@ pub async fn find_duplicates(
     let mut quick_prefixes: HashMap<usize, Vec<u8>> = HashMap::new();
     const FINGERPRINT_BATCH: usize = 50;
     for chunk in candidates.chunks(FINGERPRINT_BATCH) {
-        if SCAN_CANCEL.load(Ordering::SeqCst) {
+        if DUPLICATE_CANCEL.load(Ordering::SeqCst) {
             break;
         }
         // Process batch in blocking pool to avoid blocking executor
@@ -2641,7 +2655,7 @@ pub async fn find_duplicates(
     // Process with controlled concurrency
     let mut join_set = tokio::task::JoinSet::new();
     for &index in &full_hash_candidates {
-        if SCAN_CANCEL.load(Ordering::SeqCst) {
+        if DUPLICATE_CANCEL.load(Ordering::SeqCst) {
             break;
         }
         let path = items[index].path.clone();
@@ -2654,7 +2668,7 @@ pub async fn find_duplicates(
 
         join_set.spawn(async move {
             let _permit = sem.acquire().await.ok();
-            if SCAN_CANCEL.load(Ordering::SeqCst) {
+            if DUPLICATE_CANCEL.load(Ordering::SeqCst) {
                 return None;
             }
             // Reuse cached prefix from quick fingerprint phase
@@ -2676,11 +2690,11 @@ pub async fn find_duplicates(
     }
 
     while let Some(result) = join_set.join_next().await {
-        if SCAN_CANCEL.load(Ordering::SeqCst) {
+        if DUPLICATE_CANCEL.load(Ordering::SeqCst) {
             break;
         }
         if let Ok(Some((index, id, hash, size))) = result {
-            if SCAN_CANCEL.load(Ordering::SeqCst) {
+            if DUPLICATE_CANCEL.load(Ordering::SeqCst) {
                 break;
             }
             processed += 1;
@@ -2798,7 +2812,7 @@ async fn compute_full_sha256_with_progress(
     let mut last_reported_at = std::time::Instant::now();
     
     loop {
-        if SCAN_CANCEL.load(Ordering::SeqCst) {
+        if DUPLICATE_CANCEL.load(Ordering::SeqCst) {
             return None;
         }
         let n = file.read(&mut buf).await.ok()?;

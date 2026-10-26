@@ -72,6 +72,9 @@ export const tauri = {
     moveToTrash: (paths: string[]): Promise<TrashResult> =>
       invoke("move_to_trash", { paths }),
 
+    cancelMoveToTrash: (): Promise<void> =>
+      invoke("cancel_move_to_trash"),
+
     revealInFinder: (path: string): Promise<void> =>
       invoke("reveal_in_finder", { path }),
 
@@ -126,6 +129,9 @@ export const tauri = {
   duplicates: {
     scan: (): Promise<DuplicateGroup[]> =>
       invoke("find_duplicates"),
+
+    cancel: (): Promise<void> =>
+      invoke("cancel_find_duplicates"),
   },
 
   finder: {
