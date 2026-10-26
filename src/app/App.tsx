@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo, useDeferredValue, memo } from "react";
 import { useFocusTrap } from "../design/hooks/useFocusTrap";
+import { KindBadge, KindDot } from "../design/components/KindBadge";
 
 import { createPortal } from "react-dom";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -28,20 +29,6 @@ import { MiniPlayer } from "../design/components/MiniPlayer";
 import { getTypeIdentity } from "../engine/utils/mediaTypes";
 
 // Helper: render a kind badge using centralized type identity
-function KindBadge({ kind }: { kind: "photo" | "video" | "raw" }) {
-  const { label, softColor, color } = getTypeIdentity(kind);
-  return (
-    <span className={`kind-badge ${kind}`} style={{ background: softColor, color }} title={label}>
-      {label}
-    </span>
-  );
-}
-
-// Helper: render a kind dot
-function KindDot({ kind }: { kind: "photo" | "video" | "raw" }) {
-  const { color } = getTypeIdentity(kind);
-  return <span className={`kind-dot ${kind}`} style={{ background: color }} />;
-}
 
 // Helper: get icon for kind
 function KindIcon({ kind, size = 14 }: { kind: "photo" | "video" | "raw"; size?: number }) {
