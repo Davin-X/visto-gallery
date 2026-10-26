@@ -1437,21 +1437,19 @@ pub async fn remove_library_folder(
         return Err("Folder is not a registered library root.".to_string());
     }
 
-    let rows = sqlx::query("SELECT id, path FROM media_items")
-        .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+let rows = sqlx::query(
+        "SELECT id, path FROM media_items \
+         WHERE substr(path, 1, ?1) = ?2 AND length(path) > ?1 AND substr(path, ?1 + 1, 1) = '/'",
+    )
+    .bind(root.len() as i64)
+    .bind(&root)
+    .fetch_all(&db)
+    .await
+    .map_err(|e| e.to_string())?;
 
     let targets: Vec<(String, String)> = rows
         .iter()
-        .filter_map(|row| {
-            let item_path: String = row.get("path");
-            if path_is_inside(&item_path, &root) {
-                Some((row.get::<String, _>("id"), item_path))
-            } else {
-                None
-            }
-        })
+        .map(|row| (row.get::<String, _>("id"), row.get::<String, _>("path")))
         .collect();
 
     if delete_files.unwrap_or(false) && !targets.is_empty() {
@@ -1485,6 +1483,8 @@ pub async fn remove_library_folder(
         }
     }
 
+    let mut tx = db.begin().await.map_err(|e| e.to_string())?;
+
     // Clean up join rows explicitly instead of relying on foreign-key cascades
     // being enabled on this particular pooled connection.
     for (id, _) in &targets {
@@ -1495,7 +1495,7 @@ pub async fn remove_library_folder(
         ] {
             sqlx::query(statement)
                 .bind(id)
-                .execute(&db)
+                .execute(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
         }
@@ -1504,18 +1504,20 @@ pub async fn remove_library_folder(
     // Forget the folder itself, plus any registered subfolder that lived
     // inside it, so a later import is not shadowed by stale entries.
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
-        .fetch_all(&db)
+        .fetch_all(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     for registered_path in registered {
         if normalize_root(&registered_path) == root || path_is_inside(&registered_path, &root) {
             sqlx::query("DELETE FROM library_folders WHERE path = ?")
                 .bind(&registered_path)
-                .execute(&db)
+                .execute(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
         }
     }
+
+    tx.commit().await.map_err(|e| e.to_string())?;
 
     Ok(targets.len() as i64)
 }
