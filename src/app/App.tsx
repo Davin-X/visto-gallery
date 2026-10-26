@@ -23,7 +23,7 @@ import {
 } from "../engine/stores";
 import { formatDuration } from "../engine/utils/time";
 import { MiniPlayer } from "../design/components/MiniPlayer";
-import { getTypeIdentity, getKindIcon } from "../engine/utils/mediaTypes";
+import { getTypeIdentity } from "../engine/utils/mediaTypes";
 
 // Helper: render a kind badge using centralized type identity
 function KindBadge({ kind }: { kind: "photo" | "video" | "raw" }) {
@@ -43,7 +43,25 @@ function KindDot({ kind }: { kind: "photo" | "video" | "raw" }) {
 
 // Helper: get icon for kind
 function KindIcon({ kind, size = 14 }: { kind: "photo" | "video" | "raw"; size?: number }) {
-  return <span dangerouslySetInnerHTML={{ __html: getKindIcon(kind, 14) }} />;
+  const common = { width: size, height: size, viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: 1.8 };
+  if (kind === "photo") {
+    return (
+      <span>
+        <svg {...common}>
+          <rect x="2" y="2" width="12" height="12" rx="2" />
+          <path d="M6 2v12M10 2v12M2 6h12M2 10h12" />
+        </svg>
+      </span>
+    );
+  }
+  return (
+    <span>
+      <svg {...common}>
+        <path d="M4 4h8v8H4z" />
+        <path d="M4 8h8" />
+      </svg>
+    </span>
+  );
 }
 
 /**
@@ -5581,7 +5599,7 @@ function DuplicatesScreen(props: any) {
           <p className="page-subtitle">
             {groups.length === 0
               ? "Duplicate scans compare file content (SHA-256), not just names or sizes."
-              : `${groups.length} group${groups.length === 1 ? "" : "s"} · ${totalCopies} copies · ${formatBytesSimple(reclaimableBytes)} reclaimable`}
+              : `${groups.length} group${groups.length === 1 ? "" : "s"} · ${totalCopies} copies · ${formatBytesSimple(reclaimableBytes)} reclaimable (includes hidden items)`}
           </p>
         </div>
         {!props.busy && groups.length > 0 && (
