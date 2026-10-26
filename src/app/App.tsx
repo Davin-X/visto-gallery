@@ -336,7 +336,7 @@ function App() {
     useState<LibraryFolder | null>(null);
   const [removingFolder, setRemovingFolder] = useState(false);
   const [sourcesSheetOpen, setSourcesSheetOpen] = useState(false);
-  const [removeAllSourcesArmed, setRemoveAllSourcesArmed] = useState(false);
+  const [removeAllSourcesDialogOpen, setRemoveAllSourcesDialogOpen] = useState(false);
   useFocusTrap(albumDialogOpen, albumDialogRef);
   useFocusTrap(!!albumPendingDelete, deleteAlbumDialogRef);
   useFocusTrap(itemPendingDeleteCount > 0, deleteItemDialogRef);
@@ -3245,18 +3245,9 @@ function App() {
                 type="button"
                 className="danger-button"
                 disabled={library.busy || library.folders.length === 0}
-                onClick={() => {
-                  if (!removeAllSourcesArmed) {
-                    setRemoveAllSourcesArmed(true);
-                    library.showNotice("Click again to confirm removing all sources");
-                    window.setTimeout(() => setRemoveAllSourcesArmed(false), 4000);
-                    return;
-                  }
-                  setRemoveAllSourcesArmed(false);
-                  void removeAllSources();
-                }}
+                onClick={() => setRemoveAllSourcesDialogOpen(true)}
               >
-                {removeAllSourcesArmed ? "Confirm remove all" : "Remove all sources"}
+                Remove all sources
               </button>
               <div style={{ flex: 1 }} />
               <button
@@ -3266,6 +3257,19 @@ function App() {
               >
                 Done
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {removeAllSourcesDialogOpen && (
+        <div className='dialog-backdrop' role='presentation' onMouseDown={(e) => { if (e.target === e.currentTarget) setRemoveAllSourcesDialogOpen(false); }}>
+          <div className='album-dialog' role='dialog' aria-modal='true'>
+            <div className='dialog-heading'><h2>Remove all sources?</h2></div>
+            <div className='dialog-body'>This removes all source folders from the library. Files stay on disk.</div>
+            <div className='dialog-actions'>
+              <button type='button' className='quiet-button' onClick={() => setRemoveAllSourcesDialogOpen(false)}>Cancel</button>
+              <button type='button' className='danger-button' onClick={() => { setRemoveAllSourcesDialogOpen(false); void removeAllSources(); }}>Remove all</button>
             </div>
           </div>
         </div>
