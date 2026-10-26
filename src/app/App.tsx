@@ -167,6 +167,7 @@ function App() {
   const albumSearchRef = useRef<HTMLInputElement | null>(null);
   const [albumDragOver, setAlbumDragOver] = useState(false);
   const [appVersion, setAppVersion] = useState("");
+  const [aboutOpen, setAboutOpen] = useState(false);
   useEffect(() => {
     let cancelled = false;
     tauri.app.getVersion().then((v) => { if (!cancelled) setAppVersion(v); }).catch(() => {});
@@ -485,7 +486,7 @@ function App() {
       await register("menu-toggle-inspector", () => liveRef.current.library.toggleInspector());
       await register("menu-zoom-in", () => liveRef.current.viewer.zoomIn());
       await register("menu-zoom-out", () => liveRef.current.viewer.zoomOut());
-      await register("menu-about", () => handlersRef.current.showNotice(`VistoGallery v${appVersion || "0.1.1"} - Native macOS Photo Gallery`));
+      await register("menu-about", () => setAboutOpen(true));
       await register("menu-check-updates", () => handlersRef.current.showNotice("Check for updates - coming soon"));
 
       // Listen for native import progress events from scan/import commands.
@@ -1879,6 +1880,29 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           onClick={() => library.showNotice("")}
         >
           <span aria-hidden="true">{isWarningNotice(library.notice) ? "!" : "✓"}</span>{library.notice}
+        </div>
+      )}
+
+{aboutOpen && (
+        <div
+          className="dialog-backdrop"
+          role="presentation"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setAboutOpen(false); }}
+        >
+          <div className="album-dialog" role="dialog" aria-modal="true" aria-labelledby="about-dialog-title">
+            <div className="dialog-heading">
+              <div>
+                <p className="eyebrow">ABOUT</p>
+                <h2 id="about-dialog-title">VistoGallery</h2>
+              </div>
+              <button type="button" className="dialog-close" aria-label="Close" onClick={() => setAboutOpen(false)}>×</button>
+            </div>
+            <p className="dialog-hint">Native macOS photo gallery.</p>
+            <p className="dialog-hint">Version {appVersion || "0.1.1"}</p>
+            <div className="dialog-actions">
+              <button type="button" className="dialog-button" onClick={() => setAboutOpen(false)}>Close</button>
+            </div>
+          </div>
         </div>
       )}
 
