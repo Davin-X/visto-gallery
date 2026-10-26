@@ -2781,7 +2781,7 @@ kbd {
   gap: 6px;
   min-height: 30px;
   padding: 0 10px;
-  border: 1px solid transparent;
+  border: 1px solid var(--red, #c0392b);
   border-radius: 6px;
   background: var(--red, #c0392b);
   color: #fff;
