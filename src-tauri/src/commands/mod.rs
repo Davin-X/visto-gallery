@@ -4,6 +4,7 @@ use tauri::{AppHandle, State, Manager, Emitter, Window};
 use tauri_plugin_dialog::DialogExt;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use crate::{AppState, models::*};
+use notify::Watcher;
 use anyhow::Result;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -1283,10 +1284,29 @@ fn generate_with_macos_sips(_source: &str, _destination: &Path, _size: u32, reas
 }
 
 #[tauri::command]
-pub async fn watch_folder(path: String, state: State<'_, AppState>) -> Result<(), String> { let _ = (path, state); Ok(()) }
+pub async fn watch_folder(path: String, app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let app_handle = app.clone();
+    let watch_path = path.clone();
+    let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+        if res.is_ok() {
+            let _ = app_handle.emit("folder-changed", &watch_path);
+        }
+    })
+    .map_err(|e| e.to_string())?;
+    watcher
+        .watch(std::path::Path::new(&path), notify::RecursiveMode::Recursive)
+        .map_err(|e| e.to_string())?;
+    let mut guard = state.watchers.lock().map_err(|e| e.to_string())?;
+    guard.insert(path, watcher);
+    Ok(())
+}
 
 #[tauri::command]
-pub async fn unwatch_folder(path: String, state: State<'_, AppState>) -> Result<(), String> { let _ = (path, state); Ok(()) }
+pub async fn unwatch_folder(path: String, state: State<'_, AppState>) -> Result<(), String> {
+    let mut guard = state.watchers.lock().map_err(|e| e.to_string())?;
+    guard.remove(&path);
+    Ok(())
+}
 
 /// Group a path that was imported before folder tracking existed.
 ///

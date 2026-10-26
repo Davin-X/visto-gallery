@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use tauri::{Emitter, Manager, State};
@@ -14,11 +15,12 @@ use menu::create_menu;
 
 struct AppState {
     db: Mutex<Option<Database>>,
+    watchers: Mutex<HashMap<String, notify::RecommendedWatcher>>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        Self { db: Mutex::new(None) }
+        Self { db: Mutex::new(None), watchers: Mutex::new(HashMap::new()) }
     }
 }
 

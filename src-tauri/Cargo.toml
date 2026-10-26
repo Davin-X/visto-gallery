@@ -30,6 +30,7 @@ base64 = "0.22"
 xattr = "1.6"
 plist = "1.10"
 kamadak-exif = "0.6"
+notify = "6"
 
 # UUID
 uuid = { version = "1", features = ["v4", "serde"] }
