@@ -98,15 +98,6 @@ CREATE INDEX IF NOT EXISTS idx_media_tags_media ON media_tags (media_id);
 CREATE INDEX IF NOT EXISTS idx_album_items_media ON album_items (media_id);
 
 -- Import sessions table
-CREATE TABLE IF NOT EXISTS import_sessions (
-    id TEXT PRIMARY KEY,
-    root_path TEXT NOT NULL,
-    file_count INTEGER DEFAULT 0,
-    status TEXT NOT NULL,
-    started_at INTEGER NOT NULL,
-    completed_at INTEGER
-);
-
 -- Library folders table
 CREATE TABLE IF NOT EXISTS library_folders (
     path TEXT PRIMARY KEY,

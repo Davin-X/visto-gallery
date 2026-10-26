@@ -3285,10 +3285,6 @@ pub async fn delete_library_database(state: State<'_, AppState>) -> Result<(), S
         .execute(&db)
         .await
         .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM import_sessions")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
