@@ -40,6 +40,7 @@ import {
   useSettingsStore,
   useSystemDark,
   useThumbnailSize,
+  ACCENT_PALETTE,
   applyTheme,
   useDraftTransforms,
   useDraftIds,
@@ -298,6 +299,7 @@ function App() {
   const systemDark = useSystemDark();
   const appearance = useSettingsStore((s) => s.appearance);
   const accentColor = useSettingsStore((s) => s.accentColor);
+  const [accentPickerOpen, setAccentPickerOpen] = useState(false);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   // Resolved appearance: the user's choice, or the OS setting when "system".
   const dark = appearance === "dark" || (appearance === "system" && systemDark);
@@ -1909,6 +1911,32 @@ function App() {
             }
           >
             {dark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Accent color"
+            title="Cycle accent color"
+            onClick={() => {
+              const i = ACCENT_PALETTE.findIndex(
+                (c: any) => c.id === accentColor,
+              );
+              const next = ACCENT_PALETTE[(i + 1) % ACCENT_PALETTE.length].id;
+              settings.update("accentColor", next as any);
+            }}
+          >
+            <span
+              style={{
+                width: 14,
+                height: 14,
+                borderRadius: "50%",
+                background: (ACCENT_PALETTE.find(
+                  (c: any) => c.id === accentColor,
+                ) || ACCENT_PALETTE[0])[dark ? "dark" : "light"],
+                display: "inline-block",
+                border: "1px solid rgba(0,0,0,0.2)",
+              }}
+            />
           </button>
           <button
             className="icon-button"
