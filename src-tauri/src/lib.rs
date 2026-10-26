@@ -52,7 +52,7 @@ pub fn run() {
 
             // Create and set menu
             let app_handle = app.handle();
-            let menu = create_menu(&app_handle)?;
+            let menu = create_menu(app_handle)?;
             app.set_menu(menu)?;
 
             // Handle menu events

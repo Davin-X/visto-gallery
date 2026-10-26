@@ -264,6 +264,7 @@ fn compute_quick_fingerprint(path: &str, size: u64) -> Option<(String, Vec<u8>)>
 /// Full SHA-256 with progress. Uses a 1MB buffer and async I/O for throughput.
 /// Accepts an optional prefix (first 64KB) from the quick fingerprint phase
 /// to avoid re-reading the beginning of the file.
+#[allow(clippy::too_many_arguments)]
 async fn compute_full_sha256_with_progress(
     path: String,
     name: String,

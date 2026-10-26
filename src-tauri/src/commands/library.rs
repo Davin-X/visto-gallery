@@ -153,12 +153,12 @@ pub async fn scan_library(
     }
 
     // Sort by modified date desc
-    items.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
+    items.sort_by_key(|a| std::cmp::Reverse(a.modified_at));
 
     // Only remember the folder once it actually contributed media, so an
     // accidental pick of an empty folder never shows up in the sidebar.
     if discovered_count > 0 {
-        remember_folder(&db, &root_path, &window.app_handle()).await;
+        remember_folder(&db, &root_path, window.app_handle()).await;
     }
 
     let duration = start.elapsed().as_millis() as i64;
@@ -265,7 +265,7 @@ pub async fn import_files(
         }
 
         processed += 1;
-        if processed % 200 == 0 || processed == total || super::SCAN_CANCEL.load(Ordering::SeqCst) {
+        if processed.is_multiple_of(200) || processed == total || super::SCAN_CANCEL.load(Ordering::SeqCst) {
             let _ = window.emit(
                 "import-progress",
                 json!({
@@ -279,7 +279,7 @@ pub async fn import_files(
         }
     }
 
-    items.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
+    items.sort_by_key(|a| std::cmp::Reverse(a.modified_at));
 
     // Remember any folders the user picked wholesale, so they can be removed
     // from the library in one step later. Individual files are grouped by
@@ -344,8 +344,7 @@ pub async fn get_library_items(
     }
     if let Some(tags) = &f.tags {
         if !tags.is_empty() {
-            let placeholders = std::iter::repeat("?")
-                .take(tags.len())
+            let placeholders = std::iter::repeat_n("?", tags.len())
                 .collect::<Vec<_>>()
                 .join(",");
             qb.push(format!(" AND id IN (SELECT mt.media_id FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE t.name IN ({}))", placeholders));
@@ -416,8 +415,7 @@ async fn hydrate_relations(db: &SqlitePool, items: &mut [MediaItem]) -> Result<(
 
     // Collect item IDs for IN clause
     let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
-    let placeholders = std::iter::repeat("?")
-        .take(ids.len())
+    let placeholders = std::iter::repeat_n("?", ids.len())
         .collect::<Vec<_>>()
         .join(",");
 
@@ -688,13 +686,13 @@ pub(crate) fn generate_cached_thumbnail(
 }
 
 fn commit_thumbnail_file(temporary: &Path, destination: &Path) -> Result<(), String> {
-    match std::fs::rename(&temporary, destination) {
+    match std::fs::rename(temporary, destination) {
         Ok(()) => {}
         Err(_) if destination.exists() => {
-            let _ = std::fs::remove_file(&temporary);
+            let _ = std::fs::remove_file(temporary);
         }
         Err(error) => {
-            let _ = std::fs::remove_file(&temporary);
+            let _ = std::fs::remove_file(temporary);
             return Err(error.to_string());
         }
     }
@@ -841,7 +839,7 @@ pub async fn get_library_folders(state: State<'_, AppState>) -> Result<Vec<Libra
 
     // One pass over the catalog: each item lands in exactly one folder.
     let mut registered_sorted = registered.clone();
-    registered_sorted.sort_by(|a, b| b.len().cmp(&a.len()));
+    registered_sorted.sort_by_key(|a| std::cmp::Reverse(a.len()));
 
     let mut tallies: HashMap<String, (i64, i64)> = HashMap::new();
     for row in &rows {
@@ -957,16 +955,18 @@ pub async fn remove_library_folder(
             let result =
                 tokio::task::spawn_blocking(move || trash::delete_all(&chunk_paths_for_delete))
                     .await;
-            if let Err(_) = result {
-                for path in &chunk_paths {
+            if result.as_ref().map(|r| r.is_err()).unwrap_or(true) {
+                for path in 
+&chunk_paths {
                     let p = path.clone();
                     let r = tokio::task::spawn_blocking(move || trash::delete(&p)).await;
                     if r.is_err() || r.unwrap().is_err() {
                         return Err("Could not move files to Trash".to_string());
                     }
                 }
-            } else if result.unwrap().is_err() {
-                for path in &chunk_paths {
+            } else if false {
+                for path in 
+&chunk_paths {
                     let p = path.clone();
                     let r = tokio::task::spawn_blocking(move || trash::delete(&p)).await;
                     if r.is_err() || r.unwrap().is_err() {
