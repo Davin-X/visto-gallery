@@ -1764,6 +1764,23 @@ function App() {
     }
   };
 
+  const removeAllSources = async () => {
+    const folders = library.folders;
+    if (folders.length === 0) return;
+    if (!window.confirm(`Remove all ${folders.length} source(s)? Files stay on disk.`)) return;
+    library.setBusy(true);
+    try {
+      for (const folder of folders) {
+        await library.removeFolder(folder.path, false);
+      }
+      library.showNotice(`Removed ${folders.length} source(s).`);
+    } catch (e) {
+      library.showNotice(`Could not remove sources: ${String(e)}`);
+    } finally {
+      library.setBusy(false);
+    }
+  };
+
   const rescanSources = async () => {
     // Prevent concurrent rescans (e.g. double-click on the button)
     if (rescanInProgress.current) return;
@@ -2158,6 +2175,7 @@ function App() {
           {screen === "Library" && (
             <LibraryScreen
               items={library.visibleItems}
+              hasItems={library.items.length > 0}
               inspectedId={library.inspectedId}
               selectedIds={library.selectedIds}
               filter={library.filter}
@@ -3223,6 +3241,15 @@ function App() {
               }}
             />
             <div className="dialog-actions">
+              <button
+                type="button"
+                className="danger-button"
+                disabled={library.busy || library.folders.length === 0}
+                onClick={() => void removeAllSources()}
+              >
+                Remove all sources
+              </button>
+              <div style={{ flex: 1 }} />
               <button
                 type="button"
                 className="quiet-button"
