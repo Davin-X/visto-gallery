@@ -265,7 +265,10 @@ pub async fn import_files(
         }
 
         processed += 1;
-        if processed.is_multiple_of(200) || processed == total || super::SCAN_CANCEL.load(Ordering::SeqCst) {
+        if processed.is_multiple_of(200)
+            || processed == total
+            || super::SCAN_CANCEL.load(Ordering::SeqCst)
+        {
             let _ = window.emit(
                 "import-progress",
                 json!({
@@ -956,8 +959,7 @@ pub async fn remove_library_folder(
                 tokio::task::spawn_blocking(move || trash::delete_all(&chunk_paths_for_delete))
                     .await;
             if result.as_ref().map(|r| r.is_err()).unwrap_or(true) {
-                for path in 
-&chunk_paths {
+                for path in &chunk_paths {
                     let p = path.clone();
                     let r = tokio::task::spawn_blocking(move || trash::delete(&p)).await;
                     if r.is_err() || r.unwrap().is_err() {
@@ -965,8 +967,7 @@ pub async fn remove_library_folder(
                     }
                 }
             } else if false {
-                for path in 
-&chunk_paths {
+                for path in &chunk_paths {
                     let p = path.clone();
                     let r = tokio::task::spawn_blocking(move || trash::delete(&p)).await;
                     if r.is_err() || r.unwrap().is_err() {
