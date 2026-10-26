@@ -1763,21 +1763,87 @@ pub async fn remove_from_album(album_id: String, item_ids: Vec<String>, state: S
 }
 
 #[tauri::command]
-pub async fn read_exif(path: String, state: State<'_, AppState>) -> Result<ExifData, String> {
-    // TODO: Use kamadak-exif crate
-    let _ = (path, state);
-    Ok(ExifData {
-        captured_at: None,
-        camera: None,
-        lens: None,
-        exposure: None,
-        iso: None,
-        latitude: None,
-        longitude: None,
-        width: None,
-        height: None,
-        metadata_error: None,
+pub async fn read_exif(path: String, _state: State<'_, AppState>) -> Result<ExifData, String> {
+    tokio::task::spawn_blocking(move || {
+        let mut data = ExifData {
+            captured_at: None,
+            camera: None,
+            lens: None,
+            exposure: None,
+            iso: None,
+            latitude: None,
+            longitude: None,
+            width: None,
+            height: None,
+            metadata_error: None,
+        };
+
+        let file = match std::fs::File::open(&path) {
+            Ok(f) => f,
+            Err(e) => {
+                data.metadata_error = Some(e.to_string());
+                return Ok(data);
+            }
+        };
+        let mut buf = std::io::BufReader::new(&file);
+        let exif_reader = exif::Reader::new();
+        let exif = match exif_reader.read_from_container(&mut buf) {
+            Ok(e) => e,
+            Err(e) => {
+                data.metadata_error = Some(e.to_string());
+                return Ok(data);
+            }
+        };
+
+        if let Some(field) = exif.get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY) {
+            let s = field.display_value().to_string();
+            if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(&s, "%Y:%m:%d %H:%M:%S") {
+                data.captured_at = Some(dt.and_utc().timestamp());
+            }
+        }
+        let make = exif.get_field(exif::Tag::Make, exif::In::PRIMARY).map(|f| f.display_value().to_string());
+        let model = exif.get_field(exif::Tag::Model, exif::In::PRIMARY).map(|f| f.display_value().to_string());
+        data.camera = match (make, model) {
+            (Some(m), Some(modl)) => Some(format!("{} {}", m.trim(), modl.trim())),
+            (Some(m), None) => Some(m.trim().to_string()),
+            (None, Some(modl)) => Some(modl.trim().to_string()),
+            _ => None,
+        };
+        if let Some(f) = exif.get_field(exif::Tag::LensModel, exif::In::PRIMARY) {
+            data.lens = Some(f.display_value().to_string().trim().to_string());
+        }
+        if let Some(f) = exif.get_field(exif::Tag::ExposureTime, exif::In::PRIMARY) {
+            data.exposure = Some(f.display_value().to_string());
+        }
+        if let Some(f) = exif.get_field(exif::Tag::PhotographicSensitivity, exif::In::PRIMARY) {
+            if let exif::Value::Short(ref v) = f.value {
+                if let Some(&x) = v.first() {
+                    data.iso = Some(x as i32);
+                }
+            }
+        }
+        if let Some(f) = exif.get_field(exif::Tag::PixelXDimension, exif::In::PRIMARY) {
+            if let exif::Value::Long(ref v) = f.value {
+                data.width = v.first().map(|&x| x as i32);
+            }
+        }
+        if let Some(f) = exif.get_field(exif::Tag::PixelYDimension, exif::In::PRIMARY) {
+            if let exif::Value::Long(ref v) = f.value {
+                data.height = v.first().map(|&x| x as i32);
+            }
+        }
+        // GPS
+        if let (Some(lat), Some(lon)) = (
+            exif.get_field(exif::Tag::GPSLatitude, exif::In::PRIMARY),
+            exif.get_field(exif::Tag::GPSLongitude, exif::In::PRIMARY),
+        ) {
+            // Convert DMS to decimal degrees is non-trivial; leave display string for now.
+            let _ = (lat, lon);
+        }
+        Ok(data)
     })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
