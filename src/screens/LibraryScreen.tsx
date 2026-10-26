@@ -298,12 +298,16 @@ function LibraryScreen(props: LibraryScreenProps) {
             ? props.albumDragOver
               ? "Drop to add to this album"
               : "This album is empty"
-            : "No photos match"}
+            : props.items?.length === 0
+              ? "Your library is empty"
+              : "No photos match"}
         </b>
         <p>
           {albumEmpty
             ? "Drag files here or use Add Items. You can also select photos in Library and choose Add to album."
-            : "Try another filter or search."}
+            : props.items?.length === 0
+              ? "Add a folder to start indexing photos and videos."
+              : "Try another filter or search."}
         </p>
         {albumEmpty ? (
           <div className="album-empty-actions">
@@ -329,19 +333,13 @@ function LibraryScreen(props: LibraryScreenProps) {
             </button>
           </div>
         ) : props.items?.length === 0 ? (
-          <>
-            <p>
-              Your library is empty. Add a folder to start indexing photos and
-              videos.
-            </p>
-            <button
-              className="primary-button"
-              type="button"
-              onClick={() => props.onImportFolder?.()}
-            >
-              <PlusIcon size={14} /> Add a folder
-            </button>
-          </>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => props.onImportFolder?.()}
+          >
+            <PlusIcon size={14} /> Add a folder
+          </button>
         ) : (
           <button type="button" onClick={clearEmptyView}>
             Clear filters
