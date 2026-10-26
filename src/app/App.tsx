@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo, useDeferredValue, memo } from "react";
+import { useFocusTrap } from "../design/hooks/useFocusTrap";
+
 import { createPortal } from "react-dom";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { save, open as openFileDialog } from "@tauri-apps/plugin-dialog";
@@ -23,7 +25,7 @@ import {
 } from "../engine/stores";
 import { formatDuration } from "../engine/utils/time";
 import { MiniPlayer } from "../design/components/MiniPlayer";
-import { getTypeIdentity, getKindIcon } from "../engine/utils/mediaTypes";
+import { getTypeIdentity } from "../engine/utils/mediaTypes";
 
 // Helper: render a kind badge using centralized type identity
 function KindBadge({ kind }: { kind: "photo" | "video" | "raw" }) {
@@ -43,7 +45,25 @@ function KindDot({ kind }: { kind: "photo" | "video" | "raw" }) {
 
 // Helper: get icon for kind
 function KindIcon({ kind, size = 14 }: { kind: "photo" | "video" | "raw"; size?: number }) {
-  return <span dangerouslySetInnerHTML={{ __html: getKindIcon(kind, 14) }} />;
+  const common = { width: size, height: size, viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: 1.8 };
+  if (kind === "photo") {
+    return (
+      <span>
+        <svg {...common}>
+          <rect x="2" y="2" width="12" height="12" rx="2" />
+          <path d="M6 2v12M10 2v12M2 6h12M2 10h12" />
+        </svg>
+      </span>
+    );
+  }
+  return (
+    <span>
+      <svg {...common}>
+        <path d="M4 4h8v8H4z" />
+        <path d="M4 8h8" />
+      </svg>
+    </span>
+  );
 }
 
 /**
@@ -63,7 +83,7 @@ function startConfiguredSlideshow(items: MediaItem[], startId?: string | null) {
   slideshow.setLoop(preferences.slideshowLoop);
   slideshow.open(items, startId);
 }
-import type { MediaItem, MediaKind } from "../engine/types/media";
+import type { MediaItem, MediaKind, DuplicateGroup, Album, Filter, LayoutMode, EditValues, CropRect } from "../engine/types/media";
 import type { LibraryFolder } from "../engine/types/commands";
 import { SettingsScreen } from "../design/components/SettingsScreen";
 import { SourcesManager } from "../design/components/SourcesManager";
@@ -124,10 +144,15 @@ function App() {
   const [renamingAlbumId, setRenamingAlbumId] = useState<string | null>(null);
   const [creatingAlbum, setCreatingAlbum] = useState(false);
   const albumInputRef = useRef<HTMLInputElement | null>(null);
+  const albumDialogRef = useRef<HTMLFormElement | null>(null);
+  const deleteAlbumDialogRef = useRef<HTMLDivElement | null>(null);
+  const deleteItemDialogRef = useRef<HTMLDivElement | null>(null);
+  const removeFolderDialogRef = useRef<HTMLDivElement | null>(null);
 
   const [albumPendingDelete, setAlbumPendingDelete] = useState<any | null>(null);
   const [itemPendingDeleteCount, setItemPendingDeleteCount] = useState<number>(0);
   const itemPendingDeleteRef = useRef<string[] | null>(null);
+  const folderChangedTimerRef = useRef<number | null>(null);
   const [albumRemovePending, setAlbumRemovePending] = useState<{ albumId: string; itemIds: string[] } | null>(null);
   const [deletingAlbum, setDeletingAlbum] = useState(false);
 
@@ -136,6 +161,11 @@ function App() {
   const [folderPendingRemove, setFolderPendingRemove] = useState<LibraryFolder | null>(null);
   const [removingFolder, setRemovingFolder] = useState(false);
   const [sourcesSheetOpen, setSourcesSheetOpen] = useState(false);
+  useFocusTrap(albumDialogOpen, albumDialogRef);
+  useFocusTrap(!!albumPendingDelete, deleteAlbumDialogRef);
+  useFocusTrap(itemPendingDeleteCount > 0, deleteItemDialogRef);
+  useFocusTrap(!!folderPendingRemove, removeFolderDialogRef);
+
   const rescanInProgress = useRef(false);
   // Where the viewer returns when it closes. Opening the viewer from Hidden
   // keeps the user in Hidden; the Library viewer returns to Library.
@@ -147,6 +177,19 @@ function App() {
   const [addingToAlbumId, setAddingToAlbumId] = useState<string | null>(null);
   const albumSearchRef = useRef<HTMLInputElement | null>(null);
   const [albumDragOver, setAlbumDragOver] = useState(false);
+  const [appVersion, setAppVersion] = useState("");
+const [aboutOpen, setAboutOpen] = useState(false);
+  useEffect(() => {
+    if (!aboutOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setAboutOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [aboutOpen]);
+  useEffect(() => {
+    let cancelled = false;
+    tauri.app.getVersion().then((v) => { if (!cancelled) setAppVersion(v); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   const importPathsIntoAlbumRef = useRef<(paths: string[], albumId: string) => Promise<void>>(async () => {});
 
   // Opening our own menu has to cancel the event, otherwise the webview shows
@@ -460,7 +503,7 @@ function App() {
       await register("menu-toggle-inspector", () => liveRef.current.library.toggleInspector());
       await register("menu-zoom-in", () => liveRef.current.viewer.zoomIn());
       await register("menu-zoom-out", () => liveRef.current.viewer.zoomOut());
-      await register("menu-about", () => handlersRef.current.showNotice("VistoGallery v0.1.1 - Native macOS Photo Gallery"));
+      await register("menu-about", () => setAboutOpen(true));
       await register("menu-check-updates", () => handlersRef.current.showNotice("Check for updates - coming soon"));
 
       // Listen for native import progress events from scan/import commands.
@@ -484,7 +527,14 @@ function App() {
           liveRef.current.library.setProgress(null);
         }
       });
-      unlisteners.push(unlistenProgress);
+      const unlistenFolderChanged = await events.onFolderChanged((path) => {
+        // Debounce rapid filesystem events into a single catalog refresh.
+        if (folderChangedTimerRef.current) window.clearTimeout(folderChangedTimerRef.current);
+        folderChangedTimerRef.current = window.setTimeout(() => {
+          liveRef.current.library.loadLibrary().catch(() => {});
+        }, 500);
+      });
+      unlisteners.push(unlistenFolderChanged);
     };
     listen();
 
@@ -1473,7 +1523,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
               <span className="health-dot" aria-hidden="true" />
               Storage Healthy
             </span>
-            <span className="sidebar-version">v0.1.1</span>
+            <span className="sidebar-version">v{appVersion || "0.1.1"}</span>
           </div>
         </aside>
 
@@ -1610,92 +1660,47 @@ handlersRef.current = { importFolder, importFiles, showNotice };
                   showNotice("Replace original supports JPEG, PNG, and WebP. Save a copy instead.");
                   return;
                 }
-                }
+              }
               try {
-                const img = new Image();
-                img.crossOrigin = "anonymous";
-                img.src = assetUrl(item.path);
-                await new Promise((res, rej) => { img.onload = () => res(null); img.onerror = rej; });
-              const v = edit.values || {};
-              const crop = edit.crop || { enabled: false, x:0,y:0,width:1,height:1 };
-              const useCrop = !!crop.enabled;
-               if (useCrop && (((v.rotation || 0) % 360) !== 0 || !!v.flip)) {
-                 showNotice("Crop cannot be combined with rotation or flip. Reset transforms first.");
-                 return;
-               }
-              const srcX = useCrop ? crop.x * img.naturalWidth : 0;
-              const srcY = useCrop ? crop.y * img.naturalHeight : 0;
-              const srcW = useCrop ? crop.width * img.naturalWidth : img.naturalWidth;
-              const srcH = useCrop ? crop.height * img.naturalHeight : img.naturalHeight;
-              const rot = ((v.rotation || 0) % 360 + 360) % 360;
-              const swap = rot === 90 || rot === 270;
-              const baseW = srcW;
-              const baseH = srcH;
-              const canvas = document.createElement("canvas");
-              canvas.width = swap ? baseH : baseW;
-              canvas.height = swap ? baseW : baseH;
-              const ctx = canvas.getContext("2d");
-              if (!ctx) { showNotice("Export failed"); return; }
-              ctx.translate(canvas.width / 2, canvas.height / 2);
-              ctx.rotate((rot * Math.PI) / 180);
-              ctx.scale(v.flip ? -1 : 1, 1);
-              const warmth = Number(v.warmth || 0);
-              ctx.filter = "none";
-              ctx.drawImage(img, srcX, srcY, srcW, srcH, -baseW / 2, -baseH / 2, baseW, baseH);
-              // Manual color adjustments (WebKit-compatible fallback; avoids ctx.filter gaps).
-              try {
-                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const d = imgData.data;
-                const brightness = 100 + (v.exposure || 0) + (v.shadows || 0) * 0.22 + (v.highlights || 0) * 0.1;
-                const contrast = 100 + (v.contrast || 0) - (v.shadows || 0) * 0.08 + (v.highlights || 0) * 0.12;
-                const saturation = 100 + (v.saturation || 0);
-                const bf = brightness / 100;
-                const cf = contrast / 100;
-                const sf = saturation / 100;
-                for (let i = 0; i < d.length; i += 4) {
-                  let r = d[i], g = d[i+1], b = d[i+2];
-                  r *= bf; g *= bf; b *= bf;
-                  r = (r - 128) * cf + 128;
-                  g = (g - 128) * cf + 128;
-                  b = (b - 128) * cf + 128;
-                  const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-                  r = gray + (r - gray) * sf;
-                  g = gray + (g - gray) * sf;
-                  b = gray + (b - gray) * sf;
-                  if (warmth > 0) { r += warmth * 0.3; b -= warmth * 0.3; }
-                  else if (warmth < 0) { b += -warmth * 0.3; r -= -warmth * 0.3; }
-                  d[i] = Math.max(0, Math.min(255, r));
-                  d[i+1] = Math.max(0, Math.min(255, g));
-                  d[i+2] = Math.max(0, Math.min(255, b));
-                }
-                ctx.putImageData(imgData, 0, 0);
-              } catch (e) { /* ignore */ }
-                const outputType = inPlace
-                  ? sourceExtension === "png" ? "image/png" : sourceExtension === "webp" ? "image/webp" : "image/jpeg"
-                  : "image/jpeg";
-                const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, outputType, 0.92));
-                if (!blob) { showNotice("Export failed"); return; }
-                if (inPlace && blob.type !== outputType) {
-                  showNotice("This image format cannot be preserved here. Save a copy instead.");
-                  return;
-                }
-                let path: any;
-                if (inPlace) {
-                  path = item.path;
-                } else {
-                  path = await save({
-                    defaultPath: String(item.name).replace(/\.[^.]+$/, "") + "_edited.jpg",
+                const v = edit.values || {};
+                const crop = edit.crop || { enabled: false, x: 0, y: 0, width: 1, height: 1 };
+                
+                // Build render request for native backend
+                const request = {
+                  sourcePath: item.path,
+                  edits: v,
+                  outputFormat: (inPlace ? "in_place" : "image/jpeg") as "jpeg" | "png" | "webp" | "heic" | "avif" | "in_place",
+                  quality: 0.92,
+                  stripMetadata: false,
+                  crop: crop.enabled ? crop : undefined,
+                };
+                
+                const result = await tauri.editing.render(request);
+                
+                if (!inPlace) {
+                  // For save-copy, backend wrote to temp; now show save dialog
+                  const suggestedName = String(item.name).replace(/\.[^.]+$/, "") + "_edited.jpg";
+                  const finalPath = await save({
+                    defaultPath: suggestedName,
                     filters: [{ name: "JPEG image", extensions: ["jpg", "jpeg"] }],
                   });
-                  if (!path) { showNotice("Export cancelled"); return; }
+                  if (!finalPath) { 
+                    showNotice("Export cancelled"); 
+                    return; 
+                  }
+                  // Move temp file to final destination
+                  await tauri.editing.moveExportedFile(result.outputPath, finalPath);
                 }
-                const buf = await blob.arrayBuffer();
-                await invoke("save_file", { path, bytes: Array.from(new Uint8Array(buf)), backup: inPlace });
+                
                 clearEditDraft(item.id);
                 if (inPlace) await library.loadLibrary();
                 showNotice(inPlace ? "Replaced original" : "Exported edited copy");
               } catch (e) {
-                showNotice("Export failed");
+                if (String(e).includes("cancelled")) {
+                  showNotice("Export cancelled");
+                } else {
+                  showNotice("Export failed: " + String(e));
+                }
               }
             }}
             onClearDraft={edit.clearDraft}
@@ -1895,6 +1900,29 @@ handlersRef.current = { importFolder, importFiles, showNotice };
         </div>
       )}
 
+{aboutOpen && (
+        <div
+          className="dialog-backdrop"
+          role="presentation"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setAboutOpen(false); }}
+        >
+          <div className="album-dialog" role="dialog" aria-modal="true" aria-labelledby="about-dialog-title">
+            <div className="dialog-heading">
+              <div>
+                <p className="eyebrow">ABOUT</p>
+                <h2 id="about-dialog-title">VistoGallery</h2>
+              </div>
+              <button type="button" className="dialog-close" aria-label="Close" onClick={() => setAboutOpen(false)}>×</button>
+            </div>
+            <p className="dialog-hint">Native macOS photo gallery.</p>
+            <p className="dialog-hint">Version {appVersion || "0.1.1"}</p>
+            <div className="dialog-actions">
+              <button type="button" className="dialog-button" onClick={() => setAboutOpen(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {albumDialogOpen && (
         <div
           className="dialog-backdrop"
@@ -1904,6 +1932,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           }}
         >
           <form
+            ref={albumDialogRef}
             className="album-dialog"
             role="dialog"
             aria-modal="true"
@@ -2107,6 +2136,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           }}
         >
           <div
+            ref={deleteAlbumDialogRef}
             className="album-dialog delete-album-dialog"
             role="alertdialog"
             aria-modal="true"
@@ -2169,7 +2199,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           role="presentation"
           onMouseDown={(e) => { if (e.target === e.currentTarget) { setItemPendingDeleteCount(0); itemPendingDeleteRef.current = null; } }}
         >
-          <div className="album-dialog delete-album-dialog" role="alertdialog" aria-modal="true">
+          <div ref={deleteItemDialogRef} className="album-dialog delete-album-dialog" role="alertdialog" aria-modal="true">
             <div className="dialog-heading">
               <div>
                 <p className="eyebrow">PHOTO</p>
@@ -2267,6 +2297,7 @@ handlersRef.current = { importFolder, importFiles, showNotice };
           }}
         >
           <div
+            ref={removeFolderDialogRef}
             className="album-dialog delete-album-dialog"
             role="alertdialog"
             aria-modal="true"
@@ -2411,16 +2442,15 @@ function VideoThumb({ src, name, className }: { src: string; name?: string; clas
 // grid used to request multi-megabyte originals; cached JPEGs make scrolling a
 // large library cheap. Keys include the size because the backend caches each
 // rendering separately.
-const thumbnailCache = new Map<string, string>();
+const thumbnailCache = new Map<string, { dataUrl: string; byteLength: number }>();
 const thumbnailRequests = new Map<string, Promise<string>>();
 const thumbnailQueue: Array<() => void> = [];
-// Roughly one screenful of large tiles plus the editor picker. The DOM keeps
-// mounted thumbnails alive on its own, so this only needs to cover navigation
-// between views without holding the whole library in JS memory.
-const THUMBNAIL_CACHE_LIMIT = 256;
+// Byte budget: 20 MiB ≈ 256 * 80 KB (1024px JPEG). Evict by bytes, not count.
+const THUMBNAIL_CACHE_LIMIT_BYTES = 20 * 1024 * 1024;
 const MAX_CONCURRENT_THUMBNAIL_REQUESTS = 6;
 type CachedThumbnailSize = 64 | 128 | 256 | 512 | 1024;
 let activeThumbnailRequests = 0;
+let thumbnailCacheBytes = 0;
 
 function loadThumbnail(itemId: string, size: CachedThumbnailSize): Promise<string> {
   const key = `${itemId}:${size}`;
@@ -2429,7 +2459,7 @@ function loadThumbnail(itemId: string, size: CachedThumbnailSize): Promise<strin
     // Refresh insertion order so the least recently used entry is evicted first.
     thumbnailCache.delete(key);
     thumbnailCache.set(key, cached);
-    return Promise.resolve(cached);
+    return Promise.resolve(cached.dataUrl);
   }
   const inFlight = thumbnailRequests.get(key);
   if (inFlight) return inFlight;
@@ -2438,10 +2468,19 @@ function loadThumbnail(itemId: string, size: CachedThumbnailSize): Promise<strin
     thumbnailQueue.push(() => {
       activeThumbnailRequests += 1;
       void tauri.library.getThumbnail({ itemId, size }).then((response) => {
-        thumbnailCache.set(key, response.dataUrl);
-        if (thumbnailCache.size > THUMBNAIL_CACHE_LIMIT) {
-          const oldest = thumbnailCache.keys().next().value;
-          if (oldest) thumbnailCache.delete(oldest);
+        const byteLength = response.dataUrl.length; // base64 length ≈ 4/3 * bytes
+        thumbnailCache.set(key, { dataUrl: response.dataUrl, byteLength });
+        thumbnailCacheBytes += byteLength;
+        // Evict by bytes, not count
+        while (thumbnailCacheBytes > THUMBNAIL_CACHE_LIMIT_BYTES && thumbnailCache.size > 0) {
+          const oldestKey = thumbnailCache.keys().next().value;
+          if (oldestKey) {
+            const oldest = thumbnailCache.get(oldestKey);
+            if (oldest) thumbnailCacheBytes -= oldest.byteLength;
+            thumbnailCache.delete(oldestKey);
+          } else {
+            break;
+          }
         }
         resolve(response.dataUrl);
       }).catch(reject).finally(() => {
@@ -2585,16 +2624,36 @@ function VideoPlayer({ itemId, active = true, src, name, onFullscreen, onNext }:
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
-    setPlaying(false);
-    setTime(0);
-    setDuration(0);
-    setVolume(1);
-    setMuted(false);
+
+    // Restore playback state from store if this is the same itemId
+    const { itemId: storeItemId, time, volume, muted, playing, duration } = usePlaybackStore.getState();
+    if (storeItemId === itemId && duration > 0) {
+      // Restore saved state
+      video.currentTime = time;
+      video.volume = volume;
+      video.muted = muted;
+      if (playing && !video.paused) {
+        // Already playing, just sync
+      } else if (playing) {
+        void video.play().catch(() => {});
+      }
+      setPlaying(playing);
+      setTime(time);
+      setDuration(duration);
+      setVolume(volume);
+      setMuted(muted);
+    } else {
+      // Fresh load - defaults
+      setPlaying(false);
+      setTime(0);
+      setDuration(0);
+      setVolume(1);
+      setMuted(false);
+    }
 
     const onMetadata = () => {
       const nextDuration = Number.isFinite(video.duration) ? video.duration : 0;
       setDuration(nextDuration);
-      try { video.currentTime = Math.min(0.15, (video.duration || 1) / 2); } catch { /* ignore */ }
       syncPlayback({
         duration: nextDuration,
         time: video.currentTime,
@@ -2747,7 +2806,7 @@ function VideoPlayer({ itemId, active = true, src, name, onFullscreen, onNext }:
         await video.requestPictureInPicture();
       }
     } catch (err) {
-      console.warn("Picture-in-picture unavailable", err);
+      if (import.meta.env.DEV) console.warn("Picture-in-picture unavailable", err);
     }
   };
 
@@ -2908,7 +2967,19 @@ const GALLERY_PAGE_SIZE = 180;
  * the Library's view, and it never pretends the files are protected — the
  * disclaimer in the header is the contract.
  */
-function HiddenScreen(props: any) {
+interface HiddenScreenProps {
+  assetUrl: (path: string) => string;
+  searchInputRef: React.RefObject<HTMLInputElement | null>;
+  onContextMenu: (items: any[], e: React.MouseEvent) => void;
+  onNavigate: (screen: Screen) => void;
+  onCreateAlbum: () => void;
+  onOpenAlbumPicker: (itemIds?: string[]) => void;
+  onRequestDeleteItems: (ids: string[]) => void;
+  onOpenEdit: (item: MediaItem) => void;
+  onOpenViewer: (id?: string) => void;
+}
+
+function HiddenScreen(props: HiddenScreenProps) {
   const library = useLibraryStore();
   const filter = library.hiddenFilter;
   const query = library.hiddenQuery;
@@ -3102,7 +3173,59 @@ function HiddenScreen(props: any) {
   );
 }
 
-function LibraryScreen(props: any) {
+interface LibraryScreenProps {
+  activeAlbum: string | null;
+  albumDragOver?: boolean;
+  albums: Album[];
+  assetUrl: (path: string) => string;
+  busy: boolean;
+  filter: Filter;
+  hiddenCount: number;
+  hiddenView?: boolean;
+  inspectedId: string | null;
+  items: MediaItem[];
+  layout: LayoutMode;
+  onAddItems?: (albumId: string) => void;
+  onAlbumMenu?: (e: React.MouseEvent) => void;
+  onBrowseLibrary?: () => void;
+  onChangeFilter: (filter: Filter) => void;
+  onChangeLayout: (layout: LayoutMode) => void;
+  onChangeQuery: (query: string) => void;
+  onClearSelection: () => void;
+  onContextMenu: (items: any[], e: React.MouseEvent) => void;
+  onCreateAlbum: (itemIds?: string[]) => void;
+  onImportFiles?: () => void;
+  onImportFolder?: () => void;
+  onInspectItem: (id: string) => void;
+  onOpenAlbumPicker: (itemIds?: string[]) => void;
+  onOpenAlbums: () => void;
+  onOpenBatch?: (ids?: string[]) => void;
+  onOpenEdit: (item: MediaItem) => void;
+  onOpenViewer: (id?: string) => void;
+  onPlaySlideshow: (ids?: string[]) => void;
+  onRequestDeleteItems: (ids: string[]) => void;
+  onRequestRemoveFromAlbum?: (albumId: string, itemIds: string[]) => void;
+  onSelectRange: (startId: string, endId: string) => void;
+  onSetActiveAlbum: (albumId: string | null) => void;
+  onSetFavoriteForIds: (ids: string[], favorite: boolean) => void | Promise<void>;
+  onSetHiddenForIds: (ids: string[], hidden: boolean) => void | Promise<void>;
+  onSetSelection: (ids: string[]) => void;
+  onToggleFavorite: (id: string) => void | Promise<void>;
+  onToggleHidden: (id: string) => void | Promise<void>;
+  onToggleInspector: () => void;
+  onToggleSelect: (id: string) => void;
+  onToggleSelectAll: () => void;
+  onDeleteItems: (ids: string[]) => void | Promise<void>;
+  onUpdateTags: (id: string, tags: string[]) => void | Promise<void>;
+  query: string;
+  notice: any;
+  progress: any;
+  searchInputRef: any;
+  selectedIds: string[];
+  showInspector: boolean;
+}
+
+function LibraryScreen(props: LibraryScreenProps) {
   const library = useLibraryStore();
   const draftTransforms = useDraftTransforms();
   const thumbnailSize = useThumbnailSize();
@@ -3254,7 +3377,7 @@ function LibraryScreen(props: any) {
             <button
               className="primary-button"
               type="button"
-              onClick={() => props.onAddItems?.(props.activeAlbum)}
+              onClick={() => props.activeAlbum && props.onAddItems?.(props.activeAlbum)}
             >
               <PlusIcon size={14} /> Add Items
             </button>
@@ -3270,6 +3393,13 @@ function LibraryScreen(props: any) {
               Browse Library
             </button>
           </div>
+        ) : props.items?.length === 0 ? (
+          <>
+            <p>Your library is empty. Add a folder to start indexing photos and videos.</p>
+            <button className="primary-button" type="button" onClick={() => props.onImportFolder?.()}>
+              <PlusIcon size={14} /> Add a folder
+            </button>
+          </>
         ) : (
           <button type="button" onClick={clearEmptyView}>Clear filters</button>
         )}
@@ -3446,7 +3576,7 @@ function LibraryScreen(props: any) {
       ? [{
           label: "Remove from this Album",
           danger: true,
-          onClick: () => props.onRequestRemoveFromAlbum?.(props.activeAlbum, [item.id]),
+          onClick: () => props.activeAlbum && props.onRequestRemoveFromAlbum?.(props.activeAlbum, [item.id]),
         }]
       : []),
     { label: "New Album…", onClick: () => props.onCreateAlbum?.([item.id]) },
@@ -3526,7 +3656,7 @@ function LibraryScreen(props: any) {
                   <button
                     className="primary-button"
                     type="button"
-                    onClick={() => props.onAddItems?.(props.activeAlbum)}
+                    onClick={() => props.activeAlbum && props.onAddItems?.(props.activeAlbum)}
                     disabled={props.busy}
                   >
                     <PlusIcon size={15} /> Add Items
@@ -3691,7 +3821,7 @@ function LibraryScreen(props: any) {
             {(["All", "Photos", "Videos", "RAW", "Favorites"] as string[]).map((f) => {
               const count = filterCounts[f as keyof typeof filterCounts] ?? 0;
               return (
-                <button key={f} type="button" className={`quick-filter ${props.filter === f ? "active" : ""}`} onClick={() => props.onChangeFilter(f)}>
+                <button key={f} type="button" className={`quick-filter ${props.filter === f ? "active" : ""}`} onClick={() => props.onChangeFilter(f as Filter)}>
                   {f}
                   <span className="filter-count">{count}</span>
                 </button>
@@ -3773,7 +3903,7 @@ function LibraryScreen(props: any) {
                 <button
                   type="button"
                   className="selection-bar-action"
-                  onClick={() => library.removeFromAlbum(props.activeAlbum, props.selectedIds)}
+                  onClick={() => props.activeAlbum && library.removeFromAlbum(props.activeAlbum, props.selectedIds)}
                   title="Remove selected items from this album (photos stay in the library)"
                 >
                   <MinusIcon size={13} /> Remove from album
@@ -3979,7 +4109,7 @@ function LibraryScreen(props: any) {
                   <div className="inspector-actions">
                     <button
                       className={`inspector-action ${sel.favorite ? "favorite active" : ""}`}
-                      onClick={() => props.onToggleFavorite(props.inspectedId)}
+                      onClick={() => props.onToggleFavorite(props.inspectedId as string)}
                       title={sel.favorite ? "Unfavorite" : "Favorite"}
                     >
                       <HeartIcon size={14} filled={!!sel.favorite} />
@@ -3987,7 +4117,7 @@ function LibraryScreen(props: any) {
                     </button>
                     <button
                       className="inspector-action"
-                      onClick={() => props.onToggleHidden(props.inspectedId)}
+                      onClick={() => props.onToggleHidden(props.inspectedId as string)}
                       title={sel.hidden ? "Unhide" : "Hide"}
                     >
                       {sel.hidden ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
@@ -4041,7 +4171,7 @@ function LibraryScreen(props: any) {
                       {sel.tags?.map((tag: string) => (
                         <span className="app-tag" key={tag}>
                           {tag}
-                          <button type="button" onClick={() => props.onUpdateTags(props.inspectedId, (sel.tags || []).filter((t: string) => t !== tag))}>×</button>
+                          <button type="button" onClick={() => props.onUpdateTags(props.inspectedId as string, (sel.tags || []).filter((t: string) => t !== tag))}>×</button>
                         </span>
                       ))}
                     </div>
@@ -4054,7 +4184,7 @@ function LibraryScreen(props: any) {
                           const newTag = e.currentTarget.value.trim();
                           const currentTags = sel.tags || [];
                           if (!currentTags.includes(newTag)) {
-                            props.onUpdateTags(props.inspectedId, [...currentTags, newTag]);
+                            props.onUpdateTags(props.inspectedId as string, [...currentTags, newTag]);
                           }
                           e.currentTarget.value = "";
                         }
@@ -4082,7 +4212,34 @@ function LibraryScreen(props: any) {
   );
 }
 
-function ViewerScreen(props: any) {
+interface ViewerScreenProps {
+  active: boolean;
+  items: MediaItem[];
+  selected: MediaItem | null;
+  zoom: number;
+  fitMode: "fit" | "actual" | "fill";
+  rotation: number;
+  flipX: boolean;
+  onNavigate: (delta: number) => void;
+  onSetPhoto: (id: string) => void;
+  onSetZoom: (zoom: number) => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onResetZoom: () => void;
+  onToggleFitMode: () => void;
+  onRotate: (deg: number) => void;
+  onToggleFlip: () => void;
+  onResetTransform: () => void;
+  onToggleFullscreen: () => void;
+  onClose: () => void;
+  onToggleFavorite: (id: string) => void | Promise<void>;
+  onToggleHidden: (id: string) => void | Promise<void>;
+  onOpenEdit: (item: MediaItem) => void;
+  onContextMenu: (items: any[], e: React.MouseEvent) => void;
+  assetUrl: (path: string) => string;
+}
+
+function ViewerScreen(props: ViewerScreenProps) {
   const selected = props.selected;
   const draftTransforms = useDraftTransforms();
   // Folder context: the pill shows the containing folder, the subtle line the
@@ -4100,7 +4257,7 @@ function ViewerScreen(props: any) {
   const stripWindowSize = 50;
   const selectedIndex = props.items.findIndex((item: any) => item.id === selected?.id);
   const stripEnd = Math.min(props.items.length, stripStart + stripWindowSize);
-  const imageRotation = (props.rotation + (draftTransforms.get(selected?.id)?.rotation || 0)) % 360;
+  const imageRotation = (props.rotation + (draftTransforms.get(selected?.id ?? "")?.rotation || 0)) % 360;
 
   // Shortcut hints are shown on open and whenever the pointer moves over the
   // stage, then fade away after a short pause so the frame stays clean.
@@ -4161,6 +4318,7 @@ function ViewerScreen(props: any) {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+    if (!selected) return;
       // The viewer stays mounted off-screen to keep a video playing; its
       // shortcuts must not fire while another tab is on screen.
       if (!props.active) return;
@@ -4335,7 +4493,36 @@ function ViewerScreen(props: any) {
   );
 }
 
-function EditScreen(props: any) {
+interface EditScreenProps {
+  item: MediaItem | null;
+  values: EditValues | null;
+  crop: { enabled: boolean; x: number; y: number; width: number; height: number; aspectRatio?: number | "free" };
+  history: any[];
+  historyIndex: number;
+  items: MediaItem[];
+  assetUrl: (path: string) => string;
+  canUndo: boolean;
+  canRedo: boolean;
+  onSetValue: (key: keyof EditValues, value: any) => void;
+  onSetValues: (values: EditValues) => void;
+  onReset: () => void;
+  onAuto: () => void;
+  onRotate: (deg: number) => void;
+  onFlip: () => void;
+  onSetCrop: (crop: Partial<{ enabled: boolean; x: number; y: number; width: number; height: number; aspectRatio?: number | "free" }>) => void;
+  onResetCrop: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onClose: () => void;
+  onSaveDraft: () => void;
+  onBack: () => void;
+  onExport: (inPlace?: boolean) => void | Promise<void>;
+  onClearDraft: (id: string) => void;
+  onNotice: (text: string) => void;
+  onOpenEdit: (item: MediaItem) => void;
+}
+
+function EditScreen(props: EditScreenProps) {
   const [pickerQuery, setPickerQuery] = useState("");
   const deferredPickerQuery = useDeferredValue(pickerQuery);
   const [pickerLimit, setPickerLimit] = useState(24);
@@ -4357,8 +4544,8 @@ function EditScreen(props: any) {
   const draftIds = useDraftIds();
   const stageRef = useRef<any>(null);
   const [drag, setDrag] = useState<any>(null);
-  const values = props.values || {};
-  const hasAdjustments = Object.entries(initialEdits).some(([key, value]) => values[key] !== value);
+  const values = (props.values || {}) as EditValues;
+  const hasAdjustments = Object.entries(initialEdits).some(([key, value]) => (values as any)[key] !== value);
   const crop = props.crop || { enabled:false, x:0,y:0,width:1,height:1 };
   const savedDraftItems = useMemo(
     () => (props.items || []).filter((item: any) => draftIds.has(item.id) && !item.hidden),
@@ -4438,7 +4625,7 @@ function EditScreen(props: any) {
         if (!sel) return;
         const path = Array.isArray(sel) ? sel[0] : sel;
         const name = String(path).split(/[\\/]/).pop() || "photo";
-        props.onOpenEdit?.({ id: path, name, path, kind: "photo" });
+        props.onOpenEdit?.({ id: path, name, path, kind: "photo" } as any);
       } catch (e) { props.onNotice?.("Could not open file"); }
     };
     return (
@@ -4453,6 +4640,7 @@ function EditScreen(props: any) {
           <input value={pickerQuery} onChange={(e) => setPickerQuery(e.target.value)} placeholder="Search photos..." aria-label="Search photos" />
           </div>
           <button className="quiet-button" type="button" onClick={browse}>Browse from Finder…</button>
+          {filtered.length > pickerLimit && <button className="quiet-button" type="button" onClick={() => setPickerLimit((limit) => limit + 24)}>Show 24 more ({filtered.length - pickerLimit})</button>}
         </div>
         {(() => {
           const drafts = savedDraftItems.slice(0, pickerDraftLimit);
@@ -4477,7 +4665,8 @@ function EditScreen(props: any) {
           );
         })()}
         {filtered.length > 0 ? (<>
-          <div className="edit-picker-grid">{filtered.slice(0, pickerLimit).map((item:any)=> {
+          <div className="edit-picker-scroll">
+            <div className="edit-picker-grid">{filtered.slice(0, pickerLimit).map((item:any)=> {
   const hasDraft = draftIds.has(item.id);
   return (
     <button key={item.id} type="button" className="edit-picker-tile" onClick={()=>props.onOpenEdit?.(item)}>
@@ -4488,7 +4677,7 @@ function EditScreen(props: any) {
     </button>
   );
 })}</div>
-          {filtered.length > pickerLimit && <button className="quiet-button" type="button" style={{ marginTop: 12 }} onClick={() => setPickerLimit((limit) => limit + 24)}>Show 24 more photos ({filtered.length - pickerLimit} remaining)</button>}
+          </div>
         </>) : (<div className="viewer-empty-state"><div style={{ marginBottom: 16 }}><BrandMark size={56} /></div><h2>No photos found</h2><p>Import a folder or browse from disk.</p></div>) }
       </div>
     );
@@ -4541,8 +4730,18 @@ function EditScreen(props: any) {
           <div ref={stageRef} className={`crop-stage${showOriginalPreview ? " is-original" : ""}`}>
             <img src={props.assetUrl(props.item.path)} alt={props.item.name} style={{ transform: `rotate(${previewValues.rotation}deg) scaleX(${previewValues.flip ? -1 : 1})`, filter: previewFilter }} />
             {crop.enabled && !showOriginalPreview && (
-              <div className="crop-overlay" style={{ position: "absolute", left: `${crop.x*100}%`, top: `${crop.y*100}%`, width: `${crop.width*100}%`, height: `${crop.height*100}%`, border: "2px solid #fff", boxShadow: "0 0 0 9999px rgba(0,0,0,.45)", cursor: "move" }} onPointerDown={(e) => startDrag("move", e)}>
-                <span className="crop-handle br" style={{ position: "absolute", right: -6, bottom: -6, width: 12, height: 12, background: "#fff", border: "1px solid #333", cursor: "nwse-resize", borderRadius: 2 }} onPointerDown={(e) => { e.stopPropagation(); startDrag("resize", e); }} />
+              <div className="crop-overlay" style={{ position: "absolute", left: `${crop.x*100}%`, top: `${crop.y*100}%`, width: `${crop.width*100}%`, height: `${crop.height*100}%`, border: "2px solid #fff", boxShadow: "0 0 0 9999px rgba(0,0,0,.45)", cursor: "move" }} tabIndex={0} role="application" aria-label="Crop frame" onKeyDown={(e) => {
+                const step = e.shiftKey ? 0.05 : 0.01;
+                if (e.key === "ArrowLeft") { e.preventDefault(); props.onSetCrop({ x: Math.max(0, crop.x - step) }); }
+                else if (e.key === "ArrowRight") { e.preventDefault(); props.onSetCrop({ x: Math.min(1 - crop.width, crop.x + step) }); }
+                else if (e.key === "ArrowUp") { e.preventDefault(); props.onSetCrop({ y: Math.max(0, crop.y - step) }); }
+                else if (e.key === "ArrowDown") { e.preventDefault(); props.onSetCrop({ y: Math.min(1 - crop.height, crop.y + step) }); }
+              }} onPointerDown={(e) => startDrag("move", e)}>
+                <span className="crop-handle br" style={{ position: "absolute", right: -6, bottom: -6, width: 12, height: 12, background: "#fff", border: "1px solid #333", cursor: "nwse-resize", borderRadius: 2 }} tabIndex={0} role="button" aria-label="Resize crop" onKeyDown={(e) => {
+                  const step = e.shiftKey ? 0.05 : 0.01;
+                  if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); props.onSetCrop({ width: Math.min(1 - crop.x, crop.width + step), height: Math.min(1 - crop.y, crop.height + step) }); }
+                  else if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); props.onSetCrop({ width: Math.max(0.05, crop.width - step), height: Math.max(0.05, crop.height - step) }); }
+                }} onPointerDown={(e) => { e.stopPropagation(); startDrag("resize", e); }} />
               </div>
             )}
           </div>
@@ -4595,7 +4794,7 @@ function EditScreen(props: any) {
           ))}
           </>}
           <div className="edit-footer">
-            <button className="quiet-button" type="button" onClick={props.onClearDraft}>Discard draft</button>
+            <button className="quiet-button" type="button" onClick={() => props.item && props.onClearDraft(props.item.id)}>Discard draft</button>
             <button className="quiet-button" type="button" onClick={props.onSaveDraft}>Save draft</button>
             <button className="quiet-button" type="button" style={{ color: "#d33" }} disabled={!(["jpg", "jpeg", "png", "webp"].includes(String(props.item.extension || props.item.name.split(".").pop() || "").toLowerCase()))} title="Replace original is available for JPEG, PNG, and WebP files" onClick={() => setConfirmReplace(true)}>Replace original</button>
             <button className="primary-button" type="button" onClick={() => props.onExport(false)}>Save copy</button>
@@ -4684,7 +4883,36 @@ function folderDisplayName(path: string) {
   return parts[parts.length - 1] || path;
 }
 
-function BatchScreen(props: any) {
+interface BatchScreenProps {
+  items: MediaItem[];
+  selectedIds: string[];
+  config: ReturnType<typeof useBatchStore.getState>;
+  state: ReturnType<typeof useBatchStore.getState>;
+  busy: boolean;
+  cancelRequested: boolean;
+  progress: ReturnType<typeof useBatchStore.getState>["progress"];
+  result: ReturnType<typeof useBatchStore.getState>["result"];
+  error: ReturnType<typeof useBatchStore.getState>["error"];
+  assetUrl: (path: string) => string;
+  onSetPattern: ReturnType<typeof useBatchStore.getState>["setPattern"];
+  onSetFormat: ReturnType<typeof useBatchStore.getState>["setFormat"];
+  onSetQuality: ReturnType<typeof useBatchStore.getState>["setQuality"];
+  onSetStripMetadata: ReturnType<typeof useBatchStore.getState>["setStripMetadata"];
+  onSetMaxDimension: ReturnType<typeof useBatchStore.getState>["setMaxDimension"];
+  onSetStep: ReturnType<typeof useBatchStore.getState>["setStep"];
+  onChooseFolder: () => void | Promise<void>;
+  onOpenFolder: () => void;
+  onExportBatch: () => void | Promise<void>;
+  onCancelBatch: () => void | Promise<void>;
+  onReset: () => void;
+  onOpenLibrary: () => void;
+  onClearSelection: () => void;
+  onSelectAll: () => void;
+  onSetSelection: (ids: string[]) => void;
+  onRemoveItem: (id: string) => void;
+}
+
+function BatchScreen(props: BatchScreenProps) {
   const [showAllFailures, setShowAllFailures] = React.useState(false);
   const items: any[] = props.items || [];
   const total = items.length;
@@ -4693,6 +4921,7 @@ function BatchScreen(props: any) {
   const progress = props.state.progress;
   const error = props.state.error;
   const cancelRequested = Boolean(props.cancelRequested);
+  const stalled = Boolean(props.state.stalled);
   const config = props.config;
   const outputFolder = String(config.outputFolder || "");
   const step = result ? 3 : busy ? 3 : total > 0 ? 2 : 1;
@@ -4784,6 +5013,7 @@ function BatchScreen(props: any) {
             <span>{cancelRequested ? "Finishing the current file, then stopping." : "Finished copies are kept. The current file finishes before the export stops."}</span>
           </div>
           <p className="batch-note">Files are written one at a time. Keep this window open until the export finishes.</p>
+          {stalled && <p className="batch-error">No progress for 15s — export may be stalled. You can cancel and retry.</p>}
         </div>
       ) : result ? (
         <div className="batch-result">
@@ -5161,7 +5391,16 @@ function AlbumPhotoStack({ photos, assetUrl, albumItems = [] }: { photos: any[];
   );
 }
 
-function AlbumsScreen(props: any) {
+interface AlbumsScreenProps {
+  albums: Album[];
+  items: MediaItem[];
+  assetUrl: (path: string) => string;
+  onCreateAlbum: () => void;
+  onAlbumContextMenu: (album: any, e: React.MouseEvent) => void;
+  onOpenAlbum: (albumId: string) => void;
+}
+
+function AlbumsScreen(props: AlbumsScreenProps) {
   const albums = React.useMemo(
     () =>
       (props.albums || []).map((album: any, index: number) => {
@@ -5173,7 +5412,6 @@ function AlbumsScreen(props: any) {
           .filter((item: any) => item.kind === "photo" || item.kind === "video")
           .slice(0, 3);
         if (false && photos.length) {
-          console.log(`[AlbumsScreen] Album "${album.name}" (${album.id}) cover photos:`, photos.map((p: any) => p.name));
         }
         return {
           ...album,
@@ -5259,7 +5497,18 @@ function AlbumsScreen(props: any) {
   );
 }
 
-function DuplicatesScreen(props: any) {
+interface DuplicatesScreenProps {
+  groups: DuplicateGroup[];
+  items: MediaItem[];
+  onScan: () => void | Promise<void>;
+  onClear: () => void;
+  busy: boolean;
+  assetUrl: (path: string) => string;
+  onRequestDeleteItems: (ids: string[]) => void;
+  onHideIds: (ids: string[]) => void | Promise<void>;
+}
+
+function DuplicatesScreen(props: DuplicatesScreenProps) {
   const draftTransforms = useDraftTransforms();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -5575,7 +5824,7 @@ function DuplicatesScreen(props: any) {
           <p className="page-subtitle">
             {groups.length === 0
               ? "Duplicate scans compare file content (SHA-256), not just names or sizes."
-              : `${groups.length} group${groups.length === 1 ? "" : "s"} · ${totalCopies} copies · ${formatBytesSimple(reclaimableBytes)} reclaimable`}
+              : `${groups.length} group${groups.length === 1 ? "" : "s"} · ${totalCopies} copies · ${formatBytesSimple(reclaimableBytes)} reclaimable (includes hidden items)`}
           </p>
         </div>
         {!props.busy && groups.length > 0 && (

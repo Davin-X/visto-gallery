@@ -22,6 +22,8 @@ import type {
   AppSettings,
   EditValues,
   CropRect,
+  TrashResult,
+  TrashError,
 } from "../types/commands";
 
 // Type-safe command wrappers
@@ -67,8 +69,11 @@ export const tauri = {
     updateTags: (itemId: string, tags: string[]): Promise<void> =>
       invoke("update_item_tags", { itemId, tags }),
 
-    moveToTrash: (paths: string[]): Promise<void> =>
+    moveToTrash: (paths: string[]): Promise<TrashResult> =>
       invoke("move_to_trash", { paths }),
+
+    cancelMoveToTrash: (): Promise<void> =>
+      invoke("cancel_move_to_trash"),
 
     revealInFinder: (path: string): Promise<void> =>
       invoke("reveal_in_finder", { path }),
@@ -111,6 +116,9 @@ export const tauri = {
   editing: {
     render: (request: RenderRequest): Promise<ExportResult> =>
       invoke("render_edited", { request }),
+
+    moveExportedFile: (sourcePath: string, destinationPath: string): Promise<void> =>
+      invoke("move_exported_file", { sourcePath, destinationPath }),
   },
 
   batch: {
@@ -124,6 +132,9 @@ export const tauri = {
   duplicates: {
     scan: (): Promise<DuplicateGroup[]> =>
       invoke("find_duplicates"),
+
+    cancel: (): Promise<void> =>
+      invoke("cancel_find_duplicates"),
   },
 
   finder: {
@@ -151,6 +162,9 @@ export const tauri = {
 
     openExternal: (url: string): Promise<void> =>
       invoke("open_external", { url }),
+
+    exportBytes: (suggestedName: string, bytes: Uint8Array, backup?: boolean): Promise<string> =>
+      invoke("export_bytes", { suggestedName, bytes: Array.from(bytes), backup }),
   },
 };
 
@@ -169,6 +183,9 @@ export const events = {
 
   onBatchProgress: (callback: (event: BatchProgressEvent) => void) =>
     listen("batch-progress", (e: any) => callback(e.payload)),
+
+  onFolderChanged: (callback: (path: string) => void) =>
+    listen("folder-changed", (e: any) => callback(e.payload)),
 };
 
 // Helper: Build thumbnail data URL from response

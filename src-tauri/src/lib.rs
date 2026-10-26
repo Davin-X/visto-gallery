@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use tauri::{Emitter, Manager, State};
@@ -14,15 +15,19 @@ use menu::create_menu;
 
 struct AppState {
     db: Mutex<Option<Database>>,
+    watchers: Mutex<HashMap<String, notify::RecommendedWatcher>>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        Self { db: Mutex::new(None) }
+        Self { db: Mutex::new(None), watchers: Mutex::new(HashMap::new()) }
     }
 }
 
 pub fn run() {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
 .manage(AppState::default())
@@ -142,6 +147,8 @@ pub fn run() {
             // Library
             scan_library,
             cancel_scan,
+            cancel_move_to_trash,
+            cancel_find_duplicates,
             import_files,
             get_library_items,
             get_albums,
@@ -170,6 +177,7 @@ pub fn run() {
             write_exif,
             // Editing
             render_edited,
+            move_exported_file,
             // Batch
             batch_export,
             cancel_batch_export,
@@ -186,7 +194,7 @@ pub fn run() {
             get_version,
             check_updates,
             open_external,
-            save_file,
+            export_bytes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

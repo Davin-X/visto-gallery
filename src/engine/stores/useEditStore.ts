@@ -33,6 +33,11 @@ function persistDraft(itemId: string, values: EditValues, history: EditValues[],
   notifyDraftChanged();
 }
 
+export function resetDraftRevision(): void {
+  draftRevision = 0;
+  notifyDraftChanged();
+}
+
 export function clearEditDraft(itemId: string) {
   if (typeof localStorage !== "undefined") {
     try { localStorage.removeItem(draftKey(itemId)); } catch {}

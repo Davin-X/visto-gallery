@@ -1,7 +1,7 @@
 export type { MediaItem, Album, Tag, ImportSession, LibraryFilter, DuplicateGroup } from "./media";
 export type { AppSettings } from "./settings";
 
-import type { MediaItem, Album, Tag, ImportSession, LibraryFilter, DuplicateGroup } from "./media";
+import type { MediaItem, Album, Tag, ImportSession, LibraryFilter, DuplicateGroup, MediaKind } from "./media";
 import type { AppSettings } from "./settings";
 
 export interface ScanResult {
@@ -11,7 +11,6 @@ export interface ScanResult {
   cancelled: boolean;
   albums: Album[];
   tags: Tag[];
-  sessions: ImportSession[];
   totalSize: number;
   duration: number;
 }
@@ -22,6 +21,7 @@ export interface LibraryFilterDTO {
   hidden?: boolean;
   albumId?: string;
   query?: string;
+  tags?: string[];
   dateFrom?: number;
   dateTo?: number;
   limit?: number;
@@ -59,7 +59,7 @@ export interface ExifData {
 export interface RenderRequest {
   sourcePath: string;
   edits: EditValues;
-  outputFormat: "jpeg" | "png" | "webp" | "heic" | "avif";
+  outputFormat: "jpeg" | "png" | "webp" | "heic" | "avif" | "in_place";
   quality: number;
   stripMetadata: boolean;
   crop?: CropRect;
@@ -104,12 +104,24 @@ export interface BatchExportItem {
   id: string;
   sourcePath: string;
   index: number;
+  kind?: MediaKind;
+  date?: number;
 }
 
 export interface BatchExportResult {
   exported: number;
   failed: Array<{ itemId: string; error: string }>;
   outputs: string[];
+}
+
+export interface TrashResult {
+  trashed: string[];
+  failed: Array<{ path: string; error: string }>;
+}
+
+export interface TrashError {
+  path: string;
+  error: string;
 }
 
 export interface LibraryChangedEvent {
@@ -161,6 +173,7 @@ export type TauriCommandSignature = {
   // Library
   scan_library: (rootPath: string, force: boolean) => ScanResult;
   cancel_scan: () => void;
+  cancel_move_to_trash: () => void;
   import_files: (paths: string[]) => ScanResult;
   get_library_items: (filter: LibraryFilterDTO) => MediaItem[];
   get_item_thumbnail: (request: ThumbnailRequest) => ThumbnailResponse;
@@ -197,6 +210,7 @@ export type TauriCommandSignature = {
 
   // Duplicates
   find_duplicates: () => DuplicateGroup[];
+  cancel_find_duplicates: () => void;
 
   // Finder
   write_finder_tags: (path: string, tags: string[]) => void;

@@ -133,7 +133,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
         void video.requestPictureInPicture();
       }
     } catch (err) {
-      console.warn("Picture-in-picture unavailable", err);
+      if (import.meta.env.DEV) console.warn("Picture-in-picture unavailable", err);
     }
   };
 

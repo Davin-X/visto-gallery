@@ -21,25 +21,29 @@ tauri-plugin-dialog = "2"
 tokio = { version = "1", features = ["full", "macros"] }
 
 # Database
-sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "macros", "time", "uuid", "chrono"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "macros", "time", "uuid", "chrono", "migrate"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"
+xattr = "1.6"
+plist = "1.10"
+kamadak-exif = "0.6"
+notify = "6"
 
 # UUID
 uuid = { version = "1", features = ["v4", "serde"] }
 
 # Time
 time = { version = "0.3", features = ["serde", "formatting", "macros", "std"] }
+chrono = { version = "0.4", features = ["serde"] }
 
 # Trash
 trash = "5"
 
 # Error handling
 anyhow = "1"
-thiserror = "1"
 
 
 # Image processing
@@ -48,21 +52,6 @@ image = "0.25"
 # Hashing
 ring = "0.17"
 hex = "0.4"
-
-# File watching (for future)
-notify = { version = "6", features = ["fsevent-sys"] }
-
-# Crypto for vault
-aes-gcm = "0.10"
-rand = "0.8"
-zeroize = "1"
-
-# macOS integration
-objc2 = "0.6.5"
-objc2-foundation = "0.3.2"
-
-# Extended attributes for Finder tags
-xattr = "1.5"
 
 # Logging
 tracing = "0.1"

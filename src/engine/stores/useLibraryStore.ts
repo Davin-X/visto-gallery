@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import type { MediaItem, Album, Tag, ImportSession, LibraryFilter, DuplicateGroup, Filter, LayoutMode, Screen } from "../types/media";
-import type { LibraryFolder } from "../types/commands";
+import type { LibraryFolder, LibraryFilterDTO } from "../types/commands";
 import { tauri } from "../commands/tauri";
 import { formatBytes } from "../commands/tauri";
 
@@ -31,7 +31,6 @@ interface LibraryState {
   items: MediaItem[];
   albums: Album[];
   tags: Tag[];
-  sessions: ImportSession[];
   duplicates: DuplicateGroup[];
   folders: LibraryFolder[];
 
@@ -62,6 +61,10 @@ interface LibraryState {
   // deliberately absent from the normal viewer, so the Hidden gallery asks the
   // viewer to browse the hidden set instead.
   viewerScope: "library" | "hidden";
+
+  // Pagination
+  page: number;
+  pageSize: number;
 
   // Status
   busy: boolean;
@@ -157,6 +160,13 @@ let sortedSource: MediaItem[] | null = null;
 let sortedBy: LibraryState["sortBy"] | null = null;
 let sortedOrder: LibraryState["sortOrder"] | null = null;
 let sortedCache: MediaItem[] = [];
+
+export function resetSortedItemsCache(): void {
+  sortedSource = null;
+  sortedBy = null;
+  sortedOrder = null;
+  sortedCache = [];
+}
 
 function getSortedItems(items: MediaItem[], sortBy: LibraryState["sortBy"], sortOrder: LibraryState["sortOrder"]) {
   if (items === sortedSource && sortBy === sortedBy && sortOrder === sortedOrder) return sortedCache;
@@ -258,7 +268,6 @@ export const useLibraryStore = create<LibraryState>()(
       items: [],
       albums: [],
       tags: [],
-      sessions: [],
       duplicates: [],
       folders: [],
       inspectedId: null,
@@ -281,6 +290,10 @@ export const useLibraryStore = create<LibraryState>()(
       progress: null,
       notice: null,
       
+      // Pagination
+      page: 0,
+      pageSize: 0, // 0 = load all (no pagination)
+      
       // Computed (updated via subscribe in components)
       visibleItems: [],
       sortedItems: [],
@@ -296,6 +309,8 @@ export const useLibraryStore = create<LibraryState>()(
       loadLibrary: async (filter) => {
         set({ busy: true, progress: { phase: "reading", processed: 0, total: 0 } });
         try {
+          const { page, pageSize, sortBy, sortOrder } = get();
+          const usePagination = pageSize > 0;
           const dto = filter ? {
             kind: filter.kind,
             favorite: filter.favorite,
@@ -304,15 +319,18 @@ export const useLibraryStore = create<LibraryState>()(
             query: filter.query,
             dateFrom: filter.dateFrom,
             dateTo: filter.dateTo,
-            sortBy: "capturedAt" as const,
-            sortOrder: "desc" as const,
-          } : undefined;
+            sortBy: sortBy as LibraryFilterDTO["sortBy"],
+            sortOrder: sortOrder as LibraryFilterDTO["sortOrder"],
+            limit: usePagination ? pageSize : undefined,
+            offset: usePagination ? page * pageSize : undefined,
+          } : {
+            limit: usePagination ? pageSize : undefined,
+            offset: usePagination ? page * pageSize : undefined,
+          };
           
-          console.log("loadLibrary: starting", { dto });
-
           const isTauri = typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
           if (!isTauri) {
-            console.warn("Tauri IPC is not available in browser preview mode.");
+            if (import.meta.env.DEV) console.warn("Tauri IPC is not available in browser preview mode.");
             set({ busy: false, progress: null });
             get().refreshDerived();
             return;
@@ -325,12 +343,10 @@ export const useLibraryStore = create<LibraryState>()(
             tauri.library.getFolders(),
           ]);
           
-          console.log("loadLibrary: got items", { itemsCount: items.length, albumsCount: albums.length, tagsCount: tags.length });
-          
           set({ items, albums, tags, folders, busy: false, progress: null });
           get().refreshDerived();
         } catch (e) {
-          console.error("loadLibrary failed:", e);
+          if (import.meta.env.DEV) console.error("loadLibrary failed:", e);
           set({ busy: false, progress: null, notice: "Failed to load library: " + String(e) });
         }
       },
@@ -346,7 +362,7 @@ export const useLibraryStore = create<LibraryState>()(
           const folders = await tauri.library.getFolders();
           set({ folders });
         } catch (e) {
-          console.error("loadFolders failed:", e);
+          if (import.meta.env.DEV) console.error("loadFolders failed:", e);
         }
       },
 
@@ -606,18 +622,25 @@ export const useLibraryStore = create<LibraryState>()(
             .map((i) => i.path);
         set({ busy: true, canceling: false, progress: { phase: "trashing", processed: 0, total: paths.length } });
         try {
-          await tauri.items.moveToTrash(paths);
+          const result = await tauri.items.moveToTrash(paths);
+          // Only remove items that were successfully trashed
+          const trashedIds = new Set(
+            get().items.filter((i) => result.trashed.includes(i.path)).map((i) => i.id)
+          );
+          if (result.failed.length > 0) {
+            const errors = result.failed.map((f) => `${f.path}: ${f.error}`).join("; ");
+            get().showNotice(`Failed to trash ${result.failed.length} item(s): ${errors}`);
+          }
+          set({ busy: false, canceling: false, progress: null });
+          set((s) => ({
+            items: s.items.filter((i) => !trashedIds.has(i.id)),
+            selectedIds: s.selectedIds.filter((id) => !trashedIds.has(id)),
+            inspectedId: s.inspectedId && trashedIds.has(s.inspectedId) ? null : s.inspectedId,
+          }));
         } catch (e) {
           set({ busy: false, canceling: false, progress: null });
           throw e;
         }
-        set({ busy: false, canceling: false, progress: null });
-        set((s) => ({
-          items: s.items.filter((i) => !ids.includes(i.id)),
-          selectedIds: s.selectedIds.filter((id) => !ids.includes(id)),
-          // Never leave inspection pointing at a deleted item.
-          inspectedId: s.inspectedId && ids.includes(s.inspectedId) ? null : s.inspectedId,
-        }));
         get().refreshDerived();
       },
 

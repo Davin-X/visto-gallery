@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::{AppHandle, State, Manager, Emitter, Window};
+use tauri_plugin_dialog::DialogExt;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use crate::{AppState, models::*};
+use notify::Watcher;
 use anyhow::Result;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -11,6 +13,7 @@ use time::OffsetDateTime;
 use sqlx::{SqlitePool, Sqlite, QueryBuilder, Row};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::io::Write;
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::codecs::webp::WebPEncoder;
@@ -35,7 +38,6 @@ pub struct ScanResult {
     pub cancelled: bool,
     pub albums: Vec<Album>,
     pub tags: Vec<Tag>,
-    pub sessions: Vec<ImportSession>,
     pub total_size: i64,
     pub duration: i64,
 }
@@ -59,6 +61,7 @@ pub struct LibraryFilterDTO {
     pub hidden: Option<bool>,
     pub album_id: Option<String>,
     pub query: Option<String>,
+    pub tags: Option<Vec<String>>,
     pub date_from: Option<i64>,
     pub date_to: Option<i64>,
     pub limit: Option<i32>,
@@ -190,6 +193,20 @@ pub struct BatchExportError {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TrashResult {
+    pub trashed: Vec<String>,
+    pub failed: Vec<TrashError>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashError {
+    pub path: String,
+    pub error: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DuplicateGroup {
     pub id: String,
     pub sha256: String,
@@ -306,10 +323,24 @@ const TAG_SELECT: &str = "SELECT t.id, t.name, t.color_index, t.created_at, \
 /// duplicate hashing. Each operation clears it before starting and checks it
 /// between filesystem work units.
 static SCAN_CANCEL: AtomicBool = AtomicBool::new(false);
+static TRASH_CANCEL: AtomicBool = AtomicBool::new(false);
+static DUPLICATE_CANCEL: AtomicBool = AtomicBool::new(false);
 
 #[tauri::command]
 pub async fn cancel_scan() -> Result<(), String> {
     SCAN_CANCEL.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cancel_move_to_trash() -> Result<(), String> {
+    TRASH_CANCEL.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cancel_find_duplicates() -> Result<(), String> {
+    DUPLICATE_CANCEL.store(true, Ordering::SeqCst);
     Ok(())
 }
 
@@ -328,6 +359,26 @@ fn normalize_root(path: &str) -> String {
         path.trim_end_matches('/').to_string()
     } else {
         path.to_string()
+    }
+}
+
+/// True if `path` is inside any registered library root.
+fn is_path_under_registered_roots(path: &str, registered: &[String]) -> bool {
+    let file = normalize_root(path);
+    registered.iter().any(|root| {
+        let r = normalize_root(root);
+        r.is_empty() || r == "/" || path_is_inside(&file, &r) || file == r
+    })
+}
+
+fn validate_path_under_registered_roots(path: &str, registered: &[String]) -> Result<(), String> {
+    if registered.is_empty() {
+        return Ok(());
+    }
+    if is_path_under_registered_roots(path, registered) {
+        Ok(())
+    } else {
+        Err("Path is outside registered library folders.".to_string())
     }
 }
 
@@ -736,7 +787,6 @@ pub async fn scan_library(
         cancelled,
         albums,
         tags,
-        sessions: vec![],
         total_size,
         duration,
     })
@@ -854,7 +904,6 @@ pub async fn import_files(
         cancelled: SCAN_CANCEL.load(Ordering::SeqCst),
         albums,
         tags,
-        sessions: vec![],
         total_size,
         duration: start.elapsed().as_millis() as i64,
     })
@@ -881,6 +930,15 @@ pub async fn get_library_items(filter: Option<LibraryFilterDTO>, state: State<'_
             .push_bind(album_id.clone())
             .push(")");
     }
+    if let Some(tags) = &f.tags {
+        if !tags.is_empty() {
+            let placeholders = std::iter::repeat("?").take(tags.len()).collect::<Vec<_>>().join(",");
+            qb.push(format!(" AND id IN (SELECT mt.media_id FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE t.name IN ({}))", placeholders));
+            for tag in tags {
+                qb.push_bind(tag.clone());
+            }
+        }
+    }
     if let Some(query) = &f.query {
         let like = format!("%{}%", query);
         qb.push(" AND (name LIKE ").push_bind(like.clone())
@@ -895,19 +953,22 @@ pub async fn get_library_items(filter: Option<LibraryFilterDTO>, state: State<'_
 
     // Identifiers cannot be bound, so the sort column is whitelisted instead of
     // interpolated straight from the caller.
-    let sort_column = match f.sort_by.as_deref() {
-        Some("capturedAt") => "COALESCE(captured_at, modified_at)",
-        Some("modifiedAt") => "modified_at",
-        Some("name") => "name",
-        Some("size") => "size",
-        Some("kind") => "kind",
-        _ => "modified_at",
+    // Define default direction per column: dates default DESC, others ASC.
+    let (primary_sql, default_dir) = match f.sort_by.as_deref() {
+        Some("capturedAt") => ("COALESCE(captured_at, modified_at)", "DESC"),
+        Some("modifiedAt") => ("modified_at", "DESC"),
+        Some("name") => ("name COLLATE NOCASE", "ASC"),
+        Some("size") => ("size", "ASC"),
+        Some("kind") => ("kind", "ASC"),
+        _ => ("COALESCE(captured_at, modified_at)", "DESC"),
     };
-    let sort_order = match f.sort_order.as_deref() {
+    let dir = match f.sort_order.as_deref() {
         Some("asc") => "ASC",
-        _ => "DESC",
+        Some("desc") => "DESC",
+        _ => default_dir,
     };
-    qb.push(format!(" ORDER BY {} {}", sort_column, sort_order));
+    // Stable secondary sort: id ASC
+    qb.push(format!(" ORDER BY {} {}, id ASC", primary_sql, dir));
 
     if let Some(limit) = f.limit {
         qb.push(" LIMIT ").push_bind(limit as i64);
@@ -926,26 +987,38 @@ pub async fn get_library_items(filter: Option<LibraryFilterDTO>, state: State<'_
     Ok(items)
 }
 
-/// Attach tags and album ids to a page of items using two batch queries rather
-/// than one query per item.
+/// Attach tags and album ids to a page of items using filtered queries.
+/// Only fetches relations for the given item IDs (keyset pagination friendly).
 async fn hydrate_relations(db: &SqlitePool, items: &mut [MediaItem]) -> Result<(), String> {
     if items.is_empty() {
         return Ok(());
     }
 
-    let tag_rows = sqlx::query_as::<_, (String, String)>(
-        "SELECT mt.media_id, t.name FROM media_tags mt JOIN tags t ON t.id = mt.tag_id",
-    )
-    .fetch_all(db)
-    .await
-    .map_err(|e| e.to_string())?;
+    // Collect item IDs for IN clause
+    let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
+    let placeholders = std::iter::repeat("?").take(ids.len()).collect::<Vec<_>>().join(",");
+    
+    // Tags with JOIN to get names
+    let tag_sql = format!(
+        "SELECT mt.media_id, t.name FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.media_id IN ({})",
+        placeholders
+    );
+    let mut tag_query = sqlx::query_as::<_, (String, String)>(&tag_sql);
+    for id in &ids {
+        tag_query = tag_query.bind(*id);
+    }
+    let tag_rows = tag_query.fetch_all(db).await.map_err(|e| e.to_string())?;
 
-    let album_rows = sqlx::query_as::<_, (String, String)>(
-        "SELECT media_id, album_id FROM album_items",
-    )
-    .fetch_all(db)
-    .await
-    .map_err(|e| e.to_string())?;
+    // Album items
+    let album_sql = format!(
+        "SELECT media_id, album_id FROM album_items WHERE media_id IN ({})",
+        placeholders
+    );
+    let mut album_query = sqlx::query_as::<_, (String, String)>(&album_sql);
+    for id in &ids {
+        album_query = album_query.bind(*id);
+    }
+    let album_rows = album_query.fetch_all(db).await.map_err(|e| e.to_string())?;
 
     let mut tags_by_item: HashMap<String, Vec<String>> = HashMap::new();
     for (media_id, name) in tag_rows {
@@ -981,7 +1054,6 @@ pub struct ThumbnailResponse {
 
 /// Large originals should be downsampled by macOS ImageIO (via `sips`) instead
 /// of being decoded into a full-resolution buffer just to shrink them.
-#[cfg(test)]
 const LARGE_THUMBNAIL_SOURCE_BYTES: i64 = 8 * 1024 * 1024;
 /// Thumbnails are small, but they should still have a predictable disk budget.
 const THUMBNAIL_CACHE_LIMIT_BYTES: u64 = 512 * 1024 * 1024;
@@ -1074,9 +1146,10 @@ fn maybe_prune_thumbnail_cache(root: PathBuf) {
 }
 
 /// Remove the oldest thumbnails until the directory fits the budget.
-fn prune_thumbnail_cache(root: &Path, max_bytes: u64) {
+/// Returns (deleted_count, bytes_freed, failed_count).
+fn prune_thumbnail_cache(root: &Path, max_bytes: u64) -> (usize, u64, usize) {
     let Ok(entries) = std::fs::read_dir(root) else {
-        return;
+        return (0, 0, 0);
     };
 
     let mut files = Vec::new();
@@ -1099,36 +1172,51 @@ fn prune_thumbnail_cache(root: &Path, max_bytes: u64) {
     }
 
     if total <= max_bytes {
-        return;
+        return (0, 0, 0);
     }
 
     // Cache files are written once, so modified time is a good proxy for age.
     files.sort_by_key(|(_, _, modified)| *modified);
+    
+    let mut deleted = 0;
+    let mut bytes_freed = 0_u64;
+    let mut failed = 0;
+    
     for (path, size, _) in files {
         if total <= max_bytes {
             break;
         }
-        if std::fs::remove_file(&path).is_ok() {
-            total = total.saturating_sub(size);
+        match std::fs::remove_file(&path) {
+            Ok(_) => {
+                total = total.saturating_sub(size);
+                deleted += 1;
+                bytes_freed += size;
+            }
+            Err(_) => {
+                failed += 1;
+                // Don't subtract size since deletion failed
+            }
         }
     }
+    
+    (deleted, bytes_freed, failed)
 }
 
-#[allow(unreachable_code)]
 fn generate_cached_thumbnail(
     source: &str,
     destination: &Path,
     size: u32,
-    _source_size: i64,
+    source_size: i64,
 ) -> Result<(Vec<u8>, u32, u32), String> {
     #[cfg(target_os = "macos")]
     {
-        return generate_with_macos_sips(source, destination, size, "macOS sips");
+        // Use sips for large images on macOS; fall back to image crate for smaller ones
+        if source_size > LARGE_THUMBNAIL_SOURCE_BYTES {
+            return generate_with_macos_sips(source, destination, size, "macOS sips (large image)");
+        }
     }
-    #[cfg(not(target_os = "macos"))]
-    let _ = _source_size;
-
-    let mut reader = image::ImageReader::open(source)
+    // Fallback: use image crate (used on non-macOS, and for small images on macOS)
+    let reader = image::ImageReader::open(source)
         .map_err(|error| format!("Could not read photo: {error}"))?
         .with_guessed_format()
         .map_err(|error| format!("Could not identify photo format: {error}"))?;
@@ -1213,10 +1301,29 @@ fn generate_with_macos_sips(_source: &str, _destination: &Path, _size: u32, reas
 }
 
 #[tauri::command]
-pub async fn watch_folder(path: String, state: State<'_, AppState>) -> Result<(), String> { let _ = (path, state); Ok(()) }
+pub async fn watch_folder(path: String, app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let app_handle = app.clone();
+    let watch_path = path.clone();
+    let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+        if res.is_ok() {
+            let _ = app_handle.emit("folder-changed", &watch_path);
+        }
+    })
+    .map_err(|e| e.to_string())?;
+    watcher
+        .watch(std::path::Path::new(&path), notify::RecursiveMode::Recursive)
+        .map_err(|e| e.to_string())?;
+    let mut guard = state.watchers.lock().map_err(|e| e.to_string())?;
+    guard.insert(path, watcher);
+    Ok(())
+}
 
 #[tauri::command]
-pub async fn unwatch_folder(path: String, state: State<'_, AppState>) -> Result<(), String> { let _ = (path, state); Ok(()) }
+pub async fn unwatch_folder(path: String, state: State<'_, AppState>) -> Result<(), String> {
+    let mut guard = state.watchers.lock().map_err(|e| e.to_string())?;
+    guard.remove(&path);
+    Ok(())
+}
 
 /// Group a path that was imported before folder tracking existed.
 ///
@@ -1264,15 +1371,17 @@ pub async fn get_library_folders(state: State<'_, AppState>) -> Result<Vec<Libra
         .map_err(|e| e.to_string())?;
 
     // One pass over the catalog: each item lands in exactly one folder.
+let mut registered_sorted = registered.clone();
+    registered_sorted.sort_by(|a, b| b.len().cmp(&a.len()));
+
     let mut tallies: HashMap<String, (i64, i64)> = HashMap::new();
     for row in &rows {
         let item_path: String = row.get("path");
         let size: i64 = row.get("size");
 
-        let owner = registered
+        let owner = registered_sorted
             .iter()
-            .filter(|root| path_is_inside(&item_path, root))
-            .max_by_key(|root| root.len())
+            .find(|root| path_is_inside(&item_path, root))
             .cloned()
             .or_else(|| inferred_folder_root(&item_path));
 
@@ -1337,22 +1446,27 @@ pub async fn remove_library_folder(
     if root.is_empty() {
         return Err("Refusing to remove an empty folder path".to_string());
     }
-
-    let rows = sqlx::query("SELECT id, path FROM media_items")
+    let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
         .fetch_all(&db)
         .await
         .map_err(|e| e.to_string())?;
+    if !registered.iter().any(|registered_path| normalize_root(registered_path) == root) {
+        return Err("Folder is not a registered library root.".to_string());
+    }
+
+let rows = sqlx::query(
+        "SELECT id, path FROM media_items \
+         WHERE substr(path, 1, ?1) = ?2 AND length(path) > ?1 AND substr(path, ?1 + 1, 1) = '/'",
+    )
+    .bind(root.len() as i64)
+    .bind(&root)
+    .fetch_all(&db)
+    .await
+    .map_err(|e| e.to_string())?;
 
     let targets: Vec<(String, String)> = rows
         .iter()
-        .filter_map(|row| {
-            let item_path: String = row.get("path");
-            if path_is_inside(&item_path, &root) {
-                Some((row.get::<String, _>("id"), item_path))
-            } else {
-                None
-            }
-        })
+        .map(|row| (row.get::<String, _>("id"), row.get::<String, _>("path")))
         .collect();
 
     if delete_files.unwrap_or(false) && !targets.is_empty() {
@@ -1386,6 +1500,8 @@ pub async fn remove_library_folder(
         }
     }
 
+    let mut tx = db.begin().await.map_err(|e| e.to_string())?;
+
     // Clean up join rows explicitly instead of relying on foreign-key cascades
     // being enabled on this particular pooled connection.
     for (id, _) in &targets {
@@ -1396,7 +1512,7 @@ pub async fn remove_library_folder(
         ] {
             sqlx::query(statement)
                 .bind(id)
-                .execute(&db)
+                .execute(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
         }
@@ -1405,18 +1521,20 @@ pub async fn remove_library_folder(
     // Forget the folder itself, plus any registered subfolder that lived
     // inside it, so a later import is not shadowed by stale entries.
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
-        .fetch_all(&db)
+        .fetch_all(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     for registered_path in registered {
         if normalize_root(&registered_path) == root || path_is_inside(&registered_path, &root) {
             sqlx::query("DELETE FROM library_folders WHERE path = ?")
                 .bind(&registered_path)
-                .execute(&db)
+                .execute(&mut *tx)
                 .await
                 .map_err(|e| e.to_string())?;
         }
     }
+
+    tx.commit().await.map_err(|e| e.to_string())?;
 
     Ok(targets.len() as i64)
 }
@@ -1479,20 +1597,16 @@ pub async fn move_to_trash(
     paths: Vec<String>,
     state: State<'_, AppState>,
     window: Window,
-) -> Result<(), String> {
-    SCAN_CANCEL.store(false, Ordering::SeqCst);
+) -> Result<TrashResult, String> {
+    TRASH_CANCEL.store(false, Ordering::SeqCst);
 
     let db = get_db(&state)?;
 
-let known_paths: std::collections::HashSet<String> = sqlx::query_scalar("SELECT path FROM media_items")
-        .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .collect();
+    // Only trash paths that exist on disk. Files not in the catalog can still be
+    // trashed if they exist (e.g. imported outside the app).
     let paths: Vec<String> = paths
         .into_iter()
-        .filter(|p| std::path::Path::new(p).exists() && known_paths.contains(p))
+        .filter(|p| std::path::Path::new(p).exists())
         .collect();
     if paths.is_empty() {
         return Err("Selected items no longer exist on disk.".to_string());
@@ -1507,19 +1621,75 @@ let known_paths: std::collections::HashSet<String> = sqlx::query_scalar("SELECT 
         }),
     );
 
-let mut trashed: Vec<String> = Vec::new();
-    let paths_for_trash = paths.clone();
-    let result = tokio::task::spawn_blocking(move || trash::delete_all(&paths_for_trash)).await;
-    match result {
-        Ok(Ok(())) => {
-            trashed = paths.clone();
+    let mut trashed = Vec::new();
+    let mut failed = Vec::new();
+
+    // Trash in chunks using trash::delete_all, which moves many files in a
+    // single OS-level operation (much faster than one-by-one). Fall back to
+    // per-file deletes if a chunk fails so partial results are still reported.
+    const TRASH_CHUNK: usize = 50;
+    let total = paths.len();
+    let mut processed = 0usize;
+    for chunk in paths.chunks(TRASH_CHUNK) {
+        if TRASH_CANCEL.load(Ordering::SeqCst) {
+            for p in chunk {
+                failed.push(TrashError {
+                    path: p.clone(),
+                    error: "Operation cancelled".to_string(),
+                });
+            }
+            processed += chunk.len();
+            continue;
         }
-        Ok(Err(e)) => {
-            return Err(format!("Could not move files to Trash: {}", e));
+
+        let _ = window.emit(
+            "import-progress",
+            json!({
+                "phase": "trashing",
+                "processed": processed,
+                "total": total,
+                "currentFile": chunk.first().cloned().unwrap_or_default(),
+            }),
+        );
+
+        let chunk_paths: Vec<String> = chunk.to_vec();
+        let result = tokio::task::spawn_blocking(move || trash::delete_all(&chunk_paths)).await;
+
+        match result {
+            Ok(Ok(())) => {
+                trashed.extend(chunk.iter().cloned());
+            }
+            _ => {
+                // Fallback: try each file individually so partial successes count.
+                for path in chunk {
+                    if TRASH_CANCEL.load(Ordering::SeqCst) {
+                        failed.push(TrashError {
+                            path: path.clone(),
+                            error: "Operation cancelled".to_string(),
+                        });
+                        continue;
+                    }
+                    match tokio::task::spawn_blocking({
+                        let path = path.clone();
+                        move || trash::delete(&path)
+                    })
+                    .await
+                    {
+                        Ok(Ok(())) => trashed.push(path.clone()),
+                        Ok(Err(e)) => failed.push(TrashError {
+                            path: path.clone(),
+                            error: format!("Could not move to Trash: {}", e),
+                        }),
+                        Err(e) => failed.push(TrashError {
+                            path: path.clone(),
+                            error: format!("Trash task failed: {}", e),
+                        }),
+                    }
+                }
+            }
         }
-        Err(e) => {
-            return Err(format!("Trash task failed: {}", e));
-        }
+
+        processed += chunk.len();
     }
 
     let _ = window.emit(
@@ -1531,20 +1701,19 @@ let mut trashed: Vec<String> = Vec::new();
         }),
     );
 
-    let mut transaction = db.begin().await.map_err(|e| e.to_string())?;
-    for path in &trashed {
-        sqlx::query("DELETE FROM media_items WHERE path = ?")
-            .bind(path)
-            .execute(&mut *transaction)
-            .await
-            .map_err(|e| e.to_string())?;
+    if !trashed.is_empty() {
+        let mut transaction = db.begin().await.map_err(|e| e.to_string())?;
+        for path in &trashed {
+            sqlx::query("DELETE FROM media_items WHERE path = ?")
+                .bind(path)
+                .execute(&mut *transaction)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        transaction.commit().await.map_err(|e| e.to_string())?;
     }
-    transaction.commit().await.map_err(|e| e.to_string())?;
 
-    if trashed.len() != paths.len() {
-        return Err("Trash operation cancelled.".to_string());
-    }
-    Ok(())
+    Ok(TrashResult { trashed, failed })
 }
 
 #[tauri::command]
@@ -1570,6 +1739,9 @@ pub async fn reveal_in_finder(path: String, state: State<'_, AppState>) -> Resul
 pub async fn open_folder(path: String) -> Result<(), String> {
     // Unlike `open -R` (which selects a file in its parent), this opens the
     // folder itself in Finder. Used by Batch export results.
+    if !std::path::Path::new(&path).is_dir() {
+        return Err("Path is not a directory.".to_string());
+    }
     std::process::Command::new("open")
         .arg(&path)
         .status()
@@ -1672,32 +1844,491 @@ pub async fn remove_from_album(album_id: String, item_ids: Vec<String>, state: S
 
 #[tauri::command]
 pub async fn read_exif(path: String, state: State<'_, AppState>) -> Result<ExifData, String> {
-    // TODO: Use kamadak-exif crate
-    let _ = (path, state);
-    Ok(ExifData {
-        captured_at: None,
-        camera: None,
-        lens: None,
-        exposure: None,
-        iso: None,
-        latitude: None,
-        longitude: None,
-        width: None,
-        height: None,
-        metadata_error: None,
+    let db = get_db(&state)?;
+    let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
+        .fetch_all(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    if !registered.is_empty() {
+        validate_path_under_registered_roots(&path, &registered)?;
+    }
+    tokio::task::spawn_blocking(move || {
+        let mut data = ExifData {
+            captured_at: None,
+            camera: None,
+            lens: None,
+            exposure: None,
+            iso: None,
+            latitude: None,
+            longitude: None,
+            width: None,
+            height: None,
+            metadata_error: None,
+        };
+
+        let file = match std::fs::File::open(&path) {
+            Ok(f) => f,
+            Err(e) => {
+                data.metadata_error = Some(e.to_string());
+                return Ok(data);
+            }
+        };
+        let mut buf = std::io::BufReader::new(&file);
+        let exif_reader = exif::Reader::new();
+        let exif = match exif_reader.read_from_container(&mut buf) {
+            Ok(e) => e,
+            Err(e) => {
+                data.metadata_error = Some(e.to_string());
+                return Ok(data);
+            }
+        };
+
+        if let Some(field) = exif.get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY) {
+            let s = field.display_value().to_string();
+            if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(&s, "%Y:%m:%d %H:%M:%S") {
+                data.captured_at = Some(dt.and_utc().timestamp());
+            }
+        }
+        let make = exif.get_field(exif::Tag::Make, exif::In::PRIMARY).map(|f| f.display_value().to_string());
+        let model = exif.get_field(exif::Tag::Model, exif::In::PRIMARY).map(|f| f.display_value().to_string());
+        data.camera = match (make, model) {
+            (Some(m), Some(modl)) => Some(format!("{} {}", m.trim(), modl.trim())),
+            (Some(m), None) => Some(m.trim().to_string()),
+            (None, Some(modl)) => Some(modl.trim().to_string()),
+            _ => None,
+        };
+        if let Some(f) = exif.get_field(exif::Tag::LensModel, exif::In::PRIMARY) {
+            data.lens = Some(f.display_value().to_string().trim().to_string());
+        }
+        if let Some(f) = exif.get_field(exif::Tag::ExposureTime, exif::In::PRIMARY) {
+            data.exposure = Some(f.display_value().to_string());
+        }
+        if let Some(f) = exif.get_field(exif::Tag::PhotographicSensitivity, exif::In::PRIMARY) {
+            if let exif::Value::Short(ref v) = f.value {
+                if let Some(&x) = v.first() {
+                    data.iso = Some(x as i32);
+                }
+            }
+        }
+        if let Some(f) = exif.get_field(exif::Tag::PixelXDimension, exif::In::PRIMARY) {
+            if let exif::Value::Long(ref v) = f.value {
+                data.width = v.first().map(|&x| x as i32);
+            }
+        }
+        if let Some(f) = exif.get_field(exif::Tag::PixelYDimension, exif::In::PRIMARY) {
+            if let exif::Value::Long(ref v) = f.value {
+                data.height = v.first().map(|&x| x as i32);
+            }
+        }
+        // GPS
+        if let (Some(lat), Some(lon)) = (
+            exif.get_field(exif::Tag::GPSLatitude, exif::In::PRIMARY),
+            exif.get_field(exif::Tag::GPSLongitude, exif::In::PRIMARY),
+        ) {
+            // Convert DMS to decimal degrees is non-trivial; leave display string for now.
+            let _ = (lat, lon);
+        }
+        Ok(data)
     })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 pub async fn write_exif(path: String, data: PartialExifData, state: State<'_, AppState>) -> Result<(), String> {
+    let db = get_db(&state)?;
+    let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
+        .fetch_all(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    if !registered.is_empty() {
+        validate_path_under_registered_roots(&path, &registered)?;
+    }
     let _ = (path, data, state);
     Ok(())
 }
 
 #[tauri::command]
-pub async fn render_edited(request: RenderRequest, state: State<'_, AppState>) -> Result<ExportResult, String> {
-    let _ = (request, state);
-    Err("Not implemented - use image crate".to_string())
+pub async fn render_edited(request: RenderRequest, _state: State<'_, AppState>) -> Result<ExportResult, String> {
+    // Offload CPU-intensive image processing to blocking pool
+    tauri::async_runtime::spawn_blocking(move || {
+        render_edited_blocking(request)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+/// Core image editing pipeline - runs in blocking pool
+fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String> {
+    use std::path::PathBuf;
+
+    let source_path = PathBuf::from(&request.source_path);
+    
+    // 1. Load image with metadata
+    let reader = image::ImageReader::open(&source_path)
+        .map_err(|e| format!("Could not open image: {}", e))?
+        .with_guessed_format()
+        .map_err(|e| format!("Could not identify image format: {}", e))?;
+    
+    let _format = reader.format().ok_or("Unknown image format")?;
+    let mut img = reader.decode()
+        .map_err(|e| format!("Could not decode image: {}", e))?;
+    
+    let (orig_width, orig_height) = (img.width(), img.height());
+    
+    // 2. Read EXIF data before any modifications (for preservation)
+    let exif_data = read_exif_bytes(&source_path);
+    
+    // 3. Apply crop in SOURCE space (before rotation/flip)
+    // CropRect is normalized (0-1) against source dimensions
+    if let Some(crop) = request.crop {
+        let crop_x = (crop.x * orig_width as f32).round() as u32;
+        let crop_y = (crop.y * orig_height as f32).round() as u32;
+        let crop_w = (crop.width * orig_width as f32).round() as u32;
+        let crop_h = (crop.height * orig_height as f32).round() as u32;
+        
+        // Clamp to image bounds
+        let crop_x = crop_x.min(orig_width.saturating_sub(1));
+        let crop_y = crop_y.min(orig_height.saturating_sub(1));
+        let crop_w = crop_w.min(orig_width - crop_x).max(1);
+        let crop_h = crop_h.min(orig_height - crop_y).max(1);
+        
+        img = img.crop_imm(crop_x, crop_y, crop_w, crop_h);
+    }
+    
+    // 4. Apply rotation (in 90-degree increments)
+    let rotation = ((request.edits.rotation % 360) + 360) % 360;
+    match rotation {
+        90 => img = img.rotate90(),
+        180 => img = img.rotate180(),
+        270 => img = img.rotate270(),
+        _ => {}
+    }
+    
+    // 5. Apply horizontal flip
+    if request.edits.flip {
+        img = img.fliph();
+    }
+    
+    // 6. Apply color adjustments
+    // exposure, contrast, warmth, shadows, highlights, saturation
+    // These are applied as linear RGB adjustments
+    if has_color_adjustments(&request.edits) {
+        img = apply_color_adjustments(img, &request.edits);
+    }
+    
+    let (final_width, final_height) = (img.width(), img.height());
+    
+    // 7. Determine output format for writing (preserve source format for in-place edits)
+    let write_format = if request.output_format == "in_place" {
+        match source_path
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_lowercase())
+            .as_deref()
+        {
+            Some("png") => "image/png".to_string(),
+            Some("webp") => "image/webp".to_string(),
+            _ => "image/jpeg".to_string(),
+        }
+    } else {
+        request.output_format.clone()
+    };
+
+    // 8. Determine output path
+    let output_path = if request.output_format == "in_place" {
+        // In-place: write to temp next to source, then atomic rename
+        let tmp_path = source_path.with_extension(format!(
+            "tmp-{}",
+            uuid::Uuid::new_v4()
+        ));
+        
+        // Create backup
+        let backup_path = source_path.with_extension(format!("{}.bak", 
+            source_path.extension().and_then(|s| s.to_str()).unwrap_or("bak")));
+        let _ = std::fs::copy(&source_path, &backup_path);
+        
+        // Write to temp
+        write_image(&img, &tmp_path, &write_format, request.quality, request.strip_metadata, &exif_data)?;
+        
+        // Atomic rename
+        std::fs::rename(&tmp_path, &source_path)
+            .map_err(|e| {
+                let _ = std::fs::remove_file(&tmp_path);
+                format!("Failed to replace original: {}", e)
+            })?;
+        
+        source_path.to_string_lossy().into_owned()
+    } else {
+        // Save a copy - caller handles path via dialog
+        // We write to a temp location and return the path
+        let tmp_dir = std::env::temp_dir();
+        let output_name = format!(
+            "{}_edited.{}",
+            source_path.file_stem().and_then(|s| s.to_str()).unwrap_or("image"),
+            match request.output_format.as_str() {
+                "image/png" => "png",
+                "image/webp" => "webp",
+                _ => "jpg",
+            }
+        );
+        let output_path = tmp_dir.join(output_name);
+        
+        write_image(&img, &output_path, &write_format, request.quality, request.strip_metadata, &exif_data)?;
+        
+        output_path.to_string_lossy().into_owned()
+    };
+    
+    // 8. Verify output
+    let metadata = std::fs::metadata(&output_path).map_err(|e| format!("Output verification failed: {}", e))?;
+    let size = metadata.len() as i64;
+    
+    Ok(ExportResult {
+        output_path,
+        size,
+        width: final_width as i32,
+        height: final_height as i32,
+    })
+}
+
+/// Move an exported temp file to its final destination.
+#[tauri::command]
+pub async fn move_exported_file(source_path: String, destination_path: String, _state: State<'_, AppState>) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        use std::path::PathBuf;
+        let src = PathBuf::from(&source_path);
+        let dst = PathBuf::from(&destination_path);
+
+        if let Some(parent) = dst.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("Could not create destination folder: {}", e))?;
+        }
+
+        // Prefer an atomic rename; fall back to copy+remove for cross-device moves.
+        if std::fs::rename(&src, &dst).is_ok() {
+            return Ok(());
+        }
+
+        std::fs::copy(&src, &dst).map_err(|e| format!("Could not copy exported file: {}", e))?;
+        let _ = std::fs::remove_file(&src);
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Check if any color adjustments are non-zero
+fn has_color_adjustments(edits: &EditValues) -> bool {
+    edits.exposure != 0 || edits.contrast != 0 || edits.warmth != 0 ||
+    edits.shadows != 0 || edits.highlights != 0 || edits.saturation != 0
+}
+
+/// Apply color adjustments to image
+fn apply_color_adjustments(img: DynamicImage, edits: &EditValues) -> DynamicImage {
+    // Convert to RGBA for pixel manipulation
+    let mut rgba = img.to_rgba8();
+    
+    // Precompute factors
+    let exposure = edits.exposure as f32 / 100.0;
+    let contrast = edits.contrast as f32 / 100.0;
+    let warmth = edits.warmth as f32 / 100.0;
+    let shadows = edits.shadows as f32 / 100.0;
+    let highlights = edits.highlights as f32 / 100.0;
+    let saturation = edits.saturation as f32 / 100.0;
+    
+    // Combined brightness factor
+    let brightness = 1.0 + exposure + shadows * 0.22 + highlights * 0.1;
+    let contrast_factor = 1.0 + contrast - shadows * 0.08 + highlights * 0.12;
+    let saturation_factor = 1.0 + saturation;
+    
+    for pixel in rgba.pixels_mut() {
+        let mut r = pixel[0] as f32 / 255.0;
+        let mut g = pixel[1] as f32 / 255.0;
+        let mut b = pixel[2] as f32 / 255.0;
+        
+        // Brightness
+        r *= brightness;
+        g *= brightness;
+        b *= brightness;
+        
+        // Contrast (around 0.5 midpoint)
+        r = (r - 0.5) * contrast_factor + 0.5;
+        g = (g - 0.5) * contrast_factor + 0.5;
+        b = (b - 0.5) * contrast_factor + 0.5;
+        
+        // Saturation
+        let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = gray + (r - gray) * saturation_factor;
+        g = gray + (g - gray) * saturation_factor;
+        b = gray + (b - gray) * saturation_factor;
+        
+        // Warmth
+        if warmth > 0.0 {
+            r += warmth * 0.3;
+            b -= warmth * 0.3;
+        } else if warmth < 0.0 {
+            b += -warmth * 0.3;
+            r -= -warmth * 0.3;
+        }
+        
+        // Clamp and convert back
+        pixel[0] = (r.clamp(0.0, 1.0) * 255.0).round() as u8;
+        pixel[1] = (g.clamp(0.0, 1.0) * 255.0).round() as u8;
+        pixel[2] = (b.clamp(0.0, 1.0) * 255.0).round() as u8;
+    }
+    
+    DynamicImage::ImageRgba8(rgba)
+}
+
+/// Read EXIF bytes from file for preservation
+fn read_exif_bytes(path: &PathBuf) -> Option<Vec<u8>> {
+    // For JPEG, read the APP1 segment (EXIF)
+    if let Ok(mut file) = std::fs::File::open(path) {
+        use std::io::Read;
+        let mut buffer = Vec::new();
+        if file.read_to_end(&mut buffer).is_ok() {
+            // Look for EXIF marker (0xFFE1) in JPEG
+            if buffer.len() > 4 && buffer[0] == 0xFF && buffer[1] == 0xD8 {
+                // Simple JPEG EXIF extraction - find APP1 marker
+                let mut i = 2;
+                while i + 4 < buffer.len() {
+                    if buffer[i] == 0xFF && buffer[i + 1] == 0xE1 {
+                        let len = ((buffer[i + 2] as usize) << 8) | (buffer[i + 3] as usize);
+                        if i + 2 + len <= buffer.len() {
+                            // Check for "Exif\0\0" signature
+                            if i + 8 < buffer.len() &&
+                               buffer[i + 4] == b'E' && buffer[i + 5] == b'x' &&
+                               buffer[i + 6] == b'i' && buffer[i + 7] == b'f' &&
+                               buffer[i + 8] == 0 && buffer[i + 9] == 0 {
+                                return Some(buffer[i..i + 2 + len].to_vec());
+                            }
+                        }
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Write image with format-specific options, optionally preserving EXIF
+fn write_image(
+    img: &DynamicImage,
+    path: &PathBuf,
+    format: &str,
+    quality: f32,
+    strip_metadata: bool,
+    exif_data: &Option<Vec<u8>>,
+) -> Result<(), String> {
+    let quality = (quality * 100.0).round().clamp(1.0, 100.0) as u8;
+    
+    match format {
+        "image/png" => {
+            let encoder = image::codecs::png::PngEncoder::new_with_quality(
+                std::fs::File::create(path).map_err(|e| e.to_string())?,
+                image::codecs::png::CompressionType::Default,
+                image::codecs::png::FilterType::default(),
+            );
+            encoder.write_image(
+                img.as_bytes(),
+                img.width(),
+                img.height(),
+                img.color().into(),
+            ).map_err(|e| e.to_string())?;
+        }
+        "image/webp" => {
+            let encoder = image::codecs::webp::WebPEncoder::new_lossless(
+                std::fs::File::create(path).map_err(|e| e.to_string())?
+            );
+            encoder.write_image(
+                img.as_bytes(),
+                img.width(),
+                img.height(),
+                img.color().into(),
+            ).map_err(|e| e.to_string())?;
+        }
+        _ => { // JPEG default
+            // For JPEG, we can preserve EXIF by injecting it
+            let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
+
+            // JPEG only supports RGB; flatten any alpha channel.
+            let rgb = img.to_rgb8();
+
+            if !strip_metadata {
+                if let Some(exif) = exif_data {
+                    // Write JPEG with EXIF injection
+                    write_jpeg_with_exif(&mut file, &rgb, quality, exif)?;
+                } else {
+                    // No EXIF to preserve, write normally
+                    let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut file, quality);
+                    encoder.write_image(
+                        rgb.as_raw(),
+                        rgb.width(),
+                        rgb.height(),
+                        image::ExtendedColorType::Rgb8,
+                    ).map_err(|e| e.to_string())?;
+                }
+            } else {
+                // Strip metadata explicitly requested
+                let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut file, quality);
+                encoder.write_image(
+                    rgb.as_raw(),
+                    rgb.width(),
+                    rgb.height(),
+                    image::ExtendedColorType::Rgb8,
+                ).map_err(|e| e.to_string())?;
+            }
+            file.flush().map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+/// Write JPEG with EXIF injection
+fn write_jpeg_with_exif(
+    file: &mut std::fs::File,
+    img: &image::RgbImage,
+    quality: u8,
+    exif: &[u8],
+) -> Result<(), String> {
+    use std::io::Write;
+    
+    // Encode to memory buffer first
+    let mut buffer = Vec::new();
+    {
+        let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buffer, quality);
+        encoder.write_image(
+            img.as_raw(),
+            img.width(),
+            img.height(),
+            image::ExtendedColorType::Rgb8,
+        ).map_err(|e| e.to_string())?;
+    }
+    
+    // Inject EXIF after SOI marker (0xFFD8)
+    let mut output = Vec::new();
+    
+    // Write SOI
+    output.extend_from_slice(&[0xFF, 0xD8]);
+    
+    // Skip any existing APP0 (JFIF) marker - check at buffer[2]
+    if buffer.len() > 4 && buffer[2] == 0xFF && buffer[3] == 0xE0 {
+        let len = ((buffer[4] as usize) << 8) | (buffer[5] as usize);
+        output.extend_from_slice(&buffer[2..2 + 2 + len]);
+    }
+    
+    // Inject our EXIF (APP1)
+    output.extend_from_slice(&[0xFF, 0xE1]);
+    let exif_len = exif.len() + 2;
+    output.extend_from_slice(&[(exif_len >> 8) as u8, (exif_len & 0xFF) as u8]);
+    output.extend_from_slice(exif);
+    
+    // Copy rest of buffer (skip SOI at buffer[0..2])
+    output.extend_from_slice(&buffer[2..]);
+    
+    file.write_all(&output).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Only one batch export runs at a time. The UI sets this flag; the worker
@@ -2117,7 +2748,7 @@ pub async fn find_duplicates(
     state: State<'_, AppState>,
     window: Window,
 ) -> Result<Vec<DuplicateGroup>, String> {
-    SCAN_CANCEL.store(false, Ordering::SeqCst);
+    DUPLICATE_CANCEL.store(false, Ordering::SeqCst);
     let db = get_db(&state)?;
 
     // Load the catalog (hidden items included — a duplicate doesn't stop being
@@ -2158,9 +2789,11 @@ pub async fn find_duplicates(
     // Phase 1: Quick fingerprint (first 64KB + size) for all candidates.
     // Run in parallel batches to avoid blocking the executor.
     let mut quick_fingerprints: Vec<(usize, String)> = Vec::with_capacity(candidates.len());
+    // Store prefixes for reuse in full hash phase (across all batches)
+    let mut quick_prefixes: HashMap<usize, Vec<u8>> = HashMap::new();
     const FINGERPRINT_BATCH: usize = 50;
     for chunk in candidates.chunks(FINGERPRINT_BATCH) {
-        if SCAN_CANCEL.load(Ordering::SeqCst) {
+        if DUPLICATE_CANCEL.load(Ordering::SeqCst) {
             break;
         }
         // Process batch in blocking pool to avoid blocking executor
@@ -2175,15 +2808,16 @@ pub async fn find_duplicates(
             paths
                 .into_iter()
                 .filter_map(|(index, path, size)| {
-                    compute_quick_fingerprint(&path, size, 0).map(|fp| (index, fp))
+                    compute_quick_fingerprint(&path, size).map(|(fp, prefix)| (index, fp, prefix))
                 })
                 .collect::<Vec<_>>()
         })
         .await
         .map_err(|e| format!("Fingerprint task failed: {e}"))?;
         
-        for (index, fp) in fps {
+        for (index, fp, prefix) in fps {
             quick_fingerprints.push((index, fp));
+            quick_prefixes.insert(index, prefix);
         }
 
         let _ = window.emit(
@@ -2218,6 +2852,7 @@ pub async fn find_duplicates(
     let total = full_hash_candidates.len() as u64;
     
     let semaphore = Arc::new(Semaphore::new(2));
+    let quick_prefixes = Arc::new(quick_prefixes);
     let mut hash_updates: Vec<(String, String)> = Vec::with_capacity(full_hash_candidates.len());
     let mut bytes_completed = 0u64;
     let mut processed = 0u64;
@@ -2236,7 +2871,7 @@ pub async fn find_duplicates(
     // Process with controlled concurrency
     let mut join_set = tokio::task::JoinSet::new();
     for &index in &full_hash_candidates {
-        if SCAN_CANCEL.load(Ordering::SeqCst) {
+        if DUPLICATE_CANCEL.load(Ordering::SeqCst) {
             break;
         }
         let path = items[index].path.clone();
@@ -2245,12 +2880,15 @@ pub async fn find_duplicates(
         let id = items[index].id.clone();
         let sem = semaphore.clone();
         let window_clone = window.clone();
+        let prefixes = quick_prefixes.clone();
 
         join_set.spawn(async move {
             let _permit = sem.acquire().await.ok();
-            if SCAN_CANCEL.load(Ordering::SeqCst) {
+            if DUPLICATE_CANCEL.load(Ordering::SeqCst) {
                 return None;
             }
+            // Reuse cached prefix from quick fingerprint phase
+            let prefix = prefixes.get(&index).cloned();
             let hash = compute_full_sha256_with_progress(
                 path,
                 name,
@@ -2260,6 +2898,7 @@ pub async fn find_duplicates(
                 1,
                 1,
                 window_clone,
+                prefix,
             )
             .await;
             Some((index, id, hash, size))
@@ -2267,11 +2906,11 @@ pub async fn find_duplicates(
     }
 
     while let Some(result) = join_set.join_next().await {
-        if SCAN_CANCEL.load(Ordering::SeqCst) {
+        if DUPLICATE_CANCEL.load(Ordering::SeqCst) {
             break;
         }
         if let Ok(Some((index, id, hash, size))) = result {
-            if SCAN_CANCEL.load(Ordering::SeqCst) {
+            if DUPLICATE_CANCEL.load(Ordering::SeqCst) {
                 break;
             }
             processed += 1;
@@ -2334,12 +2973,12 @@ pub async fn find_duplicates(
 }
 
 /// Two-phase duplicate detection:
-/// 1. Quick fingerprint: first 64KB + file size + mtime — O(1) per file
+/// 1. Quick fingerprint: first 64KB + file size — O(1) per file
 /// 2. Full SHA-256 only for files that share a quick fingerprint.
 ///
 /// This avoids reading entire multi-GB video files unless they actually
-/// have a matching prefix + size + mtime, which is extremely rare.
-fn compute_quick_fingerprint(path: &str, size: u64, _modified_at: i64) -> Option<String> {
+/// have a matching prefix + size, which is extremely rare.
+fn compute_quick_fingerprint(path: &str, size: u64) -> Option<(String, Vec<u8>)> {
     use std::io::Read;
     let mut file = std::fs::File::open(path).ok()?;
     let mut buf = [0u8; 64 * 1024];
@@ -2347,15 +2986,18 @@ fn compute_quick_fingerprint(path: &str, size: u64, _modified_at: i64) -> Option
     if n == 0 && size > 0 {
         return None;
     }
-    // Hash the first 64KB + file size. Omit mtime so files with identical
-    // content but different mtimes are correctly grouped as duplicates.
+    // Hash the first 64KB + file size.
     let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
     ctx.update(&buf[..n]);
     ctx.update(&size.to_le_bytes());
-    Some(hex::encode(ctx.finish().as_ref()))
+    let fingerprint = hex::encode(ctx.finish().as_ref());
+    // Return both fingerprint AND the prefix bytes for reuse in full hash
+    Some((fingerprint, buf[..n].to_vec()))
 }
 
-/// Full SHA-256 with progress. Uses a large buffer and async I/O for throughput.
+/// Full SHA-256 with progress. Uses a 1MB buffer and async I/O for throughput.
+/// Accepts an optional prefix (first 64KB) from the quick fingerprint phase
+/// to avoid re-reading the beginning of the file.
 async fn compute_full_sha256_with_progress(
     path: String,
     name: String,
@@ -2365,17 +3007,28 @@ async fn compute_full_sha256_with_progress(
     file_number: u64,
     total_files: u64,
     window: Window,
+    prefix: Option<Vec<u8>>,
 ) -> Option<String> {
     use tokio::io::AsyncReadExt;
     let mut file = tokio::fs::File::open(&path).await.ok()?;
     let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
-    // 64MB buffer for sequential throughput on SSD/NVMe.
-    let mut buf = vec![0u8; 64 * 1024 * 1024];
+    
+    // If we have a prefix from quick fingerprint, use it and skip those bytes
+    if let Some(prefix) = prefix {
+        ctx.update(&prefix);
+        // Skip the prefix bytes in the file
+        use tokio::io::AsyncSeekExt;
+        file.seek(std::io::SeekFrom::Start(prefix.len() as u64)).await.ok()?;
+    }
+    
+    // 1MB buffer for sequential throughput on SSD/NVMe (reduced from 64MB)
+    let mut buf = vec![0u8; 1024 * 1024];
     let mut file_bytes = 0u64;
     let mut last_reported_bytes = 0u64;
     let mut last_reported_at = std::time::Instant::now();
+    
     loop {
-        if SCAN_CANCEL.load(Ordering::SeqCst) {
+        if DUPLICATE_CANCEL.load(Ordering::SeqCst) {
             return None;
         }
         let n = file.read(&mut buf).await.ok()?;
@@ -2427,15 +3080,47 @@ async fn compute_full_sha256_with_progress(
 
 
 #[tauri::command]
-pub async fn write_finder_tags(path: String, tags: Vec<String>, state: State<'_, AppState>) -> Result<(), String> {
-    let _ = (path, tags, state);
-    Ok(())
+pub async fn write_finder_tags(path: String, tags: Vec<String>, _state: State<'_, AppState>) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let plist_tags: Vec<plist::Value> = tags
+            .into_iter()
+            .map(|t| plist::Value::String(format!("{}\x000", t)))
+            .collect();
+        let mut buf = Vec::new();
+        plist::to_writer_binary(&mut buf, &plist::Value::Array(plist_tags))
+            .map_err(|e| e.to_string())?;
+        xattr::set(&path, "com.apple.metadata:_kMDItemUserTags", &buf)
+            .map_err(|e| e.to_string())?;
+        Ok::<(), String>(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub async fn read_finder_tags(path: String, state: State<'_, AppState>) -> Result<Vec<String>, String> {
-    let _ = (path, state);
-    Ok(vec![])
+pub async fn read_finder_tags(path: String, _state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    tokio::task::spawn_blocking(move || {
+        let value = xattr::get(&path, "com.apple.metadata:_kMDItemUserTags")
+            .map_err(|e| e.to_string())?;
+        let Some(bytes) = value else {
+            return Ok(vec![]);
+        };
+        let plist_value: plist::Value = plist::from_bytes(&bytes).map_err(|e| e.to_string())?;
+        let mut tags = Vec::new();
+        if let Some(arr) = plist_value.as_array() {
+            for v in arr {
+                if let Some(s) = v.as_string() {
+                    let name = s.split('\x00').next().unwrap_or(s).to_string();
+                    if !name.is_empty() && !tags.contains(&name) {
+                        tags.push(name);
+                    }
+                }
+            }
+        }
+        Ok(tags)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Apply a single persisted (key, value) pair onto an `AppSettings` struct.
@@ -2636,22 +3321,51 @@ pub async fn open_external(url: String) -> Result<(), String> {
         .map_err(|e| format!("Could not open {}: {}", trimmed, e))?;
     Ok(())
 }
+/// Secure export: the backend owns path selection via native dialog.
+/// Writes to a temp file next to the destination, then renames atomically.
 #[tauri::command]
-pub async fn save_file(path: String, bytes: Vec<u8>, backup: Option<bool>) -> Result<(), String> {
+pub async fn export_bytes(
+    app: tauri::AppHandle,
+    suggested_name: String,
+    bytes: Vec<u8>,
+    backup: Option<bool>,
+) -> Result<String, String> {
     use std::io::Write;
-    let target = std::path::Path::new(&path);
-    let parent = target.parent().ok_or_else(|| "Invalid path".to_string())?;
-    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    if backup.unwrap_or(false) && target.exists() {
-        let bak = format!("{}.bak", path);
-        let _ = std::fs::copy(target, &bak);
+
+    // 1. User confirms destination via native dialog (no arbitrary path from frontend)
+    let picked = app
+        .dialog()
+        .file()
+        .set_file_name(&suggested_name)
+        .add_filter("JPEG Image", &["jpg", "jpeg"])
+        .add_filter("PNG Image", &["png"])
+        .add_filter("WebP Image", &["webp"])
+        .add_filter("All Images", &["jpg", "jpeg", "png", "webp"])
+        .blocking_save_file()
+        .ok_or("Export cancelled by user")?;
+
+    let path = picked.into_path().map_err(|e| e.to_string())?;
+
+    // 2. Optional backup of existing file (only if user chose to replace)
+    if backup.unwrap_or(false) && path.exists() {
+        let bak = path.with_extension(format!("{}.bak", path.extension().and_then(|s| s.to_str()).unwrap_or("bak")));
+        let _ = std::fs::copy(&path, &bak);
     }
-    let tmp = target.with_extension("tmp");
+
+    // 3. Atomic write: temp file next to destination, then rename
+    let tmp = path.with_extension(format!(
+        "tmp-{}",
+        uuid::Uuid::new_v4()
+    ));
     let mut file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
     file.write_all(&bytes).map_err(|e| e.to_string())?;
     file.sync_all().map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, target).map_err(|e| e.to_string())?;
-    Ok(())
+    std::fs::rename(&tmp, &path).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        e.to_string()
+    })?;
+
+    Ok(path.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]
@@ -2735,7 +3449,7 @@ mod thumbnail_cache_tests {
             .await
             .expect("open in-memory database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, sha256 TEXT)",
         )
         .execute(&db)
         .await
@@ -2847,7 +3561,7 @@ mod batch_export_tests {
             .await
             .expect("open in-memory perf database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, sha256 TEXT)",
         )
         .execute(&db)
         .await
@@ -2946,6 +3660,7 @@ mod batch_export_tests {
             assert_eq!(large_video_size, 2 * 1024 * 1024 * 1024);
         }
         let label = if generated { "generated fixture" } else { "provided media folder" };
+#[cfg(debug_assertions)]
         println!(
             "Scan {label}: {} photos, {video_count} videos: per-file writes {:.2}s; batches of {BATCH}: {:.2}s; speedup {:.2}x",
             photo_count,
