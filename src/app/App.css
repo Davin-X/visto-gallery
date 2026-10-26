@@ -888,6 +888,7 @@ body {
 .selection-bar-left,
 .selection-bar-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -940,6 +941,7 @@ body {
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     background 0.12s ease,
