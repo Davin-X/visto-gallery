@@ -161,6 +161,13 @@ let sortedBy: LibraryState["sortBy"] | null = null;
 let sortedOrder: LibraryState["sortOrder"] | null = null;
 let sortedCache: MediaItem[] = [];
 
+export function resetSortedItemsCache(): void {
+  sortedSource = null;
+  sortedBy = null;
+  sortedOrder = null;
+  sortedCache = [];
+}
+
 function getSortedItems(items: MediaItem[], sortBy: LibraryState["sortBy"], sortOrder: LibraryState["sortOrder"]) {
   if (items === sortedSource && sortBy === sortedBy && sortOrder === sortedOrder) return sortedCache;
   sortedSource = items;

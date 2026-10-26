@@ -41,6 +41,14 @@ function scheduleSave(patch: Partial<AppSettings>): void {
   }, SAVE_DEBOUNCE_MS);
 }
 
+export function resetPendingSettingsSave(): void {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  pendingPatch = null;
+}
+
 /** Flush any pending writes synchronously (e.g. on app quit / reset). */
 export function flushSettingsSaves(): void {
   if (flushTimer) {
