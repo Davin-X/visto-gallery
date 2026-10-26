@@ -37,7 +37,7 @@ function VideoPlayer({
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
+  const [volume, setVolume] = useState(() => usePlaybackStore.getState().lastVolume);
   const [muted, setMuted] = useState(false);
   const [pip, setPip] = useState(false);
   const [autoAdvance, setAutoAdvance] = useState(false);
@@ -269,6 +269,7 @@ function VideoPlayer({
     video.volume = volume;
     video.muted = muted;
     syncPlayback({ volume, muted });
+    usePlaybackStore.getState().setLastVolume(volume);
   }, [volume, muted, syncPlayback]);
 
   // Wire media keys / PiP transport controls to the player.
