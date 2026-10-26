@@ -940,6 +940,7 @@ body {
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     background 0.12s ease,
