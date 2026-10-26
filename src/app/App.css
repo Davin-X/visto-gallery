@@ -888,6 +888,7 @@ body {
 .selection-bar-left,
 .selection-bar-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   min-width: 0;
