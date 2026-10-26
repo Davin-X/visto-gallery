@@ -1354,15 +1354,17 @@ pub async fn get_library_folders(state: State<'_, AppState>) -> Result<Vec<Libra
         .map_err(|e| e.to_string())?;
 
     // One pass over the catalog: each item lands in exactly one folder.
+let mut registered_sorted = registered.clone();
+    registered_sorted.sort_by(|a, b| b.len().cmp(&a.len()));
+
     let mut tallies: HashMap<String, (i64, i64)> = HashMap::new();
     for row in &rows {
         let item_path: String = row.get("path");
         let size: i64 = row.get("size");
 
-        let owner = registered
+        let owner = registered_sorted
             .iter()
-            .filter(|root| path_is_inside(&item_path, root))
-            .max_by_key(|root| root.len())
+            .find(|root| path_is_inside(&item_path, root))
             .cloned()
             .or_else(|| inferred_folder_root(&item_path));
 
