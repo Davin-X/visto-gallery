@@ -1,7 +1,6 @@
 use super::*;
 use std::path::PathBuf;
 use tauri_plugin_dialog::DialogExt;
-use walkdir::WalkDir;
 
 #[tauri::command]
 pub async fn cancel_batch_export() -> Result<(), String> {
@@ -315,7 +314,7 @@ mod batch_export_tests {
         }
         assert!(root.is_dir(), "performance fixture directory must exist");
 
-        let paths: Vec<PathBuf> = WalkDir::new(&root)
+        let paths: Vec<PathBuf> = walkdir::WalkDir::new(&root)
             .into_iter()
             .filter_map(|entry| entry.ok())
             .filter(|entry| entry.file_type().is_file())
