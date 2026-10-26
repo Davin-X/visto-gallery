@@ -413,7 +413,10 @@ if (typeof window !== "undefined") {
 // Flush any debounced writes before the window (and therefore the Tauri app)
 // is torn down, so the last settings edits are not lost on quit.
 if (typeof window !== "undefined") {
-  window.addEventListener("beforeunload", () => {
-    flushSettingsSaves();
+  const flush = () => flushSettingsSaves();
+  window.addEventListener("beforeunload", flush);
+  window.addEventListener("pagehide", flush);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flush();
   });
 }
