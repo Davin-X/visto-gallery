@@ -1046,7 +1046,7 @@ fn apply_setting(settings: &mut AppSettings, key: &str, value: &str) {
         "video_auto_play" => settings.video_auto_play = value.parse().unwrap_or(true),
         "video_loop" => settings.video_loop = value.parse().unwrap_or(false),
         "watch_folders" => {
-            settings.watch_folders = serde_json::from_str(&value).unwrap_or_default();
+            settings.watch_folders = serde_json::from_str(value).unwrap_or_default();
         }
         "auto_import" => settings.auto_import = value.parse().unwrap_or(false),
         "pair_raw_jpeg" => settings.pair_raw_jpeg = value.parse().unwrap_or(true),

@@ -6,7 +6,7 @@ use tauri::State;
 #[tauri::command]
 pub async fn get_settings(state: State<'_, AppState>) -> Result<AppSettings, String> {
     let db = super::get_db(&state)?;
-    Ok(load_persisted_settings(&db).await?)
+    load_persisted_settings(&db).await
 }
 
 /// Load the full set of persisted settings rows from the `settings` table into
