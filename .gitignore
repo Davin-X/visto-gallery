@@ -22,5 +22,8 @@ yarn-error.log*
 .idea
 
 
+# Local-only review notes (not part of the app)
+untracked/
+
 # Cline workspace rules (local)
 .clinerules
