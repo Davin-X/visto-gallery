@@ -12,6 +12,7 @@ export function SourcesManager(props: {
   onFilterSource?: (folder: LibraryFolder) => void;
   onRescan?: () => void;
   onRescanFolder?: (folder: LibraryFolder) => void;
+  onRemoveAllSources?: () => void;
 }) {
   const {
     variant = "inline",
@@ -20,6 +21,7 @@ export function SourcesManager(props: {
     onFilterSource,
     onRescan,
     onRescanFolder,
+    onRemoveAllSources,
   } = props;
   const folders = useLibraryStore((s) => s.folders);
   const activeSource = useLibraryStore((s) => s.activeSource);
@@ -135,6 +137,16 @@ export function SourcesManager(props: {
               }
             >
               {libraryBusy ? "Working…" : "Rescan Sources"}
+            </button>
+          )}
+          {onRemoveAllSources && folders.length > 0 && (
+            <button
+              className="danger-button"
+              type="button"
+              onClick={() => onRemoveAllSources()}
+              disabled={libraryBusy}
+            >
+              Remove all sources
             </button>
           )}
         </div>

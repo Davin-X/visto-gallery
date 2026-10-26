@@ -33,6 +33,7 @@ export function SettingsScreen(props: {
   onRemoveFolder?: (folder: LibraryFolder) => void;
   onRescan?: () => void;
   onRescanFolder?: (folder: LibraryFolder) => void;
+  onRemoveAllSources?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const sidebarWidth = useSidebarWidth();
@@ -290,6 +291,7 @@ export function SettingsScreen(props: {
             onRemoveFolder={props.onRemoveFolder}
             onRescan={props.onRescan}
             onRescanFolder={props.onRescanFolder}
+            onRemoveAllSources={props.onRemoveAllSources}
             onChange={update}
           />
         )}

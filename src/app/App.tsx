@@ -2514,6 +2514,7 @@ function App() {
               onRescanFolder={(folder) => {
                 void rescanSource(folder);
               }}
+              onRemoveAllSources={() => void removeAllSources()}
             />
           )}
         </main>
