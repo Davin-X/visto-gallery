@@ -29,6 +29,11 @@
 
 Grab the latest release from [**GitHub Releases**](https://github.com/Davin-X/visto-gallery/releases).
 
+> **macOS Gatekeeper note:** The app is not notarized yet. If macOS says it’s damaged, run:
+> ```bash
+> xattr -dr com.apple.quarantine /Applications/VistoGallery.app
+> ```
+
 ## Build from source
 
 ```bash
