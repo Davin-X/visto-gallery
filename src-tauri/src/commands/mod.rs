@@ -2874,15 +2874,47 @@ async fn compute_full_sha256_with_progress(
 
 
 #[tauri::command]
-pub async fn write_finder_tags(path: String, tags: Vec<String>, state: State<'_, AppState>) -> Result<(), String> {
-    let _ = (path, tags, state);
-    Ok(())
+pub async fn write_finder_tags(path: String, tags: Vec<String>, _state: State<'_, AppState>) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let plist_tags: Vec<plist::Value> = tags
+            .into_iter()
+            .map(|t| plist::Value::String(format!("{}\x000", t)))
+            .collect();
+        let mut buf = Vec::new();
+        plist::to_writer_binary(&mut buf, &plist::Value::Array(plist_tags))
+            .map_err(|e| e.to_string())?;
+        xattr::set(&path, "com.apple.metadata:_kMDItemUserTags", &buf)
+            .map_err(|e| e.to_string())?;
+        Ok::<(), String>(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub async fn read_finder_tags(path: String, state: State<'_, AppState>) -> Result<Vec<String>, String> {
-    let _ = (path, state);
-    Ok(vec![])
+pub async fn read_finder_tags(path: String, _state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    tokio::task::spawn_blocking(move || {
+        let value = xattr::get(&path, "com.apple.metadata:_kMDItemUserTags")
+            .map_err(|e| e.to_string())?;
+        let Some(bytes) = value else {
+            return Ok(vec![]);
+        };
+        let plist_value: plist::Value = plist::from_bytes(&bytes).map_err(|e| e.to_string())?;
+        let mut tags = Vec::new();
+        if let Some(arr) = plist_value.as_array() {
+            for v in arr {
+                if let Some(s) = v.as_string() {
+                    let name = s.split('\x00').next().unwrap_or(s).to_string();
+                    if !name.is_empty() && !tags.contains(&name) {
+                        tags.push(name);
+                    }
+                }
+            }
+        }
+        Ok(tags)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Apply a single persisted (key, value) pair onto an `AppSettings` struct.
