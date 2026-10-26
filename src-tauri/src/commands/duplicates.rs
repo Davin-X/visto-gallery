@@ -1,6 +1,6 @@
-use crate::AppState;
 use super::DuplicateGroup;
 use super::MediaItem;
+use crate::AppState;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -80,7 +80,7 @@ pub async fn find_duplicates(
         })
         .await
         .map_err(|e| format!("Fingerprint task failed: {e}"))?;
-        
+
         for (index, fp, prefix) in fps {
             quick_fingerprints.push((index, fp));
             quick_prefixes.insert(index, prefix);
@@ -116,7 +116,7 @@ pub async fn find_duplicates(
     use tokio::sync::Semaphore;
 
     let total = full_hash_candidates.len() as u64;
-    
+
     let semaphore = Arc::new(Semaphore::new(2));
     let quick_prefixes = Arc::new(quick_prefixes);
     let mut hash_updates: Vec<(String, String)> = Vec::with_capacity(full_hash_candidates.len());
@@ -278,21 +278,23 @@ async fn compute_full_sha256_with_progress(
     use tokio::io::AsyncReadExt;
     let mut file = tokio::fs::File::open(&path).await.ok()?;
     let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
-    
+
     // If we have a prefix from quick fingerprint, use it and skip those bytes
     if let Some(prefix) = prefix {
         ctx.update(&prefix);
         // Skip the prefix bytes in the file
         use tokio::io::AsyncSeekExt;
-        file.seek(std::io::SeekFrom::Start(prefix.len() as u64)).await.ok()?;
+        file.seek(std::io::SeekFrom::Start(prefix.len() as u64))
+            .await
+            .ok()?;
     }
-    
+
     // 1MB buffer for sequential throughput on SSD/NVMe (reduced from 64MB)
     let mut buf = vec![0u8; 1024 * 1024];
     let mut file_bytes = 0u64;
     let mut last_reported_bytes = 0u64;
     let mut last_reported_at = std::time::Instant::now();
-    
+
     loop {
         if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
             return None;
@@ -343,6 +345,3 @@ async fn compute_full_sha256_with_progress(
     );
     Some(hex::encode(ctx.finish().as_ref()))
 }
-
-
-

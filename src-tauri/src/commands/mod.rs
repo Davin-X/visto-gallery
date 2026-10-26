@@ -1,33 +1,33 @@
-mod library;
-mod settings;
-mod batch;
 mod albums;
-mod media;
+mod batch;
 mod duplicates;
-pub use library::*;
-pub use settings::*;
-pub use batch::*;
+mod library;
+mod media;
+mod settings;
+use crate::{models::*, AppState};
 pub use albums::*;
-pub use media::*;
-pub use duplicates::*;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use tauri::{AppHandle, State, Manager, Emitter};
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use crate::{AppState, models::*};
-use notify::Watcher;
 use anyhow::Result;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
-use uuid::Uuid;
-use time::OffsetDateTime;
-use sqlx::{SqlitePool, Sqlite, QueryBuilder, Row};
-use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+pub use batch::*;
+pub use duplicates::*;
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::codecs::webp::WebPEncoder;
 use image::{DynamicImage, GenericImageView, ImageDecoder, ImageEncoder};
+pub use library::*;
+pub use media::*;
+use notify::Watcher;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+pub use settings::*;
+use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::{AppHandle, Emitter, Manager, State};
+use time::OffsetDateTime;
+use uuid::Uuid;
 
 // ===== Request/Response Types =====
 //
@@ -350,7 +350,11 @@ pub async fn cancel_move_to_trash() -> Result<(), String> {
 
 fn get_db(state: &State<'_, AppState>) -> Result<SqlitePool, String> {
     let guard = state.db.lock().map_err(|e| e.to_string())?;
-    Ok(guard.as_ref().ok_or("Database not initialized".to_string())?.pool().clone())
+    Ok(guard
+        .as_ref()
+        .ok_or("Database not initialized".to_string())?
+        .pool()
+        .clone())
 }
 
 fn now_ms() -> i64 {
@@ -413,27 +417,41 @@ async fn remember_folder(db: &SqlitePool, root: &str, app: &tauri::AppHandle) {
 }
 
 fn is_media_file(ext: &str) -> bool {
-    let image_exts = ["avif", "bmp", "gif", "heic", "heif", "jfif", "jpe", "jpeg", "jpg", "jxl", "png", "tif", "tiff", "webp"];
-    let raw_exts = ["3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf", "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf", "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f"];
+    let image_exts = [
+        "avif", "bmp", "gif", "heic", "heif", "jfif", "jpe", "jpeg", "jpg", "jxl", "png", "tif",
+        "tiff", "webp",
+    ];
+    let raw_exts = [
+        "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf",
+        "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",
+        "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f",
+    ];
     let video_exts = ["m4v", "mov", "mp4", "mpeg", "mpg", "webm"];
     image_exts.contains(&ext) || raw_exts.contains(&ext) || video_exts.contains(&ext)
 }
 
 fn kind_for_ext(ext: &str) -> &'static str {
     let video_exts = ["m4v", "mov", "mp4", "mpeg", "mpg", "webm"];
-    let raw_exts = ["3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf", "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf", "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f"];
-    if video_exts.contains(&ext) { "video" }
-    else if raw_exts.contains(&ext) { "raw" }
-    else { "photo" }
+    let raw_exts = [
+        "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf",
+        "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",
+        "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f",
+    ];
+    if video_exts.contains(&ext) {
+        "video"
+    } else if raw_exts.contains(&ext) {
+        "raw"
+    } else {
+        "photo"
+    }
 }
 
 /// Read file facts needed by the catalog without decoding the image payload.
 /// Folder scans and direct imports share this inspection path.
-fn inspect_media_file(
-    path: &Path,
-    now: i64,
-) -> Option<(MediaItem, Option<i32>, Option<i32>)> {
-    let metadata = std::fs::metadata(path).ok().filter(|metadata| metadata.is_file())?;
+fn inspect_media_file(path: &Path, now: i64) -> Option<(MediaItem, Option<i32>, Option<i32>)> {
+    let metadata = std::fs::metadata(path)
+        .ok()
+        .filter(|metadata| metadata.is_file())?;
     inspect_media_file_with_metadata(path, &metadata, now)
 }
 
@@ -442,7 +460,11 @@ fn inspect_media_file_with_metadata(
     metadata: &std::fs::Metadata,
     now: i64,
 ) -> Option<(MediaItem, Option<i32>, Option<i32>)> {
-    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
     if !is_media_file(&ext) {
         return None;
     }
@@ -450,7 +472,11 @@ fn inspect_media_file_with_metadata(
     let size = metadata.len() as i64;
     let modified_at = file_modified_at(metadata);
 
-    let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let name = path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
     let kind = kind_for_ext(&ext).to_string();
 
     // Read dimensions from the file header only; no full decode.
@@ -483,7 +509,11 @@ fn inspect_media_file_with_metadata(
 fn file_modified_at(metadata: &std::fs::Metadata) -> i64 {
     metadata
         .modified()
-        .map(|time| time.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as i64)
+        .map(|time| {
+            time.duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as i64
+        })
         .unwrap_or(0)
 }
 
@@ -521,11 +551,7 @@ async fn upsert_media_batch(
     query.push(
         " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, width = excluded.width, height = excluded.height, updated_at = excluded.updated_at, sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END",
     );
-    query
-        .build()
-        .execute(db)
-        .await
-        .map_err(|e| e.to_string())?;
+    query.build().execute(db).await.map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -540,11 +566,10 @@ async fn prune_missing_items(
     root: &str,
     seen_paths: &HashSet<String>,
 ) -> Result<usize, String> {
-    let candidates: Vec<(String, String)> =
-        sqlx::query_as("SELECT id, path FROM media_items")
-            .fetch_all(db)
-            .await
-            .map_err(|error| error.to_string())?;
+    let candidates: Vec<(String, String)> = sqlx::query_as("SELECT id, path FROM media_items")
+        .fetch_all(db)
+        .await
+        .map_err(|error| error.to_string())?;
 
     let missing: Vec<String> = candidates
         .into_iter()
@@ -561,9 +586,8 @@ async fn prune_missing_items(
     let mut transaction = db.begin().await.map_err(|error| error.to_string())?;
     for chunk in missing.chunks(DELETE_CHUNK) {
         for table in ["media_tags", "album_items"] {
-            let mut query = QueryBuilder::<Sqlite>::new(format!(
-                "DELETE FROM {table} WHERE media_id IN ("
-            ));
+            let mut query =
+                QueryBuilder::<Sqlite>::new(format!("DELETE FROM {table} WHERE media_id IN ("));
             let mut values = query.separated(", ");
             for id in chunk {
                 values.push_bind(id);
@@ -611,7 +635,6 @@ async fn import_media_file(
 
 // ===== Commands =====
 
-
 /// Replace characters macOS rejects in filenames and collapse whitespace.
 fn sanitize_batch_name(value: &str) -> String {
     let cleaned: String = value
@@ -622,11 +645,7 @@ fn sanitize_batch_name(value: &str) -> String {
             c => c,
         })
         .collect();
-    let trimmed = cleaned
-        .trim()
-        .trim_matches('.')
-        .trim()
-        .to_string();
+    let trimmed = cleaned.trim().trim_matches('.').trim().to_string();
     if trimmed.is_empty() {
         "export".to_string()
     } else {
@@ -650,7 +669,14 @@ fn batch_output_extension(format: &str, source: &Path) -> String {
 
 fn batch_date_label(ms: i64) -> String {
     OffsetDateTime::from_unix_timestamp(ms / 1000)
-        .map(|dt| format!("{:04}-{:02}-{:02}", dt.year(), u8::from(dt.month()), dt.day()))
+        .map(|dt| {
+            format!(
+                "{:04}-{:02}-{:02}",
+                dt.year(),
+                u8::from(dt.month()),
+                dt.day()
+            )
+        })
         .unwrap_or_else(|_| "unknown".to_string())
 }
 
@@ -667,7 +693,9 @@ fn render_batch_filename(
         .and_then(|name| name.to_str())
         .unwrap_or("export");
     let number = format!("{:03}", item.index + 1);
-    let date = date_ms.map(batch_date_label).unwrap_or_else(|| "unknown".to_string());
+    let date = date_ms
+        .map(batch_date_label)
+        .unwrap_or_else(|| "unknown".to_string());
     let template = if pattern.trim().is_empty() {
         "{name}_{number}"
     } else {
@@ -691,9 +719,7 @@ fn render_batch_filename(
         .to_ascii_lowercase();
     if existing_ext.is_empty() {
         format!("{}.{}", rendered, extension)
-    } else if existing_ext == extension
-        || (extension == "jpg" && existing_ext == "jpeg")
-    {
+    } else if existing_ext == extension || (extension == "jpg" && existing_ext == "jpeg") {
         rendered
     } else {
         let base = path
@@ -736,7 +762,11 @@ fn resize_batch_image(image: DynamicImage, max_dimension: u32) -> DynamicImage {
     let scale = max_dimension as f64 / longest as f64;
     let next_width = ((width as f64) * scale).round().max(1.0) as u32;
     let next_height = ((height as f64) * scale).round().max(1.0) as u32;
-    image.resize_exact(next_width, next_height, image::imageops::FilterType::Lanczos3)
+    image.resize_exact(
+        next_width,
+        next_height,
+        image::imageops::FilterType::Lanczos3,
+    )
 }
 
 fn write_batch_jpeg(image: DynamicImage, path: &Path, quality: u8) -> Result<(), String> {
@@ -745,7 +775,12 @@ fn write_batch_jpeg(image: DynamicImage, path: &Path, quality: u8) -> Result<(),
         .map_err(|e| format!("Could not create the export file: {}", e))?;
     let mut writer = std::io::BufWriter::new(file);
     JpegEncoder::new_with_quality(&mut writer, quality)
-        .encode(&rgb, rgb.width(), rgb.height(), image::ExtendedColorType::Rgb8)
+        .encode(
+            &rgb,
+            rgb.width(),
+            rgb.height(),
+            image::ExtendedColorType::Rgb8,
+        )
         .map_err(|e| format!("JPEG encoding failed: {}", e))
 }
 
@@ -799,7 +834,10 @@ fn write_batch_with_sips(
     }
     command.arg("-s").arg("format").arg(format);
     if format == "jpeg" {
-        command.arg("-s").arg("formatOptions").arg(quality.to_string());
+        command
+            .arg("-s")
+            .arg("formatOptions")
+            .arg(quality.to_string());
     }
     let result = command
         .arg(source)
@@ -936,7 +974,11 @@ fn export_batch_item(
 }
 
 #[tauri::command]
-pub async fn write_finder_tags(path: String, tags: Vec<String>, _state: State<'_, AppState>) -> Result<(), String> {
+pub async fn write_finder_tags(
+    path: String,
+    tags: Vec<String>,
+    _state: State<'_, AppState>,
+) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let plist_tags: Vec<plist::Value> = tags
             .into_iter()
@@ -954,10 +996,13 @@ pub async fn write_finder_tags(path: String, tags: Vec<String>, _state: State<'_
 }
 
 #[tauri::command]
-pub async fn read_finder_tags(path: String, _state: State<'_, AppState>) -> Result<Vec<String>, String> {
+pub async fn read_finder_tags(
+    path: String,
+    _state: State<'_, AppState>,
+) -> Result<Vec<String>, String> {
     tokio::task::spawn_blocking(move || {
-        let value = xattr::get(&path, "com.apple.metadata:_kMDItemUserTags")
-            .map_err(|e| e.to_string())?;
+        let value =
+            xattr::get(&path, "com.apple.metadata:_kMDItemUserTags").map_err(|e| e.to_string())?;
         let Some(bytes) = value else {
             return Ok(vec![]);
         };
@@ -1010,11 +1055,12 @@ fn apply_setting(settings: &mut AppSettings, key: &str, value: &str) {
         "max_cache_size_gb" => settings.max_cache_size_gb = value.parse().unwrap_or(5),
         "thumbnail_quality" => settings.thumbnail_quality = value.parse().unwrap_or(80),
         "enable_debug_logging" => settings.enable_debug_logging = value.parse().unwrap_or(false),
-        "show_native_limit_warnings" => settings.show_native_limit_warnings = value.parse().unwrap_or(true),
+        "show_native_limit_warnings" => {
+            settings.show_native_limit_warnings = value.parse().unwrap_or(true)
+        }
         _ => {}
     }
 }
-
 
 #[tauri::command]
 pub async fn get_version() -> Result<String, String> {
