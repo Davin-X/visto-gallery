@@ -27,3 +27,5 @@ untracked/
 
 # Cline workspace rules (local)
 .clinerules
+
+.kilo
