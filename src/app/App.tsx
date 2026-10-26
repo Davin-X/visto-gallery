@@ -83,7 +83,7 @@ function startConfiguredSlideshow(items: MediaItem[], startId?: string | null) {
   slideshow.setLoop(preferences.slideshowLoop);
   slideshow.open(items, startId);
 }
-import type { MediaItem, MediaKind } from "../engine/types/media";
+import type { MediaItem, MediaKind, DuplicateGroup, Album, Filter, LayoutMode } from "../engine/types/media";
 import type { LibraryFolder } from "../engine/types/commands";
 import { SettingsScreen } from "../design/components/SettingsScreen";
 import { SourcesManager } from "../design/components/SourcesManager";
@@ -2967,7 +2967,19 @@ const GALLERY_PAGE_SIZE = 180;
  * the Library's view, and it never pretends the files are protected — the
  * disclaimer in the header is the contract.
  */
-function HiddenScreen(props: any) {
+interface HiddenScreenProps {
+  assetUrl: (path: string) => string;
+  searchInputRef: React.RefObject<HTMLInputElement | null>;
+  onContextMenu: (items: any[], e: React.MouseEvent) => void;
+  onNavigate: (screen: Screen) => void;
+  onCreateAlbum: () => void;
+  onOpenAlbumPicker: (itemIds?: string[]) => void;
+  onRequestDeleteItems: (ids: string[]) => void;
+  onOpenEdit: (item: MediaItem) => void;
+  onOpenViewer: (id?: string) => void;
+}
+
+function HiddenScreen(props: HiddenScreenProps) {
   const library = useLibraryStore();
   const filter = library.hiddenFilter;
   const query = library.hiddenQuery;
@@ -3161,7 +3173,59 @@ function HiddenScreen(props: any) {
   );
 }
 
-function LibraryScreen(props: any) {
+interface LibraryScreenProps {
+  activeAlbum: string | null;
+  albumDragOver?: boolean;
+  albums: Album[];
+  assetUrl: (path: string) => string;
+  busy: boolean;
+  filter: Filter;
+  hiddenCount: number;
+  hiddenView?: boolean;
+  inspectedId: string | null;
+  items: MediaItem[];
+  layout: LayoutMode;
+  onAddItems?: (albumId: string) => void;
+  onAlbumMenu?: (e: React.MouseEvent) => void;
+  onBrowseLibrary?: () => void;
+  onChangeFilter: (filter: Filter) => void;
+  onChangeLayout: (layout: LayoutMode) => void;
+  onChangeQuery: (query: string) => void;
+  onClearSelection: () => void;
+  onContextMenu: (items: any[], e: React.MouseEvent) => void;
+  onCreateAlbum: (itemIds?: string[]) => void;
+  onImportFiles?: () => void;
+  onImportFolder?: () => void;
+  onInspectItem: (id: string) => void;
+  onOpenAlbumPicker: (itemIds?: string[]) => void;
+  onOpenAlbums: () => void;
+  onOpenBatch?: (ids?: string[]) => void;
+  onOpenEdit: (item: MediaItem) => void;
+  onOpenViewer: (id?: string) => void;
+  onPlaySlideshow: (ids?: string[]) => void;
+  onRequestDeleteItems: (ids: string[]) => void;
+  onRequestRemoveFromAlbum?: (albumId: string, itemIds: string[]) => void;
+  onSelectRange: (startId: string, endId: string) => void;
+  onSetActiveAlbum: (albumId: string | null) => void;
+  onSetFavoriteForIds: (ids: string[], favorite: boolean) => void | Promise<void>;
+  onSetHiddenForIds: (ids: string[], hidden: boolean) => void | Promise<void>;
+  onSetSelection: (ids: string[]) => void;
+  onToggleFavorite: (id: string) => void | Promise<void>;
+  onToggleHidden: (id: string) => void | Promise<void>;
+  onToggleInspector: () => void;
+  onToggleSelect: (id: string) => void;
+  onToggleSelectAll: () => void;
+  onDeleteItems: (ids: string[]) => void | Promise<void>;
+  onUpdateTags: (id: string, tags: string[]) => void | Promise<void>;
+  query: string;
+  notice: any;
+  progress: any;
+  searchInputRef: any;
+  selectedIds: string[];
+  showInspector: boolean;
+}
+
+function LibraryScreen(props: LibraryScreenProps) {
   const library = useLibraryStore();
   const draftTransforms = useDraftTransforms();
   const thumbnailSize = useThumbnailSize();
@@ -3313,7 +3377,7 @@ function LibraryScreen(props: any) {
             <button
               className="primary-button"
               type="button"
-              onClick={() => props.onAddItems?.(props.activeAlbum)}
+              onClick={() => props.activeAlbum && props.onAddItems?.(props.activeAlbum)}
             >
               <PlusIcon size={14} /> Add Items
             </button>
@@ -3512,7 +3576,7 @@ function LibraryScreen(props: any) {
       ? [{
           label: "Remove from this Album",
           danger: true,
-          onClick: () => props.onRequestRemoveFromAlbum?.(props.activeAlbum, [item.id]),
+          onClick: () => props.activeAlbum && props.onRequestRemoveFromAlbum?.(props.activeAlbum, [item.id]),
         }]
       : []),
     { label: "New Album…", onClick: () => props.onCreateAlbum?.([item.id]) },
@@ -3592,7 +3656,7 @@ function LibraryScreen(props: any) {
                   <button
                     className="primary-button"
                     type="button"
-                    onClick={() => props.onAddItems?.(props.activeAlbum)}
+                    onClick={() => props.activeAlbum && props.onAddItems?.(props.activeAlbum)}
                     disabled={props.busy}
                   >
                     <PlusIcon size={15} /> Add Items
@@ -3757,7 +3821,7 @@ function LibraryScreen(props: any) {
             {(["All", "Photos", "Videos", "RAW", "Favorites"] as string[]).map((f) => {
               const count = filterCounts[f as keyof typeof filterCounts] ?? 0;
               return (
-                <button key={f} type="button" className={`quick-filter ${props.filter === f ? "active" : ""}`} onClick={() => props.onChangeFilter(f)}>
+                <button key={f} type="button" className={`quick-filter ${props.filter === f ? "active" : ""}`} onClick={() => props.onChangeFilter(f as Filter)}>
                   {f}
                   <span className="filter-count">{count}</span>
                 </button>
@@ -3839,7 +3903,7 @@ function LibraryScreen(props: any) {
                 <button
                   type="button"
                   className="selection-bar-action"
-                  onClick={() => library.removeFromAlbum(props.activeAlbum, props.selectedIds)}
+                  onClick={() => props.activeAlbum && library.removeFromAlbum(props.activeAlbum, props.selectedIds)}
                   title="Remove selected items from this album (photos stay in the library)"
                 >
                   <MinusIcon size={13} /> Remove from album
@@ -4045,7 +4109,7 @@ function LibraryScreen(props: any) {
                   <div className="inspector-actions">
                     <button
                       className={`inspector-action ${sel.favorite ? "favorite active" : ""}`}
-                      onClick={() => props.onToggleFavorite(props.inspectedId)}
+                      onClick={() => props.onToggleFavorite(props.inspectedId as string)}
                       title={sel.favorite ? "Unfavorite" : "Favorite"}
                     >
                       <HeartIcon size={14} filled={!!sel.favorite} />
@@ -4053,7 +4117,7 @@ function LibraryScreen(props: any) {
                     </button>
                     <button
                       className="inspector-action"
-                      onClick={() => props.onToggleHidden(props.inspectedId)}
+                      onClick={() => props.onToggleHidden(props.inspectedId as string)}
                       title={sel.hidden ? "Unhide" : "Hide"}
                     >
                       {sel.hidden ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
@@ -4107,7 +4171,7 @@ function LibraryScreen(props: any) {
                       {sel.tags?.map((tag: string) => (
                         <span className="app-tag" key={tag}>
                           {tag}
-                          <button type="button" onClick={() => props.onUpdateTags(props.inspectedId, (sel.tags || []).filter((t: string) => t !== tag))}>×</button>
+                          <button type="button" onClick={() => props.onUpdateTags(props.inspectedId as string, (sel.tags || []).filter((t: string) => t !== tag))}>×</button>
                         </span>
                       ))}
                     </div>
@@ -4120,7 +4184,7 @@ function LibraryScreen(props: any) {
                           const newTag = e.currentTarget.value.trim();
                           const currentTags = sel.tags || [];
                           if (!currentTags.includes(newTag)) {
-                            props.onUpdateTags(props.inspectedId, [...currentTags, newTag]);
+                            props.onUpdateTags(props.inspectedId as string, [...currentTags, newTag]);
                           }
                           e.currentTarget.value = "";
                         }
@@ -4148,7 +4212,34 @@ function LibraryScreen(props: any) {
   );
 }
 
-function ViewerScreen(props: any) {
+interface ViewerScreenProps {
+  active: boolean;
+  items: MediaItem[];
+  selected: MediaItem | null;
+  zoom: number;
+  fitMode: "fit" | "actual" | "fill";
+  rotation: number;
+  flipX: boolean;
+  onNavigate: (delta: number) => void;
+  onSetPhoto: (id: string) => void;
+  onSetZoom: (zoom: number) => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onResetZoom: () => void;
+  onToggleFitMode: () => void;
+  onRotate: (deg: number) => void;
+  onToggleFlip: () => void;
+  onResetTransform: () => void;
+  onToggleFullscreen: () => void;
+  onClose: () => void;
+  onToggleFavorite: (id: string) => void | Promise<void>;
+  onToggleHidden: (id: string) => void | Promise<void>;
+  onOpenEdit: (item: MediaItem) => void;
+  onContextMenu: (items: any[], e: React.MouseEvent) => void;
+  assetUrl: (path: string) => string;
+}
+
+function ViewerScreen(props: ViewerScreenProps) {
   const selected = props.selected;
   const draftTransforms = useDraftTransforms();
   // Folder context: the pill shows the containing folder, the subtle line the
@@ -4166,7 +4257,7 @@ function ViewerScreen(props: any) {
   const stripWindowSize = 50;
   const selectedIndex = props.items.findIndex((item: any) => item.id === selected?.id);
   const stripEnd = Math.min(props.items.length, stripStart + stripWindowSize);
-  const imageRotation = (props.rotation + (draftTransforms.get(selected?.id)?.rotation || 0)) % 360;
+  const imageRotation = (props.rotation + (draftTransforms.get(selected?.id ?? "")?.rotation || 0)) % 360;
 
   // Shortcut hints are shown on open and whenever the pointer moves over the
   // stage, then fade away after a short pause so the frame stays clean.
@@ -4227,6 +4318,7 @@ function ViewerScreen(props: any) {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+    if (!selected) return;
       // The viewer stays mounted off-screen to keep a video playing; its
       // shortcuts must not fire while another tab is on screen.
       if (!props.active) return;
@@ -4519,6 +4611,7 @@ function EditScreen(props: any) {
           <input value={pickerQuery} onChange={(e) => setPickerQuery(e.target.value)} placeholder="Search photos..." aria-label="Search photos" />
           </div>
           <button className="quiet-button" type="button" onClick={browse}>Browse from Finder…</button>
+          {filtered.length > pickerLimit && <button className="quiet-button" type="button" onClick={() => setPickerLimit((limit) => limit + 24)}>Show 24 more ({filtered.length - pickerLimit})</button>}
         </div>
         {(() => {
           const drafts = savedDraftItems.slice(0, pickerDraftLimit);
@@ -4543,7 +4636,8 @@ function EditScreen(props: any) {
           );
         })()}
         {filtered.length > 0 ? (<>
-          <div className="edit-picker-grid">{filtered.slice(0, pickerLimit).map((item:any)=> {
+          <div className="edit-picker-scroll">
+            <div className="edit-picker-grid">{filtered.slice(0, pickerLimit).map((item:any)=> {
   const hasDraft = draftIds.has(item.id);
   return (
     <button key={item.id} type="button" className="edit-picker-tile" onClick={()=>props.onOpenEdit?.(item)}>
@@ -4554,7 +4648,7 @@ function EditScreen(props: any) {
     </button>
   );
 })}</div>
-          {filtered.length > pickerLimit && <button className="quiet-button" type="button" style={{ marginTop: 12 }} onClick={() => setPickerLimit((limit) => limit + 24)}>Show 24 more photos ({filtered.length - pickerLimit} remaining)</button>}
+          </div>
         </>) : (<div className="viewer-empty-state"><div style={{ marginBottom: 16 }}><BrandMark size={56} /></div><h2>No photos found</h2><p>Import a folder or browse from disk.</p></div>) }
       </div>
     );
@@ -4760,7 +4854,36 @@ function folderDisplayName(path: string) {
   return parts[parts.length - 1] || path;
 }
 
-function BatchScreen(props: any) {
+interface BatchScreenProps {
+  items: MediaItem[];
+  selectedIds: string[];
+  config: ReturnType<typeof useBatchStore.getState>;
+  state: ReturnType<typeof useBatchStore.getState>;
+  busy: boolean;
+  cancelRequested: boolean;
+  progress: ReturnType<typeof useBatchStore.getState>["progress"];
+  result: ReturnType<typeof useBatchStore.getState>["result"];
+  error: ReturnType<typeof useBatchStore.getState>["error"];
+  assetUrl: (path: string) => string;
+  onSetPattern: ReturnType<typeof useBatchStore.getState>["setPattern"];
+  onSetFormat: ReturnType<typeof useBatchStore.getState>["setFormat"];
+  onSetQuality: ReturnType<typeof useBatchStore.getState>["setQuality"];
+  onSetStripMetadata: ReturnType<typeof useBatchStore.getState>["setStripMetadata"];
+  onSetMaxDimension: ReturnType<typeof useBatchStore.getState>["setMaxDimension"];
+  onSetStep: ReturnType<typeof useBatchStore.getState>["setStep"];
+  onChooseFolder: () => void | Promise<void>;
+  onOpenFolder: () => void;
+  onExportBatch: () => void | Promise<void>;
+  onCancelBatch: () => void | Promise<void>;
+  onReset: () => void;
+  onOpenLibrary: () => void;
+  onClearSelection: () => void;
+  onSelectAll: () => void;
+  onSetSelection: (ids: string[]) => void;
+  onRemoveItem: (id: string) => void;
+}
+
+function BatchScreen(props: BatchScreenProps) {
   const [showAllFailures, setShowAllFailures] = React.useState(false);
   const items: any[] = props.items || [];
   const total = items.length;
@@ -5239,7 +5362,16 @@ function AlbumPhotoStack({ photos, assetUrl, albumItems = [] }: { photos: any[];
   );
 }
 
-function AlbumsScreen(props: any) {
+interface AlbumsScreenProps {
+  albums: Album[];
+  items: MediaItem[];
+  assetUrl: (path: string) => string;
+  onCreateAlbum: () => void;
+  onAlbumContextMenu: (album: any, e: React.MouseEvent) => void;
+  onOpenAlbum: (albumId: string) => void;
+}
+
+function AlbumsScreen(props: AlbumsScreenProps) {
   const albums = React.useMemo(
     () =>
       (props.albums || []).map((album: any, index: number) => {
@@ -5336,7 +5468,18 @@ function AlbumsScreen(props: any) {
   );
 }
 
-function DuplicatesScreen(props: any) {
+interface DuplicatesScreenProps {
+  groups: DuplicateGroup[];
+  items: MediaItem[];
+  onScan: () => void | Promise<void>;
+  onClear: () => void;
+  busy: boolean;
+  assetUrl: (path: string) => string;
+  onRequestDeleteItems: (ids: string[]) => void;
+  onHideIds: (ids: string[]) => void | Promise<void>;
+}
+
+function DuplicatesScreen(props: DuplicatesScreenProps) {
   const draftTransforms = useDraftTransforms();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());

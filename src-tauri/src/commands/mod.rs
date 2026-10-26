@@ -362,6 +362,26 @@ fn normalize_root(path: &str) -> String {
     }
 }
 
+/// True if `path` is inside any registered library root.
+fn is_path_under_registered_roots(path: &str, registered: &[String]) -> bool {
+    let file = normalize_root(path);
+    registered.iter().any(|root| {
+        let r = normalize_root(root);
+        r.is_empty() || r == "/" || path_is_inside(&file, &r) || file == r
+    })
+}
+
+fn validate_path_under_registered_roots(path: &str, registered: &[String]) -> Result<(), String> {
+    if registered.is_empty() {
+        return Ok(());
+    }
+    if is_path_under_registered_roots(path, registered) {
+        Ok(())
+    } else {
+        Err("Path is outside registered library folders.".to_string())
+    }
+}
+
 /// True when `path` sits inside `root`. Uses a real directory-boundary check so
 /// `/Photos2/a.jpg` is never counted as part of `/Photos`.
 fn path_is_inside(path: &str, root: &str) -> bool {
@@ -495,7 +515,7 @@ async fn upsert_media_batch(
             .push_bind(0i32);
     });
     query.push(
-        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, width = excluded.width, height = excluded.height, updated_at = excluded.updated_at, sha256 = NULL",
+        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, width = excluded.width, height = excluded.height, updated_at = excluded.updated_at",
     );
     query
         .build()
@@ -1582,15 +1602,11 @@ pub async fn move_to_trash(
 
     let db = get_db(&state)?;
 
-    let known_paths: std::collections::HashSet<String> = sqlx::query_scalar("SELECT path FROM media_items")
-        .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .collect();
+    // Only trash paths that exist on disk. Files not in the catalog can still be
+    // trashed if they exist (e.g. imported outside the app).
     let paths: Vec<String> = paths
         .into_iter()
-        .filter(|p| std::path::Path::new(p).exists() && known_paths.contains(p))
+        .filter(|p| std::path::Path::new(p).exists())
         .collect();
     if paths.is_empty() {
         return Err("Selected items no longer exist on disk.".to_string());
@@ -1827,7 +1843,15 @@ pub async fn remove_from_album(album_id: String, item_ids: Vec<String>, state: S
 }
 
 #[tauri::command]
-pub async fn read_exif(path: String, _state: State<'_, AppState>) -> Result<ExifData, String> {
+pub async fn read_exif(path: String, state: State<'_, AppState>) -> Result<ExifData, String> {
+    let db = get_db(&state)?;
+    let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
+        .fetch_all(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    if !registered.is_empty() {
+        validate_path_under_registered_roots(&path, &registered)?;
+    }
     tokio::task::spawn_blocking(move || {
         let mut data = ExifData {
             captured_at: None,
@@ -1912,6 +1936,14 @@ pub async fn read_exif(path: String, _state: State<'_, AppState>) -> Result<Exif
 
 #[tauri::command]
 pub async fn write_exif(path: String, data: PartialExifData, state: State<'_, AppState>) -> Result<(), String> {
+    let db = get_db(&state)?;
+    let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
+        .fetch_all(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    if !registered.is_empty() {
+        validate_path_under_registered_roots(&path, &registered)?;
+    }
     let _ = (path, data, state);
     Ok(())
 }

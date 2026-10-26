@@ -62,17 +62,6 @@ pub struct Tag {
     pub item_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-#[serde(rename_all = "camelCase")]
-pub struct ImportSession {
-    pub id: String,
-    pub root_path: String,
-    pub file_count: i32,
-    pub status: String,
-    pub started_at: i64,
-    pub completed_at: Option<i64>,
-}
-
 
 /// Hand-written row mapping.
 ///
