@@ -1427,6 +1427,13 @@ pub async fn remove_library_folder(
     if root.is_empty() {
         return Err("Refusing to remove an empty folder path".to_string());
     }
+    let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
+        .fetch_all(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    if !registered.iter().any(|registered_path| normalize_root(registered_path) == root) {
+        return Err("Folder is not a registered library root.".to_string());
+    }
 
     let rows = sqlx::query("SELECT id, path FROM media_items")
         .fetch_all(&db)
@@ -1715,6 +1722,9 @@ pub async fn reveal_in_finder(path: String, state: State<'_, AppState>) -> Resul
 pub async fn open_folder(path: String) -> Result<(), String> {
     // Unlike `open -R` (which selects a file in its parent), this opens the
     // folder itself in Finder. Used by Batch export results.
+    if !std::path::Path::new(&path).is_dir() {
+        return Err("Path is not a directory.".to_string());
+    }
     std::process::Command::new("open")
         .arg(&path)
         .status()
