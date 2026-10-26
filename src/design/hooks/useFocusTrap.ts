@@ -18,7 +18,7 @@ export function useFocusTrap(active: boolean, containerRef: RefObject<HTMLElemen
 
     const getFocusable = () =>
       Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-        (el) => !el.hasAttribute("disabled") && el.offsetParent !== null,
+        (el) => !el.hasAttribute("disabled"),
       );
 
     const focusFirst = () => {
