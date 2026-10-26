@@ -61,6 +61,7 @@ pub struct LibraryFilterDTO {
     pub hidden: Option<bool>,
     pub album_id: Option<String>,
     pub query: Option<String>,
+    pub tags: Option<Vec<String>>,
     pub date_from: Option<i64>,
     pub date_to: Option<i64>,
     pub limit: Option<i32>,
@@ -910,6 +911,15 @@ pub async fn get_library_items(filter: Option<LibraryFilterDTO>, state: State<'_
         qb.push(" AND id IN (SELECT media_id FROM album_items WHERE album_id = ")
             .push_bind(album_id.clone())
             .push(")");
+    }
+    if let Some(tags) = &f.tags {
+        if !tags.is_empty() {
+            let placeholders = std::iter::repeat("?").take(tags.len()).collect::<Vec<_>>().join(",");
+            qb.push(format!(" AND id IN (SELECT mt.media_id FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE t.name IN ({}))", placeholders));
+            for tag in tags {
+                qb.push_bind(tag.clone());
+            }
+        }
     }
     if let Some(query) = &f.query {
         let like = format!("%{}%", query);

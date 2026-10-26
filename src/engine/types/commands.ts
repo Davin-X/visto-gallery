@@ -22,6 +22,7 @@ export interface LibraryFilterDTO {
   hidden?: boolean;
   albumId?: string;
   query?: string;
+  tags?: string[];
   dateFrom?: number;
   dateTo?: number;
   limit?: number;
