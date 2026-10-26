@@ -167,7 +167,13 @@ function App() {
   const albumSearchRef = useRef<HTMLInputElement | null>(null);
   const [albumDragOver, setAlbumDragOver] = useState(false);
   const [appVersion, setAppVersion] = useState("");
-  const [aboutOpen, setAboutOpen] = useState(false);
+const [aboutOpen, setAboutOpen] = useState(false);
+  useEffect(() => {
+    if (!aboutOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setAboutOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [aboutOpen]);
   useEffect(() => {
     let cancelled = false;
     tauri.app.getVersion().then((v) => { if (!cancelled) setAppVersion(v); }).catch(() => {});
