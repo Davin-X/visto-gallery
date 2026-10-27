@@ -15,6 +15,40 @@
   <img alt="Platform" src="https://img.shields.io/badge/macOS-13%2B-lightgrey?style=flat-square">
 </p>
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/library-blue-dark.png" width="800" alt="VistoGallery Library - Blue Accent" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/library-purple-dark.png" width="800" alt="VistoGallery Library - Purple Accent" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/library-green-light.png" width="800" alt="VistoGallery Library - Green Accent" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/albums-orange-dark.png" width="800" alt="VistoGallery Albums - Orange Accent" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/duplicates-red-dark.png" width="800" alt="Duplicate Finder - Red Accent" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/batch-blue-dark.png" width="800" alt="Batch Tools - Blue Accent" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/edit-red-dark.png" width="800" alt="Edit View - Red Accent" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/settings-adv-purple-dark.png" width="800" alt="Settings - Purple Accent" />
+</p>
+
 ## Features
 
 - **Private by default** — Everything stays local. No cloud, no tracking.
@@ -28,11 +62,6 @@
 ## Download
 
 Grab the latest release from [**GitHub Releases**](https://github.com/Davin-X/visto-gallery/releases).
-
-> **macOS Gatekeeper note:** The app is not notarized yet. If macOS says it’s damaged, run:
-> ```bash
-> xattr -dr com.apple.quarantine /Applications/VistoGallery.app
-> ```
 
 ## Build from source
 
