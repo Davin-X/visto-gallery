@@ -17,37 +17,12 @@
 
 ## Screenshots
 
-<p align="center">
-  <img src="docs/screenshots/library-green-light.png" width="800" alt="VistoGallery Library - Green Accent" />
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/library-blue-dark.png" width="800" alt="VistoGallery Library - Blue Accent" />
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/library-purple-dark.png" width="800" alt="VistoGallery Library - Purple Accent" />
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/albums-orange-dark.png" width="800" alt="VistoGallery Albums - Orange Accent" />
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/duplicates-red-dark.png" width="800" alt="Duplicate Finder - Red Accent" />
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/batch-blue-dark.png" width="800" alt="Batch Tools - Blue Accent" />
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/edit-red-dark.png" width="800" alt="Edit View - Red Accent" />
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/settings-adv-purple-dark.png" width="800" alt="Settings - Purple Accent" />
-</p>
+| | |
+|---|---|
+| ![Library](docs/screenshots/library-green-light.png) | ![Library](docs/screenshots/library-blue-dark.png) |
+| ![Library](docs/screenshots/library-purple-dark.png) | ![Albums](docs/screenshots/albums-orange-dark.png) |
+| ![Duplicates](docs/screenshots/duplicates-red-dark.png) | ![Batch](docs/screenshots/batch-blue-dark.png) |
+| ![Edit](docs/screenshots/edit-red-dark.png) | ![Settings](docs/screenshots/settings-adv-purple-dark.png) |
 
 ## Features
 
