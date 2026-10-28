@@ -19,10 +19,9 @@
 
 | | |
 |---|---|
-| ![Library](docs/screenshots/library-green-light.png) | ![Library](docs/screenshots/library-blue-dark.png) |
-| ![Library](docs/screenshots/library-purple-dark.png) | ![Albums](docs/screenshots/albums-orange-dark.png) |
-| ![Duplicates](docs/screenshots/duplicates-red-dark.png) | ![Batch](docs/screenshots/batch-blue-dark.png) |
-| ![Edit](docs/screenshots/edit-red-dark.png) | ![Settings](docs/screenshots/settings-adv-purple-dark.png) |
+| ![Library](docs/screenshots/library-green-light.png) | ![Albums](docs/screenshots/albums-orange-light.png) |
+| ![Duplicates](docs/screenshots/duplicates-pink-light.png) | ![Batch](docs/screenshots/batch-purple-light.png) |
+| ![Edit](docs/screenshots/edit-blue-light.png) | ![Settings](docs/screenshots/settings-library-blue-light.png) |
 
 ## Features
 
