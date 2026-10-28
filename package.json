@@ -32,7 +32,8 @@
     "tauri:dev": "tauri dev",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "screenshots": "node scripts/capture-all-screenshots.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
@@ -44,6 +45,7 @@
     "zustand": "^4.5.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@tauri-apps/cli": "^2.0.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^14.3.1",

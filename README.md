@@ -18,15 +18,15 @@
 ## Screenshots
 
 <p align="center">
+  <img src="docs/screenshots/library-green-light.png" width="800" alt="VistoGallery Library - Green Accent" />
+</p>
+
+<p align="center">
   <img src="docs/screenshots/library-blue-dark.png" width="800" alt="VistoGallery Library - Blue Accent" />
 </p>
 
 <p align="center">
   <img src="docs/screenshots/library-purple-dark.png" width="800" alt="VistoGallery Library - Purple Accent" />
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/library-green-light.png" width="800" alt="VistoGallery Library - Green Accent" />
 </p>
 
 <p align="center">
@@ -62,6 +62,22 @@
 ## Download
 
 Grab the latest release from [**GitHub Releases**](https://github.com/Davin-X/visto-gallery/releases).
+
+### Install
+
+1. Download the latest `.dmg` from GitHub Releases.
+2. Open the `.dmg` and drag **VistoGallery.app** into **Applications**.
+3. Eject the disk image.
+
+### ⚠️ macOS Gatekeeper (unsigned build)
+
+This app is **not notarized** yet. macOS may block it with a "damaged" or "unidentified developer" message. If so, run:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/VistoGallery.app
+```
+
+Then open the app normally. Alternatively, right-click the app → **Open** → **Open** to bypass Gatekeeper once.
 
 ## Build from source
 
