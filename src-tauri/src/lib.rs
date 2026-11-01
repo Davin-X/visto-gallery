@@ -160,6 +160,7 @@ pub fn run() {
             watch_folder,
             unwatch_folder,
             get_library_folders,
+            get_library_stats,
             remove_library_folder,
             delete_library_database,
             // Items

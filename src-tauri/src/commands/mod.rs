@@ -73,8 +73,10 @@ pub struct LibraryFilterDTO {
     pub tags: Option<Vec<String>>,
     pub date_from: Option<i64>,
     pub date_to: Option<i64>,
+    pub source_path: Option<String>,
     pub limit: Option<i32>,
-    pub offset: Option<i32>,
+    /// Opaque cursor returned by a previous `get_library_items` page.
+    pub cursor: Option<String>,
     pub sort_by: Option<String>,
     pub sort_order: Option<String>,
 }

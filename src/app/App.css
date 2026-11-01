@@ -1064,6 +1064,14 @@ body {
   align-content: start;
 }
 
+/* Keeps the native scroll track accurate while the grid mounts only a small
+   row window around the viewport. It intentionally occupies every column. */
+.grid-virtual-spacer {
+  grid-column: 1 / -1;
+  min-height: 0;
+  pointer-events: none;
+}
+
 .gallery-grid.thumb-small {
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 }

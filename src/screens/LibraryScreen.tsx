@@ -2,6 +2,7 @@ import React, {
   useState,
   useMemo,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useRef,
   useDeferredValue,
@@ -55,6 +56,9 @@ function draftImageStyle(
 }
 
 const GALLERY_PAGE_SIZE = 180;
+const VIRTUAL_GRID_OVERSCAN_ROWS = 6;
+const MAX_VIRTUAL_GRID_ITEMS = 480;
+const GRID_HORIZONTAL_PADDING = 40;
 
 function searchShortcutLabel(): string {
   if (typeof navigator === "undefined") return "⌘F";
@@ -356,6 +360,69 @@ function LibraryScreen(props: LibraryScreenProps) {
   // and extend it as the user scrolls, so the DOM stays small.
   const scrollRef = useRef<HTMLDivElement>(null);
   const [renderLimit, setRenderLimit] = useState(GALLERY_PAGE_SIZE);
+  const [gridViewport, setGridViewport] = useState({
+    width: 0,
+    height: 0,
+    scrollTop: 0,
+  });
+  const [measuredTileHeight, setMeasuredTileHeight] = useState<number | null>(
+    null,
+  );
+  const virtualFrame = useRef<number | null>(null);
+
+  // The standard grid and overview use fixed-ratio cards, so their full
+  // scroll height can be represented by two spacers while only nearby rows
+  // stay mounted. Details, timeline and masonry retain their specialised
+  // renderers; their rows, groups and heights need different virtualizers.
+  const supportsGridVirtualization =
+    props.layout === "grid" || props.layout === "overview";
+  const updateGridViewport = useCallback(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    const next = {
+      width: node.clientWidth,
+      height: node.clientHeight,
+      scrollTop: node.scrollTop,
+    };
+    setGridViewport((previous) =>
+      previous.width === next.width &&
+      previous.height === next.height &&
+      previous.scrollTop === next.scrollTop
+        ? previous
+        : next,
+    );
+  }, []);
+  const scheduleViewportUpdate = useCallback(() => {
+    if (virtualFrame.current !== null) return;
+    virtualFrame.current = window.requestAnimationFrame(() => {
+      virtualFrame.current = null;
+      updateGridViewport();
+    });
+  }, [updateGridViewport]);
+
+  useLayoutEffect(() => {
+    updateGridViewport();
+    const node = scrollRef.current;
+    if (!node) return;
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateGridViewport);
+    observer?.observe(node);
+    if (!observer) window.addEventListener("resize", updateGridViewport);
+    return () => {
+      observer?.disconnect();
+      if (!observer) window.removeEventListener("resize", updateGridViewport);
+      if (virtualFrame.current !== null) {
+        window.cancelAnimationFrame(virtualFrame.current);
+        virtualFrame.current = null;
+      }
+    };
+  }, [updateGridViewport]);
+
+  useEffect(() => {
+    setMeasuredTileHeight(null);
+  }, [props.layout, thumbnailSize, gridViewport.width]);
 
   // A new view starts at the top of the list again.
   useEffect(() => {
@@ -370,12 +437,28 @@ function LibraryScreen(props: LibraryScreenProps) {
   ]);
 
   const loadMore = () => {
-    setRenderLimit((n) => Math.min(n + GALLERY_PAGE_SIZE, props.items.length));
+    const nextRenderLimit = Math.min(
+      renderLimit + GALLERY_PAGE_SIZE,
+      props.items.length,
+    );
+    setRenderLimit(nextRenderLimit);
+    // The screen only renders a local window, while the store owns the next
+    // database page. Ask for it only when the already loaded items are also
+    // exhausted, so rapid scroll events cannot fan out duplicate IPC calls.
+    if (
+      nextRenderLimit >= props.items.length &&
+      library.hasMore &&
+      !library.busy &&
+      !library.loadingNextPage
+    ) {
+      void library.loadNextPage();
+    }
   };
 
   const handleGridScroll = () => {
+    scheduleViewportUpdate();
     const el = scrollRef.current;
-    if (!el || renderLimit >= props.items.length) return;
+    if (!el) return;
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 800) loadMore();
   };
   const handleGridKeyDown = useCallback(
@@ -432,6 +515,94 @@ function LibraryScreen(props: LibraryScreenProps) {
     () => props.items.slice(0, renderLimit),
     [props.items, renderLimit],
   );
+  const virtualGrid = useMemo(() => {
+    if (!supportsGridVirtualization || renderedItems.length === 0) {
+      return { items: renderedItems, topSpacer: 0, bottomSpacer: 0 };
+    }
+
+    const overview = props.layout === "overview";
+    const gap = overview ? 20 : 16;
+    const minTileWidth = overview
+      ? 320
+      : thumbnailSize === "small"
+        ? 160
+        : thumbnailSize === "large"
+          ? 280
+          : props.showInspector
+            ? 210
+            : 220;
+    const availableWidth = Math.max(
+      minTileWidth,
+      gridViewport.width - GRID_HORIZONTAL_PADDING,
+    );
+    const columns = Math.max(
+      1,
+      Math.floor((availableWidth + gap) / (minTileWidth + gap)),
+    );
+    const tileWidth = (availableWidth - gap * (columns - 1)) / columns;
+    const estimatedTileHeight =
+      tileWidth * (overview ? 10 / 16 : 1) + 58;
+    const rowHeight = measuredTileHeight ?? estimatedTileHeight;
+    const rowStride = rowHeight + gap;
+    const totalRows = Math.ceil(renderedItems.length / columns);
+    const firstVisibleRow = Math.max(
+      0,
+      Math.floor(gridViewport.scrollTop / rowStride),
+    );
+    const lastVisibleRow = Math.min(
+      totalRows,
+      Math.ceil((gridViewport.scrollTop + gridViewport.height) / rowStride),
+    );
+    const startRow = Math.max(0, firstVisibleRow - VIRTUAL_GRID_OVERSCAN_ROWS);
+    const requestedEndRow = Math.min(
+      totalRows,
+      Math.max(lastVisibleRow + VIRTUAL_GRID_OVERSCAN_ROWS, startRow + 1),
+    );
+    // A very wide monitor can have many columns. Cap the mounted item count
+    // regardless of viewport dimensions so scrolling a 100k library never
+    // recreates the unbounded-DOM problem this window is solving.
+    const maxWindowRows = Math.max(1, Math.floor(MAX_VIRTUAL_GRID_ITEMS / columns));
+    const endRow = Math.min(requestedEndRow, startRow + maxWindowRows);
+    const startIndex = startRow * columns;
+    const endIndex = Math.min(renderedItems.length, endRow * columns);
+
+    return {
+      items: renderedItems.slice(startIndex, endIndex),
+      // CSS grid contributes one gap after a spacer, so exclude it from the
+      // spacer's own height to preserve each row's original document offset.
+      topSpacer: startRow ? Math.max(0, startRow * rowStride - gap) : 0,
+      bottomSpacer:
+        endRow < totalRows
+          ? Math.max(0, (totalRows - endRow) * rowStride - gap)
+          : 0,
+    };
+  }, [
+    gridViewport.height,
+    gridViewport.scrollTop,
+    gridViewport.width,
+    measuredTileHeight,
+    props.layout,
+    props.showInspector,
+    renderedItems,
+    supportsGridVirtualization,
+    thumbnailSize,
+  ]);
+
+  useLayoutEffect(() => {
+    if (!supportsGridVirtualization) return;
+    const tile = scrollRef.current?.querySelector<HTMLElement>(
+      ".gallery-grid.layout-grid .gallery-tile, .gallery-grid.layout-overview .gallery-tile",
+    );
+    const height = tile?.getBoundingClientRect().height;
+    if (height && Math.abs((measuredTileHeight ?? 0) - height) > 1) {
+      setMeasuredTileHeight(height);
+    }
+  }, [
+    measuredTileHeight,
+    props.layout,
+    supportsGridVirtualization,
+    virtualGrid.items.length,
+  ]);
   const selectedIdSet = useMemo(
     () => new Set(props.selectedIds),
     [props.selectedIds],
@@ -750,7 +921,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                     {props.items.length.toLocaleString()} shown ·{" "}
                     {props.hiddenView
                       ? `${(props.hiddenCount || 0).toLocaleString()} hidden`
-                      : `${(library.items.length - library.hiddenCount).toLocaleString()} in library`}
+                      : `${library.totalCount.toLocaleString()} in library`}
                     {!props.hiddenView && props.hiddenCount
                       ? ` · ${props.hiddenCount.toLocaleString()} hidden`
                       : ""}
@@ -1421,7 +1592,14 @@ function LibraryScreen(props: LibraryScreenProps) {
               <div
                 className={`gallery-grid layout-${props.layout} thumb-${thumbnailSize}`}
               >
-                {renderedItems.map((item: any) => (
+                {virtualGrid.topSpacer > 0 && (
+                  <div
+                    className="grid-virtual-spacer"
+                    aria-hidden="true"
+                    style={{ height: virtualGrid.topSpacer }}
+                  />
+                )}
+                {virtualGrid.items.map((item: any) => (
                   <article
                     key={item.id}
                     className={tileClass(item)}
@@ -1511,6 +1689,13 @@ function LibraryScreen(props: LibraryScreenProps) {
                     </button>
                   </article>
                 ))}
+                {virtualGrid.bottomSpacer > 0 && (
+                  <div
+                    className="grid-virtual-spacer"
+                    aria-hidden="true"
+                    style={{ height: virtualGrid.bottomSpacer }}
+                  />
+                )}
                 {props.items.length === 0 && emptyView()}
               </div>
             );

@@ -6,6 +6,7 @@ import type {
   Tag,
   ImportSession,
   LibraryFilterDTO,
+  LibraryItemsPage,
   ThumbnailRequest,
   ThumbnailResponse,
   ExifData,
@@ -25,6 +26,7 @@ import type {
   TrashResult,
   TrashError,
   UpdateCheckResult,
+  LibraryStats,
 } from "../types/commands";
 
 // Type-safe command wrappers
@@ -38,7 +40,7 @@ export const tauri = {
     importFiles: (paths: string[]): Promise<ScanResult> =>
       invoke("import_files", { paths }),
 
-    getItems: (filter: LibraryFilterDTO): Promise<MediaItem[]> =>
+    getItems: (filter: LibraryFilterDTO): Promise<LibraryItemsPage> =>
       invoke("get_library_items", { filter }),
 
     getThumbnail: (request: ThumbnailRequest): Promise<ThumbnailResponse> =>
@@ -51,6 +53,8 @@ export const tauri = {
       invoke("unwatch_folder", { path }),
 
     getFolders: (): Promise<LibraryFolder[]> => invoke("get_library_folders"),
+
+    getStats: (): Promise<LibraryStats> => invoke("get_library_stats"),
 
     removeFolder: (path: string, deleteFiles = false): Promise<number> =>
       invoke("remove_library_folder", { path, deleteFiles }),
