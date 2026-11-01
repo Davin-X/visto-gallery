@@ -135,14 +135,14 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
             Duplicate scans compare file content (SHA-256), not just names or
             sizes.
           </p>
-          <button
-            className="primary-button"
-            type="button"
-            onClick={props.onScan}
-            disabled={props.busy}
-          >
-            Scan {props.items?.length || 0} files
-          </button>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={props.onScan}
+              disabled={props.busy}
+            >
+              Scan for duplicates
+            </button>
         </div>
       );
     }
