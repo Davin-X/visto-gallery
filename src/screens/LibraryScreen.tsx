@@ -921,7 +921,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                     {props.items.length.toLocaleString()} shown ·{" "}
                     {props.hiddenView
                       ? `${(props.hiddenCount || 0).toLocaleString()} hidden`
-                      : `${(library.items.length - library.hiddenCount).toLocaleString()} loaded${library.hasMore ? " · more available" : ""}`}
+                      : `${library.totalCount.toLocaleString()} in library`}
                     {!props.hiddenView && props.hiddenCount
                       ? ` · ${props.hiddenCount.toLocaleString()} hidden`
                       : ""}

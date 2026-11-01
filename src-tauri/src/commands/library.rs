@@ -335,6 +335,7 @@ pub struct LibraryItemsPage {
     items: Vec<MediaItem>,
     has_more: bool,
     next_cursor: Option<String>,
+    total_count: i64,
 }
 
 fn cursor_value(item: &MediaItem, sort_by: &str) -> Value {
@@ -361,13 +362,7 @@ pub async fn get_library_items(
     get_library_items_page(&db, f).await
 }
 
-async fn get_library_items_page(
-    db: &SqlitePool,
-    f: super::LibraryFilterDTO,
-) -> Result<LibraryItemsPage, String> {
-
-    let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new("SELECT * FROM media_items WHERE 1=1");
-
+fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterDTO) {
     if let Some(kind) = &f.kind {
         qb.push(" AND kind = ").push_bind(kind.clone());
     }
@@ -389,7 +384,10 @@ async fn get_library_items_page(
             let placeholders = std::iter::repeat_n("?", tags.len())
                 .collect::<Vec<_>>()
                 .join(",");
-            qb.push(format!(" AND id IN (SELECT mt.media_id FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE t.name IN ({}))", placeholders));
+            qb.push(format!(
+                " AND id IN (SELECT mt.media_id FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE t.name IN ({}))",
+                placeholders
+            ));
             for tag in tags {
                 qb.push_bind(tag.clone());
             }
@@ -432,6 +430,18 @@ async fn get_library_items_page(
             .push_bind(prefix)
             .push(")");
     }
+}
+
+async fn get_library_items_page(
+    db: &SqlitePool,
+    f: super::LibraryFilterDTO,
+) -> Result<LibraryItemsPage, String> {
+
+    let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new("SELECT * FROM media_items WHERE 1=1");
+    let mut count_qb: QueryBuilder<Sqlite> =
+        QueryBuilder::new("SELECT COUNT(*) FROM media_items WHERE 1=1");
+    push_library_filters(&mut qb, &f);
+    push_library_filters(&mut count_qb, &f);
 
     // Identifiers cannot be bound, so the sort column is whitelisted instead of
     // interpolated straight from the caller. `id` is always the stable tie-breaker.
@@ -551,8 +561,19 @@ async fn get_library_items_page(
         None
     };
 
+    let total_count: i64 = count_qb
+        .build_query_scalar::<i64>()
+        .fetch_one(db)
+        .await
+        .map_err(|e| e.to_string())?;
+
     hydrate_relations(db, &mut items).await?;
-    Ok(LibraryItemsPage { items, has_more, next_cursor })
+    Ok(LibraryItemsPage {
+        items,
+        has_more,
+        next_cursor,
+        total_count,
+    })
 }
 
 /// Attach tags and album ids to a page of items using filtered queries.

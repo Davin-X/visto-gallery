@@ -52,6 +52,7 @@ export interface LibraryItemsPage {
   items: MediaItem[];
   hasMore: boolean;
   nextCursor?: string;
+  totalCount: number;
 }
 
 export interface ThumbnailRequest {

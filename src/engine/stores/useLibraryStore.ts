@@ -81,6 +81,7 @@ interface LibraryState {
   pageSize: number;
   hasMore: boolean;
   nextCursor: string | null;
+  totalCount: number;
   /** A background page request; unlike a scan it must not block the UI. */
   loadingNextPage: boolean;
 
@@ -400,6 +401,7 @@ export const useLibraryStore = create<LibraryState>()(
       pageSize: 250,
       hasMore: false,
       nextCursor: null,
+      totalCount: 0,
       loadingNextPage: false,
 
       // Computed (updated via subscribe in components)
@@ -456,7 +458,7 @@ export const useLibraryStore = create<LibraryState>()(
           // Supports the old array response in browser fixtures while native
           // callers use the bounded page contract.
           const page: LibraryItemsPage = Array.isArray(pageResult)
-            ? { items: pageResult, hasMore: false }
+            ? { items: pageResult, hasMore: false, totalCount: pageResult.length }
             : pageResult;
 
           set({
@@ -469,6 +471,7 @@ export const useLibraryStore = create<LibraryState>()(
             page: 0,
             hasMore: page.hasMore,
             nextCursor: page.nextCursor ?? null,
+            totalCount: page.totalCount ?? 0,
           });
           get().refreshDerived();
         } catch (e) {
@@ -504,7 +507,7 @@ export const useLibraryStore = create<LibraryState>()(
             return;
           }
           const page: LibraryItemsPage = Array.isArray(pageResult)
-            ? { items: pageResult, hasMore: false }
+            ? { items: pageResult, hasMore: false, totalCount: pageResult.length }
             : pageResult;
           set((current) => {
             const known = new Set(current.items.map((item) => item.id));
@@ -516,6 +519,7 @@ export const useLibraryStore = create<LibraryState>()(
               page: current.page + 1,
               hasMore: page.hasMore,
               nextCursor: page.nextCursor ?? null,
+              totalCount: page.totalCount ?? current.totalCount,
               loadingNextPage: false,
             };
           });
