@@ -420,3 +420,13 @@ if (typeof window !== "undefined") {
     if (document.visibilityState === "hidden") flush();
   });
 }
+
+// Conditional debug logging — only emits when enableDebugLogging is true.
+// Use this instead of console.log for diagnostics that should be opt-in.
+export function debugLog(...args: any[]): void {
+  if (typeof window === "undefined") return;
+  const settings = useSettingsStore.getState();
+  if (settings.enableDebugLogging) {
+    console.log("[VistoGallery]", ...args);
+  }
+}
