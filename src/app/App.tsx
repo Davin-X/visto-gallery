@@ -43,13 +43,11 @@ import {
   useThumbnailSize,
   ACCENT_PALETTE,
   applyTheme,
-  useDraftTransforms,
   useDraftIds,
-  draftTransformStyle,
   clearEditDraft,
-  type DraftTransform,
   usePlaybackStore,
 } from "../engine/stores";
+import { draftImageStyle } from "../engine/utils/draftImage";
 import { formatDuration } from "../engine/utils/time";
 import { MiniPlayer } from "../design/components/MiniPlayer";
 import { getTypeIdentity, formatBytesSimple } from "../engine/utils/mediaTypes";
@@ -96,13 +94,6 @@ function KindIcon({
  * Apply the item's saved edit draft to a preview image. Passing the shared map
  * keeps this synchronous and avoids a localStorage read per tile.
  */
-function draftImageStyle(
-  transforms: Map<string, DraftTransform> | undefined,
-  itemId: string,
-) {
-  const transform = draftTransformStyle(transforms?.get(itemId));
-  return transform ? { transform } : undefined;
-}
 
 function startConfiguredSlideshow(items: MediaItem[], startId?: string | null) {
   const preferences = useSettingsStore.getState();
@@ -272,16 +263,6 @@ function isWarningNotice(text: string): boolean {
 }
 
 /** Modifier glyph for the "focus search" hint - Command on macOS, Ctrl elsewhere. */
-function searchShortcutLabel(): string {
-  if (typeof navigator === "undefined") return "⌘F";
-  // `userAgentData` is not in the default TS lib yet, so read it defensively.
-  const uaData = (
-    navigator as unknown as { userAgentData?: { platform?: string } }
-  ).userAgentData;
-  const platform = uaData?.platform || navigator.platform || "";
-  return /mac|iphone|ipad|ipod/i.test(platform) ? "⌘F" : "Ctrl F";
-}
-
 function App() {
   const [screen, setScreen] = useState<Screen>("Library");
   const [screenHistory, setScreenHistory] = useState<Screen[]>([]);

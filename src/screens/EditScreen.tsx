@@ -21,10 +21,10 @@ import {
   useDraftTransforms,
   useDraftIds,
   clearEditDraft,
-  draftTransformStyle,
 } from "../engine/stores/useEditStore";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import type { MediaItem, EditValues, CropRect } from "../engine/types/media";
+import { draftImageStyle } from "../engine/utils/draftImage";
 
 function PickerThumbnail({
   itemId,
@@ -45,14 +45,6 @@ function PickerThumbnail({
       placeholderClassName="edit-picker-thumb"
     />
   );
-}
-
-function draftImageStyle(
-  transforms: Map<string, any> | undefined,
-  itemId: string,
-) {
-  const transform = draftTransformStyle(transforms?.get(itemId));
-  return transform ? { transform } : undefined;
 }
 
 const initialEdits = {

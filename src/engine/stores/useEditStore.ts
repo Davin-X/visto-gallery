@@ -10,6 +10,40 @@ export interface DraftTransform {
 }
 
 const draftKey = (itemId: string) => `edit:draft:${itemId}`;
+const draftOrderKey = "edit:draft:order";
+
+const MAX_DRAFTS = 100;
+const MAX_DRAFT_SIZE_BYTES = 5 * 1024; // 5 KB per draft
+
+function getDraftOrder(): string[] {
+  if (typeof localStorage === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(draftOrderKey);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function setDraftOrder(order: string[]) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(draftOrderKey, JSON.stringify(order));
+  } catch {
+    // Ignore storage failures for order tracking.
+  }
+}
+
+function pruneDrafts() {
+  if (typeof localStorage === "undefined") return;
+  const order = getDraftOrder();
+  if (order.length <= MAX_DRAFTS) return;
+  const toRemove = order.slice(0, order.length - MAX_DRAFTS);
+  for (const id of toRemove) {
+    try { localStorage.removeItem(draftKey(id)); } catch {}
+  }
+  setDraftOrder(order.slice(order.length - MAX_DRAFTS));
+}
 
 // Previews subscribe to a small revision counter instead of reading every
 // draft on every render. The counter only changes when a draft is written or
@@ -29,20 +63,30 @@ function persistDraft(
   historyIndex: number,
   crop?: CropState,
 ) {
-  if (typeof localStorage !== "undefined") {
-    try {
-      localStorage.setItem(
-        draftKey(itemId),
-        JSON.stringify({
-          values,
-          history,
-          historyIndex,
-          ...(crop ? { crop } : {}),
-        }),
-      );
-    } catch {
-      // A full or unavailable localStorage should not break editing.
+  if (typeof localStorage === "undefined") return;
+  try {
+    const payload = JSON.stringify({
+      values,
+      history,
+      historyIndex,
+      ...(crop ? { crop } : {}),
+    });
+    // Enforce per-draft size cap: drop oversized drafts.
+    if (new TextEncoder().encode(payload).length > MAX_DRAFT_SIZE_BYTES) {
+      return;
     }
+    localStorage.setItem(draftKey(itemId), payload);
+
+    // Update LRU order: move itemId to end (most recently used).
+    let order = getDraftOrder();
+    order = order.filter((id) => id !== itemId);
+    order.push(itemId);
+    setDraftOrder(order);
+
+    // Prune oldest drafts beyond the cap.
+    pruneDrafts();
+  } catch {
+    // A full or unavailable localStorage should not break editing.
   }
   notifyDraftChanged();
 }
@@ -53,11 +97,13 @@ export function resetDraftRevision(): void {
 }
 
 export function clearEditDraft(itemId: string) {
-  if (typeof localStorage !== "undefined") {
-    try {
-      localStorage.removeItem(draftKey(itemId));
-    } catch {}
-  }
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.removeItem(draftKey(itemId));
+    // Remove from LRU order.
+    const order = getDraftOrder().filter((id) => id !== itemId);
+    setDraftOrder(order);
+  } catch {}
   notifyDraftChanged();
 }
 

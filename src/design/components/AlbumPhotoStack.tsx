@@ -2,16 +2,8 @@ import React from "react";
 import VideoThumb from "./VideoThumb";
 import {
   useDraftTransforms,
-  draftTransformStyle,
 } from "../../engine/stores/useEditStore";
-
-function draftImageStyle(
-  transforms: Map<string, any> | undefined,
-  itemId: string,
-) {
-  const transform = draftTransformStyle(transforms?.get(itemId));
-  return transform ? { transform } : undefined;
-}
+import { draftImageStyle } from "../../engine/utils/draftImage";
 
 function albumStackPose(count: number, index: number) {
   const poses =
