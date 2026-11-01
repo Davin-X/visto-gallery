@@ -436,7 +436,6 @@ async fn get_library_items_page(
     db: &SqlitePool,
     f: super::LibraryFilterDTO,
 ) -> Result<LibraryItemsPage, String> {
-
     let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new("SELECT * FROM media_items WHERE 1=1");
     let mut count_qb: QueryBuilder<Sqlite> =
         QueryBuilder::new("SELECT COUNT(*) FROM media_items WHERE hidden = 0");
@@ -470,7 +469,11 @@ async fn get_library_items_page(
         let comparison = if dir == "ASC" { ">" } else { "<" };
         match sort_by {
             "name" => {
-                let value = cursor.value.as_str().ok_or("Invalid name cursor")?.to_string();
+                let value = cursor
+                    .value
+                    .as_str()
+                    .ok_or("Invalid name cursor")?
+                    .to_string();
                 qb.push(" AND (name COLLATE NOCASE ")
                     .push(comparison)
                     .push(" ")
@@ -482,7 +485,11 @@ async fn get_library_items_page(
                     .push("))");
             }
             "kind" => {
-                let value = cursor.value.as_str().ok_or("Invalid kind cursor")?.to_string();
+                let value = cursor
+                    .value
+                    .as_str()
+                    .ok_or("Invalid kind cursor")?
+                    .to_string();
                 qb.push(" AND (kind ")
                     .push(comparison)
                     .push(" ")
@@ -506,7 +513,10 @@ async fn get_library_items_page(
                     .push("))");
             }
             "modifiedAt" => {
-                let value = cursor.value.as_i64().ok_or("Invalid modified date cursor")?;
+                let value = cursor
+                    .value
+                    .as_i64()
+                    .ok_or("Invalid modified date cursor")?;
                 qb.push(" AND (modified_at ")
                     .push(comparison)
                     .push(" ")
@@ -535,7 +545,10 @@ async fn get_library_items_page(
     // Stable secondary sort: id ASC.
     qb.push(format!(" ORDER BY {} {}, id ASC", primary_sql, dir));
 
-    let page_size = f.limit.unwrap_or(LIBRARY_PAGE_SIZE).clamp(1, MAX_LIBRARY_PAGE_SIZE) as usize;
+    let page_size = f
+        .limit
+        .unwrap_or(LIBRARY_PAGE_SIZE)
+        .clamp(1, MAX_LIBRARY_PAGE_SIZE) as usize;
     // Fetch one extra row solely to determine whether another page exists.
     qb.push(" LIMIT ").push_bind((page_size + 1) as i64);
 
@@ -588,8 +601,15 @@ async fn hydrate_relations(db: &SqlitePool, items: &mut [MediaItem]) -> Result<(
 
     // Keep each `IN` clause comfortably below SQLite's parameter ceiling even
     // when this helper is reused by a larger server-side page in the future.
-    for ids in items.iter().map(|item| item.id.as_str()).collect::<Vec<_>>().chunks(500) {
-        let placeholders = std::iter::repeat_n("?", ids.len()).collect::<Vec<_>>().join(",");
+    for ids in items
+        .iter()
+        .map(|item| item.id.as_str())
+        .collect::<Vec<_>>()
+        .chunks(500)
+    {
+        let placeholders = std::iter::repeat_n("?", ids.len())
+            .collect::<Vec<_>>()
+            .join(",");
         let tag_sql = format!(
             "SELECT mt.media_id, t.name FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.media_id IN ({})",
             placeholders
@@ -1109,9 +1129,7 @@ pub struct LibraryStats {
 }
 
 #[tauri::command]
-pub async fn get_library_stats(
-    state: State<'_, AppState>,
-) -> Result<LibraryStats, String> {
+pub async fn get_library_stats(state: State<'_, AppState>) -> Result<LibraryStats, String> {
     let db = super::get_db(&state)?;
     let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
         "SELECT
@@ -1603,14 +1621,13 @@ mod pagination_tests {
             value: cursor_value(&item, "capturedAt"),
             id: item.id.clone(),
         };
-        let round_trip: LibraryCursor = serde_json::from_str(
-            &serde_json::to_string(&cursor).expect("serialize cursor"),
-        )
-        .expect("parse cursor");
+        let round_trip: LibraryCursor =
+            serde_json::from_str(&serde_json::to_string(&cursor).expect("serialize cursor"))
+                .expect("parse cursor");
         assert_eq!(round_trip.value.as_i64(), Some(80));
         assert_eq!(round_trip.id, "stable-id");
 
-        assert_eq!(cursor_value(&item, "name").as_str(), Some("example.jpg"));
+        assert_eq!(cursor_value(&item, "name").as_str(), Some("Example.JPG"));
         assert_eq!(cursor_value(&item, "size").as_i64(), Some(42));
         assert_eq!(cursor_value(&item, "modifiedAt").as_i64(), Some(100));
     }
@@ -1631,11 +1648,22 @@ mod pagination_tests {
 
         let first = get_library_items_page(
             &db,
-            LibraryFilterDTO { limit: Some(2), sort_by: Some("capturedAt".to_string()), ..Default::default() },
+            LibraryFilterDTO {
+                limit: Some(2),
+                sort_by: Some("capturedAt".to_string()),
+                ..Default::default()
+            },
         )
         .await
         .expect("read first page");
-        assert_eq!(first.items.iter().map(|item| item.id.as_str()).collect::<Vec<_>>(), ["c", "a"]);
+        assert_eq!(
+            first
+                .items
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            ["c", "a"]
+        );
         assert!(first.has_more);
 
         let second = get_library_items_page(
@@ -1649,7 +1677,14 @@ mod pagination_tests {
         )
         .await
         .expect("read second page");
-        assert_eq!(second.items.iter().map(|item| item.id.as_str()).collect::<Vec<_>>(), ["b"]);
+        assert_eq!(
+            second
+                .items
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            ["b"]
+        );
         assert!(!second.has_more);
     }
 }

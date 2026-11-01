@@ -20,6 +20,7 @@ import VideoThumb from "../design/components/VideoThumb";
 import DuplicatesScreen from "../screens/DuplicatesScreen";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import { KindBadge, KindDot } from "../design/components/KindBadge";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 import { createPortal } from "react-dom";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -1897,10 +1898,11 @@ function App() {
   };
 
   return (
-    <div
-      className={`app-frame ${dark ? "dark" : ""}`}
-      style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
-    >
+    <ErrorBoundary>
+      <div
+        className={`app-frame ${dark ? "dark" : ""}`}
+        style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
+      >
       <a className="skip-to-content" href="#main-content">
         Skip to main content
       </a>
@@ -3547,6 +3549,7 @@ function App() {
         />
       )}
     </div>
+    </ErrorBoundary>
   );
 }
 
