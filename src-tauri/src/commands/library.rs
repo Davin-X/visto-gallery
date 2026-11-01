@@ -465,6 +465,10 @@ async fn hydrate_relations(db: &SqlitePool, items: &mut [MediaItem]) -> Result<(
 pub struct ThumbnailRequest {
     item_id: String,
     size: u32,
+    /// JPEG quality 1-100; defaults to 78.
+    quality: Option<u8>,
+    /// Cache budget in bytes; defaults to 512 MiB.
+    max_cache_bytes: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -480,7 +484,6 @@ pub struct ThumbnailResponse {
 /// of being decoded into a full-resolution buffer just to shrink them.
 pub(crate) const LARGE_THUMBNAIL_SOURCE_BYTES: i64 = 8 * 1024 * 1024;
 /// Thumbnails are small, but they should still have a predictable disk budget.
-const THUMBNAIL_CACHE_LIMIT_BYTES: u64 = 512 * 1024 * 1024;
 const THUMBNAIL_PRUNE_INTERVAL_SECS: u64 = 60 * 60;
 static LAST_THUMBNAIL_PRUNE_EPOCH: AtomicU64 = AtomicU64::new(0);
 
@@ -503,6 +506,9 @@ pub async fn get_item_thumbnail(
     .await
     .map_err(|error| error.to_string())?
     .ok_or_else(|| "Photo not found in library".to_string())?;
+
+    let quality = request.quality.unwrap_or(78).clamp(1, 100);
+    let max_cache_bytes = request.max_cache_bytes.unwrap_or(512 * 1024 * 1024);
 
     let cache_root = app
         .path()
@@ -532,11 +538,11 @@ pub async fn get_item_thumbnail(
         let target_path = cache_path.clone();
         let size = request.size;
         let generated = tokio::task::spawn_blocking(move || {
-            generate_cached_thumbnail(&source_path, &target_path, size, source_size)
+            generate_cached_thumbnail(&source_path, &target_path, size, source_size, quality)
         })
         .await
         .map_err(|error| format!("Thumbnail worker failed: {error}"))??;
-        maybe_prune_thumbnail_cache(cache_root.clone());
+        maybe_prune_thumbnail_cache(cache_root.clone(), max_cache_bytes);
         generated
     };
 
@@ -562,7 +568,7 @@ pub(crate) fn thumbnail_cache_key(
 /// Keep the cache bounded without making every thumbnail request pay for a
 /// directory scan. The first cache miss after an interval triggers a detached
 /// cleanup, and concurrent requests are deduplicated by the epoch compare-exchange.
-fn maybe_prune_thumbnail_cache(root: PathBuf) {
+fn maybe_prune_thumbnail_cache(root: PathBuf, max_bytes: u64) {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs())
@@ -578,7 +584,7 @@ fn maybe_prune_thumbnail_cache(root: PathBuf) {
         return;
     }
     tokio::task::spawn_blocking(move || {
-        prune_thumbnail_cache(&root, THUMBNAIL_CACHE_LIMIT_BYTES);
+        prune_thumbnail_cache(&root, max_bytes);
     });
 }
 
@@ -644,12 +650,13 @@ pub(crate) fn generate_cached_thumbnail(
     destination: &Path,
     size: u32,
     source_size: i64,
+    quality: u8,
 ) -> Result<(Vec<u8>, u32, u32), String> {
     #[cfg(target_os = "macos")]
     {
         // Use sips for large images on macOS; fall back to image crate for smaller ones
         if source_size > LARGE_THUMBNAIL_SOURCE_BYTES {
-            return generate_with_macos_sips(source, destination, size, "macOS sips (large image)");
+            return generate_with_macos_sips(source, destination, size, quality, "macOS sips (large image)");
         }
     }
     // Fallback: use image crate (used on non-macOS, and for small images on macOS)
@@ -661,7 +668,7 @@ pub(crate) fn generate_cached_thumbnail(
         Ok(decoder) => decoder,
         Err(error) => {
             let reason = format!("decode failed: {error}");
-            return generate_with_macos_sips(source, destination, size, &reason);
+            return generate_with_macos_sips(source, destination, size, quality, &reason);
         }
     };
     let orientation = decoder
@@ -671,14 +678,14 @@ pub(crate) fn generate_cached_thumbnail(
         Ok(image) => image,
         Err(error) => {
             let reason = format!("decode failed: {error}");
-            return generate_with_macos_sips(source, destination, size, &reason);
+            return generate_with_macos_sips(source, destination, size, quality, &reason);
         }
     };
     image.apply_orientation(orientation);
     let thumbnail = image.thumbnail(size, size).to_rgb8();
     let (width, height) = (thumbnail.width(), thumbnail.height());
     let mut bytes = Vec::new();
-    JpegEncoder::new_with_quality(&mut bytes, 78)
+    JpegEncoder::new_with_quality(&mut bytes, quality)
         .encode(&thumbnail, width, height, image::ExtendedColorType::Rgb8)
         .map_err(|error| format!("Could not encode thumbnail: {error}"))?;
 
@@ -709,13 +716,14 @@ fn generate_with_macos_sips(
     source: &str,
     destination: &Path,
     size: u32,
+    quality: u8,
     reason: &str,
 ) -> Result<(Vec<u8>, u32, u32), String> {
     use std::process::Command;
 
     let temporary = destination.with_extension(format!("{}.tmp.jpg", Uuid::new_v4()));
     let output = Command::new("/usr/bin/sips")
-        .args(["-s", "format", "jpeg", "-Z", &size.to_string()])
+        .args(["-s", "format", "jpeg", "-s", "formatOptions", &quality.to_string(), "-Z", &size.to_string()])
         .arg(source)
         .arg("--out")
         .arg(&temporary)

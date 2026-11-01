@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { tauri, thumbnailToDataUrl } from "../../engine/commands/tauri";
+import { useSettingsStore } from "../../engine/stores/useSettingsStore";
 
 // Shared, size-aware thumbnail cache. Both the editor picker and the library
 // grid used to request multi-megabyte originals; cached JPEGs make scrolling a
@@ -32,7 +33,13 @@ function loadThumbnail(
     thumbnailQueue.push(() => {
       activeThumbnailRequests += 1;
       void tauri.library
-        .getThumbnail({ itemId, size })
+        .getThumbnail({
+          itemId,
+          size,
+          quality: useSettingsStore.getState().thumbnailQuality,
+          maxCacheBytes:
+            useSettingsStore.getState().maxCacheSizeGB * 1024 * 1024 * 1024,
+        })
         .then((response: any) => {
           const url = thumbnailToDataUrl(response);
           thumbnailCache.set(key, url);

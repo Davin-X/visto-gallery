@@ -49,6 +49,8 @@ export interface ThumbnailRequest {
   itemId: string;
   size: 64 | 128 | 256 | 512 | 1024;
   format?: "jpeg" | "webp" | "avif";
+  quality?: number;
+  maxCacheBytes?: number;
 }
 
 export interface ThumbnailResponse {
