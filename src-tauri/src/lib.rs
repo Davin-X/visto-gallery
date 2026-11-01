@@ -183,6 +183,16 @@ pub fn run() {
             // Editing
             render_edited,
             move_exported_file,
+            save_edit_recipe,
+            get_edit_recipe,
+            list_edit_recipes,
+            delete_edit_recipe,
+            copy_edit_recipe,
+            batch_apply_edit,
+            save_edit_preset,
+            list_edit_presets,
+            delete_edit_preset,
+            apply_edit_preset,
             // Batch
             batch_export,
             cancel_batch_export,

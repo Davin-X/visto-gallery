@@ -154,3 +154,31 @@ export interface DuplicateGroup {
   size: number;
   items: MediaItem[];
 }
+
+export interface EditRecipe {
+  mediaId: string;
+  edits: EditValues;
+  crop?: CropState;
+  history: EditValues[];
+  historyIndex: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface EditPreset {
+  id: string;
+  name: string;
+  edits: EditValues;
+  crop?: CropState;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CropState {
+  enabled: boolean;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  aspectRatio: number | "free";
+}

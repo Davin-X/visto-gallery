@@ -1,6 +1,7 @@
 mod albums;
 mod batch;
 mod duplicates;
+mod edit_recipes;
 mod library;
 mod media;
 mod settings;
@@ -10,6 +11,7 @@ pub use albums::*;
 use anyhow::Result;
 pub use batch::*;
 pub use duplicates::*;
+pub use edit_recipes::*;
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::codecs::webp::WebPEncoder;

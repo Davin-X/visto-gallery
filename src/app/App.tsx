@@ -1091,8 +1091,10 @@ function App() {
   // Library, the last screen/folder, or start a slideshow.
   const startupView = useSettingsStore((s) => s.startupView);
   const openLastFolder = useSettingsStore((s) => s.openLastFolder);
+  const didRunStartup = useRef(false);
   useEffect(() => {
-    if (!settingsHydrated) return;
+    if (!settingsHydrated || didRunStartup.current) return;
+    didRunStartup.current = true;
     if (startupView === "slideshow") {
       // Slideshow needs items; open Library first so the user can pick one.
       setScreen("Library");
