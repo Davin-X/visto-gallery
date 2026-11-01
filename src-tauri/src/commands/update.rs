@@ -274,4 +274,103 @@ mod tests {
         assert!(!result.available);
         assert_eq!(result.download_url, None);
     }
+
+    async fn cache_db() -> SqlitePool {
+        let db = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory settings database");
+        sqlx::query("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            .execute(&db)
+            .await
+            .expect("create settings table");
+        db
+    }
+
+    #[tokio::test]
+    async fn cache_roundtrips_within_ttl() {
+        let db = cache_db().await;
+        let now = 1_700_000_000_000;
+        let result = build_result(release("v0.2.0", vec![]), "0.1.2", now);
+
+        write_cache(&db, &result).await.expect("write cache");
+        let cached = read_cache(&db, now + 60_000)
+            .await
+            .expect("read cache")
+            .expect("cache should be fresh");
+
+        assert_eq!(cached.latest_version, "0.2.0");
+        assert_eq!(cached.checked_at, now);
+    }
+
+    #[tokio::test]
+    async fn cache_expires_after_ttl() {
+        let db = cache_db().await;
+        let now = 1_700_000_000_000;
+        let result = build_result(release("v0.2.0", vec![]), "0.1.2", now);
+        write_cache(&db, &result).await.expect("write cache");
+
+        // Exactly at the boundary is still stale: the cache is valid for
+        // strictly less than 24 hours.
+        assert!(read_cache(&db, now + CACHE_TTL_MS)
+            .await
+            .expect("read cache")
+            .is_none());
+        assert!(read_cache(&db, now + CACHE_TTL_MS + 1)
+            .await
+            .expect("read cache")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn cache_tolerates_a_clock_that_moved_backwards() {
+        let db = cache_db().await;
+        let now = 1_700_000_000_000;
+        let result = build_result(release("v0.2.0", vec![]), "0.1.2", now);
+        write_cache(&db, &result).await.expect("write cache");
+
+        // saturating_sub keeps this from underflowing into a panic.
+        assert!(read_cache(&db, now - 60_000)
+            .await
+            .expect("read cache")
+            .is_some());
+    }
+
+    #[tokio::test]
+    async fn corrupt_cache_is_ignored() {
+        let db = cache_db().await;
+        sqlx::query("INSERT INTO settings (key, value) VALUES (?, ?)")
+            .bind(CACHE_KEY)
+            .bind("not json")
+            .execute(&db)
+            .await
+            .expect("insert corrupt cache");
+
+        assert!(read_cache(&db, 1_700_000_000_000)
+            .await
+            .expect("read cache")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn missing_cache_returns_none() {
+        let db = cache_db().await;
+        assert!(read_cache(&db, 1_700_000_000_000)
+            .await
+            .expect("read cache")
+            .is_none());
+    }
+
+    /// Not part of the default run: verifies that the real GitHub payload still
+    /// deserializes and that the asset fallback works against live data.
+    /// `cargo test update::tests::fetches_the_real_latest_release -- --ignored`
+    #[tokio::test]
+    #[ignore = "hits the real GitHub API"]
+    async fn fetches_the_real_latest_release() {
+        let result = fetch_latest(0).await.expect("fetch real release");
+        assert!(!result.latest_version.is_empty());
+        assert!(!result.release_url.is_empty());
+        assert_eq!(result.current_version, env!("CARGO_PKG_VERSION"));
+    }
 }
