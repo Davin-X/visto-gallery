@@ -167,6 +167,8 @@ pub fn run() {
             // Items
             toggle_favorite,
             toggle_hidden,
+            set_rating,
+            set_color_label,
             update_item_tags,
             move_to_trash,
             reveal_in_finder,

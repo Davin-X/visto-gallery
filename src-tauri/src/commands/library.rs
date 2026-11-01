@@ -1475,6 +1475,43 @@ pub async fn toggle_hidden(
     Ok(())
 }
 
+/// Set the star rating (0-5) on a media item. Pass 0 to unrate.
+#[tauri::command]
+pub async fn set_rating(
+    item_id: String,
+    rating: i32,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let db = super::get_db(&state)?;
+    sqlx::query("UPDATE media_items SET rating = ?, updated_at = ? WHERE id = ?")
+        .bind(rating)
+        .bind(super::now_ms())
+        .bind(&item_id)
+        .execute(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Set the color label on a media item. Valid values: red, yellow, green,
+/// blue, purple. Pass empty string to clear.
+#[tauri::command]
+pub async fn set_color_label(
+    item_id: String,
+    color_label: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let db = super::get_db(&state)?;
+    sqlx::query("UPDATE media_items SET color_label = ?, updated_at = ? WHERE id = ?")
+        .bind(color_label)
+        .bind(super::now_ms())
+        .bind(&item_id)
+        .execute(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Core implementation of `update_item_tags`, extracted so it can be tested
 /// against an in-memory database without a Tauri `State`.
 pub async fn apply_item_tags(
@@ -1562,7 +1599,7 @@ mod tag_tests {
             .await
             .expect("enable foreign keys");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, rating INTEGER, color_label TEXT)",
         )
         .execute(&db)
         .await
@@ -1727,7 +1764,7 @@ mod pagination_tests {
             .await
             .expect("open in-memory page database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
         )
         .execute(&db)
         .await

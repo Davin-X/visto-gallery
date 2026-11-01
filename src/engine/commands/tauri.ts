@@ -72,6 +72,12 @@ export const tauri = {
     toggleHidden: (itemId: string, hidden: boolean): Promise<void> =>
       invoke("toggle_hidden", { itemId, hidden }),
 
+    setRating: (itemId: string, rating: number): Promise<void> =>
+      invoke("set_rating", { itemId, rating }),
+
+    setColorLabel: (itemId: string, colorLabel: string): Promise<void> =>
+      invoke("set_color_label", { itemId, colorLabel }),
+
     updateTags: (itemId: string, tags: string[]): Promise<void> =>
       invoke("update_item_tags", { itemId, tags }),
 

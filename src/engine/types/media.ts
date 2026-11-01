@@ -20,6 +20,8 @@ export interface MediaItem {
   sha256?: string; // Content hash
   favorite: boolean;
   hidden: boolean;
+  rating?: number; // 0-5 star rating, undefined = unrated
+  colorLabel?: string; // 'red' | 'yellow' | 'green' | 'blue' | 'purple', undefined = unlabeled
   tags: string[];
   albumIds: string[]; // Album IDs this item belongs to
   duration?: number; // Video duration (seconds), hydrated client-side

@@ -235,6 +235,8 @@ export type TauriCommandSignature = {
   // Items
   toggle_favorite: (itemId: string, favorite: boolean) => void;
   toggle_hidden: (itemId: string, hidden: boolean) => void;
+  set_rating: (itemId: string, rating: number) => void;
+  set_color_label: (itemId: string, colorLabel: string) => void;
   update_item_tags: (itemId: string, tags: string[]) => void;
   move_to_trash: (paths: string[]) => void;
   reveal_in_finder: (path: string) => void;
