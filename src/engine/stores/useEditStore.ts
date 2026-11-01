@@ -179,6 +179,8 @@ export const useEditStore = create<EditState>()(
       historyIndex: 0,
 
       open: async (item) => {
+        // Refresh draft meta store so grid thumbnails show draft transforms
+        await useDraftMetaStore.getState().refresh();
         let values = defaultEdits;
         let crop = defaultCrop;
         let history = [defaultEdits];
