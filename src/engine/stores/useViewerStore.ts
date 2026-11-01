@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import type { MediaItem } from "../types/media";
 import { useLibraryStore } from "./useLibraryStore";
+import { useSettingsStore } from "./useSettingsStore";
 
 interface ViewerState {
   // State
@@ -20,6 +21,7 @@ interface ViewerState {
   zoomOut: () => void;
   resetZoom: () => void;
   toggleFitMode: () => void;
+  setFitMode: (mode: "fit" | "actual" | "fill") => void;
   setRotation: (deg: number) => void;
   rotate: (delta: number) => void;
   toggleFlip: () => void;
@@ -44,10 +46,14 @@ export const useViewerStore = create<ViewerState>()(
           // Opening the viewer moves inspection only - the user's
           // multi-selection must survive a trip through the viewer.
           useLibraryStore.getState().inspectItem(targetId);
+          // Honor the viewer_zoom_behavior setting on open; fall back to "fit".
+          const stored = useSettingsStore.getState().viewerZoomBehavior;
+          const fitMode =
+            stored === "last" ? get().fitMode : (stored as "fit" | "actual" | "fill");
           set({
             isOpen: true,
             zoom: 100,
-            fitMode: "fit",
+            fitMode,
             rotation: 0,
             flipX: false,
           });
@@ -88,6 +94,7 @@ export const useViewerStore = create<ViewerState>()(
                 : "fit",
           zoom: 100,
         })),
+      setFitMode: (mode) => set({ fitMode: mode }),
 
       setRotation: (deg) => set({ rotation: ((deg % 360) + 360) % 360 }),
 

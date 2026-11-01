@@ -130,6 +130,7 @@ function LibraryScreen(props: LibraryScreenProps) {
   const draftTransforms = useDraftTransforms();
   const thumbnailSize = useThumbnailSize();
   const settingsStore = useSettingsStore();
+  const showExtensions = settingsStore.showExtensions;
   // The grid can request a cached JPEG instead of decoding the original. Use
   // roughly 2x the CSS tile width so retina displays stay sharp; the details
   // preview is only 42-52 px, so a 128 px thumbnail is plenty there.
@@ -1416,10 +1417,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                             </span>
                           ) : null}
                         </span>
-                        <span
-                          className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
-                        >
-                          <b>{masked(item) ? "Hidden item" : item.name}</b>
+                          <span
+                            className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
+                          >
+                            <b>
+                              {masked(item)
+                                ? "Hidden item"
+                                : item.name +
+                                  (showExtensions ? `.${item.extension}` : "")}
+                            </b>
                           <small className="tile-date">
                             {new Date(captureDate(item)).toLocaleDateString()}
                           </small>
@@ -1569,7 +1575,12 @@ function LibraryScreen(props: LibraryScreenProps) {
                                     <span
                                       className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
                                     >
-                                      <b>{item.name}</b>
+                                      <b>
+                                        {item.name +
+                                          (showExtensions
+                                            ? `.${item.extension}`
+                                            : "")}
+                                      </b>
                                       <small className="tile-date">
                                         {new Date(
                                           captureDate(item),
@@ -1680,7 +1691,10 @@ function LibraryScreen(props: LibraryScreenProps) {
                       <span
                         className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
                       >
-                        <b>{item.name}</b>
+                        <b>
+                          {item.name +
+                            (showExtensions ? `.${item.extension}` : "")}
+                        </b>
                         <small className="tile-date">
                           {new Date(captureDate(item)).toLocaleDateString()}
                         </small>

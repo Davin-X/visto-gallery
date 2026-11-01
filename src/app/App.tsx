@@ -285,6 +285,8 @@ function searchShortcutLabel(): string {
 function App() {
   const [screen, setScreen] = useState<Screen>("Library");
   const [screenHistory, setScreenHistory] = useState<Screen[]>([]);
+  const [lastFolder, setLastFolder] = useState<string | null>(null);
+  const [lastScreen, setLastScreen] = useState<Screen | null>(null);
 
   const goBack = () => {
     setScreenHistory((prev) => {
@@ -306,6 +308,7 @@ function App() {
   const accentColor = useSettingsStore((s) => s.accentColor);
   const [accentPickerOpen, setAccentPickerOpen] = useState(false);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
+  const animateTransitions = useSettingsStore((s) => s.animateTransitions);
   // Resolved appearance: the user's choice, or the OS setting when "system".
   const dark = appearance === "dark" || (appearance === "system" && systemDark);
   const [albumDialogOpen, setAlbumDialogOpen] = useState(false);
@@ -1084,6 +1087,45 @@ function App() {
     };
   }, [dark, appearance, accentColor, systemDark]);
 
+  // Honor the startup_view setting once settings are hydrated: open to the
+  // Library, the last screen/folder, or start a slideshow.
+  const startupView = useSettingsStore((s) => s.startupView);
+  const openLastFolder = useSettingsStore((s) => s.openLastFolder);
+  useEffect(() => {
+    if (!settingsHydrated) return;
+    if (startupView === "slideshow") {
+      // Slideshow needs items; open Library first so the user can pick one.
+      setScreen("Library");
+      return;
+    }
+    if (startupView === "last" && openLastFolder && lastScreen === "Albums" && lastFolder) {
+      library.setActiveAlbum(lastFolder);
+      library.setFilter("All");
+      library.setQuery("");
+      library.loadAlbumItems(lastFolder);
+      setScreen("Library");
+      return;
+    }
+    if (startupView === "last" && lastScreen) {
+      setScreen(lastScreen);
+      return;
+    }
+    // Default: Library.
+    setScreen("Library");
+  }, [settingsHydrated, startupView, openLastFolder, lastScreen, lastFolder, library]);
+
+  // Track the last screen and folder the user visited so startup_view="last"
+  // can restore them on the next launch.
+  useEffect(() => {
+    if (screen !== "Library" && screen !== "Hidden") {
+      setLastScreen(screen);
+    }
+    if (library.activeAlbum) {
+      setLastFolder(library.activeAlbum);
+      setLastScreen("Albums");
+    }
+  }, [screen, library.activeAlbum]);
+
   const showNotice = useCallback(
     (text: string) => {
       library.showNotice(text);
@@ -1121,6 +1163,20 @@ function App() {
     },
     [showNotice],
   );
+
+  // Warn when the library is very large and show_native_limit_warnings is on.
+  const showNativeWarnings = useSettingsStore((s) => s.showNativeLimitWarnings);
+  useEffect(() => {
+    if (!showNativeWarnings) return;
+    const total =
+      libraryStats.photos + libraryStats.videos + libraryStats.raws +
+      libraryStats.uncategorized;
+    if (total > 10000) {
+      showNotice(
+        `Large library (${total.toLocaleString()} items) — thumbnail generation and scrolling may be slower on this system.`,
+      );
+    }
+  }, [showNativeWarnings, libraryStats.photos, libraryStats.videos, libraryStats.raws, libraryStats.uncategorized, showNotice]);
 
   // Single entry point for "open this item in the player". Used by tiles, the
   // inspector and by Play on a video-only selection.
@@ -1900,7 +1956,7 @@ function App() {
   return (
     <ErrorBoundary>
       <div
-        className={`app-frame ${dark ? "dark" : ""}`}
+        className={`app-frame ${dark ? "dark" : ""}${!animateTransitions ? " no-transitions" : ""}`}
         style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
       >
       <a className="skip-to-content" href="#main-content">
