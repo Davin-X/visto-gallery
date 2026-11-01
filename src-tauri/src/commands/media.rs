@@ -284,6 +284,23 @@ fn dms_to_decimal(field: &exif::Field) -> Option<f64> {
     Some(deg + min / 60.0 + sec / 3600.0)
 }
 
+/// Compute the SHA-256 digest of a file's contents as a hex string.
+/// Used during backfill to populate `sha256` for items that lack it.
+pub(crate) fn compute_sha256(path: &std::path::Path) -> Option<String> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
+    let mut buf = [0u8; 1024 * 1024]; // 1 MiB buffer
+    loop {
+        let n = file.read(&mut buf).ok()?;
+        if n == 0 {
+            break;
+        }
+        ctx.update(&buf[..n]);
+    }
+    Some(hex::encode(ctx.finish()))
+}
+
 #[tauri::command]
 pub async fn read_exif(path: String, state: State<'_, AppState>) -> Result<ExifData, String> {
     let db = super::get_db(&state)?;
@@ -897,7 +914,7 @@ pub(crate) fn write_jpeg_with_exif(
 
 #[cfg(test)]
 mod exif_tests {
-    use super::{read_exif_bytes, write_jpeg_with_exif};
+    use super::{compute_sha256, read_exif_bytes, write_jpeg_with_exif};
     use image::ImageEncoder;
     use image::RgbImage;
     use std::io::Cursor;
@@ -980,13 +997,42 @@ mod exif_tests {
         assert_eq!(app1, 1, "APP1 (EXIF) must appear exactly once");
         let _ = std::fs::remove_file(&path);
     }
+
+    #[test]
+    fn compute_sha256_produces_deterministic_hex() {
+        let path =
+            std::env::temp_dir().join(format!("visto-sha256-test-{}.bin", uuid::Uuid::new_v4()));
+        let contents = b"hello world";
+        std::fs::write(&path, contents).unwrap();
+
+        let hash = compute_sha256(&path).expect("sha256 should be computed");
+        let expected = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
+        assert_eq!(hash, expected);
+
+        // Same file → same hash.
+        let hash2 = compute_sha256(&path).expect("sha256 should be computed");
+        assert_eq!(hash, hash2);
+
+        // Different content → different hash.
+        std::fs::write(&path, b"goodbye world").unwrap();
+        let hash3 = compute_sha256(&path).expect("sha256 should be computed");
+        assert_ne!(hash, hash3);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn compute_sha256_returns_none_for_missing_file() {
+        let path = std::path::Path::new("/tmp/does-not-exist-xyz123.bin");
+        assert!(compute_sha256(path).is_none());
+    }
 }
 
 #[tauri::command]
 pub async fn backfill_metadata(state: State<'_, AppState>) -> Result<i64, String> {
     let db = super::get_db(&state)?;
     let rows: Vec<(String, String)> = sqlx::query_as(
-        "SELECT id, path FROM media_items WHERE captured_at IS NULL OR camera IS NULL",
+        "SELECT id, path FROM media_items WHERE captured_at IS NULL OR camera IS NULL OR sha256 IS NULL",
     )
     .fetch_all(&db)
     .await
@@ -995,14 +1041,23 @@ pub async fn backfill_metadata(state: State<'_, AppState>) -> Result<i64, String
     let mut updated = 0i64;
     for (id, path) in rows {
         let path_buf = std::path::PathBuf::from(&path);
-        let exif = tokio::task::spawn_blocking(move || extract_exif(&path_buf))
+        let exif_path = path_buf.clone();
+        let exif = tokio::task::spawn_blocking(move || extract_exif(&exif_path))
             .await
             .map_err(|e| e.to_string())?;
         if exif.metadata_error.is_some() && exif.captured_at.is_none() && exif.camera.is_none() {
             continue;
         }
+        // Compute SHA-256 only when it's missing; skip if file is unreadable.
+        let sha256 = if path_buf.exists() {
+            tokio::task::spawn_blocking(move || compute_sha256(&path_buf))
+                .await
+                .map_err(|e| e.to_string())?
+        } else {
+            None
+        };
         sqlx::query(
-            "UPDATE media_items SET captured_at = COALESCE(?, captured_at), camera = COALESCE(?, camera), lens = COALESCE(?, lens), exposure = COALESCE(?, exposure), iso = COALESCE(?, iso), latitude = COALESCE(?, latitude), longitude = COALESCE(?, longitude), updated_at = ? WHERE id = ?",
+            "UPDATE media_items SET captured_at = COALESCE(?, captured_at), camera = COALESCE(?, camera), lens = COALESCE(?, lens), exposure = COALESCE(?, exposure), iso = COALESCE(?, iso), latitude = COALESCE(?, latitude), longitude = COALESCE(?, longitude), sha256 = COALESCE(?, sha256), updated_at = ? WHERE id = ?",
         )
         .bind(exif.captured_at)
         .bind(&exif.camera)
@@ -1011,6 +1066,7 @@ pub async fn backfill_metadata(state: State<'_, AppState>) -> Result<i64, String
         .bind(exif.iso)
         .bind(exif.latitude)
         .bind(exif.longitude)
+        .bind(&sha256)
         .bind(super::now_ms())
         .bind(&id)
         .execute(&db)
