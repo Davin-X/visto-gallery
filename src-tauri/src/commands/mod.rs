@@ -4,6 +4,7 @@ mod duplicates;
 mod library;
 mod media;
 mod settings;
+mod update;
 use crate::{models::*, AppState};
 pub use albums::*;
 use anyhow::Result;
@@ -18,7 +19,6 @@ pub use library::*;
 pub use media::*;
 use notify::Watcher;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 pub use settings::*;
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
 use std::collections::HashSet;
@@ -27,6 +27,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
 use time::OffsetDateTime;
+pub use update::*;
 use uuid::Uuid;
 
 // ===== Request/Response Types =====
@@ -1098,11 +1099,6 @@ pub async fn delete_library_database(state: State<'_, AppState>) -> Result<(), S
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
-}
-
-#[tauri::command]
-pub async fn check_updates() -> Result<serde_json::Value, String> {
-    Ok(json!({ "available": false }))
 }
 
 #[tauri::command]

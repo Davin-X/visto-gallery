@@ -121,7 +121,10 @@ import type {
   EditValues,
   CropRect,
 } from "../engine/types/media";
-import type { LibraryFolder } from "../engine/types/commands";
+import type {
+  LibraryFolder,
+  UpdateCheckResult,
+} from "../engine/types/commands";
 import { SettingsScreen } from "../design/components/SettingsScreen";
 import { SourcesManager } from "../design/components/SourcesManager";
 import { SlideshowOverlay } from "../design/components/SlideshowOverlay";
@@ -363,6 +366,21 @@ function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [aboutOpen]);
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  // The global keydown handler is mounted once, so it reads the dialog state
+  // through a ref rather than a stale closure.
+  const updateDialogOpenRef = useRef(false);
+  useEffect(() => {
+    updateDialogOpenRef.current = updateDialogOpen;
+    if (!updateDialogOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setUpdateDialogOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [updateDialogOpen]);
   useEffect(() => {
     let cancelled = false;
     tauri.app
@@ -770,7 +788,13 @@ function App() {
     importFolder: () => void;
     importFiles: () => void;
     showNotice: (text: string) => void;
-  }>({ importFolder: () => {}, importFiles: () => {}, showNotice: () => {} });
+    checkUpdates: (manual?: boolean) => void;
+  }>({
+    importFolder: () => {},
+    importFiles: () => {},
+    showNotice: () => {},
+    checkUpdates: () => {},
+  });
 
   useEffect(() => {
     folderInputRef.current?.setAttribute("webkitdirectory", "");
@@ -779,6 +803,12 @@ function App() {
     // Opening the saved catalog is cheap; source scans are always user-started.
     liveRef.current.library.loadLibrary();
     liveRef.current.settings.hydrate();
+
+    // Check for a new release once per launch. The backend caches the answer
+    // for 24 hours, so this stays well inside GitHub's unauthenticated limit.
+    const updateTimer = window.setTimeout(() => {
+      handlersRef.current.checkUpdates(false);
+    }, 4000);
 
     // Listen for native menu events (cleaned up on unmount / StrictMode remount).
     let cancelled = false;
@@ -809,7 +839,7 @@ function App() {
       await register("menu-zoom-out", () => liveRef.current.viewer.zoomOut());
       await register("menu-about", () => setAboutOpen(true));
       await register("menu-check-updates", () =>
-        handlersRef.current.showNotice("Check for updates - coming soon"),
+        handlersRef.current.checkUpdates(true),
       );
 
       // Listen for native import progress events from scan/import commands.
@@ -874,7 +904,8 @@ function App() {
         albumPendingDelete ||
         itemPendingDeleteCount > 0 ||
         folderPendingRemove ||
-        sourcesSheetOpen
+        sourcesSheetOpen ||
+        updateDialogOpenRef.current
       )
         return;
 
@@ -1020,6 +1051,7 @@ function App() {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(updateTimer);
       window.removeEventListener("keydown", handleKeyDown);
       unlisteners.forEach((un) => un());
     };
@@ -1060,6 +1092,37 @@ function App() {
       library.showNotice(text);
     },
     [library],
+  );
+
+  const checkForUpdates = useCallback(
+    async (manual = false) => {
+      if (manual) setUpdateChecking(true);
+      try {
+        const result = await tauri.app.checkUpdates(manual);
+        if (!result.available) {
+          if (manual) {
+            showNotice(`You're up to date on v${result.currentVersion}.`);
+          }
+          return;
+        }
+        // Skipping a version silences the launch prompt only; an explicit
+        // menu check should always surface it again.
+        const skipped = localStorage.getItem(
+          `update:skip:${result.latestVersion}`,
+        );
+        if (!manual && skipped === "1") return;
+        setUpdateInfo(result);
+        setAboutOpen(false);
+        setUpdateDialogOpen(true);
+      } catch (error) {
+        if (manual) {
+          showNotice(`Could not check for updates: ${describeError(error)}`);
+        }
+      } finally {
+        if (manual) setUpdateChecking(false);
+      }
+    },
+    [showNotice],
   );
 
   // Single entry point for "open this item in the player". Used by tiles, the
@@ -1830,7 +1893,12 @@ function App() {
     }
   };
 
-  handlersRef.current = { importFolder, importFiles, showNotice };
+  handlersRef.current = {
+    importFolder,
+    importFiles,
+    showNotice,
+    checkUpdates: checkForUpdates,
+  };
 
   return (
     <div
@@ -2140,7 +2208,20 @@ function App() {
               <span className="health-dot" aria-hidden="true" />
               Storage Healthy
             </span>
-            <span className="sidebar-version">v{appVersion || "0.1.1"}</span>
+            <div className="sidebar-version-group">
+              {updateInfo?.available && (
+                <button
+                  type="button"
+                  className="update-badge"
+                  onClick={() => setUpdateDialogOpen(true)}
+                  title={`VistoGallery ${updateInfo.latestVersion} is available`}
+                >
+                  <span className="update-dot" aria-hidden="true" />
+                  Update
+                </button>
+              )}
+              <span className="sidebar-version">v{appVersion || "dev"}</span>
+            </div>
           </div>
         </aside>
 
@@ -2729,6 +2810,81 @@ function App() {
         </div>
       )}
 
+      {updateDialogOpen && updateInfo && (
+        <div
+          className="dialog-backdrop"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setUpdateDialogOpen(false);
+          }}
+        >
+          <div
+            className="album-dialog update-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="update-dialog-title"
+          >
+            <div className="dialog-heading">
+              <div>
+                <p className="eyebrow">UPDATE</p>
+                <h2 id="update-dialog-title">
+                  VistoGallery {updateInfo.latestVersion} is available
+                </h2>
+              </div>
+              <button
+                type="button"
+                className="dialog-close"
+                aria-label="Close"
+                onClick={() => setUpdateDialogOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <p className="dialog-hint">
+              You're running v{updateInfo.currentVersion}. Download the latest
+              build, then drag VistoGallery.app into Applications to replace the
+              old copy.
+            </p>
+            {updateInfo.notes && (
+              <pre className="update-notes">{updateInfo.notes}</pre>
+            )}
+            <div className="dialog-actions">
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={() => {
+                  localStorage.setItem(
+                    `update:skip:${updateInfo.latestVersion}`,
+                    "1",
+                  );
+                  setUpdateDialogOpen(false);
+                }}
+              >
+                Skip this version
+              </button>
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={() => setUpdateDialogOpen(false)}
+              >
+                Later
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  void tauri.app.openExternal(
+                    updateInfo.downloadUrl || updateInfo.releaseUrl,
+                  );
+                }}
+              >
+                Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {aboutOpen && (
         <div
           className="dialog-backdrop"
@@ -2758,11 +2914,24 @@ function App() {
               </button>
             </div>
             <p className="dialog-hint">Native macOS photo gallery.</p>
-            <p className="dialog-hint">Version {appVersion || "0.1.1"}</p>
+            <p className="dialog-hint">Version {appVersion || "dev"}</p>
+            {updateInfo?.available && (
+              <p className="dialog-hint">
+                Version {updateInfo.latestVersion} is available to download.
+              </p>
+            )}
             <div className="dialog-actions">
               <button
                 type="button"
-                className="dialog-button"
+                className="quiet-button"
+                onClick={() => void checkForUpdates(true)}
+                disabled={updateChecking}
+              >
+                {updateChecking ? "Checking…" : "Check for Updates"}
+              </button>
+              <button
+                type="button"
+                className="primary-button"
                 onClick={() => setAboutOpen(false)}
               >
                 Close

@@ -182,6 +182,17 @@ export interface LibraryFolder {
   totalSize: number;
 }
 
+export interface UpdateCheckResult {
+  available: boolean;
+  currentVersion: string;
+  latestVersion: string;
+  notes: string;
+  releaseUrl: string;
+  downloadUrl: string | null;
+  publishedAt: string | null;
+  checkedAt: number;
+}
+
 // Tauri Command Signatures (for type-safe invoke)
 // Using a mapped type for command signatures
 export type TauriCommandSignature = {
@@ -237,6 +248,6 @@ export type TauriCommandSignature = {
 
   // App
   get_version: () => string;
-  check_updates: () => { available: boolean; version: string; notes: string };
+  check_updates: (force?: boolean) => UpdateCheckResult;
   open_external: (url: string) => void;
 };

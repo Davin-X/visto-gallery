@@ -24,6 +24,7 @@ import type {
   CropRect,
   TrashResult,
   TrashError,
+  UpdateCheckResult,
 } from "../types/commands";
 
 // Type-safe command wrappers
@@ -150,11 +151,8 @@ export const tauri = {
   app: {
     getVersion: (): Promise<string> => invoke("get_version"),
 
-    checkUpdates: (): Promise<{
-      available: boolean;
-      version: string;
-      notes: string;
-    }> => invoke("check_updates"),
+    checkUpdates: (force = false): Promise<UpdateCheckResult> =>
+      invoke("check_updates", { force }),
 
     openExternal: (url: string): Promise<void> =>
       invoke("open_external", { url }),

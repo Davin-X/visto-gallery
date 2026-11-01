@@ -32,7 +32,10 @@ function makeItem(
   favorite = false,
   kind: "photo" | "video" = "photo",
 ): MediaItem {
-  const now = Date.now();
+  // Fixed timestamp keeps sort order deterministic across runs; Date.now()
+  // resolution differs per call and made the default (desc by capturedAt)
+  // ordering flaky.
+  const now = 1_700_000_000_000;
   return {
     id,
     path: `/tmp/${name}`,
