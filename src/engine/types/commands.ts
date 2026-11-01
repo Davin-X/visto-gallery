@@ -53,7 +53,7 @@ export interface ThumbnailRequest {
 
 export interface ThumbnailResponse {
   itemId: string;
-  dataUrl: string; // base64 data URL
+  path: string; // cache file path; convert with convertFileSrc
   width: number;
   height: number;
 }

@@ -1,22 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
-import { tauri } from "../../engine/commands/tauri";
+import { tauri, thumbnailToDataUrl } from "../../engine/commands/tauri";
 
 // Shared, size-aware thumbnail cache. Both the editor picker and the library
 // grid used to request multi-megabyte originals; cached JPEGs make scrolling a
 // large library cheap. Keys include the size because the backend caches each
 // rendering separately.
-const thumbnailCache = new Map<
-  string,
-  { dataUrl: string; byteLength: number }
->();
+const thumbnailCache = new Map<string, string>();
 const thumbnailRequests = new Map<string, Promise<string>>();
 const thumbnailQueue: Array<() => void> = [];
-// Byte budget: 20 MiB ≈ 256 * 80 KB (1024px JPEG). Evict by bytes, not count.
-const THUMBNAIL_CACHE_LIMIT_BYTES = 20 * 1024 * 1024;
+const THUMBNAIL_CACHE_LIMIT_ENTRIES = 512;
 const MAX_CONCURRENT_THUMBNAIL_REQUESTS = 6;
 type CachedThumbnailSize = 64 | 128 | 256 | 512 | 1024;
 let activeThumbnailRequests = 0;
-let thumbnailCacheBytes = 0;
 
 function loadThumbnail(
   itemId: string,
@@ -28,7 +23,7 @@ function loadThumbnail(
     // Refresh insertion order so the least recently used entry is evicted first.
     thumbnailCache.delete(key);
     thumbnailCache.set(key, cached);
-    return Promise.resolve(cached.dataUrl);
+    return Promise.resolve(cached);
   }
   const inFlight = thumbnailRequests.get(key);
   if (inFlight) return inFlight;
@@ -39,24 +34,15 @@ function loadThumbnail(
       void tauri.library
         .getThumbnail({ itemId, size })
         .then((response: any) => {
-          const byteLength = response.dataUrl.length; // base64 length ≈ 4/3 * bytes
-          thumbnailCache.set(key, { dataUrl: response.dataUrl, byteLength });
-          thumbnailCacheBytes += byteLength;
-          // Evict by bytes, not count
-          while (
-            thumbnailCacheBytes > THUMBNAIL_CACHE_LIMIT_BYTES &&
-            thumbnailCache.size > 0
-          ) {
+          const url = thumbnailToDataUrl(response);
+          thumbnailCache.set(key, url);
+          // Evict by count (LRU).
+          while (thumbnailCache.size > THUMBNAIL_CACHE_LIMIT_ENTRIES) {
             const oldestKey = thumbnailCache.keys().next().value;
-            if (oldestKey) {
-              const oldest = thumbnailCache.get(oldestKey);
-              if (oldest) thumbnailCacheBytes -= oldest.byteLength;
-              thumbnailCache.delete(oldestKey);
-            } else {
-              break;
-            }
+            if (oldestKey) thumbnailCache.delete(oldestKey);
+            else break;
           }
-          resolve(response.dataUrl);
+          resolve(url);
         })
         .catch(reject)
         .finally(() => {

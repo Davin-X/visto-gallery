@@ -471,7 +471,7 @@ pub struct ThumbnailRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ThumbnailResponse {
     item_id: String,
-    data_url: String,
+    path: String,
     width: u32,
     height: u32,
 }
@@ -523,7 +523,7 @@ pub async fn get_item_thumbnail(
     } else {
         None
     };
-    let (bytes, width, height) = if let Some(cached) = cached {
+    let (_bytes, width, height) = if let Some(cached) = cached {
         cached
     } else {
         let _ = tokio::fs::remove_file(&cache_path).await;
@@ -542,7 +542,7 @@ pub async fn get_item_thumbnail(
 
     Ok(ThumbnailResponse {
         item_id: request.item_id,
-        data_url: format!("data:image/jpeg;base64,{}", BASE64.encode(bytes)),
+        path: cache_path.to_string_lossy().into_owned(),
         width,
         height,
     })
