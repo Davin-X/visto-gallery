@@ -1077,13 +1077,12 @@ pub async fn apply_item_tags(
             continue;
         }
 
-        let existing: Option<String> = sqlx::query_scalar(
-            "SELECT id FROM tags WHERE name = ? COLLATE NOCASE",
-        )
-        .bind(trimmed)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
+        let existing: Option<String> =
+            sqlx::query_scalar("SELECT id FROM tags WHERE name = ? COLLATE NOCASE")
+                .bind(trimmed)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
 
         let tag_id = match existing {
             Some(id) => id,
@@ -1164,20 +1163,43 @@ mod tag_tests {
     async fn shared_tag_keeps_one_canonical_row() {
         let db = tag_db().await;
         sqlx::query("INSERT INTO media_items (id, path, name) VALUES (?, ?, ?)")
-            .bind("a").bind("/tmp/a.jpg").bind("a.jpg")
-            .execute(&db).await.unwrap();
+            .bind("a")
+            .bind("/tmp/a.jpg")
+            .bind("a.jpg")
+            .execute(&db)
+            .await
+            .unwrap();
         sqlx::query("INSERT INTO media_items (id, path, name) VALUES (?, ?, ?)")
-            .bind("b").bind("/tmp/b.jpg").bind("b.jpg")
-            .execute(&db).await.unwrap();
+            .bind("b")
+            .bind("/tmp/b.jpg")
+            .bind("b.jpg")
+            .execute(&db)
+            .await
+            .unwrap();
 
-        apply_item_tags(&db, "a", &["Travel".to_string()]).await.expect("apply to a");
-        apply_item_tags(&db, "b", &["Travel".to_string()]).await.expect("apply to b");
+        apply_item_tags(&db, "a", &["Travel".to_string()])
+            .await
+            .expect("apply to a");
+        apply_item_tags(&db, "b", &["Travel".to_string()])
+            .await
+            .expect("apply to b");
 
-        let tag_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tags").fetch_one(&db).await.unwrap();
+        let tag_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tags")
+            .fetch_one(&db)
+            .await
+            .unwrap();
         assert_eq!(tag_count, 1, "shared tag should not duplicate");
 
-        let a_tags: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = 'a'").fetch_one(&db).await.unwrap();
-        let b_tags: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = 'b'").fetch_one(&db).await.unwrap();
+        let a_tags: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = 'a'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        let b_tags: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = 'b'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
         assert_eq!(a_tags, 1);
         assert_eq!(b_tags, 1);
     }
@@ -1186,16 +1208,32 @@ mod tag_tests {
     async fn applying_existing_tag_to_second_item_succeeds() {
         let db = tag_db().await;
         sqlx::query("INSERT INTO media_items (id, path, name) VALUES (?, ?, ?)")
-            .bind("a").bind("/tmp/a.jpg").bind("a.jpg")
-            .execute(&db).await.unwrap();
+            .bind("a")
+            .bind("/tmp/a.jpg")
+            .bind("a.jpg")
+            .execute(&db)
+            .await
+            .unwrap();
         sqlx::query("INSERT INTO media_items (id, path, name) VALUES (?, ?, ?)")
-            .bind("b").bind("/tmp/b.jpg").bind("b.jpg")
-            .execute(&db).await.unwrap();
+            .bind("b")
+            .bind("/tmp/b.jpg")
+            .bind("b.jpg")
+            .execute(&db)
+            .await
+            .unwrap();
 
-        apply_item_tags(&db, "a", &["Travel".to_string(), "2024".to_string()]).await.unwrap();
-        apply_item_tags(&db, "b", &["Travel".to_string()]).await.expect("existing tag on second item must succeed");
+        apply_item_tags(&db, "a", &["Travel".to_string(), "2024".to_string()])
+            .await
+            .unwrap();
+        apply_item_tags(&db, "b", &["Travel".to_string()])
+            .await
+            .expect("existing tag on second item must succeed");
 
-        let a_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = 'a'").fetch_one(&db).await.unwrap();
+        let a_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = 'a'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
         assert_eq!(a_count, 2, "item a must keep both tags");
     }
 
@@ -1203,14 +1241,27 @@ mod tag_tests {
     async fn case_insensitive_dedup() {
         let db = tag_db().await;
         sqlx::query("INSERT INTO media_items (id, path, name) VALUES (?, ?, ?)")
-            .bind("a").bind("/tmp/a.jpg").bind("a.jpg")
-            .execute(&db).await.unwrap();
+            .bind("a")
+            .bind("/tmp/a.jpg")
+            .bind("a.jpg")
+            .execute(&db)
+            .await
+            .unwrap();
 
-        apply_item_tags(&db, "a", &["Travel".to_string(), "travel".to_string()]).await.unwrap();
+        apply_item_tags(&db, "a", &["Travel".to_string(), "travel".to_string()])
+            .await
+            .unwrap();
 
-        let tag_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tags").fetch_one(&db).await.unwrap();
+        let tag_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tags")
+            .fetch_one(&db)
+            .await
+            .unwrap();
         assert_eq!(tag_count, 1);
-        let join_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = 'a'").fetch_one(&db).await.unwrap();
+        let join_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = 'a'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
         assert_eq!(join_count, 1);
     }
 
@@ -1218,15 +1269,24 @@ mod tag_tests {
     async fn failed_transaction_leaves_previous_tags_intact() {
         let db = tag_db().await;
         sqlx::query("INSERT INTO media_items (id, path, name) VALUES (?, ?, ?)")
-            .bind("a").bind("/tmp/a.jpg").bind("a.jpg")
-            .execute(&db).await.unwrap();
+            .bind("a")
+            .bind("/tmp/a.jpg")
+            .bind("a.jpg")
+            .execute(&db)
+            .await
+            .unwrap();
 
-        apply_item_tags(&db, "a", &["Keep".to_string()]).await.unwrap();
+        apply_item_tags(&db, "a", &["Keep".to_string()])
+            .await
+            .unwrap();
 
         let result = apply_item_tags(&db, "ghost", &["New".to_string()]).await;
         assert!(result.is_err(), "applying tags to a missing item must fail");
 
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = 'a'").fetch_one(&db).await.unwrap();
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = 'a'")
+            .fetch_one(&db)
+            .await
+            .unwrap();
         assert_eq!(count, 1, "original item's tags must survive the failed tx");
     }
 }

@@ -402,9 +402,8 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
                 .unwrap_or("bak")
         ));
         if !backup_path.exists() {
-            std::fs::copy(&source_path, &backup_path).map_err(|e| {
-                format!("Could not create backup of original: {}", e)
-            })?;
+            std::fs::copy(&source_path, &backup_path)
+                .map_err(|e| format!("Could not create backup of original: {}", e))?;
         }
 
         // Write to temp
@@ -623,7 +622,7 @@ pub(crate) fn read_exif_bytes(path: &PathBuf) -> Option<Vec<u8>> {
 
         if marker == 0xE1 {
             let payload_start = j + 3; // skip marker(1) + length(2)
-            // payload_start..seg_end is the APP1 payload; require Exif\0\0.
+                                       // payload_start..seg_end is the APP1 payload; require Exif\0\0.
             if payload_start + 6 <= seg_end
                 && buffer[payload_start..payload_start + 4] == *b"Exif"
                 && buffer[payload_start + 4] == 0
@@ -866,7 +865,11 @@ mod exif_tests {
     use std::io::Cursor;
 
     fn temp_path(label: &str) -> std::path::PathBuf {
-        std::env::temp_dir().join(format!("visto-exif-test-{}-{}.jpg", label, uuid::Uuid::new_v4()))
+        std::env::temp_dir().join(format!(
+            "visto-exif-test-{}-{}.jpg",
+            label,
+            uuid::Uuid::new_v4()
+        ))
     }
 
     #[test]
@@ -875,7 +878,8 @@ mod exif_tests {
         let img = RgbImage::new(4, 4);
         let mut buf = Vec::new();
         let enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, 80);
-        enc.write_image(img.as_raw(), 4, 4, image::ExtendedColorType::Rgb8).unwrap();
+        enc.write_image(img.as_raw(), 4, 4, image::ExtendedColorType::Rgb8)
+            .unwrap();
         std::fs::write(&path, &buf).unwrap();
 
         assert!(read_exif_bytes(&path).is_none());

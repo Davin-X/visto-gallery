@@ -406,8 +406,8 @@ fn is_path_under_registered_roots(path: &str, registered: &[String]) -> bool {
         return false;
     };
     registered.iter().any(|root| {
-        let root_canonical = canonical_path(root)
-            .unwrap_or_else(|| std::path::PathBuf::from(normalize_root(root)));
+        let root_canonical =
+            canonical_path(root).unwrap_or_else(|| std::path::PathBuf::from(normalize_root(root)));
         candidate == root_canonical || candidate.starts_with(&root_canonical)
     })
 }
@@ -1187,7 +1187,9 @@ mod path_validation_tests {
         fs::create_dir_all(nested.parent().unwrap()).unwrap();
         fs::write(&nested, b"x").unwrap();
         let registered = vec![root.to_string_lossy().into_owned()];
-        assert!(validate_path_under_registered_roots(nested.to_str().unwrap(), &registered).is_ok());
+        assert!(
+            validate_path_under_registered_roots(nested.to_str().unwrap(), &registered).is_ok()
+        );
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -1199,7 +1201,9 @@ mod path_validation_tests {
         // A `..` segment that escapes the root must be rejected.
         let escape = root.join("..").join(outside.file_name().unwrap());
         let registered = vec![root.to_string_lossy().into_owned()];
-        assert!(validate_path_under_registered_roots(escape.to_str().unwrap(), &registered).is_err());
+        assert!(
+            validate_path_under_registered_roots(escape.to_str().unwrap(), &registered).is_err()
+        );
         let _ = fs::remove_dir_all(&root);
         let _ = fs::remove_file(&outside);
     }
