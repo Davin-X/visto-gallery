@@ -1,16 +1,45 @@
 use crate::{models::*, AppState};
+use sqlx::sqlite::Sqlite;
+use sqlx::QueryBuilder;
+use std::collections::HashMap;
 use tauri::State;
 
 #[tauri::command]
 pub async fn get_albums(state: State<'_, AppState>) -> Result<Vec<Album>, String> {
     let db = super::get_db(&state)?;
-    let albums = sqlx::query_as::<_, Album>(&format!(
+    let mut albums = sqlx::query_as::<_, Album>(&format!(
         "{} ORDER BY a.created_at ASC",
         super::ALBUM_SELECT
     ))
     .fetch_all(&db)
     .await
     .map_err(|e| e.to_string())?;
+
+    // Hydrate item_ids per album from album_items join table.
+    let album_ids: Vec<String> = albums.iter().map(|a| a.id.clone()).collect();
+    if !album_ids.is_empty() {
+        let mut qb = QueryBuilder::<Sqlite>::new(
+            "SELECT album_id, media_id FROM album_items WHERE album_id IN (",
+        );
+        let mut separated = qb.separated(", ");
+        for id in &album_ids {
+            separated.push_bind(id);
+        }
+        separated.push_unseparated(")");
+        let rows = qb
+            .build_query_as::<(String, String)>()
+            .fetch_all(&db)
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut by_album: HashMap<String, Vec<String>> = HashMap::new();
+        for (album_id, media_id) in rows {
+            by_album.entry(album_id).or_default().push(media_id);
+        }
+        for album in &mut albums {
+            album.item_ids = by_album.remove(&album.id).unwrap_or_default();
+        }
+    }
+
     Ok(albums)
 }
 

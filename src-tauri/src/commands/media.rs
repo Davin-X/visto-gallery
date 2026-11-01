@@ -200,7 +200,7 @@ pub(crate) fn extract_exif(path: &std::path::Path) -> ExifData {
     if let Some(field) = exif.get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY) {
         let s = field.display_value().to_string();
         if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(&s, "%Y:%m:%d %H:%M:%S") {
-            data.captured_at = Some(dt.and_utc().timestamp());
+            data.captured_at = Some(dt.and_utc().timestamp_millis());
         }
     }
     let make = exif
@@ -430,7 +430,14 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
 
     // 8. Determine output path
     let output_path = if request.output_format == "in_place" {
-        // In-place: write to temp next to source, then atomic rename
+        // In-place: back up the original, write to temp next to source,
+        // then atomic rename. Fail closed if the backup cannot be made.
+        let backup_path = source_path.with_extension("bak");
+        if source_path.exists() {
+            std::fs::copy(&source_path, &backup_path)
+                .map_err(|e| format!("Failed to create backup before in-place edit: {}", e))?;
+        }
+
         let tmp_path = source_path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
 
         // Write to temp
@@ -445,7 +452,11 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
 
         // Atomic rename
         std::fs::rename(&tmp_path, &source_path).map_err(|e| {
+            // Try to restore from backup on failure
             let _ = std::fs::remove_file(&tmp_path);
+            if backup_path.exists() {
+                let _ = std::fs::rename(&backup_path, &source_path);
+            }
             format!("Failed to replace original: {}", e)
         })?;
 

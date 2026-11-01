@@ -39,7 +39,7 @@ pub struct MediaItem {
     pub album_ids: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Album {
     pub id: String,
@@ -49,6 +49,22 @@ pub struct Album {
     pub updated_at: i64,
     // Not a column on `albums`: every query selects it as a correlated count.
     pub item_count: i64,
+    // Not a column on `albums`: hydrated by get_albums via album_items join.
+    pub item_ids: Vec<String>,
+}
+
+impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for Album {
+    fn from_row(row: &'r sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: row.try_get("id")?,
+            name: row.try_get("name")?,
+            color_index: row.try_get("color_index")?,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
+            item_count: row.try_get("item_count")?,
+            item_ids: Vec::new(),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -157,6 +173,7 @@ impl Album {
             created_at: now,
             updated_at: now,
             item_count: 0,
+            item_ids: Vec::new(),
         }
     }
 }

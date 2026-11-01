@@ -33,7 +33,7 @@ export interface Album {
   name: string;
   colorIndex: number; // 0-3 for dot colors
   itemCount: number;
-  itemIds?: string[];
+  itemIds: string[]; // IDs of items in this album (populated by get_albums)
   createdAt: number;
   updatedAt: number;
 }

@@ -16,8 +16,12 @@ function AlbumsScreen(props: AlbumsScreenProps) {
   const albums = React.useMemo(
     () =>
       (props.albums || []).map((album: any, index: number) => {
+        // Use the backend-provided itemIds (complete catalog) instead of
+        // filtering props.items, which is paginated and would miss items on
+        // non-loaded pages — making albums appear empty.
+        const albumItemIds: string[] = album.itemIds || [];
         const albumItems = (props.items || []).filter(
-          (item: any) => item.albumIds?.includes(album.id) && !item.hidden,
+          (item: any) => albumItemIds.includes(item.id) && !item.hidden,
         );
         // Skip RAW-only files for the cover fan; they have no poster frame.
         const photos = albumItems
@@ -28,9 +32,11 @@ function AlbumsScreen(props: AlbumsScreenProps) {
         return {
           ...album,
           photos,
-          // Count visible membership, not the backend's cached count: an album
-          // can contain hidden items and must not leak them through a badge.
-          count: albumItems.length,
+          albumItems,
+          // Backend itemCount already excludes hidden items
+          // (WHERE m.hidden = 0 in ALBUM_SELECT). Use it directly instead of
+          // re-filtering the paginated props.items, which would under-count.
+          count: Number(album.itemCount),
           color: ["coral", "violet", "blue", "green"][index % 4],
         };
       }),
@@ -87,9 +93,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   <AlbumPhotoStack
                     photos={album.photos}
                     assetUrl={props.assetUrl}
-                    albumItems={(props.items || []).filter(
-                      (i: any) => i.albumIds?.includes(album.id) && !i.hidden,
-                    )}
+                    albumItems={album.albumItems}
                   />
                 ) : (
                   <span className="album-cover-placeholder">
