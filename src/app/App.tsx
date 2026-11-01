@@ -2207,24 +2207,6 @@ function App() {
                     · {formatBytesSimple(libraryStats.totalSize)}
                   </span>
                 </div>
-                {library.folders.length > 0 && (
-                  <div className="library-stats-sources">
-                    <span className="stat-label" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 12, display: "block", marginBottom: 6 }}>
-                      Sources
-                    </span>
-                    {library.folders.map((folder: LibraryFolder) => (
-                      <div key={folder.path} className="stat-row stat-row-source">
-                        <span className="stat-label" title={folder.path}>
-                          {folder.name}
-                        </span>
-                        <span className="stat-value">
-                          {folder.itemCount.toLocaleString()} item{folder.itemCount !== 1 ? "s" : ""}
-                          {folder.totalSize > 0 ? ` · ${formatBytesSimple(folder.totalSize)}` : ""}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           </div>
