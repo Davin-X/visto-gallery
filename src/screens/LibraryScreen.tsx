@@ -1215,10 +1215,9 @@ function LibraryScreen(props: LibraryScreenProps) {
                 </button>
               );
             })}
-          </div>
-
-          <div className="filter-cluster">
-            <span className="smart-label">COLOR</span>
+            <span className="smart-label" style={{ marginLeft: 16 }}>
+              COLOR
+            </span>
             {([
               ["red", "Red"],
               ["yellow", "Yellow"],
@@ -1226,22 +1225,22 @@ function LibraryScreen(props: LibraryScreenProps) {
               ["blue", "Blue"],
               ["purple", "Purple"],
             ] as [string, string][]).map(([color, name]) => {
-                const active = props.colorLabelFilter === color;
-                return (
-                  <button
-                    key={color}
-                    type="button"
-                    className={`quick-filter quick-filter-color quick-filter-color-${color} ${active ? "active" : ""}`}
-                    onClick={() =>
-                      props.onSetColorLabelFilter(active ? null : color)
-                    }
-                    title={`Filter by ${name} label`}
-                  >
-                    <span className="color-dot-small" />
-                    {name}
-                  </button>
-                );
-              })}
+              const active = props.colorLabelFilter === color;
+              return (
+                <button
+                  key={color}
+                  type="button"
+                  className={`quick-filter quick-filter-color quick-filter-color-${color} ${active ? "active" : ""}`}
+                  onClick={() =>
+                    props.onSetColorLabelFilter(active ? null : color)
+                  }
+                  title={`Filter by ${name} label`}
+                >
+                  <span className="color-dot-small" />
+                  {name}
+                </button>
+              );
+            })}
           </div>
 
           {props.selectedIds.length > 0 && (

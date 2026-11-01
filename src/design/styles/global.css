@@ -737,6 +737,13 @@ kbd {
   font-weight: 600;
   color: var(--muted);
 }
+/* Keep rating + color chips separated within the same row */
+.filter-cluster .smart-label {
+  margin-right: 6px;
+}
+.filter-cluster .smart-label + .quick-filter-color {
+  margin-left: 4px;
+}
 .empty-state {
   grid-column: 1/-1;
   display: grid;
