@@ -2395,11 +2395,11 @@ function App() {
               assetUrl={assetUrl}
               onCreateAlbum={openAlbumDialog}
               onAlbumContextMenu={openAlbumMenu}
-              onOpenAlbum={(albumId: string) => {
+              onOpenAlbum={async (albumId: string) => {
                 library.setActiveAlbum(albumId);
                 library.setFilter("All");
                 library.setQuery("");
-                library.loadAlbumItems(albumId);
+                await library.loadAlbumItems(albumId);
                 setScreen("Library");
               }}
             />
