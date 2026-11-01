@@ -1,17 +1,15 @@
 import React, {
-  useState,
-  useMemo,
-  useDeferredValue,
-  useRef,
-  useEffect,
   useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
 import { createPortal } from "react-dom";
 import {
   CropIcon,
   FlipIcon,
   RotateIcon,
-  SearchIcon,
   SparkleIcon,
 } from "../design/components/icons";
 import { BrandMark } from "../design/components/BrandMark";
@@ -21,39 +19,9 @@ import {
   useDraftTransforms,
   useDraftIds,
   clearEditDraft,
-  draftTransformStyle,
 } from "../engine/stores/useEditStore";
-import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import type { MediaItem, EditValues, CropRect } from "../engine/types/media";
-
-function PickerThumbnail({
-  itemId,
-  name,
-  style,
-}: {
-  itemId: string;
-  name: string;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <CachedThumbnail
-      itemId={itemId}
-      name={name}
-      size={256}
-      style={style}
-      showStatus
-      placeholderClassName="edit-picker-thumb"
-    />
-  );
-}
-
-function draftImageStyle(
-  transforms: Map<string, any> | undefined,
-  itemId: string,
-) {
-  const transform = draftTransformStyle(transforms?.get(itemId));
-  return transform ? { transform } : undefined;
-}
+import { draftImageStyle } from "../engine/utils/draftImage";
 
 const initialEdits = {
   exposure: 0,
@@ -77,7 +45,7 @@ interface EditScreenProps {
     height: number;
     aspectRatio?: number | "free";
   };
-  history: any[];
+  history: EditValues[];
   historyIndex: number;
   items: MediaItem[];
   assetUrl: (path: string) => string;
@@ -112,12 +80,8 @@ interface EditScreenProps {
 }
 
 function EditScreen(props: EditScreenProps) {
-  const [pickerQuery, setPickerQuery] = useState("");
-  const deferredPickerQuery = useDeferredValue(pickerQuery);
-  const [pickerLimit, setPickerLimit] = useState(24);
-  const [pickerDraftLimit, setPickerDraftLimit] = useState(12);
-  const [confirmReplace, setConfirmReplace] = useState(false);
   const [showOriginalPreview, setShowOriginalPreview] = useState(false);
+  const [confirmReplace, setConfirmReplace] = useState(false);
   const [draftTrayOpen, setDraftTrayOpen] = useState(false);
   const draftTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [draftPopoverPos, setDraftPopoverPos] = useState<{
@@ -157,19 +121,6 @@ function EditScreen(props: EditScreenProps) {
       ),
     [props.items, draftIds],
   );
-  const pickerItems = useMemo(() => {
-    const query = deferredPickerQuery.trim().toLowerCase();
-    return (props.items || []).filter(
-      (item: any) =>
-        item.kind === "photo" &&
-        !item.hidden &&
-        !draftIds.has(item.id) &&
-        (!query ||
-          String(item.name || "")
-            .toLowerCase()
-            .includes(query)),
-    );
-  }, [props.items, draftIds, deferredPickerQuery]);
   const previewValues = showOriginalPreview ? initialEdits : values;
   const warmth = Number(previewValues.warmth || 0);
   const previewFilter = [
@@ -182,9 +133,6 @@ function EditScreen(props: EditScreenProps) {
   useEffect(() => {
     setShowOriginalPreview(false);
   }, [props.item?.id]);
-  useEffect(() => {
-    setPickerLimit(24);
-  }, [deferredPickerQuery]);
   useEffect(() => {
     if (!drag || !props.item) return;
     const onMove = (e: any) => {
@@ -269,36 +217,39 @@ function EditScreen(props: EditScreenProps) {
       height,
     });
   };
+
   if (!props.item) {
-    const filtered = pickerItems;
-    const browse = async () => {
-      try {
-        const sel = await openFileDialog({
-          multiple: false,
-          filters: [
-            {
-              name: "Images",
-              extensions: [
-                "jpg",
-                "jpeg",
-                "png",
-                "webp",
-                "heic",
-                "heif",
-                "tif",
-                "tiff",
-              ],
-            },
-          ],
-        });
-        if (!sel) return;
-        const path = Array.isArray(sel) ? sel[0] : sel;
-        const name = String(path).split(/[\\/]/).pop() || "photo";
-        props.onOpenEdit?.({ id: path, name, path, kind: "photo" } as any);
-      } catch (e) {
-        props.onNotice?.("Could not open file");
-      }
-    };
+    const draftTiles = savedDraftItems.map((item: any) => (
+      <button
+        key={item.id}
+        type="button"
+        className="edit-picker-tile"
+        style={{ minWidth: 140, width: 140 }}
+        onClick={() => props.onOpenEdit?.(item)}
+      >
+        <CachedThumbnail
+          itemId={item.id}
+          name={item.name}
+          size={256}
+          style={draftImageStyle(draftTransforms, item.id)}
+        />
+        <span>{item.name}</span>
+        <span className="draft-badge">Draft</span>
+        <button
+          className="draft-remove"
+          type="button"
+          aria-label={`Remove draft for ${item.name}`}
+          title="Remove draft"
+          onClick={(e) => {
+            e.stopPropagation();
+            clearEditDraft(item.id);
+            props.onNotice?.("Draft removed");
+          }}
+        >
+          ×
+        </button>
+      </button>
+    ));
     return (
       <div className="edit-page">
         <div className="page-heading">
@@ -306,164 +257,41 @@ function EditScreen(props: EditScreenProps) {
             <p className="eyebrow">NON-DESTRUCTIVE EDITING</p>
             <h1>Select a photo to edit</h1>
             <p className="page-subtitle">
-              Choose a browser-supported photo from your library or browse from
-              disk, then open the editor.
+              Open a photo from the Library to begin editing.
             </p>
           </div>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            marginBottom: 12,
-            alignItems: "center",
-          }}
-        >
-          <button
-            className="quiet-button"
-            type="button"
-            onClick={() => props.onBack?.()}
-          >
-            Back to Library
-          </button>
-          <div className="search-field" style={{ flex: 1 }}>
-            <span className="search-icon">
-              <SearchIcon size={15} />
-            </span>
-            <input
-              value={pickerQuery}
-              onChange={(e) => setPickerQuery(e.target.value)}
-              placeholder="Search photos..."
-              aria-label="Search photos"
-            />
-          </div>
-          <button className="quiet-button" type="button" onClick={browse}>
-            Browse from Finder…
-          </button>
-          {filtered.length > pickerLimit && (
+          <div style={{ marginTop: 20 }}>
             <button
-              className="quiet-button"
+              className="primary-button"
               type="button"
-              onClick={() => setPickerLimit((limit) => limit + 24)}
+              onClick={() => props.onBack?.()}
             >
-              Show 24 more ({filtered.length - pickerLimit})
+              Back to Library
             </button>
-          )}
+          </div>
         </div>
-        {(() => {
-          const drafts = savedDraftItems.slice(0, pickerDraftLimit);
-          const remainingDrafts = Math.max(
-            0,
-            savedDraftItems.length - pickerDraftLimit,
-          );
-          const nextDrafts = Math.min(12, remainingDrafts);
-          if (!drafts.length) return null;
-          return (
-            <div style={{ marginBottom: 16 }}>
-              <h3 style={{ margin: "0 0 8px", color: "var(--text)" }}>
-                Drafts
-              </h3>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  overflowX: "auto",
-                  paddingBottom: 8,
-                  marginBottom: 8,
-                }}
-              >
-                {drafts.map((item: any) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="edit-picker-tile"
-                    style={{ minWidth: 140, width: 140 }}
-                    onClick={() => props.onOpenEdit?.(item)}
-                  >
-                    <PickerThumbnail
-                      itemId={item.id}
-                      name={item.name}
-                      style={draftImageStyle(draftTransforms, item.id)}
-                    />
-                    <span>{item.name}</span>
-                    <span className="draft-badge">Draft</span>
-                    <span
-                      className="draft-remove"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        clearEditDraft(item.id);
-                        props.onNotice?.("Draft removed");
-                      }}
-                      title="Remove draft"
-                    >
-                      ×
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {remainingDrafts > 0 && (
-                <button
-                  className="quiet-button"
-                  type="button"
-                  onClick={() => setPickerDraftLimit((limit) => limit + 12)}
-                >
-                  Show {nextDrafts} more draft{nextDrafts === 1 ? "" : "s"}
-                </button>
-              )}
+        {savedDraftItems.length > 0 && (
+          <div style={{ marginTop: 24, marginLeft: 16 }}>
+            <h3 style={{ margin: "0 0 12px", color: "var(--text)" }}>
+              Saved drafts
+            </h3>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                overflowX: "auto",
+                paddingBottom: 12,
+                marginBottom: 8,
+              }}
+            >
+              {draftTiles}
             </div>
-          );
-        })()}
-        {filtered.length > 0 ? (
-          <>
-            <div className="edit-picker-scroll">
-              <div className="edit-picker-grid">
-                {filtered.slice(0, pickerLimit).map((item: any) => {
-                  const hasDraft = draftIds.has(item.id);
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="edit-picker-tile"
-                      onClick={() => props.onOpenEdit?.(item)}
-                    >
-                      <PickerThumbnail
-                        itemId={item.id}
-                        name={item.name}
-                        style={draftImageStyle(draftTransforms, item.id)}
-                      />
-                      <span>{item.name}</span>
-                      {hasDraft && <span className="draft-badge">Draft</span>}
-                      {hasDraft && (
-                        <span
-                          className="draft-remove"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            clearEditDraft(item.id);
-                            props.onNotice?.("Draft removed");
-                          }}
-                          title="Remove draft"
-                        >
-                          ×
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="viewer-empty-state">
-            <div style={{ marginBottom: 16 }}>
-              <BrandMark size={56} />
-            </div>
-            <h2>No photos found</h2>
-            <p>Import a folder or browse from disk.</p>
           </div>
         )}
       </div>
     );
   }
+
   return (
     <div className="edit-page">
       <div className="page-heading">

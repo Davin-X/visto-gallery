@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { AlbumsIcon, PlusIcon } from "../design/components/icons";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
+import { useLibraryStore } from "../engine/stores/useLibraryStore";
 import type { Album, MediaItem, MediaKind } from "../engine/types/media";
 
 interface AlbumsScreenProps {
@@ -13,34 +14,57 @@ interface AlbumsScreenProps {
 }
 
 function AlbumsScreen(props: AlbumsScreenProps) {
+  const library = useLibraryStore();
+  const loadAlbumItems = library.loadAlbumItems;
+  const albumItemsCache = library.albumItems;
+
+  const [loadedAlbumIds, setLoadedAlbumIds] = React.useState<Set<string>>(
+    new Set(),
+  );
+
+  // Load items for each album that hasn't been loaded yet
+  useEffect(() => {
+    const loadPromises = (props.albums || [])
+      .filter((album: any) => !loadedAlbumIds.has(album.id))
+      .map((album: any) => loadAlbumItems(album.id));
+
+    if (loadPromises.length > 0) {
+      Promise.all(loadPromises).then(() => {
+        setLoadedAlbumIds((prev) => {
+          const next = new Set(prev);
+          (props.albums || []).forEach((a: any) => next.add(a.id));
+          return next;
+        });
+      });
+    }
+  }, [props.albums, loadAlbumItems, loadedAlbumIds]);
+
   const albums = React.useMemo(
     () =>
       (props.albums || []).map((album: any, index: number) => {
-        // Use the backend-provided itemIds (complete catalog) instead of
-        // filtering props.items, which is paginated and would miss items on
-        // non-loaded pages — making albums appear empty.
-        const albumItemIds: string[] = album.itemIds || [];
-        const albumItems = (props.items || []).filter(
-          (item: any) => albumItemIds.includes(item.id) && !item.hidden,
-        );
+        // Use loaded album items from store (complete catalog), not paginated
+        // props.items which would miss items on non-loaded pages.
+        const albumItems: MediaItem[] =
+          albumItemsCache[album.id] ||
+          (props.items || []).filter(
+            (item: any) =>
+              (album.itemIds || []).includes(item.id) && !item.hidden,
+          );
         // Skip RAW-only files for the cover fan; they have no poster frame.
         const photos = albumItems
-          .filter((item: any) => item.kind === "photo" || item.kind === "video")
+          .filter(
+            (item: any) => item.kind === "photo" || item.kind === "video",
+          )
           .slice(0, 3);
-        if (false && photos.length) {
-        }
         return {
           ...album,
           photos,
           albumItems,
-          // Backend itemCount already excludes hidden items
-          // (WHERE m.hidden = 0 in ALBUM_SELECT). Use it directly instead of
-          // re-filtering the paginated props.items, which would under-count.
           count: Number(album.itemCount),
           color: ["coral", "violet", "blue", "green"][index % 4],
         };
       }),
-    [props.albums, props.items],
+    [props.albums, props.items, albumItemsCache, loadedAlbumIds],
   );
 
   return (

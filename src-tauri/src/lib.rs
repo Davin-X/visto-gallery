@@ -155,6 +155,7 @@ pub fn run() {
             import_files,
             get_library_items,
             get_albums,
+            get_album_items,
             get_tags,
             get_item_thumbnail,
             watch_folder,
