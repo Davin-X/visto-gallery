@@ -110,6 +110,11 @@ interface LibraryScreenProps {
   ) => void | Promise<void>;
   onSetHiddenForIds: (ids: string[], hidden: boolean) => void | Promise<void>;
   onSetSelection: (ids: string[]) => void;
+  onSetRatingForIds: (ids: string[], rating: number) => void | Promise<void>;
+  onSetColorLabelForIds: (
+    ids: string[],
+    colorLabel: string,
+  ) => void | Promise<void>;
   onToggleFavorite: (id: string) => void | Promise<void>;
   onToggleHidden: (id: string) => void | Promise<void>;
   onToggleInspector: () => void;
@@ -118,6 +123,10 @@ interface LibraryScreenProps {
   onDeleteItems: (ids: string[]) => void | Promise<void>;
   onUpdateTags: (id: string, tags: string[]) => void | Promise<void>;
   query: string;
+  minRating: number | null;
+  colorLabelFilter: string | null;
+  onSetMinRating: (rating: number | null) => void;
+  onSetColorLabelFilter: (colorLabel: string | null) => void;
   notice: any;
   progress: any;
   searchInputRef: any;
@@ -782,6 +791,28 @@ function LibraryScreen(props: LibraryScreenProps) {
     { divider: true },
     { label: "Favorite", onClick: () => props.onToggleFavorite(item.id) },
     {
+      label: "Rating",
+      submenu: [
+        { label: "Unrate", onClick: () => props.onSetRatingForIds?.([item.id], 0) },
+        { label: "★ 1", onClick: () => props.onSetRatingForIds?.([item.id], 1) },
+        { label: "★ 2", onClick: () => props.onSetRatingForIds?.([item.id], 2) },
+        { label: "★ 3", onClick: () => props.onSetRatingForIds?.([item.id], 3) },
+        { label: "★ 4", onClick: () => props.onSetRatingForIds?.([item.id], 4) },
+        { label: "★ 5", onClick: () => props.onSetRatingForIds?.([item.id], 5) },
+      ],
+    },
+    {
+      label: "Color Label",
+      submenu: [
+        { label: "None", onClick: () => props.onSetColorLabelForIds?.([item.id], "") },
+        { label: "Red", onClick: () => props.onSetColorLabelForIds?.([item.id], "red") },
+        { label: "Yellow", onClick: () => props.onSetColorLabelForIds?.([item.id], "yellow") },
+        { label: "Green", onClick: () => props.onSetColorLabelForIds?.([item.id], "green") },
+        { label: "Blue", onClick: () => props.onSetColorLabelForIds?.([item.id], "blue") },
+        { label: "Purple", onClick: () => props.onSetColorLabelForIds?.([item.id], "purple") },
+      ],
+    },
+    {
       label: item.hidden ? "Unhide" : "Hide",
       onClick: () => props.onToggleHidden(item.id),
     },
@@ -1165,6 +1196,54 @@ function LibraryScreen(props: LibraryScreenProps) {
             )}
           </div>
 
+          <div className="filter-cluster">
+            <span className="smart-label">RATING</span>
+            {["★ 1", "★ 2", "★ 3", "★ 4", "★ 5"].map((label, i) => {
+              const stars = i + 1;
+              const active = props.minRating === stars;
+              return (
+                <button
+                  key={stars}
+                  type="button"
+                  className={`quick-filter ${active ? "active" : ""}`}
+                  onClick={() =>
+                    props.onSetMinRating(active ? null : stars)
+                  }
+                  title={`Show ${stars}+ star${stars > 1 ? "s" : ""}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="filter-cluster">
+            <span className="smart-label">COLOR</span>
+            {([
+              ["red", "Red"],
+              ["yellow", "Yellow"],
+              ["green", "Green"],
+              ["blue", "Blue"],
+              ["purple", "Purple"],
+            ] as [string, string][]).map(([color, name]) => {
+                const active = props.colorLabelFilter === color;
+                return (
+                  <button
+                    key={color}
+                    type="button"
+                    className={`quick-filter quick-filter-color quick-filter-color-${color} ${active ? "active" : ""}`}
+                    onClick={() =>
+                      props.onSetColorLabelFilter(active ? null : color)
+                    }
+                    title={`Filter by ${name} label`}
+                  >
+                    <span className="color-dot-small" />
+                    {name}
+                  </button>
+                );
+              })}
+          </div>
+
           {props.selectedIds.length > 0 && (
             <div
               className="selection-bar"
@@ -1517,7 +1596,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                                       onClick={(e: any) => e.stopPropagation()}
                                     />
                                     <CheckIcon size={12} />
-                                  </div>
+          </div>
                                   <button
                                     type="button"
                                     className="tile-open-button"
@@ -1685,6 +1764,27 @@ function LibraryScreen(props: LibraryScreenProps) {
                         {item.favorite && !masked(item) ? (
                           <span className="tile-favorite" aria-label="Favorite">
                             <HeartIcon size={11} filled />
+                          </span>
+                        ) : null}
+                        {item.colorLabel && !masked(item) ? (
+                          <span
+                            className={`tile-color-label tile-color-${item.colorLabel}`}
+                            aria-label={`Color label: ${item.colorLabel}`}
+                            title={`Color: ${item.colorLabel}`}
+                          >
+                            <span className="color-dot" />
+                          </span>
+                        ) : null}
+                        {item.rating != null && item.rating > 0 && !masked(item) ? (
+                          <span className="tile-rating" aria-label={`Rating: ${item.rating} stars`}>
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <span
+                                key={i}
+                                className={`star ${i < item.rating ? "filled" : ""}`}
+                              >
+                                {"\u2605"}
+                              </span>
+                            ))}
                           </span>
                         ) : null}
                       </span>

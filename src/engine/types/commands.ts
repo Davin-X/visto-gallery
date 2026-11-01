@@ -34,6 +34,8 @@ export interface LibraryFilterDTO {
   dateFrom?: number;
   dateTo?: number;
   sourcePath?: string;
+  rating?: number;
+  colorLabel?: string;
   limit?: number;
   /** Opaque keyset cursor returned by the preceding page. */
   cursor?: string;

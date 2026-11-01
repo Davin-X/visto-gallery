@@ -430,6 +430,13 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
             .push_bind(prefix)
             .push(")");
     }
+    if let Some(rating) = f.rating {
+        qb.push(" AND rating >= ").push_bind(rating);
+    }
+    if let Some(color_label) = &f.color_label {
+        qb.push(" AND color_label = ")
+            .push_bind(color_label.clone());
+    }
 }
 
 async fn get_library_items_page(
