@@ -108,7 +108,7 @@ pub async fn get_album_items(
                m.modified_at, m.captured_at, m.width, m.height, m.camera, m.lens,
                m.exposure, m.iso, m.latitude, m.longitude, m.sha256,
                m.favorite, m.hidden, m.import_session_id,
-               m.created_at, m.updated_at
+               m.created_at, m.updated_at, m.rating, m.color_label
         FROM media_items m
         JOIN album_items ai ON ai.media_id = m.id
         WHERE ai.album_id = ? AND m.hidden = 0
