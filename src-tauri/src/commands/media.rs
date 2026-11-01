@@ -433,21 +433,6 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
         // In-place: write to temp next to source, then atomic rename
         let tmp_path = source_path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
 
-        // Create a single managed backup (never overwrite an existing one) so
-        // repeated edits keep the original pre-edit file. A failed backup must
-        // abort the whole operation instead of silently degrading.
-        let backup_path = source_path.with_extension(format!(
-            "{}.bak",
-            source_path
-                .extension()
-                .and_then(|s| s.to_str())
-                .unwrap_or("bak")
-        ));
-        if !backup_path.exists() {
-            std::fs::copy(&source_path, &backup_path)
-                .map_err(|e| format!("Could not create backup of original: {}", e))?;
-        }
-
         // Write to temp
         write_image(
             &img,
