@@ -229,10 +229,9 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 2px 7px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-2);
+  padding: 0;
+  background: none;
+  border: none;
   color: var(--accent);
   font-size: 10px;
   font-weight: 600;
@@ -241,7 +240,7 @@ body {
 }
 
 .update-badge:hover {
-  border-color: var(--accent);
+  text-decoration: underline;
 }
 
 .update-dot {
