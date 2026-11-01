@@ -219,6 +219,37 @@ function EditScreen(props: EditScreenProps) {
   };
 
   if (!props.item) {
+    const draftTiles = savedDraftItems.map((item: any) => (
+      <button
+        key={item.id}
+        type="button"
+        className="edit-picker-tile"
+        style={{ minWidth: 140, width: 140 }}
+        onClick={() => props.onOpenEdit?.(item)}
+      >
+        <CachedThumbnail
+          itemId={item.id}
+          name={item.name}
+          size={256}
+          style={draftImageStyle(draftTransforms, item.id)}
+        />
+        <span>{item.name}</span>
+        <span className="draft-badge">Draft</span>
+        <button
+          className="draft-remove"
+          type="button"
+          aria-label={`Remove draft for ${item.name}`}
+          title="Remove draft"
+          onClick={(e) => {
+            e.stopPropagation();
+            clearEditDraft(item.id);
+            props.onNotice?.("Draft removed");
+          }}
+        >
+          ×
+        </button>
+      </button>
+    ));
     return (
       <div className="edit-page">
         <div className="page-heading">
@@ -239,6 +270,24 @@ function EditScreen(props: EditScreenProps) {
             Back to Library
           </button>
         </div>
+        {savedDraftItems.length > 0 && (
+          <div style={{ marginTop: 24, marginLeft: 16 }}>
+            <h3 style={{ margin: "0 0 12px", color: "var(--text)" }}>
+              Saved drafts
+            </h3>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                overflowX: "auto",
+                paddingBottom: 12,
+                marginBottom: 8,
+              }}
+            >
+              {draftTiles}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
