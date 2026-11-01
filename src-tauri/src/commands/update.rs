@@ -380,7 +380,9 @@ mod tests {
     #[tokio::test]
     #[ignore = "hits the real GitHub API"]
     async fn fetches_the_real_latest_release() {
-        let result = fetch_latest(0, env!("CARGO_PKG_VERSION")).await.expect("fetch real release");
+        let result = fetch_latest(0, env!("CARGO_PKG_VERSION"))
+            .await
+            .expect("fetch real release");
         assert!(!result.latest_version.is_empty());
         assert!(!result.release_url.is_empty());
         assert_eq!(result.current_version, env!("CARGO_PKG_VERSION"));
