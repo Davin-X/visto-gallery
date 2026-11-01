@@ -123,6 +123,7 @@ import type {
 } from "../engine/types/media";
 import type {
   LibraryFolder,
+  LibraryStats,
   UpdateCheckResult,
 } from "../engine/types/commands";
 import { SettingsScreen } from "../design/components/SettingsScreen";
@@ -440,50 +441,45 @@ function App() {
     library.setLayout,
   ]);
 
-  // Sidebar summary in one pass. The rows used to run a filter + reduce over
-  // the whole library each, i.e. a dozen scans per render, which is costly at
-  // 10k+ items and made every unrelated state change feel slow.
-  const libraryStats = useMemo(() => {
-    const stats = {
-      photos: 0,
-      videos: 0,
-      raws: 0,
-      favorites: 0,
-      hidden: 0,
-      photoSize: 0,
-      videoSize: 0,
-      rawSize: 0,
-      favoriteSize: 0,
-      hiddenSize: 0,
-      totalSize: 0,
+  // Sidebar summary from the catalog (exact counts, not loaded-page counts).
+  const [libraryStats, setLibraryStats] = useState<LibraryStats>({
+    photos: 0,
+    videos: 0,
+    raws: 0,
+    uncategorized: 0,
+    favorites: 0,
+    hidden: 0,
+    photoSize: 0,
+    videoSize: 0,
+    rawSize: 0,
+    uncategorizedSize: 0,
+    favoriteSize: 0,
+    hiddenSize: 0,
+    totalSize: 0,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    tauri.library
+      .getStats()
+      .then((stats) => {
+        if (!cancelled) setLibraryStats(stats);
+      })
+      .catch((e) => {
+        if (import.meta.env.DEV) console.error("get_library_stats failed:", e);
+      });
+
+    let unlisten: (() => void) | null = null;
+    events.onLibraryChanged(() => {
+      tauri.library.getStats().then(setLibraryStats).catch(() => {});
+    }).then((u) => {
+      unlisten = u;
+    });
+    return () => {
+      cancelled = true;
+      if (unlisten) unlisten();
     };
-    for (const item of library.items) {
-      // Hidden items are a separate collection. Keeping them out of the
-      // Photos/Videos/RAW/Favorites rows means the sidebar numbers match the
-      // grid the user is actually looking at.
-      if (item.hidden) {
-        stats.hidden += 1;
-        stats.hiddenSize += item.size;
-        continue;
-      }
-      stats.totalSize += item.size;
-      if (item.favorite) {
-        stats.favorites += 1;
-        stats.favoriteSize += item.size;
-      }
-      if (item.kind === "photo") {
-        stats.photos += 1;
-        stats.photoSize += item.size;
-      } else if (item.kind === "video") {
-        stats.videos += 1;
-        stats.videoSize += item.size;
-      } else if (item.kind === "raw") {
-        stats.raws += 1;
-        stats.rawSize += item.size;
-      }
-    }
-    return stats;
-  }, [library.items]);
+  }, []);
 
   const viewer = useViewerStore();
   const edit = useEditStore();
@@ -2181,6 +2177,16 @@ function App() {
                     </span>
                   </span>
                 </div>
+                <div className="stat-row">
+                  <KindDot kind="photo" />
+                  <span className="stat-label">Uncategorized</span>
+                  <span className="stat-value">
+                    {libraryStats.uncategorized.toLocaleString()}
+                    <span className="stat-size">
+                      · {formatBytesSimple(libraryStats.uncategorizedSize)}
+                    </span>
+                  </span>
+                </div>
                 <div className="stat-row hidden">
                   <KindDot kind="photo" />
                   <span className="stat-label">Hidden</span>
@@ -2194,10 +2200,31 @@ function App() {
                 <div className="stat-row size">
                   <span className="stat-label">Total</span>
                   <span className="stat-value">
-                    {library.totalCount.toLocaleString()}{" "}
+                    {(libraryStats.photos +
+                      libraryStats.videos +
+                      libraryStats.raws +
+                      libraryStats.uncategorized).toLocaleString()}{" "}
                     · {formatBytesSimple(libraryStats.totalSize)}
                   </span>
                 </div>
+                {library.folders.length > 0 && (
+                  <div className="library-stats-sources">
+                    <span className="stat-label" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 12, display: "block", marginBottom: 6 }}>
+                      Sources
+                    </span>
+                    {library.folders.map((folder: LibraryFolder) => (
+                      <div key={folder.path} className="stat-row stat-row-source">
+                        <span className="stat-label" title={folder.path}>
+                          {folder.name}
+                        </span>
+                        <span className="stat-value">
+                          {folder.itemCount.toLocaleString()} item{folder.itemCount !== 1 ? "s" : ""}
+                          {folder.totalSize > 0 ? ` · ${formatBytesSimple(folder.totalSize)}` : ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

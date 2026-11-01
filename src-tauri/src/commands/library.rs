@@ -439,7 +439,7 @@ async fn get_library_items_page(
 
     let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new("SELECT * FROM media_items WHERE 1=1");
     let mut count_qb: QueryBuilder<Sqlite> =
-        QueryBuilder::new("SELECT COUNT(*) FROM media_items WHERE 1=1");
+        QueryBuilder::new("SELECT COUNT(*) FROM media_items WHERE hidden = 0");
     push_library_filters(&mut qb, &f);
     push_library_filters(&mut count_qb, &f);
 
@@ -1088,6 +1088,83 @@ pub async fn get_library_folders(state: State<'_, AppState>) -> Result<Vec<Libra
             .then_with(|| a.path.to_lowercase().cmp(&b.path.to_lowercase()))
     });
     Ok(folders)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryStats {
+    photos: i64,
+    videos: i64,
+    raws: i64,
+    uncategorized: i64,
+    favorites: i64,
+    hidden: i64,
+    photo_size: i64,
+    video_size: i64,
+    raw_size: i64,
+    uncategorized_size: i64,
+    favorite_size: i64,
+    hidden_size: i64,
+    total_size: i64,
+}
+
+#[tauri::command]
+pub async fn get_library_stats(
+    state: State<'_, AppState>,
+) -> Result<LibraryStats, String> {
+    let db = super::get_db(&state)?;
+    let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
+        "SELECT
+            SUM(CASE WHEN kind = 'photo' AND hidden = 0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN kind = 'video' AND hidden = 0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN kind = 'raw' AND hidden = 0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN kind NOT IN ('photo', 'video', 'raw') AND hidden = 0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN favorite = 1 AND hidden = 0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN hidden = 1 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN kind = 'photo' AND hidden = 0 THEN size ELSE 0 END),
+            SUM(CASE WHEN kind = 'video' AND hidden = 0 THEN size ELSE 0 END),
+            SUM(CASE WHEN kind = 'raw' AND hidden = 0 THEN size ELSE 0 END),
+            SUM(CASE WHEN kind NOT IN ('photo', 'video', 'raw') AND hidden = 0 THEN size ELSE 0 END),
+            SUM(CASE WHEN favorite = 1 AND hidden = 0 THEN size ELSE 0 END),
+            SUM(CASE WHEN hidden = 1 THEN size ELSE 0 END)
+        FROM media_items",
+    )
+    .fetch_one(&db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let (
+        photos,
+        videos,
+        raws,
+        uncategorized,
+        favorites,
+        hidden,
+        photo_size,
+        video_size,
+        raw_size,
+        uncategorized_size,
+        favorite_size,
+        hidden_size,
+    ) = row;
+
+    let total_size = photo_size + video_size + raw_size + uncategorized_size;
+
+    Ok(LibraryStats {
+        photos,
+        videos,
+        raws,
+        uncategorized,
+        favorites,
+        hidden,
+        photo_size,
+        video_size,
+        raw_size,
+        uncategorized_size,
+        favorite_size,
+        hidden_size,
+        total_size,
+    })
 }
 
 /// Remove a folder from VistoGallery.

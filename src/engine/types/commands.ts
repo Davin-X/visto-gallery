@@ -205,6 +205,23 @@ export interface UpdateCheckResult {
   checkedAt: number;
 }
 
+/** Exact library statistics computed from the catalog (not from loaded pages). */
+export interface LibraryStats {
+  photos: number;
+  videos: number;
+  raws: number;
+  uncategorized: number;
+  favorites: number;
+  hidden: number;
+  photoSize: number;
+  videoSize: number;
+  rawSize: number;
+  uncategorizedSize: number;
+  favoriteSize: number;
+  hiddenSize: number;
+  totalSize: number;
+}
+
 // Tauri Command Signatures (for type-safe invoke)
 // Using a mapped type for command signatures
 export type TauriCommandSignature = {
@@ -218,6 +235,7 @@ export type TauriCommandSignature = {
   watch_folder: (path: string) => void;
   unwatch_folder: (path: string) => void;
   get_library_folders: () => LibraryFolder[];
+  get_library_stats: () => LibraryStats;
   remove_library_folder: (path: string, deleteFiles?: boolean) => number;
 
   // Items

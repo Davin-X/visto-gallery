@@ -26,6 +26,7 @@ import type {
   TrashResult,
   TrashError,
   UpdateCheckResult,
+  LibraryStats,
 } from "../types/commands";
 
 // Type-safe command wrappers
@@ -52,6 +53,8 @@ export const tauri = {
       invoke("unwatch_folder", { path }),
 
     getFolders: (): Promise<LibraryFolder[]> => invoke("get_library_folders"),
+
+    getStats: (): Promise<LibraryStats> => invoke("get_library_stats"),
 
     removeFolder: (path: string, deleteFiles = false): Promise<number> =>
       invoke("remove_library_folder", { path, deleteFiles }),
