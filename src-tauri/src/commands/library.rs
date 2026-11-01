@@ -656,7 +656,13 @@ pub(crate) fn generate_cached_thumbnail(
     {
         // Use sips for large images on macOS; fall back to image crate for smaller ones
         if source_size > LARGE_THUMBNAIL_SOURCE_BYTES {
-            return generate_with_macos_sips(source, destination, size, quality, "macOS sips (large image)");
+            return generate_with_macos_sips(
+                source,
+                destination,
+                size,
+                quality,
+                "macOS sips (large image)",
+            );
         }
     }
     // Fallback: use image crate (used on non-macOS, and for small images on macOS)
@@ -723,7 +729,16 @@ fn generate_with_macos_sips(
 
     let temporary = destination.with_extension(format!("{}.tmp.jpg", Uuid::new_v4()));
     let output = Command::new("/usr/bin/sips")
-        .args(["-s", "format", "jpeg", "-s", "formatOptions", &quality.to_string(), "-Z", &size.to_string()])
+        .args([
+            "-s",
+            "format",
+            "jpeg",
+            "-s",
+            "formatOptions",
+            &quality.to_string(),
+            "-Z",
+            &size.to_string(),
+        ])
         .arg(source)
         .arg("--out")
         .arg(&temporary)
