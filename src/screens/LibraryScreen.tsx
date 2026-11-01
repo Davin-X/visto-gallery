@@ -844,11 +844,19 @@ function LibraryScreen(props: LibraryScreenProps) {
           {inAlbum ? (
             <div className="album-detail-top">
               <button
-                className="album-breadcrumb"
+                className="quiet-button album-breadcrumb"
                 type="button"
                 onClick={() => props.onOpenAlbums?.()}
+                style={{
+                  fontSize: 15,
+                  fontWeight: 600,
+                  padding: "8px 12px",
+                  gap: 6,
+                  marginRight: 12,
+                }}
               >
-                <AlbumsIcon size={15} /> All albums
+                <span style={{ fontSize: 14 }}>←</span>
+                <AlbumsIcon size={17} /> All albums
               </button>
               <div className="album-detail-heading">
                 <div
