@@ -11,7 +11,11 @@ import type {
   LayoutMode,
   Screen,
 } from "../types/media";
-import type { LibraryFolder, LibraryFilterDTO } from "../types/commands";
+import type {
+  LibraryFolder,
+  LibraryFilterDTO,
+  LibraryItemsPage,
+} from "../types/commands";
 import { tauri } from "../commands/tauri";
 import { formatBytes } from "../commands/tauri";
 
@@ -75,6 +79,10 @@ interface LibraryState {
   // Pagination
   page: number;
   pageSize: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+  /** A background page request; unlike a scan it must not block the UI. */
+  loadingNextPage: boolean;
 
   // Status
   busy: boolean;
@@ -104,6 +112,7 @@ interface LibraryState {
 
   // Actions - Data Loading
   loadLibrary: (filter?: LibraryFilter) => Promise<void>;
+  loadNextPage: () => Promise<void>;
   loadFolders: () => Promise<void>;
   removeFolder: (path: string, deleteFiles?: boolean) => Promise<number>;
   importFolder: () => Promise<void>;
@@ -173,6 +182,28 @@ let sortedSource: MediaItem[] | null = null;
 let sortedBy: LibraryState["sortBy"] | null = null;
 let sortedOrder: LibraryState["sortOrder"] | null = null;
 let sortedCache: MediaItem[] = [];
+let libraryLoadGeneration = 0;
+let queryReloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
+  const kind =
+    state.filter === "Photos"
+      ? "photo"
+      : state.filter === "Videos"
+        ? "video"
+        : state.filter === "RAW"
+          ? "raw"
+          : undefined;
+  return {
+    kind,
+    favorite: state.filter === "Favorites" ? true : undefined,
+    albumId: state.activeAlbum ?? undefined,
+    query: state.query.trim() || undefined,
+    sourcePath: state.activeSource ?? undefined,
+    sortBy: state.sortBy,
+    sortOrder: state.sortOrder,
+  };
+}
 
 export function resetSortedItemsCache(): void {
   sortedSource = null;
@@ -366,7 +397,10 @@ export const useLibraryStore = create<LibraryState>()(
 
       // Pagination
       page: 0,
-      pageSize: 0, // 0 = load all (no pagination)
+      pageSize: 250,
+      hasMore: false,
+      nextCursor: null,
+      loadingNextPage: false,
 
       // Computed (updated via subscribe in components)
       visibleItems: [],
@@ -381,31 +415,23 @@ export const useLibraryStore = create<LibraryState>()(
 
       // Data Loading
       loadLibrary: async (filter) => {
+        const generation = ++libraryLoadGeneration;
         set({
           busy: true,
           progress: { phase: "reading", processed: 0, total: 0 },
+          page: 0,
+          hasMore: false,
+          nextCursor: null,
+          loadingNextPage: false,
         });
         try {
-          const { page, pageSize, sortBy, sortOrder } = get();
-          const usePagination = pageSize > 0;
-          const dto = filter
-            ? {
-                kind: filter.kind,
-                favorite: filter.favorite,
-                hidden: filter.hidden,
-                albumId: filter.albumId,
-                query: filter.query,
-                dateFrom: filter.dateFrom,
-                dateTo: filter.dateTo,
-                sortBy: sortBy as LibraryFilterDTO["sortBy"],
-                sortOrder: sortOrder as LibraryFilterDTO["sortOrder"],
-                limit: usePagination ? pageSize : undefined,
-                offset: usePagination ? page * pageSize : undefined,
-              }
-            : {
-                limit: usePagination ? pageSize : undefined,
-                offset: usePagination ? page * pageSize : undefined,
-              };
+          const state = get();
+          const dto: LibraryFilterDTO = {
+            ...currentLibraryFilter(state),
+            ...(filter || {}),
+            limit: state.pageSize,
+            cursor: undefined,
+          };
 
           const isTauri =
             typeof window !== "undefined" &&
@@ -420,14 +446,30 @@ export const useLibraryStore = create<LibraryState>()(
             return;
           }
 
-          const [items, albums, tags, folders] = await Promise.all([
-            tauri.library.getItems(dto || {}),
+          const [pageResult, albums, tags, folders] = await Promise.all([
+            tauri.library.getItems(dto),
             tauri.albums.get(),
             tauri.albums.getTags(),
             tauri.library.getFolders(),
           ]);
+          if (generation !== libraryLoadGeneration) return;
+          // Supports the old array response in browser fixtures while native
+          // callers use the bounded page contract.
+          const page: LibraryItemsPage = Array.isArray(pageResult)
+            ? { items: pageResult, hasMore: false }
+            : pageResult;
 
-          set({ items, albums, tags, folders, busy: false, progress: null });
+          set({
+            items: page.items,
+            albums,
+            tags,
+            folders,
+            busy: false,
+            progress: null,
+            page: 0,
+            hasMore: page.hasMore,
+            nextCursor: page.nextCursor ?? null,
+          });
           get().refreshDerived();
         } catch (e) {
           if (import.meta.env.DEV) console.error("loadLibrary failed:", e);
@@ -435,6 +477,57 @@ export const useLibraryStore = create<LibraryState>()(
             busy: false,
             progress: null,
             notice: "Failed to load library: " + String(e),
+          });
+        }
+      },
+
+      loadNextPage: async () => {
+        const state = get();
+        if (state.busy || !state.hasMore || !state.nextCursor) return;
+        const cursor = state.nextCursor;
+        const generation = libraryLoadGeneration;
+        // Fetch continuation pages quietly. Marking the whole library busy here
+        // would disable controls and show a misleading cancellable scan toast
+        // every time the user reaches the bottom of the grid.
+        set({ loadingNextPage: true });
+        try {
+          const pageResult = await tauri.library.getItems({
+            ...currentLibraryFilter(get()),
+            limit: state.pageSize,
+            cursor,
+          });
+          if (generation !== libraryLoadGeneration) {
+            // A filter/sort reload superseded this continuation request. Do
+            // not leave the quiet paging guard stuck on if the old request
+            // happens to finish after the replacement load.
+            set({ loadingNextPage: false });
+            return;
+          }
+          const page: LibraryItemsPage = Array.isArray(pageResult)
+            ? { items: pageResult, hasMore: false }
+            : pageResult;
+          set((current) => {
+            const known = new Set(current.items.map((item) => item.id));
+            const additions = page.items.filter((item) => !known.has(item.id));
+            return {
+              items: [...current.items, ...additions],
+              busy: false,
+              progress: null,
+              page: current.page + 1,
+              hasMore: page.hasMore,
+              nextCursor: page.nextCursor ?? null,
+              loadingNextPage: false,
+            };
+          });
+          get().refreshDerived();
+        } catch (error) {
+          if (generation !== libraryLoadGeneration) {
+            set({ loadingNextPage: false });
+            return;
+          }
+          set({
+            loadingNextPage: false,
+            notice: "Failed to load more items: " + String(error),
           });
         }
       },
@@ -604,6 +697,7 @@ export const useLibraryStore = create<LibraryState>()(
           activeAlbum: filter === "Favorites" ? null : get().activeAlbum,
         });
         get().refreshDerived();
+        void get().loadLibrary();
       },
 
       setHiddenFilter: (hiddenFilter) => set({ hiddenFilter }),
@@ -614,11 +708,17 @@ export const useLibraryStore = create<LibraryState>()(
         const next = get().activeSource === path ? null : path;
         set({ activeSource: next, activeAlbum: null });
         get().refreshDerived();
+        void get().loadLibrary();
       },
 
       setQuery: (query) => {
         set({ query });
         get().refreshDerived();
+        if (queryReloadTimer) clearTimeout(queryReloadTimer);
+        queryReloadTimer = setTimeout(() => {
+          queryReloadTimer = null;
+          void get().loadLibrary();
+        }, 180);
       },
 
       setHiddenQuery: (hiddenQuery) => set({ hiddenQuery }),
@@ -628,6 +728,7 @@ export const useLibraryStore = create<LibraryState>()(
       setSort: (sortBy, sortOrder) => {
         set({ sortBy, sortOrder });
         get().refreshDerived();
+        void get().loadLibrary();
       },
 
       setScreen: (screen) => set({ screen }),
@@ -644,6 +745,7 @@ export const useLibraryStore = create<LibraryState>()(
       setActiveAlbum: (albumId) => {
         set({ activeAlbum: albumId, filter: "All", activeSource: null });
         get().refreshDerived();
+        void get().loadLibrary();
       },
 
       // Items

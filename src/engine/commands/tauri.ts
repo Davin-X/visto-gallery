@@ -6,6 +6,7 @@ import type {
   Tag,
   ImportSession,
   LibraryFilterDTO,
+  LibraryItemsPage,
   ThumbnailRequest,
   ThumbnailResponse,
   ExifData,
@@ -38,7 +39,7 @@ export const tauri = {
     importFiles: (paths: string[]): Promise<ScanResult> =>
       invoke("import_files", { paths }),
 
-    getItems: (filter: LibraryFilterDTO): Promise<MediaItem[]> =>
+    getItems: (filter: LibraryFilterDTO): Promise<LibraryItemsPage> =>
       invoke("get_library_items", { filter }),
 
     getThumbnail: (request: ThumbnailRequest): Promise<ThumbnailResponse> =>

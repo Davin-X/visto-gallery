@@ -39,10 +39,19 @@ export interface LibraryFilterDTO {
   tags?: string[];
   dateFrom?: number;
   dateTo?: number;
+  sourcePath?: string;
   limit?: number;
-  offset?: number;
+  /** Opaque keyset cursor returned by the preceding page. */
+  cursor?: string;
   sortBy?: "capturedAt" | "modifiedAt" | "name" | "size" | "kind";
   sortOrder?: "asc" | "desc";
+}
+
+/** A bounded page of library items. `nextCursor` is opaque to the client. */
+export interface LibraryItemsPage {
+  items: MediaItem[];
+  hasMore: boolean;
+  nextCursor?: string;
 }
 
 export interface ThumbnailRequest {

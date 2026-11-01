@@ -1,6 +1,7 @@
 use super::*;
 use crate::{models::*, AppState};
-use serde_json::json;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use sqlx::{QueryBuilder, SqlitePool};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -319,13 +320,51 @@ pub async fn import_files(
     })
 }
 
+const LIBRARY_PAGE_SIZE: i32 = 250;
+const MAX_LIBRARY_PAGE_SIZE: i32 = 500;
+
+#[derive(Debug, Deserialize, Serialize)]
+struct LibraryCursor {
+    value: Value,
+    id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryItemsPage {
+    items: Vec<MediaItem>,
+    has_more: bool,
+    next_cursor: Option<String>,
+}
+
+fn cursor_value(item: &MediaItem, sort_by: &str) -> Value {
+    match sort_by {
+        // SQLite's built-in NOCASE collation is ASCII-only. Preserve the
+        // stored spelling in the cursor rather than applying Rust Unicode
+        // lowercasing, which could otherwise disagree with SQLite's ordering
+        // for non-ASCII filenames (for example, accented characters).
+        "name" => Value::String(item.name.clone()),
+        "size" => Value::from(item.size),
+        "kind" => Value::String(item.kind.clone()),
+        "modifiedAt" => Value::from(item.modified_at),
+        _ => Value::from(item.captured_at.unwrap_or(item.modified_at)),
+    }
+}
+
 #[tauri::command]
 pub async fn get_library_items(
     filter: Option<super::LibraryFilterDTO>,
     state: State<'_, AppState>,
-) -> Result<Vec<MediaItem>, String> {
+) -> Result<LibraryItemsPage, String> {
     let db = super::get_db(&state)?;
     let f = filter.unwrap_or_default();
+    get_library_items_page(&db, f).await
+}
+
+async fn get_library_items_page(
+    db: &SqlitePool,
+    f: super::LibraryFilterDTO,
+) -> Result<LibraryItemsPage, String> {
 
     let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new("SELECT * FROM media_items WHERE 1=1");
 
@@ -361,7 +400,18 @@ pub async fn get_library_items(
         qb.push(" AND (name LIKE ")
             .push_bind(like.clone())
             .push(" OR path LIKE ")
+            .push_bind(like.clone())
+            .push(" OR extension LIKE ")
+            .push_bind(like.clone())
+            .push(" OR kind LIKE ")
+            .push_bind(like.clone())
+            .push(" OR COALESCE(camera, '') LIKE ")
+            .push_bind(like.clone())
+            .push(" OR COALESCE(lens, '') LIKE ")
+            .push_bind(like.clone())
+            .push(" OR EXISTS (SELECT 1 FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.media_id = media_items.id AND t.name LIKE ")
             .push_bind(like)
+            .push(")")
             .push(")");
     }
     if let Some(from) = f.date_from {
@@ -372,16 +422,31 @@ pub async fn get_library_items(
         qb.push(" AND COALESCE(captured_at, modified_at) <= ")
             .push_bind(to);
     }
+    if let Some(source_path) = &f.source_path {
+        let prefix = format!("{}/", source_path.trim_end_matches('/'));
+        qb.push(" AND (path = ")
+            .push_bind(source_path.clone())
+            .push(" OR substr(path, 1, length(")
+            .push_bind(prefix.clone())
+            .push(")) = ")
+            .push_bind(prefix)
+            .push(")");
+    }
 
     // Identifiers cannot be bound, so the sort column is whitelisted instead of
-    // interpolated straight from the caller.
-    // Define default direction per column: dates default DESC, others ASC.
-    let (primary_sql, default_dir) = match f.sort_by.as_deref() {
-        Some("capturedAt") => ("COALESCE(captured_at, modified_at)", "DESC"),
-        Some("modifiedAt") => ("modified_at", "DESC"),
-        Some("name") => ("name COLLATE NOCASE", "ASC"),
-        Some("size") => ("size", "ASC"),
-        Some("kind") => ("kind", "ASC"),
+    // interpolated straight from the caller. `id` is always the stable tie-breaker.
+    let sort_by = match f.sort_by.as_deref() {
+        Some("modifiedAt") => "modifiedAt",
+        Some("name") => "name",
+        Some("size") => "size",
+        Some("kind") => "kind",
+        _ => "capturedAt",
+    };
+    let (primary_sql, default_dir) = match sort_by {
+        "modifiedAt" => ("modified_at", "DESC"),
+        "name" => ("name COLLATE NOCASE", "ASC"),
+        "size" => ("size", "ASC"),
+        "kind" => ("kind", "ASC"),
         _ => ("COALESCE(captured_at, modified_at)", "DESC"),
     };
     let dir = match f.sort_order.as_deref() {
@@ -389,24 +454,105 @@ pub async fn get_library_items(
         Some("desc") => "DESC",
         _ => default_dir,
     };
-    // Stable secondary sort: id ASC
+    if let Some(raw_cursor) = f.cursor.as_deref() {
+        let cursor: LibraryCursor = serde_json::from_str(raw_cursor)
+            .map_err(|_| "Invalid library page cursor".to_string())?;
+        let comparison = if dir == "ASC" { ">" } else { "<" };
+        match sort_by {
+            "name" => {
+                let value = cursor.value.as_str().ok_or("Invalid name cursor")?.to_string();
+                qb.push(" AND (name COLLATE NOCASE ")
+                    .push(comparison)
+                    .push(" ")
+                    .push_bind(value.clone())
+                    .push(" OR (name COLLATE NOCASE = ")
+                    .push_bind(value)
+                    .push(" AND id > ")
+                    .push_bind(cursor.id)
+                    .push("))");
+            }
+            "kind" => {
+                let value = cursor.value.as_str().ok_or("Invalid kind cursor")?.to_string();
+                qb.push(" AND (kind ")
+                    .push(comparison)
+                    .push(" ")
+                    .push_bind(value.clone())
+                    .push(" OR (kind = ")
+                    .push_bind(value)
+                    .push(" AND id > ")
+                    .push_bind(cursor.id)
+                    .push("))");
+            }
+            "size" => {
+                let value = cursor.value.as_i64().ok_or("Invalid size cursor")?;
+                qb.push(" AND (size ")
+                    .push(comparison)
+                    .push(" ")
+                    .push_bind(value)
+                    .push(" OR (size = ")
+                    .push_bind(value)
+                    .push(" AND id > ")
+                    .push_bind(cursor.id)
+                    .push("))");
+            }
+            "modifiedAt" => {
+                let value = cursor.value.as_i64().ok_or("Invalid modified date cursor")?;
+                qb.push(" AND (modified_at ")
+                    .push(comparison)
+                    .push(" ")
+                    .push_bind(value)
+                    .push(" OR (modified_at = ")
+                    .push_bind(value)
+                    .push(" AND id > ")
+                    .push_bind(cursor.id)
+                    .push("))");
+            }
+            _ => {
+                let value = cursor.value.as_i64().ok_or("Invalid capture date cursor")?;
+                qb.push(" AND (COALESCE(captured_at, modified_at) ")
+                    .push(comparison)
+                    .push(" ")
+                    .push_bind(value)
+                    .push(" OR (COALESCE(captured_at, modified_at) = ")
+                    .push_bind(value)
+                    .push(" AND id > ")
+                    .push_bind(cursor.id)
+                    .push("))");
+            }
+        }
+    }
+
+    // Stable secondary sort: id ASC.
     qb.push(format!(" ORDER BY {} {}, id ASC", primary_sql, dir));
 
-    if let Some(limit) = f.limit {
-        qb.push(" LIMIT ").push_bind(limit as i64);
-    }
-    if let Some(offset) = f.offset {
-        qb.push(" OFFSET ").push_bind(offset as i64);
-    }
+    let page_size = f.limit.unwrap_or(LIBRARY_PAGE_SIZE).clamp(1, MAX_LIBRARY_PAGE_SIZE) as usize;
+    // Fetch one extra row solely to determine whether another page exists.
+    qb.push(" LIMIT ").push_bind((page_size + 1) as i64);
 
     let mut items = qb
         .build_query_as::<MediaItem>()
-        .fetch_all(&db)
+        .fetch_all(db)
         .await
         .map_err(|e| e.to_string())?;
 
-    hydrate_relations(&db, &mut items).await?;
-    Ok(items)
+    let has_more = items.len() > page_size;
+    if has_more {
+        items.pop();
+    }
+    let next_cursor = if has_more {
+        items.last().map(|item| {
+            serde_json::to_string(&LibraryCursor {
+                value: cursor_value(item, sort_by),
+                id: item.id.clone(),
+            })
+            .expect("library cursor serialization cannot fail")
+        })
+    } else {
+        None
+    };
+
+    hydrate_relations(db, &mut items).await?;
+    Ok(LibraryItemsPage { items, has_more, next_cursor })
 }
 
 /// Attach tags and album ids to a page of items using filtered queries.
@@ -416,41 +562,36 @@ async fn hydrate_relations(db: &SqlitePool, items: &mut [MediaItem]) -> Result<(
         return Ok(());
     }
 
-    // Collect item IDs for IN clause
-    let ids: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
-    let placeholders = std::iter::repeat_n("?", ids.len())
-        .collect::<Vec<_>>()
-        .join(",");
-
-    // Tags with JOIN to get names
-    let tag_sql = format!(
-        "SELECT mt.media_id, t.name FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.media_id IN ({})",
-        placeholders
-    );
-    let mut tag_query = sqlx::query_as::<_, (String, String)>(&tag_sql);
-    for id in &ids {
-        tag_query = tag_query.bind(*id);
-    }
-    let tag_rows = tag_query.fetch_all(db).await.map_err(|e| e.to_string())?;
-
-    // Album items
-    let album_sql = format!(
-        "SELECT media_id, album_id FROM album_items WHERE media_id IN ({})",
-        placeholders
-    );
-    let mut album_query = sqlx::query_as::<_, (String, String)>(&album_sql);
-    for id in &ids {
-        album_query = album_query.bind(*id);
-    }
-    let album_rows = album_query.fetch_all(db).await.map_err(|e| e.to_string())?;
-
     let mut tags_by_item: HashMap<String, Vec<String>> = HashMap::new();
-    for (media_id, name) in tag_rows {
-        tags_by_item.entry(media_id).or_default().push(name);
-    }
     let mut albums_by_item: HashMap<String, Vec<String>> = HashMap::new();
-    for (media_id, album_id) in album_rows {
-        albums_by_item.entry(media_id).or_default().push(album_id);
+
+    // Keep each `IN` clause comfortably below SQLite's parameter ceiling even
+    // when this helper is reused by a larger server-side page in the future.
+    for ids in items.iter().map(|item| item.id.as_str()).collect::<Vec<_>>().chunks(500) {
+        let placeholders = std::iter::repeat_n("?", ids.len()).collect::<Vec<_>>().join(",");
+        let tag_sql = format!(
+            "SELECT mt.media_id, t.name FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.media_id IN ({})",
+            placeholders
+        );
+        let mut tag_query = sqlx::query_as::<_, (String, String)>(&tag_sql);
+        for id in ids {
+            tag_query = tag_query.bind(*id);
+        }
+        for (media_id, name) in tag_query.fetch_all(db).await.map_err(|e| e.to_string())? {
+            tags_by_item.entry(media_id).or_default().push(name);
+        }
+
+        let album_sql = format!(
+            "SELECT media_id, album_id FROM album_items WHERE media_id IN ({})",
+            placeholders
+        );
+        let mut album_query = sqlx::query_as::<_, (String, String)>(&album_sql);
+        for id in ids {
+            album_query = album_query.bind(*id);
+        }
+        for (media_id, album_id) in album_query.fetch_all(db).await.map_err(|e| e.to_string())? {
+            albums_by_item.entry(media_id).or_default().push(album_id);
+        }
     }
 
     for item in items.iter_mut() {
@@ -1311,5 +1452,106 @@ mod tag_tests {
             .await
             .unwrap();
         assert_eq!(count, 1, "original item's tags must survive the failed tx");
+    }
+}
+
+#[cfg(test)]
+mod pagination_tests {
+    use super::{cursor_value, get_library_items_page, LibraryCursor};
+    use crate::{commands::LibraryFilterDTO, models::MediaItem};
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn page_db() -> sqlx::SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory page database");
+        sqlx::query(
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+        )
+        .execute(&db)
+        .await
+        .expect("create media table");
+        sqlx::query("CREATE TABLE tags (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
+            .execute(&db)
+            .await
+            .expect("create tags table");
+        sqlx::query("CREATE TABLE media_tags (media_id TEXT NOT NULL, tag_id TEXT NOT NULL)")
+            .execute(&db)
+            .await
+            .expect("create media tags table");
+        sqlx::query("CREATE TABLE album_items (media_id TEXT NOT NULL, album_id TEXT NOT NULL)")
+            .execute(&db)
+            .await
+            .expect("create album items table");
+        db
+    }
+
+    #[test]
+    fn cursor_captures_the_active_sort_value_and_stable_item_id() {
+        let mut item = MediaItem::new(
+            "/tmp/Example.JPG".to_string(),
+            "Example.JPG".to_string(),
+            "jpg".to_string(),
+            "photo".to_string(),
+            42,
+            100,
+        );
+        item.id = "stable-id".to_string();
+        item.captured_at = Some(80);
+
+        let cursor = LibraryCursor {
+            value: cursor_value(&item, "capturedAt"),
+            id: item.id.clone(),
+        };
+        let round_trip: LibraryCursor = serde_json::from_str(
+            &serde_json::to_string(&cursor).expect("serialize cursor"),
+        )
+        .expect("parse cursor");
+        assert_eq!(round_trip.value.as_i64(), Some(80));
+        assert_eq!(round_trip.id, "stable-id");
+
+        assert_eq!(cursor_value(&item, "name").as_str(), Some("example.jpg"));
+        assert_eq!(cursor_value(&item, "size").as_i64(), Some(42));
+        assert_eq!(cursor_value(&item, "modifiedAt").as_i64(), Some(100));
+    }
+
+    #[tokio::test]
+    async fn keyset_pages_do_not_skip_equal_sort_values() {
+        let db = page_db().await;
+        for (id, captured_at) in [("c", 30_i64), ("a", 20), ("b", 20)] {
+            sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, created_at, updated_at) VALUES (?, ?, ?, 'jpg', 'photo', 1, 1, ?, 1, 1)")
+                .bind(id)
+                .bind(format!("/tmp/{id}.jpg"))
+                .bind(format!("{id}.jpg"))
+                .bind(captured_at)
+                .execute(&db)
+                .await
+                .expect("insert media row");
+        }
+
+        let first = get_library_items_page(
+            &db,
+            LibraryFilterDTO { limit: Some(2), sort_by: Some("capturedAt".to_string()), ..Default::default() },
+        )
+        .await
+        .expect("read first page");
+        assert_eq!(first.items.iter().map(|item| item.id.as_str()).collect::<Vec<_>>(), ["c", "a"]);
+        assert!(first.has_more);
+
+        let second = get_library_items_page(
+            &db,
+            LibraryFilterDTO {
+                limit: Some(2),
+                sort_by: Some("capturedAt".to_string()),
+                cursor: first.next_cursor,
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("read second page");
+        assert_eq!(second.items.iter().map(|item| item.id.as_str()).collect::<Vec<_>>(), ["b"]);
+        assert!(!second.has_more);
     }
 }
