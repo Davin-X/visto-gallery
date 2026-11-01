@@ -8,7 +8,6 @@ mod update;
 use crate::{models::*, AppState};
 pub use albums::*;
 use anyhow::Result;
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 pub use batch::*;
 pub use duplicates::*;
 use image::codecs::jpeg::JpegEncoder;

@@ -24,7 +24,7 @@ import {
   draftTransformStyle,
 } from "../engine/stores/useEditStore";
 import { useSlideshowStore } from "../engine/stores/useSlideshowStore";
-import { tauri } from "../engine/commands/tauri";
+import { tauri, thumbnailToDataUrl } from "../engine/commands/tauri";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import { formatDuration } from "../engine/utils/time";
 import type { MediaItem, EditValues } from "../engine/types/media";
@@ -420,7 +420,8 @@ function ViewerScreen(props: ViewerScreenProps) {
               void tauri.library
                 .getThumbnail({ itemId: selected.id, size: 1024 })
                 .then((response) => {
-                  if (response?.dataUrl) target.src = response.dataUrl;
+                  if (response?.path)
+                    target.src = thumbnailToDataUrl(response);
                 })
                 .catch(() => {
                   target.dataset.failed = "1";

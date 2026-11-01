@@ -190,9 +190,11 @@ export const events = {
     listen("folder-changed", (e: any) => callback(e.payload)),
 };
 
-// Helper: Build thumbnail data URL from response
+import { convertFileSrc } from "@tauri-apps/api/core";
+
+// Helper: Build thumbnail URL from response
 export function thumbnailToDataUrl(response: ThumbnailResponse): string {
-  return response.dataUrl;
+  return convertFileSrc(response.path);
 }
 
 // Helper: Default edit values
