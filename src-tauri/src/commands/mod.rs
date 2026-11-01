@@ -581,7 +581,7 @@ async fn upsert_media_batch(
     }
 
     let mut query = QueryBuilder::<Sqlite>::new(
-        "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, width, height, camera, lens, exposure, iso, latitude, longitude, created_at, updated_at, favorite, hidden) ",
+        "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, width, height, camera, lens, exposure, iso, latitude, longitude, sha256, created_at, updated_at, favorite, hidden, rating, color_label) ",
     );
     query.push_values(rows, |mut values, (item, width, height)| {
         values
@@ -595,19 +595,22 @@ async fn upsert_media_batch(
             .push_bind(item.captured_at)
             .push_bind(width)
             .push_bind(height)
-            .push_bind(&item.camera)
-            .push_bind(&item.lens)
-            .push_bind(&item.exposure)
+            .push_bind(item.camera)
+            .push_bind(item.lens)
+            .push_bind(item.exposure)
             .push_bind(item.iso)
             .push_bind(item.latitude)
             .push_bind(item.longitude)
+            .push_bind(item.sha256)
             .push_bind(item.created_at)
             .push_bind(item.updated_at)
             .push_bind(0i32)
-            .push_bind(0i32);
+            .push_bind(0i32)
+            .push_bind(item.rating)
+            .push_bind(item.color_label);
     });
     query.push(
-        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), updated_at = excluded.updated_at, sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END",
+        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END, updated_at = excluded.updated_at, favorite = excluded.favorite, hidden = excluded.hidden, rating = COALESCE(excluded.rating, media_items.rating), color_label = COALESCE(excluded.color_label, media_items.color_label)",
     );
     query.build().execute(db).await.map_err(|e| e.to_string())?;
     Ok(())

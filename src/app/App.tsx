@@ -2553,8 +2553,8 @@ function App() {
               items={library.items.filter(
                 (i: any) => i.kind === "photo" && !i.hidden,
               )}
-              onOpenEdit={(item: any) => {
-                edit.saveDraft();
+              onOpenEdit={async (item: any) => {
+                await edit.saveDraft();
                 edit.open(item);
               }}
             />

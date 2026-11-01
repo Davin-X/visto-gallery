@@ -693,7 +693,7 @@ interface EditScreenProps {
   onUndo: () => void;
   onRedo: () => void;
   onClose: () => void;
-  onSaveDraft: () => void;
+  onSaveDraft: () => Promise<void>;
   onBack: () => void;
   onExport: (inPlace?: boolean) => void | Promise<void>;
   onClearDraft: (id: string) => void;

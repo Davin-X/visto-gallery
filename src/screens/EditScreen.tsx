@@ -71,7 +71,7 @@ interface EditScreenProps {
   onUndo: () => void;
   onRedo: () => void;
   onClose: () => void;
-  onSaveDraft: () => void;
+  onSaveDraft: () => Promise<void>;
   onBack: () => void;
   onExport: (inPlace?: boolean) => void | Promise<void>;
   onClearDraft: (id: string) => void;
@@ -341,8 +341,8 @@ function EditScreen(props: EditScreenProps) {
                           <button
                             className="edit-draft-open"
                             type="button"
-                            onClick={() => {
-                              props.onSaveDraft?.();
+                            onClick={async () => {
+                              await props.onSaveDraft?.();
                               props.onOpenEdit?.(item);
                               setDraftTrayOpen(false);
                             }}
@@ -721,7 +721,9 @@ function EditScreen(props: EditScreenProps) {
             <button
               className="quiet-button"
               type="button"
-              onClick={props.onSaveDraft}
+              onClick={async () => {
+                await props.onSaveDraft();
+              }}
             >
               Save draft
             </button>
