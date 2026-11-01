@@ -88,6 +88,7 @@ mod thumbnail_cache_tests {
             &destination,
             32,
             super::LARGE_THUMBNAIL_SOURCE_BYTES,
+            78,
         )
         .expect("sips should create a thumbnail");
 
