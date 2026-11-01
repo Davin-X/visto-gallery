@@ -2194,9 +2194,7 @@ function App() {
                 <div className="stat-row size">
                   <span className="stat-label">Total</span>
                   <span className="stat-value">
-                    {(
-                      library.items.length - library.hiddenCount
-                    ).toLocaleString()}{" "}
+                    {library.totalCount.toLocaleString()}{" "}
                     · {formatBytesSimple(libraryStats.totalSize)}
                   </span>
                 </div>
