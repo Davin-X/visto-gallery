@@ -2202,10 +2202,7 @@ function App() {
                 <div className="stat-row size">
                   <span className="stat-label">Total</span>
                   <span className="stat-value">
-                    {(libraryStats.photos +
-                      libraryStats.videos +
-                      libraryStats.raws +
-                      libraryStats.uncategorized).toLocaleString()}{" "}
+                    {library.totalCount.toLocaleString()}{" "}
                     · {formatBytesSimple(libraryStats.totalSize)}
                   </span>
                 </div>
