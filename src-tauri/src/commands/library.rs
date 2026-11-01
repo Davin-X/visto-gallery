@@ -1052,6 +1052,68 @@ pub async fn toggle_hidden(
     Ok(())
 }
 
+/// Core implementation of `update_item_tags`, extracted so it can be tested
+/// against an in-memory database without a Tauri `State`.
+pub async fn apply_item_tags(
+    db: &SqlitePool,
+    item_id: &str,
+    tags: &[String],
+) -> Result<(), String> {
+    let mut tx = db.begin().await.map_err(|e| e.to_string())?;
+
+    sqlx::query("DELETE FROM media_tags WHERE media_id = ?")
+        .bind(item_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut seen = std::collections::HashSet::new();
+    for tag_name in tags {
+        let trimmed = tag_name.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if !seen.insert(trimmed.to_lowercase()) {
+            continue;
+        }
+
+        let existing: Option<String> = sqlx::query_scalar(
+            "SELECT id FROM tags WHERE name = ? COLLATE NOCASE",
+        )
+        .bind(trimmed)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        let tag_id = match existing {
+            Some(id) => id,
+            None => {
+                let new_id = Uuid::new_v4().to_string();
+                sqlx::query(
+                    "INSERT INTO tags (id, name, color_index, created_at) VALUES (?, ?, 0, ?)",
+                )
+                .bind(&new_id)
+                .bind(trimmed)
+                .bind(super::now_ms())
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| e.to_string())?;
+                new_id
+            }
+        };
+
+        sqlx::query("INSERT OR IGNORE INTO media_tags (media_id, tag_id) VALUES (?, ?)")
+            .bind(item_id)
+            .bind(&tag_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn update_item_tags(
     item_id: String,
@@ -1059,28 +1121,112 @@ pub async fn update_item_tags(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let db = super::get_db(&state)?;
-    sqlx::query("DELETE FROM media_tags WHERE media_id = ?")
-        .bind(&item_id)
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    for tag_name in &tags {
-        let tag_id = Uuid::new_v4().to_string();
-        sqlx::query(
-            "INSERT OR IGNORE INTO tags (id, name, color_index, created_at) VALUES (?, ?, 0, ?)",
-        )
-        .bind(&tag_id)
-        .bind(tag_name)
-        .bind(super::now_ms())
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-        sqlx::query("INSERT INTO media_tags (media_id, tag_id) VALUES (?, ?)")
-            .bind(&item_id)
-            .bind(&tag_id)
+    apply_item_tags(&db, &item_id, &tags).await
+}
+
+#[cfg(test)]
+mod tag_tests {
+    use super::apply_item_tags;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn tag_db() -> sqlx::SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory db");
+        sqlx::query("PRAGMA foreign_keys = ON")
             .execute(&db)
             .await
-            .map_err(|e| e.to_string())?;
+            .expect("enable foreign keys");
+        sqlx::query(
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL)",
+        )
+        .execute(&db)
+        .await
+        .expect("create media_items");
+        sqlx::query(
+            "CREATE TABLE tags (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, color_index INTEGER DEFAULT 0, created_at INTEGER NOT NULL)",
+        )
+        .execute(&db)
+        .await
+        .expect("create tags");
+        sqlx::query(
+            "CREATE TABLE media_tags (media_id TEXT NOT NULL REFERENCES media_items(id) ON DELETE CASCADE, tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE, PRIMARY KEY (media_id, tag_id))",
+        )
+        .execute(&db)
+        .await
+        .expect("create media_tags");
+        db
     }
-    Ok(())
+
+    #[tokio::test]
+    async fn shared_tag_keeps_one_canonical_row() {
+        let db = tag_db().await;
+        sqlx::query("INSERT INTO media_items (id, path, name) VALUES (?, ?, ?)")
+            .bind("a").bind("/tmp/a.jpg").bind("a.jpg")
+            .execute(&db).await.unwrap();
+        sqlx::query("INSERT INTO media_items (id, path, name) VALUES (?, ?, ?)")
+            .bind("b").bind("/tmp/b.jpg").bind("b.jpg")
+            .execute(&db).await.unwrap();
+
+        apply_item_tags(&db, "a", &["Travel".to_string()]).await.expect("apply to a");
+        apply_item_tags(&db, "b", &["Travel".to_string()]).await.expect("apply to b");
+
+        let tag_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tags").fetch_one(&db).await.unwrap();
+        assert_eq!(tag_count, 1, "shared tag should not duplicate");
+
+        let a_tags: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = 'a'").fetch_one(&db).await.unwrap();
+        let b_tags: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = 'b'").fetch_one(&db).await.unwrap();
+        assert_eq!(a_tags, 1);
+        assert_eq!(b_tags, 1);
+    }
+
+    #[tokio::test]
+    async fn applying_existing_tag_to_second_item_succeeds() {
+        let db = tag_db().await;
+        sqlx::query("INSERT INTO media_items (id, path, name) VALUES (?, ?, ?)")
+            .bind("a").bind("/tmp/a.jpg").bind("a.jpg")
+            .execute(&db).await.unwrap();
+        sqlx::query("INSERT INTO media_items (id, path, name) VALUES (?, ?, ?)")
+            .bind("b").bind("/tmp/b.jpg").bind("b.jpg")
+            .execute(&db).await.unwrap();
+
+        apply_item_tags(&db, "a", &["Travel".to_string(), "2024".to_string()]).await.unwrap();
+        apply_item_tags(&db, "b", &["Travel".to_string()]).await.expect("existing tag on second item must succeed");
+
+        let a_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = 'a'").fetch_one(&db).await.unwrap();
+        assert_eq!(a_count, 2, "item a must keep both tags");
+    }
+
+    #[tokio::test]
+    async fn case_insensitive_dedup() {
+        let db = tag_db().await;
+        sqlx::query("INSERT INTO media_items (id, path, name) VALUES (?, ?, ?)")
+            .bind("a").bind("/tmp/a.jpg").bind("a.jpg")
+            .execute(&db).await.unwrap();
+
+        apply_item_tags(&db, "a", &["Travel".to_string(), "travel".to_string()]).await.unwrap();
+
+        let tag_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tags").fetch_one(&db).await.unwrap();
+        assert_eq!(tag_count, 1);
+        let join_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = 'a'").fetch_one(&db).await.unwrap();
+        assert_eq!(join_count, 1);
+    }
+
+    #[tokio::test]
+    async fn failed_transaction_leaves_previous_tags_intact() {
+        let db = tag_db().await;
+        sqlx::query("INSERT INTO media_items (id, path, name) VALUES (?, ?, ?)")
+            .bind("a").bind("/tmp/a.jpg").bind("a.jpg")
+            .execute(&db).await.unwrap();
+
+        apply_item_tags(&db, "a", &["Keep".to_string()]).await.unwrap();
+
+        let result = apply_item_tags(&db, "ghost", &["New".to_string()]).await;
+        assert!(result.is_err(), "applying tags to a missing item must fail");
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_tags WHERE media_id = 'a'").fetch_one(&db).await.unwrap();
+        assert_eq!(count, 1, "original item's tags must survive the failed tx");
+    }
 }

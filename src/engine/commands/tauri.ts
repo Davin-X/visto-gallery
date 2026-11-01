@@ -104,9 +104,6 @@ export const tauri = {
   metadata: {
     readExif: (path: string): Promise<ExifData> =>
       invoke("read_exif", { path }),
-
-    writeExif: (path: string, data: Partial<ExifData>): Promise<void> =>
-      invoke("write_exif", { path, data }),
   },
 
   editing: {

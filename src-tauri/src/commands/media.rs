@@ -170,9 +170,7 @@ pub async fn read_exif(path: String, state: State<'_, AppState>) -> Result<ExifD
         .fetch_all(&db)
         .await
         .map_err(|e| e.to_string())?;
-    if !registered.is_empty() {
-        validate_path_under_registered_roots(&path, &registered)?;
-    }
+    validate_path_under_registered_roots(&path, &registered)?;
     tokio::task::spawn_blocking(move || {
         let mut data = ExifData {
             captured_at: None,
@@ -260,32 +258,54 @@ pub async fn read_exif(path: String, state: State<'_, AppState>) -> Result<ExifD
 }
 
 #[tauri::command]
-pub async fn write_exif(
-    path: String,
-    data: PartialExifData,
+pub async fn render_edited(
+    request: RenderRequest,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<ExportResult, String> {
+    // Validate the source path against registered library folders before doing
+    // any work, so a crafted request cannot read arbitrary files.
     let db = super::get_db(&state)?;
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
         .fetch_all(&db)
         .await
         .map_err(|e| e.to_string())?;
     if !registered.is_empty() {
-        validate_path_under_registered_roots(&path, &registered)?;
+        super::validate_path_under_registered_roots(&request.source_path, &registered)?;
     }
-    let _ = (path, data, state);
-    Ok(())
-}
 
-#[tauri::command]
-pub async fn render_edited(
-    request: RenderRequest,
-    _state: State<'_, AppState>,
-) -> Result<ExportResult, String> {
+    let in_place = request.output_format == "in_place";
+    let source_path = request.source_path.clone();
+
     // Offload CPU-intensive image processing to blocking pool
-    tauri::async_runtime::spawn_blocking(move || render_edited_blocking(request))
+    let result = tauri::async_runtime::spawn_blocking(move || render_edited_blocking(request))
         .await
-        .map_err(|e| format!("Task failed: {}", e))?
+        .map_err(|e| format!("Task failed: {}", e))??;
+
+    // After a successful in-place replace, refresh the catalog row so the
+    // thumbnail cache key (which includes modified_at) changes and the stale
+    // thumbnail is regenerated on the next request.
+    if in_place {
+        if let Ok(meta) = std::fs::metadata(&source_path) {
+            let size = meta.len() as i64;
+            let modified = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or_else(super::now_ms);
+            let _ = sqlx::query(
+                "UPDATE media_items SET size = ?, modified_at = ?, updated_at = ? WHERE path = ?",
+            )
+            .bind(size)
+            .bind(modified)
+            .bind(super::now_ms())
+            .bind(&source_path)
+            .execute(&db)
+            .await;
+        }
+    }
+
+    Ok(result)
 }
 
 /// Core image editing pipeline - runs in blocking pool
@@ -371,7 +391,9 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
         // In-place: write to temp next to source, then atomic rename
         let tmp_path = source_path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
 
-        // Create backup
+        // Create a single managed backup (never overwrite an existing one) so
+        // repeated edits keep the original pre-edit file. A failed backup must
+        // abort the whole operation instead of silently degrading.
         let backup_path = source_path.with_extension(format!(
             "{}.bak",
             source_path
@@ -379,7 +401,11 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
                 .and_then(|s| s.to_str())
                 .unwrap_or("bak")
         ));
-        let _ = std::fs::copy(&source_path, &backup_path);
+        if !backup_path.exists() {
+            std::fs::copy(&source_path, &backup_path).map_err(|e| {
+                format!("Could not create backup of original: {}", e)
+            })?;
+        }
 
         // Write to temp
         write_image(
@@ -446,8 +472,22 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
 pub async fn move_exported_file(
     source_path: String,
     destination_path: String,
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
 ) -> Result<(), String> {
+    // Validate the source unless it is an app-generated temp file. The
+    // destination is user-chosen via a save dialog and is not constrained.
+    let in_temp = std::path::Path::new(&source_path)
+        .ancestors()
+        .any(|p| p == std::env::temp_dir());
+    if !in_temp {
+        let db = super::get_db(&state)?;
+        let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
+            .fetch_all(&db)
+            .await
+            .map_err(|e| e.to_string())?;
+        super::validate_path_under_registered_roots(&source_path, &registered)?;
+    }
+
     tokio::task::spawn_blocking(move || {
         use std::path::PathBuf;
         let src = PathBuf::from(&source_path);
@@ -538,39 +578,62 @@ fn apply_color_adjustments(img: DynamicImage, edits: &EditValues) -> DynamicImag
     DynamicImage::ImageRgba8(rgba)
 }
 
-/// Read EXIF bytes from file for preservation
-fn read_exif_bytes(path: &PathBuf) -> Option<Vec<u8>> {
-    // For JPEG, read the APP1 segment (EXIF)
-    if let Ok(mut file) = std::fs::File::open(path) {
-        use std::io::Read;
-        let mut buffer = Vec::new();
-        if file.read_to_end(&mut buffer).is_ok() {
-            // Look for EXIF marker (0xFFE1) in JPEG
-            if buffer.len() > 4 && buffer[0] == 0xFF && buffer[1] == 0xD8 {
-                // Simple JPEG EXIF extraction - find APP1 marker
-                let mut i = 2;
-                while i + 4 < buffer.len() {
-                    if buffer[i] == 0xFF && buffer[i + 1] == 0xE1 {
-                        let len = ((buffer[i + 2] as usize) << 8) | (buffer[i + 3] as usize);
-                        if i + 2 + len <= buffer.len() {
-                            // Check for "Exif\0\0" signature
-                            if i + 8 < buffer.len()
-                                && buffer[i + 4] == b'E'
-                                && buffer[i + 5] == b'x'
-                                && buffer[i + 6] == b'i'
-                                && buffer[i + 7] == b'f'
-                                && buffer[i + 8] == 0
-                                && buffer[i + 9] == 0
-                            {
-                                return Some(buffer[i..i + 2 + len].to_vec());
-                            }
-                        }
-                        break;
-                    }
-                    i += 1;
-                }
+/// Read EXIF bytes from a JPEG for preservation.
+///
+/// Returns only the APP1 *payload* (the `Exif\0\0` signature followed by the
+/// TIFF block), not the `FF E1 <len>` segment header. Returns `None` for
+/// non-JPEG files or files with no EXIF APP1 segment.
+pub(crate) fn read_exif_bytes(path: &PathBuf) -> Option<Vec<u8>> {
+    let mut file = std::fs::File::open(path).ok()?;
+    use std::io::Read;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer).ok()?;
+
+    if buffer.len() < 4 || buffer[0] != 0xFF || buffer[1] != 0xD8 {
+        return None;
+    }
+
+    // Walk JPEG segments instead of scanning byte-by-byte.
+    let mut i = 2usize;
+    while i < buffer.len() {
+        if buffer[i] != 0xFF {
+            break; // reached scan data / EOI
+        }
+        let mut j = i;
+        while j < buffer.len() && buffer[j] == 0xFF {
+            j += 1;
+        }
+        if j >= buffer.len() {
+            break;
+        }
+        let marker = buffer[j];
+        // Standalone markers carry no length field.
+        if marker == 0xD8 || marker == 0xD9 || marker == 0x01 || (0xD0..=0xD7).contains(&marker) {
+            i = j + 1;
+            continue;
+        }
+        if j + 2 > buffer.len() {
+            break;
+        }
+        let len = ((buffer[j + 1] as usize) << 8) | (buffer[j + 2] as usize);
+        let seg_end = j + 1 + len;
+        if seg_end > buffer.len() {
+            break;
+        }
+
+        if marker == 0xE1 {
+            let payload_start = j + 3; // skip marker(1) + length(2)
+            // payload_start..seg_end is the APP1 payload; require Exif\0\0.
+            if payload_start + 6 <= seg_end
+                && buffer[payload_start..payload_start + 4] == *b"Exif"
+                && buffer[payload_start + 4] == 0
+                && buffer[payload_start + 5] == 0
+            {
+                return Some(buffer[payload_start..seg_end].to_vec());
             }
         }
+
+        i = seg_end;
     }
     None
 }
@@ -659,8 +722,11 @@ fn write_image(
     Ok(())
 }
 
-/// Write JPEG with EXIF injection
-fn write_jpeg_with_exif(
+/// Write JPEG with EXIF injection.
+///
+/// Walks the encoded JPEG's segments so APP0 (JFIF) is written exactly once and
+/// any pre-existing APP1 (EXIF) segment is replaced rather than duplicated.
+pub(crate) fn write_jpeg_with_exif(
     file: &mut std::fs::File,
     img: &image::RgbImage,
     quality: u8,
@@ -668,7 +734,7 @@ fn write_jpeg_with_exif(
 ) -> Result<(), String> {
     use std::io::Write;
 
-    // Encode to memory buffer first
+    // Encode to a memory buffer first.
     let mut buffer = Vec::new();
     {
         let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buffer, quality);
@@ -682,27 +748,194 @@ fn write_jpeg_with_exif(
             .map_err(|e| e.to_string())?;
     }
 
-    // Inject EXIF after SOI marker (0xFFD8)
-    let mut output = Vec::new();
+    // Inject APP1 segment bytes (marker + length + payload).
+    let mut app1 = Vec::with_capacity(exif.len() + 4);
+    app1.extend_from_slice(&[0xFF, 0xE1]);
+    let exif_len = exif.len() + 2;
+    app1.extend_from_slice(&[(exif_len >> 8) as u8, (exif_len & 0xFF) as u8]);
+    app1.extend_from_slice(exif);
 
-    // Write SOI
+    let mut output = Vec::with_capacity(buffer.len() + app1.len());
+
+    // SOI
+    if buffer.len() < 2 || buffer[0] != 0xFF || buffer[1] != 0xD8 {
+        return Err("Encoded JPEG is missing SOI marker.".to_string());
+    }
     output.extend_from_slice(&[0xFF, 0xD8]);
 
-    // Skip any existing APP0 (JFIF) marker - check at buffer[2]
-    if buffer.len() > 4 && buffer[2] == 0xFF && buffer[3] == 0xE0 {
-        let len = ((buffer[4] as usize) << 8) | (buffer[5] as usize);
-        output.extend_from_slice(&buffer[2..2 + 2 + len]);
+    let mut i = 2usize;
+    let mut injected = false;
+
+    while i < buffer.len() {
+        if buffer[i] != 0xFF {
+            // Trailing data (should not happen mid-header); copy and stop.
+            if !injected {
+                output.extend_from_slice(&app1);
+                injected = true;
+            }
+            output.extend_from_slice(&buffer[i..]);
+            break;
+        }
+
+        let mut j = i;
+        while j < buffer.len() && buffer[j] == 0xFF {
+            j += 1;
+        }
+        if j >= buffer.len() {
+            break;
+        }
+        let marker = buffer[j];
+
+        // EOI: inject if missing, then copy the rest.
+        if marker == 0xD9 {
+            if !injected {
+                output.extend_from_slice(&app1);
+                injected = true;
+            }
+            output.extend_from_slice(&buffer[i..]);
+            break;
+        }
+
+        // Standalone markers carry no length.
+        if marker == 0xD8 || marker == 0x01 || (0xD0..=0xD7).contains(&marker) {
+            output.push(0xFF);
+            output.push(marker);
+            i = j + 1;
+            continue;
+        }
+
+        if j + 2 > buffer.len() {
+            break;
+        }
+        let len = ((buffer[j + 1] as usize) << 8) | (buffer[j + 2] as usize);
+        let seg_end = j + 1 + len;
+        if seg_end > buffer.len() {
+            break;
+        }
+
+        match marker {
+            0xE0 => {
+                // APP0 (JFIF): copy once, then inject APP1 right after it.
+                output.extend_from_slice(&buffer[i..seg_end]);
+                if !injected {
+                    output.extend_from_slice(&app1);
+                    injected = true;
+                }
+            }
+            0xE1 => {
+                // Skip any pre-existing APP1 (EXIF); we inject our own.
+            }
+            0xDA => {
+                // SOS: inject (if not yet) then copy the rest verbatim.
+                if !injected {
+                    output.extend_from_slice(&app1);
+                    injected = true;
+                }
+                output.extend_from_slice(&buffer[i..]);
+                i = buffer.len();
+                continue;
+            }
+            _ => {
+                // Inject before the first non-APP0 segment if no APP0 was seen.
+                if !injected && marker != 0xE0 {
+                    output.extend_from_slice(&app1);
+                    injected = true;
+                }
+                output.extend_from_slice(&buffer[i..seg_end]);
+            }
+        }
+
+        i = seg_end;
     }
 
-    // Inject our EXIF (APP1)
-    output.extend_from_slice(&[0xFF, 0xE1]);
-    let exif_len = exif.len() + 2;
-    output.extend_from_slice(&[(exif_len >> 8) as u8, (exif_len & 0xFF) as u8]);
-    output.extend_from_slice(exif);
-
-    // Copy rest of buffer (skip SOI at buffer[0..2])
-    output.extend_from_slice(&buffer[2..]);
+    if !injected {
+        // Fallback: append before EOI was already handled; if still missing,
+        // append at the end (shouldn't happen for a valid JPEG).
+        output.extend_from_slice(&app1);
+    }
 
     file.write_all(&output).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod exif_tests {
+    use super::{read_exif_bytes, write_jpeg_with_exif};
+    use image::ImageEncoder;
+    use image::RgbImage;
+    use std::io::Cursor;
+
+    fn temp_path(label: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("visto-exif-test-{}-{}.jpg", label, uuid::Uuid::new_v4()))
+    }
+
+    #[test]
+    fn read_exif_bytes_returns_none_for_plain_jpeg() {
+        let path = temp_path("plain");
+        let img = RgbImage::new(4, 4);
+        let mut buf = Vec::new();
+        let enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, 80);
+        enc.write_image(img.as_raw(), 4, 4, image::ExtendedColorType::Rgb8).unwrap();
+        std::fs::write(&path, &buf).unwrap();
+
+        assert!(read_exif_bytes(&path).is_none());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn write_jpeg_with_exif_produces_decodable_jpeg() {
+        let path = temp_path("out");
+        let img = RgbImage::new(4, 4);
+        // An APP1 payload: "Exif\0\0" + minimal TIFF header (II + 42 + offset 8).
+        let exif: &[u8] = b"Exif\0\0II*\0\x08\0\0\0";
+        let mut file = std::fs::File::create(&path).unwrap();
+        write_jpeg_with_exif(&mut file, &img, 80, exif).unwrap();
+        drop(file);
+
+        // Must decode as a valid JPEG.
+        let decoded = image::ImageReader::open(&path)
+            .unwrap()
+            .with_guessed_format()
+            .unwrap()
+            .decode()
+            .unwrap();
+        assert_eq!(decoded.width(), 4);
+        assert_eq!(decoded.height(), 4);
+
+        // And the EXIF must be recoverable.
+        let recovered = read_exif_bytes(&path).expect("exif should be recoverable");
+        assert!(recovered.starts_with(b"Exif\0\0"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn write_jpeg_with_exif_has_single_app0_and_app1() {
+        let path = temp_path("seg");
+        let img = RgbImage::new(2, 2);
+        let exif: &[u8] = b"Exif\0\0II*\0\x08\0\0\0";
+        let mut file = std::fs::File::create(&path).unwrap();
+        write_jpeg_with_exif(&mut file, &img, 80, exif).unwrap();
+        drop(file);
+
+        let data = std::fs::read(&path).unwrap();
+        // Count APP0 and APP1 markers.
+        let mut app0 = 0;
+        let mut app1 = 0;
+        let mut i = 2;
+        while i + 1 < data.len() {
+            if data[i] == 0xFF {
+                match data[i + 1] {
+                    0xE0 => app0 += 1,
+                    0xE1 => app1 += 1,
+                    0xDA => break, // SOS: rest is scan data
+                    _ => {}
+                }
+            }
+            i += 1;
+        }
+        assert_eq!(app0, 1, "APP0 (JFIF) must appear exactly once");
+        assert_eq!(app1, 1, "APP1 (EXIF) must appear exactly once");
+        let _ = std::fs::remove_file(&path);
+    }
 }
