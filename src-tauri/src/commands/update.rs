@@ -52,20 +52,20 @@ pub async fn check_updates(
 ) -> Result<UpdateCheck, String> {
     let db = super::get_db(&state)?;
     let now = super::now_ms();
+    let current = env!("CARGO_PKG_VERSION").to_string();
 
     if !force.unwrap_or(false) {
-        if let Some(cached) = read_cache(&db, now).await? {
+        if let Some(cached) = read_cache(&db, now, &current).await? {
             return Ok(cached);
         }
     }
 
-    let result = fetch_latest(now).await?;
+    let result = fetch_latest(now, &current).await?;
     write_cache(&db, &result).await?;
     Ok(result)
 }
 
-async fn fetch_latest(now: i64) -> Result<UpdateCheck, String> {
-    let current = env!("CARGO_PKG_VERSION").to_string();
+async fn fetch_latest(now: i64, current: &str) -> Result<UpdateCheck, String> {
     let client = reqwest::Client::builder()
         .user_agent(format!("VistoGallery/{}", current))
         .timeout(std::time::Duration::from_secs(10))
@@ -91,7 +91,7 @@ async fn fetch_latest(now: i64) -> Result<UpdateCheck, String> {
         .await
         .map_err(|e| format!("Could not read the release response: {}", e))?;
 
-    Ok(build_result(release, &current, now))
+    Ok(build_result(release, current, now))
 }
 
 fn build_result(release: GithubRelease, current: &str, now: i64) -> UpdateCheck {
@@ -144,7 +144,11 @@ fn pick_download(assets: &[GithubAsset]) -> Option<String> {
         .map(|asset| asset.browser_download_url.clone())
 }
 
-async fn read_cache(db: &SqlitePool, now: i64) -> Result<Option<UpdateCheck>, String> {
+async fn read_cache(
+    db: &SqlitePool,
+    now: i64,
+    current: &str,
+) -> Result<Option<UpdateCheck>, String> {
     let value: Option<String> = sqlx::query_scalar("SELECT value FROM settings WHERE key = ?")
         .bind(CACHE_KEY)
         .fetch_optional(db)
@@ -154,10 +158,14 @@ async fn read_cache(db: &SqlitePool, now: i64) -> Result<Option<UpdateCheck>, St
     let Some(value) = value else {
         return Ok(None);
     };
-    let Ok(cached) = serde_json::from_str::<UpdateCheck>(&value) else {
+    let Ok(mut cached) = serde_json::from_str::<UpdateCheck>(&value) else {
         return Ok(None);
     };
+    if cached.current_version != current {
+        return Ok(None);
+    }
     if now.saturating_sub(cached.checked_at) < CACHE_TTL_MS {
+        cached.available = is_newer(&cached.latest_version, current);
         Ok(Some(cached))
     } else {
         Ok(None)
@@ -368,7 +376,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "hits the real GitHub API"]
     async fn fetches_the_real_latest_release() {
-        let result = fetch_latest(0).await.expect("fetch real release");
+        let result = fetch_latest(0, env!("CARGO_PKG_VERSION")).await.expect("fetch real release");
         assert!(!result.latest_version.is_empty());
         assert!(!result.release_url.is_empty());
         assert_eq!(result.current_version, env!("CARGO_PKG_VERSION"));
