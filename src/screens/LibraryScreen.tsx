@@ -736,7 +736,7 @@ function LibraryScreen(props: LibraryScreenProps) {
   const handleTileDoubleClick = (item: any) => {
     lastClickedRef.current = item.id;
     props.onInspectItem?.(item.id);
-    props.onOpenViewer?.(item.id);
+    props.onOpenEdit?.(item);
   };
 
   const tileClass = (item: any) =>
