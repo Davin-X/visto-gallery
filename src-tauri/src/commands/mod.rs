@@ -372,23 +372,23 @@ fn normalize_root(path: &str) -> String {
 }
 
 /// True if `path` is inside any registered library root.
-fn is_path_under_registered_roots(path: &str, registered: &[String]) -> bool {
-    let file = normalize_root(path);
-    registered.iter().any(|root| {
-        let r = normalize_root(root);
-        r.is_empty() || r == "/" || path_is_inside(&file, &r) || file == r
-    })
-}
-
-fn validate_path_under_registered_roots(path: &str, registered: &[String]) -> Result<(), String> {
-    if registered.is_empty() {
-        return Ok(());
+/// Resolve a path to its canonical form when possible. Falls back to
+/// canonicalizing the parent and re-attaching the file name for paths that do
+/// not exist yet (e.g. a write destination), so validation still works for
+/// not-yet-created files.
+fn canonical_path(path: &str) -> Option<std::path::PathBuf> {
+    let p = std::path::Path::new(path);
+    if let Ok(c) = p.canonicalize() {
+        return Some(c);
     }
-    if is_path_under_registered_roots(path, registered) {
-        Ok(())
-    } else {
-        Err("Path is outside registered library folders.".to_string())
+    if let Some(parent) = p.parent() {
+        if let Ok(pc) = parent.canonicalize() {
+            if let Some(name) = p.file_name() {
+                return Some(pc.join(name));
+            }
+        }
     }
+    None
 }
 
 /// True when `path` sits inside `root`. Uses a real directory-boundary check so
@@ -400,6 +400,36 @@ fn path_is_inside(path: &str, root: &str) -> bool {
         return file.starts_with('/');
     }
     file.len() > root.len() && file.starts_with(&root) && file.as_bytes()[root.len()] == b'/'
+}
+fn is_path_under_registered_roots(path: &str, registered: &[String]) -> bool {
+    let Some(candidate) = canonical_path(path) else {
+        return false;
+    };
+    registered.iter().any(|root| {
+        let root_canonical =
+            canonical_path(root).unwrap_or_else(|| std::path::PathBuf::from(normalize_root(root)));
+        candidate == root_canonical || candidate.starts_with(&root_canonical)
+    })
+}
+
+/// Validate that `path` resolves (after canonicalization, so symlinks and
+/// `..` segments cannot escape) to a location inside one of the registered
+/// library folders.
+///
+/// Returns an error when no roots are registered: an empty root set means
+/// "deny everything", not "allow everything".
+pub fn validate_path_under_registered_roots(
+    path: &str,
+    registered: &[String],
+) -> Result<(), String> {
+    if registered.is_empty() {
+        return Err("No registered library folders; path access denied.".to_string());
+    }
+    if is_path_under_registered_roots(path, registered) {
+        Ok(())
+    } else {
+        Err("Path is outside registered library folders.".to_string())
+    }
 }
 
 /// Record an imported folder so the sidebar can list and remove it later.
@@ -1126,4 +1156,97 @@ pub async fn get_tags(state: State<'_, AppState>) -> Result<Vec<Tag>, String> {
         .await
         .map_err(|e| e.to_string())?;
     Ok(tags)
+}
+
+#[cfg(test)]
+mod path_validation_tests {
+    use super::validate_path_under_registered_roots;
+    use std::fs;
+    use std::path::PathBuf;
+    use uuid::Uuid;
+
+    fn tmp(label: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("visto-path-test-{}-{}", label, Uuid::new_v4()));
+        fs::create_dir_all(&p).expect("create temp dir");
+        p
+    }
+
+    #[test]
+    fn empty_roots_denies_everything() {
+        let root = tmp("root");
+        let file = root.join("a.jpg");
+        fs::write(&file, b"x").unwrap();
+        assert!(validate_path_under_registered_roots(file.to_str().unwrap(), &[]).is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn legitimate_nested_path_passes() {
+        let root = tmp("root");
+        let nested = root.join("sub").join("a.jpg");
+        fs::create_dir_all(nested.parent().unwrap()).unwrap();
+        fs::write(&nested, b"x").unwrap();
+        let registered = vec![root.to_string_lossy().into_owned()];
+        assert!(
+            validate_path_under_registered_roots(nested.to_str().unwrap(), &registered).is_ok()
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn traversal_is_rejected() {
+        let root = tmp("root");
+        let outside = std::env::temp_dir().join("visto-outside-traversal.jpg");
+        fs::write(&outside, b"x").unwrap();
+        // A `..` segment that escapes the root must be rejected.
+        let escape = root.join("..").join(outside.file_name().unwrap());
+        let registered = vec![root.to_string_lossy().into_owned()];
+        assert!(
+            validate_path_under_registered_roots(escape.to_str().unwrap(), &registered).is_err()
+        );
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_file(&outside);
+    }
+
+    #[test]
+    fn prefix_collision_is_rejected() {
+        let base = tmp("base");
+        let photos = base.join("Photos");
+        let photos2 = base.join("Photos2");
+        fs::create_dir_all(&photos).unwrap();
+        fs::create_dir_all(&photos2).unwrap();
+        let file = photos2.join("a.jpg");
+        fs::write(&file, b"x").unwrap();
+        let registered = vec![photos.to_string_lossy().into_owned()];
+        assert!(validate_path_under_registered_roots(file.to_str().unwrap(), &registered).is_err());
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn symlink_escape_is_rejected() {
+        let root = tmp("root");
+        let outside = tmp("outside");
+        let outside_file = outside.join("secret.jpg");
+        fs::write(&outside_file, b"x").unwrap();
+        let link = root.join("escape.jpg");
+        #[cfg(unix)]
+        let _ = std::os::unix::fs::symlink(&outside_file, &link);
+        let registered = vec![root.to_string_lossy().into_owned()];
+        // The symlink resolves outside the root, so it must be rejected.
+        let result = validate_path_under_registered_roots(link.to_str().unwrap(), &registered);
+        assert!(result.is_err(), "symlink escape should be rejected");
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&outside);
+    }
+
+    #[test]
+    fn exact_root_path_passes() {
+        let root = tmp("root");
+        let file = root.join("a.jpg");
+        fs::write(&file, b"x").unwrap();
+        let registered = vec![root.to_string_lossy().into_owned()];
+        // The root directory itself is allowed.
+        assert!(validate_path_under_registered_roots(root.to_str().unwrap(), &registered).is_ok());
+        let _ = fs::remove_dir_all(&root);
+    }
 }
