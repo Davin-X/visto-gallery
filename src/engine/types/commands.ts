@@ -225,6 +225,7 @@ export type TauriCommandSignature = {
 
   // Metadata
   read_exif: (path: string) => ExifData;
+  backfill_metadata: () => number;
 
   // Editing
   render_edited: (request: RenderRequest) => ExportResult;

@@ -524,12 +524,30 @@ fn inspect_media_file_with_metadata(
         path.to_string_lossy().to_string(),
         name,
         ext,
-        kind,
+        kind.clone(),
         size,
         modified_at,
     );
     item.created_at = now;
     item.updated_at = now;
+
+    // Populate metadata from EXIF for photos.
+    if kind == "photo" {
+        let exif = crate::commands::media::extract_exif(path);
+        item.captured_at = exif.captured_at;
+        item.camera = exif.camera;
+        item.lens = exif.lens;
+        item.exposure = exif.exposure;
+        item.iso = exif.iso;
+        item.latitude = exif.latitude;
+        item.longitude = exif.longitude;
+        if item.width.is_none() {
+            item.width = exif.width;
+        }
+        if item.height.is_none() {
+            item.height = exif.height;
+        }
+    }
 
     // Upsert on the stable id. `favorite` and `hidden` are left out of the
     // UPDATE clause so a re-import refreshes file facts without discarding the
@@ -560,7 +578,7 @@ async fn upsert_media_batch(
     }
 
     let mut query = QueryBuilder::<Sqlite>::new(
-        "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, width, height, created_at, updated_at, favorite, hidden) ",
+        "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, width, height, camera, lens, exposure, iso, latitude, longitude, created_at, updated_at, favorite, hidden) ",
     );
     query.push_values(rows, |mut values, (item, width, height)| {
         values
@@ -574,13 +592,19 @@ async fn upsert_media_batch(
             .push_bind(item.captured_at)
             .push_bind(width)
             .push_bind(height)
+            .push_bind(&item.camera)
+            .push_bind(&item.lens)
+            .push_bind(&item.exposure)
+            .push_bind(item.iso)
+            .push_bind(item.latitude)
+            .push_bind(item.longitude)
             .push_bind(item.created_at)
             .push_bind(item.updated_at)
             .push_bind(0i32)
             .push_bind(0i32);
     });
     query.push(
-        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, width = excluded.width, height = excluded.height, updated_at = excluded.updated_at, sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END",
+        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), updated_at = excluded.updated_at, sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END",
     );
     query.build().execute(db).await.map_err(|e| e.to_string())?;
     Ok(())
