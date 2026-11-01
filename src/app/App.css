@@ -218,6 +218,59 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.sidebar-version-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A quiet, always-visible signal that a newer release exists. */
+.update-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.update-badge:hover {
+  border-color: var(--accent);
+}
+
+.update-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.update-dialog {
+  width: min(520px, 100%);
+}
+
+.update-notes {
+  max-height: 180px;
+  overflow: auto;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 .main-content {
   display: flex;
   flex-direction: column;
