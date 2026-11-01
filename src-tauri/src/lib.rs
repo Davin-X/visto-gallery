@@ -177,6 +177,7 @@ pub fn run() {
             remove_from_album,
             // Metadata
             read_exif,
+            backfill_metadata,
             // Editing
             render_edited,
             move_exported_file,

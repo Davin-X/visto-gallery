@@ -161,10 +161,14 @@ async fn read_cache(
     let Ok(mut cached) = serde_json::from_str::<UpdateCheck>(&value) else {
         return Ok(None);
     };
+    // Invalidate the cache when the running version changes (e.g. after an
+    // upgrade), so a stale "update available" result from an older build can't
+    // keep nagging.
     if cached.current_version != current {
         return Ok(None);
     }
     if now.saturating_sub(cached.checked_at) < CACHE_TTL_MS {
+        // Recompute `available` defensively in case the stored flag drifted.
         cached.available = is_newer(&cached.latest_version, current);
         Ok(Some(cached))
     } else {
@@ -303,7 +307,7 @@ mod tests {
         let result = build_result(release("v0.2.0", vec![]), "0.1.2", now);
 
         write_cache(&db, &result).await.expect("write cache");
-        let cached = read_cache(&db, now + 60_000)
+        let cached = read_cache(&db, now + 60_000, "0.1.2")
             .await
             .expect("read cache")
             .expect("cache should be fresh");
@@ -321,11 +325,11 @@ mod tests {
 
         // Exactly at the boundary is still stale: the cache is valid for
         // strictly less than 24 hours.
-        assert!(read_cache(&db, now + CACHE_TTL_MS)
+        assert!(read_cache(&db, now + CACHE_TTL_MS, "0.1.2")
             .await
             .expect("read cache")
             .is_none());
-        assert!(read_cache(&db, now + CACHE_TTL_MS + 1)
+        assert!(read_cache(&db, now + CACHE_TTL_MS + 1, "0.1.2")
             .await
             .expect("read cache")
             .is_none());
@@ -339,7 +343,7 @@ mod tests {
         write_cache(&db, &result).await.expect("write cache");
 
         // saturating_sub keeps this from underflowing into a panic.
-        assert!(read_cache(&db, now - 60_000)
+        assert!(read_cache(&db, now - 60_000, "0.1.2")
             .await
             .expect("read cache")
             .is_some());
@@ -355,7 +359,7 @@ mod tests {
             .await
             .expect("insert corrupt cache");
 
-        assert!(read_cache(&db, 1_700_000_000_000)
+        assert!(read_cache(&db, 1_700_000_000_000, "0.1.2")
             .await
             .expect("read cache")
             .is_none());
@@ -364,7 +368,7 @@ mod tests {
     #[tokio::test]
     async fn missing_cache_returns_none() {
         let db = cache_db().await;
-        assert!(read_cache(&db, 1_700_000_000_000)
+        assert!(read_cache(&db, 1_700_000_000_000, "0.1.2")
             .await
             .expect("read cache")
             .is_none());
@@ -376,7 +380,9 @@ mod tests {
     #[tokio::test]
     #[ignore = "hits the real GitHub API"]
     async fn fetches_the_real_latest_release() {
-        let result = fetch_latest(0, env!("CARGO_PKG_VERSION")).await.expect("fetch real release");
+        let result = fetch_latest(0, env!("CARGO_PKG_VERSION"))
+            .await
+            .expect("fetch real release");
         assert!(!result.latest_version.is_empty());
         assert!(!result.release_url.is_empty());
         assert_eq!(result.current_version, env!("CARGO_PKG_VERSION"));

@@ -104,6 +104,9 @@ export const tauri = {
   metadata: {
     readExif: (path: string): Promise<ExifData> =>
       invoke("read_exif", { path }),
+
+    backfillMetadata: (): Promise<number> =>
+      invoke("backfill_metadata"),
   },
 
   editing: {

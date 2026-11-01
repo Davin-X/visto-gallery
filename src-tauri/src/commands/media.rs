@@ -163,6 +163,127 @@ pub async fn open_folder(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Extract EXIF metadata from a file. Reusable by the scan path and the
+/// `read_exif` command. Returns an `ExifData` with `metadata_error` set on
+/// failure instead of propagating the error.
+pub(crate) fn extract_exif(path: &std::path::Path) -> ExifData {
+    let mut data = ExifData {
+        captured_at: None,
+        camera: None,
+        lens: None,
+        exposure: None,
+        iso: None,
+        latitude: None,
+        longitude: None,
+        width: None,
+        height: None,
+        metadata_error: None,
+    };
+
+    let file = match std::fs::File::open(path) {
+        Ok(f) => f,
+        Err(e) => {
+            data.metadata_error = Some(e.to_string());
+            return data;
+        }
+    };
+    let mut buf = std::io::BufReader::new(file);
+    let exif_reader = exif::Reader::new();
+    let exif = match exif_reader.read_from_container(&mut buf) {
+        Ok(e) => e,
+        Err(e) => {
+            data.metadata_error = Some(e.to_string());
+            return data;
+        }
+    };
+
+    if let Some(field) = exif.get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY) {
+        let s = field.display_value().to_string();
+        if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(&s, "%Y:%m:%d %H:%M:%S") {
+            data.captured_at = Some(dt.and_utc().timestamp());
+        }
+    }
+    let make = exif
+        .get_field(exif::Tag::Make, exif::In::PRIMARY)
+        .map(|f| f.display_value().to_string());
+    let model = exif
+        .get_field(exif::Tag::Model, exif::In::PRIMARY)
+        .map(|f| f.display_value().to_string());
+    data.camera = match (make, model) {
+        (Some(m), Some(modl)) => Some(format!("{} {}", m.trim(), modl.trim())),
+        (Some(m), None) => Some(m.trim().to_string()),
+        (None, Some(modl)) => Some(modl.trim().to_string()),
+        _ => None,
+    };
+    if let Some(f) = exif.get_field(exif::Tag::LensModel, exif::In::PRIMARY) {
+        data.lens = Some(f.display_value().to_string().trim().to_string());
+    }
+    if let Some(f) = exif.get_field(exif::Tag::ExposureTime, exif::In::PRIMARY) {
+        data.exposure = Some(f.display_value().to_string());
+    }
+    if let Some(f) = exif.get_field(exif::Tag::PhotographicSensitivity, exif::In::PRIMARY) {
+        if let exif::Value::Short(ref v) = f.value {
+            if let Some(&x) = v.first() {
+                data.iso = Some(x as i32);
+            }
+        }
+    }
+    if let Some(f) = exif.get_field(exif::Tag::PixelXDimension, exif::In::PRIMARY) {
+        if let exif::Value::Long(ref v) = f.value {
+            data.width = v.first().map(|&x| x as i32);
+        }
+    }
+    if let Some(f) = exif.get_field(exif::Tag::PixelYDimension, exif::In::PRIMARY) {
+        if let exif::Value::Long(ref v) = f.value {
+            data.height = v.first().map(|&x| x as i32);
+        }
+    }
+
+    // GPS: convert DMS rationals to decimal degrees.
+    if let (Some(lat), Some(lon)) = (
+        exif.get_field(exif::Tag::GPSLatitude, exif::In::PRIMARY),
+        exif.get_field(exif::Tag::GPSLongitude, exif::In::PRIMARY),
+    ) {
+        let lat_ref = exif
+            .get_field(exif::Tag::GPSLatitudeRef, exif::In::PRIMARY)
+            .map(|f| f.display_value().to_string())
+            .unwrap_or_else(|| "N".to_string());
+        let lon_ref = exif
+            .get_field(exif::Tag::GPSLongitudeRef, exif::In::PRIMARY)
+            .map(|f| f.display_value().to_string())
+            .unwrap_or_else(|| "E".to_string());
+
+        if let (Some(la), Some(lo)) = (dms_to_decimal(lat), dms_to_decimal(lon)) {
+            data.latitude = Some(if lat_ref.trim().eq_ignore_ascii_case("S") {
+                -la
+            } else {
+                la
+            });
+            data.longitude = Some(if lon_ref.trim().eq_ignore_ascii_case("W") {
+                -lo
+            } else {
+                lo
+            });
+        }
+    }
+
+    data
+}
+
+/// Convert an EXIF GPS DMS field (three rationals) to decimal degrees.
+fn dms_to_decimal(field: &exif::Field) -> Option<f64> {
+    let exif::Value::Rational(ref vals) = field.value else {
+        return None;
+    };
+    if vals.len() < 3 {
+        return None;
+    }
+    let deg = vals[0].to_f64();
+    let min = vals[1].to_f64();
+    let sec = vals[2].to_f64();
+    Some(deg + min / 60.0 + sec / 3600.0)
+}
+
 #[tauri::command]
 pub async fn read_exif(path: String, state: State<'_, AppState>) -> Result<ExifData, String> {
     let db = super::get_db(&state)?;
@@ -171,90 +292,11 @@ pub async fn read_exif(path: String, state: State<'_, AppState>) -> Result<ExifD
         .await
         .map_err(|e| e.to_string())?;
     validate_path_under_registered_roots(&path, &registered)?;
-    tokio::task::spawn_blocking(move || {
-        let mut data = ExifData {
-            captured_at: None,
-            camera: None,
-            lens: None,
-            exposure: None,
-            iso: None,
-            latitude: None,
-            longitude: None,
-            width: None,
-            height: None,
-            metadata_error: None,
-        };
-
-        let file = match std::fs::File::open(&path) {
-            Ok(f) => f,
-            Err(e) => {
-                data.metadata_error = Some(e.to_string());
-                return Ok(data);
-            }
-        };
-        let mut buf = std::io::BufReader::new(&file);
-        let exif_reader = exif::Reader::new();
-        let exif = match exif_reader.read_from_container(&mut buf) {
-            Ok(e) => e,
-            Err(e) => {
-                data.metadata_error = Some(e.to_string());
-                return Ok(data);
-            }
-        };
-
-        if let Some(field) = exif.get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY) {
-            let s = field.display_value().to_string();
-            if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(&s, "%Y:%m:%d %H:%M:%S") {
-                data.captured_at = Some(dt.and_utc().timestamp());
-            }
-        }
-        let make = exif
-            .get_field(exif::Tag::Make, exif::In::PRIMARY)
-            .map(|f| f.display_value().to_string());
-        let model = exif
-            .get_field(exif::Tag::Model, exif::In::PRIMARY)
-            .map(|f| f.display_value().to_string());
-        data.camera = match (make, model) {
-            (Some(m), Some(modl)) => Some(format!("{} {}", m.trim(), modl.trim())),
-            (Some(m), None) => Some(m.trim().to_string()),
-            (None, Some(modl)) => Some(modl.trim().to_string()),
-            _ => None,
-        };
-        if let Some(f) = exif.get_field(exif::Tag::LensModel, exif::In::PRIMARY) {
-            data.lens = Some(f.display_value().to_string().trim().to_string());
-        }
-        if let Some(f) = exif.get_field(exif::Tag::ExposureTime, exif::In::PRIMARY) {
-            data.exposure = Some(f.display_value().to_string());
-        }
-        if let Some(f) = exif.get_field(exif::Tag::PhotographicSensitivity, exif::In::PRIMARY) {
-            if let exif::Value::Short(ref v) = f.value {
-                if let Some(&x) = v.first() {
-                    data.iso = Some(x as i32);
-                }
-            }
-        }
-        if let Some(f) = exif.get_field(exif::Tag::PixelXDimension, exif::In::PRIMARY) {
-            if let exif::Value::Long(ref v) = f.value {
-                data.width = v.first().map(|&x| x as i32);
-            }
-        }
-        if let Some(f) = exif.get_field(exif::Tag::PixelYDimension, exif::In::PRIMARY) {
-            if let exif::Value::Long(ref v) = f.value {
-                data.height = v.first().map(|&x| x as i32);
-            }
-        }
-        // GPS
-        if let (Some(lat), Some(lon)) = (
-            exif.get_field(exif::Tag::GPSLatitude, exif::In::PRIMARY),
-            exif.get_field(exif::Tag::GPSLongitude, exif::In::PRIMARY),
-        ) {
-            // Convert DMS to decimal degrees is non-trivial; leave display string for now.
-            let _ = (lat, lon);
-        }
-        Ok(data)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    let path_buf = std::path::PathBuf::from(&path);
+    let data = tokio::task::spawn_blocking(move || extract_exif(&path_buf))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(data)
 }
 
 #[tauri::command]
@@ -942,4 +984,43 @@ mod exif_tests {
         assert_eq!(app1, 1, "APP1 (EXIF) must appear exactly once");
         let _ = std::fs::remove_file(&path);
     }
+}
+
+#[tauri::command]
+pub async fn backfill_metadata(state: State<'_, AppState>) -> Result<i64, String> {
+    let db = super::get_db(&state)?;
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, path FROM media_items WHERE captured_at IS NULL OR camera IS NULL",
+    )
+    .fetch_all(&db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let mut updated = 0i64;
+    for (id, path) in rows {
+        let path_buf = std::path::PathBuf::from(&path);
+        let exif = tokio::task::spawn_blocking(move || extract_exif(&path_buf))
+            .await
+            .map_err(|e| e.to_string())?;
+        if exif.metadata_error.is_some() && exif.captured_at.is_none() && exif.camera.is_none() {
+            continue;
+        }
+        sqlx::query(
+            "UPDATE media_items SET captured_at = COALESCE(?, captured_at), camera = COALESCE(?, camera), lens = COALESCE(?, lens), exposure = COALESCE(?, exposure), iso = COALESCE(?, iso), latitude = COALESCE(?, latitude), longitude = COALESCE(?, longitude), updated_at = ? WHERE id = ?",
+        )
+        .bind(exif.captured_at)
+        .bind(&exif.camera)
+        .bind(&exif.lens)
+        .bind(&exif.exposure)
+        .bind(exif.iso)
+        .bind(exif.latitude)
+        .bind(exif.longitude)
+        .bind(super::now_ms())
+        .bind(&id)
+        .execute(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+        updated += 1;
+    }
+    Ok(updated)
 }
