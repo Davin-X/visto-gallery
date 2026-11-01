@@ -27,6 +27,16 @@ async function persistDraft(
   historyIndex: number,
   crop?: CropState,
 ) {
+  // Synchronous localStorage fallback: drafts survive even if the Tauri
+  // invoke is cancelled by navigation before SQLite completes.
+  try {
+    localStorage.setItem(
+      draftKey(itemId),
+      JSON.stringify({ edits: values, crop, history, historyIndex, updatedAt: Date.now() }),
+    );
+  } catch {
+    // localStorage may be unavailable in private mode.
+  }
   try {
     await tauri.edit.saveRecipe({
       mediaId: itemId,
@@ -35,8 +45,8 @@ async function persistDraft(
       history,
       historyIndex,
     });
-  } catch {
-    // A failed SQLite write should not break editing.
+  } catch (error) {
+    console.error(`Failed to persist draft for ${itemId}:`, error);
   }
   notifyDraftChanged();
 }
@@ -49,6 +59,9 @@ export function resetDraftRevision(): void {
 export async function clearEditDraft(itemId: string) {
   try {
     await tauri.edit.deleteRecipe(itemId);
+  } catch {}
+  try {
+    localStorage.removeItem(draftKey(itemId));
   } catch {}
   notifyDraftChanged();
 }
@@ -73,10 +86,11 @@ export const useDraftMetaStore = create<DraftMetaState>((set) => ({
   transforms: new Map<string, DraftTransform>(),
   ids: new Set<string>(),
   refresh: async () => {
+    const transforms = new Map<string, DraftTransform>();
+    const ids = new Set<string>();
+
     try {
       const recipes = await tauri.edit.listRecipes();
-      const transforms = new Map<string, DraftTransform>();
-      const ids = new Set<string>();
       for (const recipe of recipes) {
         ids.add(recipe.mediaId);
         const values = recipe.edits as EditValues;
@@ -86,10 +100,40 @@ export const useDraftMetaStore = create<DraftMetaState>((set) => ({
           transforms.set(recipe.mediaId, { rotation, flip });
         }
       }
-      set({ transforms, ids });
     } catch {
-      // Ignore errors reading drafts.
+      // Ignore errors reading drafts from SQLite.
     }
+
+    // Also include any drafts stored in localStorage fallback
+    if (typeof localStorage !== "undefined") {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key?.startsWith("edit:draft:")) {
+            const mediaId = key.slice("edit:draft:".length);
+            ids.add(mediaId);
+            if (!transforms.has(mediaId)) {
+              const raw = localStorage.getItem(key);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                const values = parsed.edits || parsed.values;
+                if (values) {
+                  const rotation = (((Number(values.rotation) || 0) % 360) + 360) % 360;
+                  const flip = Boolean(values.flip);
+                  if (rotation !== 0 || flip) {
+                    transforms.set(mediaId, { rotation, flip });
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        // Ignore localStorage read errors.
+      }
+    }
+
+    set({ transforms, ids });
   },
 }));
 
@@ -97,6 +141,15 @@ export const useDraftMetaStore = create<DraftMetaState>((set) => ({
 subscribeDraft(() => {
   void useDraftMetaStore.getState().refresh();
 });
+
+// Refresh on module load so drafts and transforms are available immediately on startup.
+if (typeof window !== "undefined") {
+  void useDraftMetaStore.getState().refresh();
+}
+
+export function refreshDraftMeta(): Promise<void> {
+  return useDraftMetaStore.getState().refresh();
+}
 
 /** Hook: rotation/flip for items with edit drafts. */
 export function useDraftTransforms(): Map<string, DraftTransform> {
@@ -113,6 +166,13 @@ export function draftTransformStyle(transform?: DraftTransform) {
   return `rotate(${transform.rotation}deg) scaleX(${transform.flip ? -1 : 1})`;
 }
 
+export function hasEditChanges(values: EditValues, crop?: CropState): boolean {
+  if (crop?.enabled) return true;
+  return Object.entries(defaultEdits).some(
+    ([key, defaultValue]) => values[key as keyof EditValues] !== defaultValue,
+  );
+}
+
 interface EditState {
   // State
   item: MediaItem | null;
@@ -123,7 +183,7 @@ interface EditState {
 
   // Actions
   open: (item: MediaItem) => Promise<void>;
-  close: () => void;
+  close: () => Promise<void>;
   saveDraft: () => Promise<void>;
   setValue: <K extends keyof EditValues>(key: K, value: EditValues[K]) => Promise<void>;
   setValues: (values: Partial<EditValues>) => Promise<void>;
@@ -185,6 +245,9 @@ export const useEditStore = create<EditState>()(
         let crop = defaultCrop;
         let history = [defaultEdits];
         let historyIndex = 0;
+        let loadedFromSqlite = false;
+
+        // Load from SQLite first.
         try {
           const recipe = await tauri.edit.getRecipe(item.id);
           if (recipe && recipe.edits) {
@@ -197,10 +260,35 @@ export const useEditStore = create<EditState>()(
               typeof recipe.historyIndex === "number"
                 ? recipe.historyIndex
                 : history.length - 1;
+            loadedFromSqlite = true;
           }
-        } catch {
-          // Ignore bad recipe, use defaults.
+        } catch (error) {
+          console.error(`Failed to load draft from SQLite for ${item.id}:`, error);
         }
+
+        // Fall back to localStorage draft if SQLite has nothing.
+        if (!loadedFromSqlite) {
+          const raw = localStorage.getItem(draftKey(item.id));
+          if (raw) {
+            try {
+              const persisted = JSON.parse(raw);
+              if (persisted.edits)
+                values = { ...defaultEdits, ...persisted.edits };
+              if (persisted.crop)
+                crop = { ...defaultCrop, ...persisted.crop };
+              if (Array.isArray(persisted.history)) {
+                history = persisted.history;
+                historyIndex =
+                  typeof persisted.historyIndex === "number"
+                    ? persisted.historyIndex
+                    : history.length - 1;
+              }
+            } catch {
+              // Ignore malformed localStorage draft, use defaults.
+            }
+          }
+        }
+
         set({
           item,
           values,
@@ -210,19 +298,25 @@ export const useEditStore = create<EditState>()(
         });
       },
 
-      close: () =>
+      close: async () => {
+        const { item, values, history, historyIndex, crop } = get();
+        if (item && (hasEditChanges(values, crop) || useDraftMetaStore.getState().ids.has(item.id))) {
+          await persistDraft(item.id, values, history, historyIndex, crop);
+        }
         set({
           item: null,
           values: defaultEdits,
           crop: defaultCrop,
           history: [defaultEdits],
           historyIndex: 0,
-        }),
+        });
+      },
 
       saveDraft: async () => {
-        const { item, values, history, historyIndex } = get();
-        if (item)
-          await persistDraft(item.id, values, history, historyIndex, get().crop);
+        const { item, values, history, historyIndex, crop } = get();
+        if (item && (hasEditChanges(values, crop) || useDraftMetaStore.getState().ids.has(item.id))) {
+          await persistDraft(item.id, values, history, historyIndex, crop);
+        }
       },
 
       setValue: async (key, value) => {

@@ -36,6 +36,7 @@ import {
   useLibraryStore,
   useViewerStore,
   useEditStore,
+  refreshDraftMeta,
   useSlideshowStore,
   useBatchStore,
   useSettingsStore,
@@ -463,6 +464,7 @@ function App() {
   });
 
   useEffect(() => {
+    void refreshDraftMeta();
     let cancelled = false;
     tauri.library
       .getStats()
@@ -1678,7 +1680,7 @@ function App() {
     );
   };
 
-  const openScreen = (next: Screen) => {
+  const openScreen = async (next: Screen) => {
     // Below tablet width the sidebar is an overlay drawer. Dismiss it after
     // navigation so it cannot cover the newly opened screen.
     if (window.innerWidth <= 900 && library.sidebarOpen) {
@@ -1730,7 +1732,8 @@ function App() {
         (i) => i.id === library.inspectedId,
       );
       if (selectedItem && selectedItem.kind === "photo") {
-        edit.open(selectedItem);
+        await edit.saveDraft();
+        await edit.open(selectedItem);
       }
     }
     if (next !== screen) {
@@ -2370,8 +2373,9 @@ function App() {
                 setAlbumRemovePending({ albumId, itemIds })
               }
               onOpenViewer={(id?: string) => openViewer(id, "Library")}
-              onOpenEdit={(item: any) => {
-                edit.open(item);
+              onOpenEdit={async (item: any) => {
+                await edit.saveDraft();
+                await edit.open(item);
                 setScreen("Edit");
               }}
               onImportFolder={() => importFolder()}
@@ -2437,8 +2441,9 @@ function App() {
                 onClose={viewer.close}
                 onToggleFavorite={library.toggleFavorite}
                 onToggleHidden={library.toggleHidden}
-                onOpenEdit={(item: any) => {
-                  edit.open(item);
+                onOpenEdit={async (item: any) => {
+                  await edit.saveDraft();
+                  await edit.open(item);
                   setScreen("Edit");
                 }}
                 onContextMenu={openContextMenu}
@@ -2555,7 +2560,7 @@ function App() {
               )}
               onOpenEdit={async (item: any) => {
                 await edit.saveDraft();
-                edit.open(item);
+                await edit.open(item);
               }}
             />
           )}
@@ -2617,8 +2622,9 @@ function App() {
                 itemPendingDeleteRef.current = ids;
                 setItemPendingDeleteCount(ids.length);
               }}
-              onOpenEdit={(item: any) => {
-                edit.open(item);
+              onOpenEdit={async (item: any) => {
+                await edit.saveDraft();
+                await edit.open(item);
                 setScreen("Edit");
               }}
               onOpenViewer={(id?: string) => openViewer(id, "Hidden", "hidden")}

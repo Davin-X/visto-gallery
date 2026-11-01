@@ -19,6 +19,7 @@ import {
   useDraftTransforms,
   useDraftIds,
   clearEditDraft,
+  refreshDraftMeta,
 } from "../engine/stores/useEditStore";
 import type { MediaItem, EditValues, CropRect } from "../engine/types/media";
 import { draftImageStyle } from "../engine/utils/draftImage";
@@ -70,13 +71,13 @@ interface EditScreenProps {
   onResetCrop: () => void;
   onUndo: () => void;
   onRedo: () => void;
-  onClose: () => void;
+  onClose: () => void | Promise<void>;
   onSaveDraft: () => Promise<void>;
   onBack: () => void;
   onExport: (inPlace?: boolean) => void | Promise<void>;
   onClearDraft: (id: string) => void;
   onNotice: (text: string) => void;
-  onOpenEdit: (item: MediaItem) => void;
+  onOpenEdit: (item: MediaItem) => void | Promise<void>;
 }
 
 function EditScreen(props: EditScreenProps) {
@@ -99,6 +100,10 @@ function EditScreen(props: EditScreenProps) {
       setDraftPopoverPos(null);
     }
   }, [draftTrayOpen]);
+  useEffect(() => {
+    void refreshDraftMeta();
+  }, []);
+
   const draftTransforms = useDraftTransforms();
   const draftIds = useDraftIds();
   const stageRef = useRef<any>(null);
@@ -133,6 +138,15 @@ function EditScreen(props: EditScreenProps) {
   useEffect(() => {
     setShowOriginalPreview(false);
   }, [props.item?.id]);
+
+  // Save draft when leaving the edit screen or switching items, as a
+  // safety net for any navigation path that doesn't explicitly call onSaveDraft.
+  const exitItemId = props.item?.id;
+  useEffect(() => {
+    return () => {
+      void props.onSaveDraft?.();
+    };
+  }, [exitItemId, props.onSaveDraft]);
   useEffect(() => {
     if (!drag || !props.item) return;
     const onMove = (e: any) => {
@@ -343,7 +357,7 @@ function EditScreen(props: EditScreenProps) {
                             type="button"
                             onClick={async () => {
                               await props.onSaveDraft?.();
-                              props.onOpenEdit?.(item);
+                              await props.onOpenEdit?.(item);
                               setDraftTrayOpen(false);
                             }}
                             title={`Open draft for ${item.name}`}
@@ -379,7 +393,9 @@ function EditScreen(props: EditScreenProps) {
           <button
             className="primary-button"
             type="button"
-            onClick={() => props.onClose?.()}
+            onClick={async () => {
+              await props.onClose?.();
+            }}
           >
             Select photo
           </button>

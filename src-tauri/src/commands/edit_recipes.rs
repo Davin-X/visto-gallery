@@ -1,43 +1,5 @@
 use super::*;
-use serde::{Deserialize, Serialize};
-
-/// Request to save (upsert) an edit recipe for a media item.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SaveEditRecipeRequest {
-    pub media_id: String,
-    pub edits: serde_json::Value,
-    pub crop: Option<serde_json::Value>,
-    pub history: serde_json::Value,
-    pub history_index: i32,
-}
-
-/// Request to copy an edit recipe from one media item to another.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CopyEditRecipeRequest {
-    pub from_media_id: String,
-    pub to_media_id: String,
-}
-
-/// Request to batch-apply edits to multiple media items.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BatchApplyEditRequest {
-    pub media_ids: Vec<String>,
-    pub edits: serde_json::Value,
-    pub crop: Option<serde_json::Value>,
-}
-
-/// Request to save a named edit preset.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SaveEditPresetRequest {
-    pub id: Option<String>,
-    pub name: String,
-    pub edits: serde_json::Value,
-    pub crop: Option<serde_json::Value>,
-}
+use serde::Serialize;
 
 /// Response: a single edit recipe.
 #[derive(Debug, Serialize)]
@@ -67,19 +29,22 @@ pub struct EditPreset {
 /// Save or update an edit recipe for a media item.
 #[tauri::command]
 pub async fn save_edit_recipe(
-    req: SaveEditRecipeRequest,
+    media_id: String,
+    edits: serde_json::Value,
+    crop: Option<serde_json::Value>,
+    history: serde_json::Value,
+    history_index: i32,
     state: State<'_, AppState>,
 ) -> Result<EditRecipe, String> {
     let db = super::get_db(&state)?;
     let now = chrono::Utc::now().timestamp_millis();
 
-    let edits_json = serde_json::to_string(&req.edits).map_err(|e| e.to_string())?;
-    let crop_json = req
-        .crop
+    let edits_json = serde_json::to_string(&edits).map_err(|e| e.to_string())?;
+    let crop_json = crop
         .as_ref()
         .map(|c| serde_json::to_string(c).map_err(|e| e.to_string()))
         .transpose()?;
-    let history_json = serde_json::to_string(&req.history).map_err(|e| e.to_string())?;
+    let history_json = serde_json::to_string(&history).map_err(|e| e.to_string())?;
 
     // Upsert: insert or update existing recipe
     sqlx::query(
@@ -94,11 +59,11 @@ pub async fn save_edit_recipe(
             updated_at = excluded.updated_at
         "#,
     )
-    .bind(&req.media_id)
+    .bind(&media_id)
     .bind(&edits_json)
     .bind(&crop_json)
     .bind(&history_json)
-    .bind(req.history_index)
+    .bind(history_index)
     .bind(now)
     .bind(now)
     .execute(&db)
@@ -106,9 +71,9 @@ pub async fn save_edit_recipe(
     .map_err(|e| e.to_string())?;
 
     // Return the saved recipe
-    get_edit_recipe_inner(&db, &req.media_id)
+    get_edit_recipe_inner(&db, &media_id)
         .await?
-        .ok_or_else(|| format!("Failed to read back saved recipe for {}", req.media_id))
+        .ok_or_else(|| format!("Failed to read back saved recipe for {}", media_id))
 }
 
 /// Get an edit recipe for a media item.
@@ -157,15 +122,16 @@ pub async fn delete_edit_recipe(
 /// Copy an edit recipe from one media item to another.
 #[tauri::command]
 pub async fn copy_edit_recipe(
-    req: CopyEditRecipeRequest,
+    from_media_id: String,
+    to_media_id: String,
     state: State<'_, AppState>,
 ) -> Result<EditRecipe, String> {
     let db = super::get_db(&state)?;
     let now = chrono::Utc::now().timestamp_millis();
 
     // Read the source recipe
-    let source = get_edit_recipe_inner(&db, &req.from_media_id).await?;
-    let source = source.ok_or_else(|| format!("No edit recipe found for {}", req.from_media_id))?;
+    let source = get_edit_recipe_inner(&db, &from_media_id).await?;
+    let source = source.ok_or_else(|| format!("No edit recipe found for {}", from_media_id))?;
 
     // Upsert into destination
     let edits_json = serde_json::to_string(&source.edits).map_err(|e| e.to_string())?;
@@ -188,7 +154,7 @@ pub async fn copy_edit_recipe(
             updated_at = excluded.updated_at
         "#,
     )
-    .bind(&req.to_media_id)
+    .bind(&to_media_id)
     .bind(&edits_json)
     .bind(&crop_json)
     .bind(&history_json)
@@ -199,30 +165,31 @@ pub async fn copy_edit_recipe(
     .await
     .map_err(|e| e.to_string())?;
 
-    get_edit_recipe_inner(&db, &req.to_media_id)
+    get_edit_recipe_inner(&db, &to_media_id)
         .await?
-        .ok_or_else(|| format!("Failed to read back copied recipe for {}", req.to_media_id))
+        .ok_or_else(|| format!("Failed to read back copied recipe for {}", to_media_id))
 }
 
 /// Batch-apply edits to multiple media items.
 #[tauri::command]
 pub async fn batch_apply_edit(
-    req: BatchApplyEditRequest,
+    media_ids: Vec<String>,
+    edits: serde_json::Value,
+    crop: Option<serde_json::Value>,
     state: State<'_, AppState>,
 ) -> Result<usize, String> {
     let db = super::get_db(&state)?;
     let now = chrono::Utc::now().timestamp_millis();
 
-    let edits_json = serde_json::to_string(&req.edits).map_err(|e| e.to_string())?;
-    let crop_json = req
-        .crop
+    let edits_json = serde_json::to_string(&edits).map_err(|e| e.to_string())?;
+    let crop_json = crop
         .as_ref()
         .map(|c| serde_json::to_string(c).map_err(|e| e.to_string()))
         .transpose()?;
-    let history_json = serde_json::to_string(&req.edits).map_err(|e| e.to_string())?;
+    let history_json = serde_json::to_string(&edits).map_err(|e| e.to_string())?;
 
     let mut count = 0usize;
-    for media_id in &req.media_ids {
+    for media_id in &media_ids {
         sqlx::query(
             r#"
             INSERT INTO edit_recipes (media_id, edits, crop, history, history_index, created_at, updated_at)
@@ -253,16 +220,18 @@ pub async fn batch_apply_edit(
 /// Save a named edit preset.
 #[tauri::command]
 pub async fn save_edit_preset(
-    req: SaveEditPresetRequest,
+    id: Option<String>,
+    name: String,
+    edits: serde_json::Value,
+    crop: Option<serde_json::Value>,
     state: State<'_, AppState>,
 ) -> Result<EditPreset, String> {
     let db = super::get_db(&state)?;
     let now = chrono::Utc::now().timestamp_millis();
-    let id = req.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    let id = id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-    let edits_json = serde_json::to_string(&req.edits).map_err(|e| e.to_string())?;
-    let crop_json = req
-        .crop
+    let edits_json = serde_json::to_string(&edits).map_err(|e| e.to_string())?;
+    let crop_json = crop
         .as_ref()
         .map(|c| serde_json::to_string(c).map_err(|e| e.to_string()))
         .transpose()?;
@@ -279,7 +248,7 @@ pub async fn save_edit_preset(
         "#,
     )
     .bind(&id)
-    .bind(&req.name)
+    .bind(&name)
     .bind(&edits_json)
     .bind(&crop_json)
     .bind(now)
@@ -290,12 +259,243 @@ pub async fn save_edit_preset(
 
     Ok(EditPreset {
         id,
-        name: req.name,
-        edits: req.edits,
-        crop: req.crop,
+        name,
+        edits,
+        crop,
         created_at: now,
         updated_at: now,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn test_db() -> SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory database");
+
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+        )
+        .execute(&db)
+        .await
+        .expect("create media_items");
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS edit_recipes (
+                media_id TEXT PRIMARY KEY REFERENCES media_items (id) ON DELETE CASCADE,
+                edits TEXT NOT NULL,
+                crop TEXT,
+                history TEXT NOT NULL,
+                history_index INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS edit_presets (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                edits TEXT NOT NULL,
+                crop TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            "#,
+        )
+        .execute(&db)
+        .await
+        .expect("create edit tables");
+
+        db
+    }
+
+    #[tokio::test]
+    async fn test_save_and_get_edit_recipe() {
+        let db = test_db().await;
+
+        // Insert dummy media item
+        sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at) VALUES ('item-1', '/tmp/1.jpg', '1.jpg', 'jpg', 'photo', 100, 1, 1, 1)")
+            .execute(&db)
+            .await
+            .expect("insert media item");
+
+        let edits = serde_json::json!({
+            "exposure": 25,
+            "contrast": -10,
+            "rotation": 90,
+            "flip": false
+        });
+        let history = serde_json::json!([edits]);
+
+        let edits_json = serde_json::to_string(&edits).unwrap();
+        let history_json = serde_json::to_string(&history).unwrap();
+        let now = 1000i64;
+
+        sqlx::query(
+            r#"
+            INSERT INTO edit_recipes (media_id, edits, crop, history, history_index, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind("item-1")
+        .bind(&edits_json)
+        .bind(None::<String>)
+        .bind(&history_json)
+        .bind(0i32)
+        .bind(now)
+        .bind(now)
+        .execute(&db)
+        .await
+        .expect("insert recipe");
+
+        let fetched = get_edit_recipe_inner(&db, "item-1").await;
+        assert!(
+            fetched.is_ok(),
+            "get_edit_recipe_inner failed: {:?}",
+            fetched.err()
+        );
+        let recipe = fetched.unwrap().expect("recipe should exist");
+        assert_eq!(recipe.media_id, "item-1");
+        assert_eq!(recipe.edits["exposure"], 25);
+    }
+
+    #[tokio::test]
+    async fn test_upsert_and_delete_recipe() {
+        let db = test_db().await;
+
+        sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at) VALUES ('item-2', '/tmp/2.jpg', '2.jpg', 'jpg', 'photo', 100, 1, 1, 1)")
+            .execute(&db)
+            .await
+            .expect("insert media item");
+
+        let edits1 = serde_json::json!({ "exposure": 10 });
+        let edits2 = serde_json::json!({ "exposure": 50, "warmth": 20 });
+        let crop =
+            serde_json::json!({ "enabled": true, "x": 0.1, "y": 0.1, "width": 0.8, "height": 0.8 });
+
+        // Save v1
+        let edits1_json = serde_json::to_string(&edits1).unwrap();
+        let history1_json = serde_json::to_string(&serde_json::json!([edits1])).unwrap();
+        sqlx::query(
+            r#"
+            INSERT INTO edit_recipes (media_id, edits, crop, history, history_index, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(media_id) DO UPDATE SET
+                edits = excluded.edits, crop = excluded.crop, history = excluded.history,
+                history_index = excluded.history_index, updated_at = excluded.updated_at
+            "#,
+        )
+        .bind("item-2")
+        .bind(&edits1_json)
+        .bind(None::<String>)
+        .bind(&history1_json)
+        .bind(0i32)
+        .bind(100i64)
+        .bind(100i64)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        // Update to v2
+        let edits2_json = serde_json::to_string(&edits2).unwrap();
+        let crop_json = serde_json::to_string(&crop).unwrap();
+        let history2_json = serde_json::to_string(&serde_json::json!([edits1, edits2])).unwrap();
+        sqlx::query(
+            r#"
+            INSERT INTO edit_recipes (media_id, edits, crop, history, history_index, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(media_id) DO UPDATE SET
+                edits = excluded.edits, crop = excluded.crop, history = excluded.history,
+                history_index = excluded.history_index, updated_at = excluded.updated_at
+            "#,
+        )
+        .bind("item-2")
+        .bind(&edits2_json)
+        .bind(Some(&crop_json))
+        .bind(&history2_json)
+        .bind(1i32)
+        .bind(100i64)
+        .bind(200i64)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let updated = get_edit_recipe_inner(&db, "item-2").await.unwrap().unwrap();
+        assert_eq!(updated.edits["exposure"], 50);
+        assert_eq!(updated.edits["warmth"], 20);
+        assert_eq!(updated.history_index, 1);
+        assert!(updated.crop.is_some());
+
+        // Delete
+        sqlx::query("DELETE FROM edit_recipes WHERE media_id = ?")
+            .bind("item-2")
+            .execute(&db)
+            .await
+            .unwrap();
+
+        let after_delete = get_edit_recipe_inner(&db, "item-2").await.unwrap();
+        assert!(after_delete.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_copy_recipe_and_presets() {
+        let db = test_db().await;
+
+        sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at) VALUES ('src-1', '/tmp/s.jpg', 's.jpg', 'jpg', 'photo', 100, 1, 1, 1), ('dst-1', '/tmp/d.jpg', 'd.jpg', 'jpg', 'photo', 100, 1, 1, 1)")
+            .execute(&db)
+            .await
+            .expect("insert items");
+
+        let edits = serde_json::json!({ "saturation": 30, "contrast": 15 });
+        let edits_json = serde_json::to_string(&edits).unwrap();
+        let history_json = serde_json::to_string(&serde_json::json!([edits])).unwrap();
+
+        sqlx::query(
+            "INSERT INTO edit_recipes (media_id, edits, crop, history, history_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind("src-1")
+        .bind(&edits_json)
+        .bind(None::<String>)
+        .bind(&history_json)
+        .bind(0i32)
+        .bind(100i64)
+        .bind(100i64)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        // Copy from src-1 to dst-1
+        let src = get_edit_recipe_inner(&db, "src-1").await.unwrap().unwrap();
+        sqlx::query(
+            r#"
+            INSERT INTO edit_recipes (media_id, edits, crop, history, history_index, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(media_id) DO UPDATE SET
+                edits = excluded.edits, crop = excluded.crop, history = excluded.history,
+                history_index = excluded.history_index, updated_at = excluded.updated_at
+            "#,
+        )
+        .bind("dst-1")
+        .bind(serde_json::to_string(&src.edits).unwrap())
+        .bind(None::<String>)
+        .bind(serde_json::to_string(&src.history).unwrap())
+        .bind(src.history_index)
+        .bind(200i64)
+        .bind(200i64)
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let dst = get_edit_recipe_inner(&db, "dst-1").await.unwrap().unwrap();
+        assert_eq!(dst.media_id, "dst-1");
+        assert_eq!(dst.edits["saturation"], 30);
+        assert_eq!(dst.edits["contrast"], 15);
+    }
 }
 
 /// List all edit presets.
