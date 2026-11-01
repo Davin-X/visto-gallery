@@ -1,11 +1,5 @@
-export type {
-  MediaItem,
-  Album,
-  Tag,
-  ImportSession,
-  LibraryFilter,
-  DuplicateGroup,
-} from "./media";
+import type { CropState, EditRecipe, EditPreset } from "./media";
+export type { CropState, EditRecipe, EditPreset, MediaItem, Album, Tag, ImportSession, LibraryFilter, DuplicateGroup } from "./media";
 export type { AppSettings } from "./settings";
 
 import type {
@@ -259,6 +253,37 @@ export type TauriCommandSignature = {
 
   // Editing
   render_edited: (request: RenderRequest) => ExportResult;
+  save_edit_recipe: (req: {
+    mediaId: string;
+    edits: EditValues;
+    crop?: CropState;
+    history: EditValues[];
+    historyIndex: number;
+  }) => EditRecipe;
+  get_edit_recipe: (mediaId: string) => EditRecipe | null;
+  list_edit_recipes: () => EditRecipe[];
+  delete_edit_recipe: (mediaId: string) => boolean;
+  copy_edit_recipe: (req: {
+    fromMediaId: string;
+    toMediaId: string;
+  }) => EditRecipe;
+  batch_apply_edit: (req: {
+    mediaIds: string[];
+    edits: EditValues;
+    crop?: CropState;
+  }) => number;
+  save_edit_preset: (req: {
+    id?: string;
+    name: string;
+    edits: EditValues;
+    crop?: CropState;
+  }) => EditPreset;
+  list_edit_presets: () => EditPreset[];
+  delete_edit_preset: (id: string) => boolean;
+  apply_edit_preset: (req: {
+    presetId: string;
+    mediaId: string;
+  }) => EditRecipe;
 
   // Batch
   batch_export: (request: BatchExportRequest) => BatchExportResult;

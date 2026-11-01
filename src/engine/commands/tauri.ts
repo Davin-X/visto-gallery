@@ -23,6 +23,9 @@ import type {
   AppSettings,
   EditValues,
   CropRect,
+  CropState,
+  EditRecipe,
+  EditPreset,
   TrashResult,
   TrashError,
   UpdateCheckResult,
@@ -153,6 +156,52 @@ export const tauri = {
 
     save: (settings: Partial<AppSettings>): Promise<AppSettings> =>
       invoke("save_settings", { patch: settings }),
+  },
+
+  edit: {
+    saveRecipe: (req: {
+      mediaId: string;
+      edits: EditValues;
+      crop?: CropState;
+      history: EditValues[];
+      historyIndex: number;
+    }) => invoke<EditRecipe>("save_edit_recipe", req),
+
+    getRecipe: (mediaId: string) =>
+      invoke<EditRecipe | null>("get_edit_recipe", { mediaId }),
+
+    listRecipes: () => invoke<EditRecipe[]>("list_edit_recipes"),
+
+    deleteRecipe: (mediaId: string) =>
+      invoke<boolean>("delete_edit_recipe", { mediaId }),
+
+    copyRecipe: (req: {
+      fromMediaId: string;
+      toMediaId: string;
+    }) => invoke<EditRecipe>("copy_edit_recipe", req),
+
+    batchApply: (req: {
+      mediaIds: string[];
+      edits: EditValues;
+      crop?: CropState;
+    }) => invoke<number>("batch_apply_edit", req),
+
+    savePreset: (req: {
+      id?: string;
+      name: string;
+      edits: EditValues;
+      crop?: CropState;
+    }) => invoke<EditPreset>("save_edit_preset", req),
+
+    listPresets: () => invoke<EditPreset[]>("list_edit_presets"),
+
+    deletePreset: (id: string) =>
+      invoke<boolean>("delete_edit_preset", { id }),
+
+    applyPreset: (req: {
+      presetId: string;
+      mediaId: string;
+    }) => invoke<EditRecipe>("apply_edit_preset", req),
   },
 
   app: {
