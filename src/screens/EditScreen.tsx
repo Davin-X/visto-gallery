@@ -260,15 +260,15 @@ function EditScreen(props: EditScreenProps) {
               Open a photo from the Library to begin editing.
             </p>
           </div>
-        </div>
-        <div className="edit-heading-actions">
-          <button
-            className="quiet-button"
-            type="button"
-            onClick={() => props.onBack?.()}
-          >
-            Back to Library
-          </button>
+          <div style={{ marginTop: 20 }}>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => props.onBack?.()}
+            >
+              Back to Library
+            </button>
+          </div>
         </div>
         {savedDraftItems.length > 0 && (
           <div style={{ marginTop: 24, marginLeft: 16 }}>

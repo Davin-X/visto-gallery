@@ -98,6 +98,23 @@ pub async fn rename_album(
 }
 
 #[tauri::command]
+pub async fn get_album_items(
+    album_id: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<MediaItem>, String> {
+    let db = super::get_db(&state)?;
+    let items = sqlx::query_as::<_, MediaItem>(&format!(
+        "{} WHERE m.id IN (SELECT media_id FROM album_items WHERE album_id = ?) ORDER BY m.captured_at ASC",
+        super::ALBUM_SELECT
+    ))
+    .bind(&album_id)
+    .fetch_all(&db)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(items)
+}
+
+#[tauri::command]
 pub async fn add_to_album(
     album_id: String,
     item_ids: Vec<String>,

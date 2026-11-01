@@ -201,12 +201,13 @@ function LibraryScreen(props: LibraryScreenProps) {
   const activeAlbumItems = useMemo(
     () =>
       props.activeAlbum
-        ? library.items.filter(
+        ? library.albumItems?.[props.activeAlbum] ??
+          library.items.filter(
             (item: any) =>
               item.albumIds?.includes(props.activeAlbum) && !item.hidden,
           )
         : [],
-    [library.items, props.activeAlbum],
+    [library.items, library.albumItems, props.activeAlbum],
   );
   const activeAlbumPhotos = useMemo(
     () =>

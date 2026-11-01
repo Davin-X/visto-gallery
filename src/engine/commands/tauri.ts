@@ -87,6 +87,9 @@ export const tauri = {
   albums: {
     get: (): Promise<Album[]> => invoke("get_albums"),
 
+    getItems: (albumId: string): Promise<MediaItem[]> =>
+      invoke("get_album_items", { albumId }),
+
     getTags: (): Promise<Tag[]> => invoke("get_tags"),
 
     create: (name: string, colorIndex?: number): Promise<Album> =>

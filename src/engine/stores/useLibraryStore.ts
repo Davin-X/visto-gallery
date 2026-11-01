@@ -111,6 +111,9 @@ interface LibraryState {
   hiddenItems: MediaItem[];
   hiddenCount: number;
 
+  // Per-album item cache (all items in an album, not paginated)
+  albumItems: Record<string, MediaItem[]>;
+
   // Actions - Data Loading
   loadLibrary: (filter?: LibraryFilter) => Promise<void>;
   loadNextPage: () => Promise<void>;
@@ -164,6 +167,7 @@ interface LibraryState {
   renameAlbum: (albumId: string, name: string) => Promise<void>;
   addToAlbum: (albumId: string, itemIds?: string[]) => Promise<void>;
   removeFromAlbum: (albumId: string, itemIds: string[]) => Promise<void>;
+  loadAlbumItems: (albumId: string) => Promise<void>;
 
   // Actions - Duplicates
   scanDuplicates: () => Promise<void>;
@@ -414,6 +418,9 @@ export const useLibraryStore = create<LibraryState>()(
       viewerIndex: -1,
       hiddenItems: [],
       hiddenCount: 0,
+
+      // Per-album item cache (all items in an album, not paginated)
+      albumItems: {},
 
       // Data Loading
       loadLibrary: async (filter) => {
@@ -1070,6 +1077,13 @@ export const useLibraryStore = create<LibraryState>()(
         get().showNotice(
           `Removed ${removedIds.length} ${removedIds.length === 1 ? "item" : "items"}${albumName ? ` from "${albumName}"` : " from the album"}`,
         );
+      },
+
+      loadAlbumItems: async (albumId) => {
+        const items = await tauri.albums.getItems(albumId);
+        set((s) => ({
+          albumItems: { ...s.albumItems, [albumId]: items },
+        }));
       },
 
       // Duplicates

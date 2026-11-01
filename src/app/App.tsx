@@ -2341,6 +2341,7 @@ function App() {
                 library.setActiveAlbum(albumId);
                 library.setFilter("All");
                 library.setQuery("");
+                library.loadAlbumItems(albumId);
                 setScreen("Library");
               }}
             />
