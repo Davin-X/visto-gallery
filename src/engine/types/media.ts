@@ -151,6 +151,8 @@ export interface LibraryFilter {
   dateTo?: number;
   rating?: number; // filter items at or above this star rating (0-5)
   colorLabel?: string; // 'red' | 'yellow' | 'green' | 'blue' | 'purple'
+  camera?: string; // filter by camera model
+  lens?: string; // filter by lens model
 }
 
 export interface DuplicateGroup {

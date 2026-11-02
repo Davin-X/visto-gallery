@@ -36,6 +36,7 @@ import {
 import { draftImageStyle } from "../engine/utils/draftImage";
 import { searchShortcutLabel } from "../engine/utils/shortcut";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
+import { FilterDropdown } from "../design/components/FilterDropdown";
 import { useSettingsStore } from "../engine/stores/useSettingsStore";
 import { useThumbnailSize } from "../engine/stores/useSettingsStore";
 import { tauri } from "../engine/commands/tauri";
@@ -133,6 +134,38 @@ function LibraryScreen(props: LibraryScreenProps) {
   const thumbnailSize = useThumbnailSize();
   const settingsStore = useSettingsStore();
   const showExtensions = settingsStore.showExtensions;
+  const sortDirectionLabel =
+    library.sortBy === "capturedAt" || library.sortBy === "modifiedAt"
+      ? library.sortOrder === "asc"
+        ? "Oldest"
+        : "Newest"
+      : library.sortBy === "name"
+        ? library.sortOrder === "asc"
+          ? "A–Z"
+          : "Z–A"
+        : library.sortBy === "size"
+          ? library.sortOrder === "asc"
+            ? "Smallest"
+            : "Largest"
+          : library.sortOrder === "asc"
+            ? "Ascending"
+            : "Descending";
+  const nextSortDirectionLabel =
+    library.sortBy === "capturedAt" || library.sortBy === "modifiedAt"
+      ? library.sortOrder === "asc"
+        ? "newest first"
+        : "oldest first"
+      : library.sortBy === "name"
+        ? library.sortOrder === "asc"
+          ? "Z to A"
+          : "A to Z"
+        : library.sortBy === "size"
+          ? library.sortOrder === "asc"
+            ? "largest first"
+            : "smallest first"
+          : library.sortOrder === "asc"
+            ? "descending by media type"
+            : "ascending by media type";
   // The grid can request a cached JPEG instead of decoding the original. Use
   // roughly 2x the CSS tile width so retina displays stay sharp; the details
   // preview is only 42-52 px, so a 128 px thumbnail is plenty there.
@@ -965,28 +998,9 @@ function LibraryScreen(props: LibraryScreenProps) {
                 </p>
                 <div className="header-title-row">
                   <h1>{props.hiddenView ? "Hidden" : "All Photos"}</h1>
-                  <p className="page-subtitle">
-                    {props.items.length.toLocaleString()} shown ·{" "}
-                    {props.hiddenView
-                      ? `${(props.hiddenCount || 0).toLocaleString()} hidden`
-                      : `${library.totalCount.toLocaleString()} in library`}
-                    {!props.hiddenView && props.hiddenCount
-                      ? ` · ${props.hiddenCount.toLocaleString()} hidden`
-                      : ""}
-                  </p>
                 </div>
               </div>
               <div className="header-actions">
-                <button
-                  className="quiet-button icon-only"
-                  type="button"
-                  onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
-                  disabled={props.busy || props.items.length === 0}
-                  title="Play the current view as a slideshow (Space)"
-                  aria-label="Play slideshow"
-                >
-                  <PlayIcon size={16} />
-                </button>
                 {!props.hiddenView && (
                   <>
                     <label
@@ -1064,7 +1078,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                 placeholder={
                   props.hiddenView
                     ? "Search hidden items…"
-                    : "Search filenames, tags, camera…"
+                    : "Search filenames, tags, camera, lens…"
                 }
                 aria-label={
                   props.hiddenView ? "Search hidden items" : "Search library"
@@ -1088,10 +1102,22 @@ function LibraryScreen(props: LibraryScreenProps) {
             </div>
             <div className="toolbar-right">
               <div className="toolbar-actions">
+                <button
+                  className="toolbar-button slideshow-action"
+                  type="button"
+                  onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
+                  disabled={props.busy || props.items.length === 0}
+                  title="Play the current view as a slideshow (Space)"
+                  aria-label="Play slideshow"
+                >
+                  <PlayIcon size={14} />
+                  <span className="slideshow-label">Slideshow</span>
+                </button>
                 {!props.hiddenView && (
                   <button
                     className="toolbar-button"
                     type="button"
+                    aria-label="Create album"
                     onClick={() => props.onCreateAlbum?.()}
                     title="Create album (⌘N)"
                   >
@@ -1099,51 +1125,90 @@ function LibraryScreen(props: LibraryScreenProps) {
                   </button>
                 )}
                 <span className="toolbar-divider" aria-hidden="true" />
-                <div className="layout-switcher" aria-label="Gallery layout">
-                  {(["grid", "details", "timeline"] as const).map((l) => {
-                    const Icon =
-                      l === "grid"
-                        ? GridIcon
-                        : l === "details"
-                          ? DetailsIcon
-                          : TimelineIcon;
-                    return (
+                <div
+                  className="view-controls"
+                  role="group"
+                  aria-label="View controls"
+                >
+                  <div
+                    className="layout-switcher"
+                    role="group"
+                    aria-label="Gallery layout"
+                  >
+                    {(["grid", "details", "timeline"] as const).map((l) => {
+                      const Icon =
+                        l === "grid"
+                          ? GridIcon
+                          : l === "details"
+                            ? DetailsIcon
+                            : TimelineIcon;
+                      return (
+                        <button
+                          key={l}
+                          type="button"
+                          aria-label={`${l[0].toUpperCase()}${l.slice(1)} view`}
+                          title={`${l[0].toUpperCase()}${l.slice(1)} view`}
+                          aria-pressed={props.layout === l}
+                          className={props.layout === l ? "selected" : ""}
+                          onClick={() => props.onChangeLayout(l)}
+                        >
+                          <Icon size={14} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div
+                    className="zoom-control"
+                    role="group"
+                    aria-label="Thumbnail size"
+                  >
+                    {(["small", "medium", "large"] as const).map((s) => (
                       <button
-                        key={l}
+                        key={s}
                         type="button"
-                        aria-label={l}
-                        title={l}
-                        className={props.layout === l ? "selected" : ""}
-                        onClick={() => props.onChangeLayout(l)}
+                        className={`zoom-step ${thumbnailSize === s ? "selected" : ""}`}
+                        aria-label={
+                          s === "small"
+                            ? "Small thumbnails"
+                            : s === "medium"
+                              ? "Medium thumbnails"
+                              : "Large thumbnails"
+                        }
+                        aria-pressed={thumbnailSize === s}
+                        onClick={() => settingsStore.update("thumbnailSize", s)}
+                        title={
+                          s === "small"
+                            ? "Small thumbnails"
+                            : s === "medium"
+                              ? "Medium thumbnails"
+                              : "Large thumbnails"
+                        }
                       >
-                        <Icon size={14} />
+                        <span
+                          className={`zoom-glyph zoom-glyph-${s}`}
+                          aria-hidden="true"
+                        >
+                          {Array.from(
+                            {
+                              length: s === "small" ? 6 : s === "medium" ? 4 : 1,
+                            },
+                            (_, index) => (
+                              <i key={index} />
+                            ),
+                          )}
+                        </span>
                       </button>
-                    );
-                  })}
-                </div>
-                <div className="zoom-control" aria-label="Thumbnail size">
-                  {(["small", "medium", "large"] as const).map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      className={`zoom-step ${thumbnailSize === s ? "selected" : ""}`}
-                      onClick={() => settingsStore.update("thumbnailSize", s)}
-                      title={
-                        s === "small"
-                          ? "Small thumbnails"
-                          : s === "medium"
-                            ? "Medium thumbnails"
-                            : "Large thumbnails"
-                      }
-                    >
-                      {s === "small" ? "S" : s === "medium" ? "M" : "L"}
-                    </button>
-                  ))}
+                    ))}
+                  </div>
                 </div>
                 {!props.hiddenView && (
-                  <div className="sort-control">
+                  <div
+                    className="sort-control"
+                    role="group"
+                    aria-label={`Sort options; ${sortDirectionLabel}`}
+                  >
                     <select
-                      aria-label="Sort library"
+                      aria-label="Sort library by"
                       value={library.sortBy}
                       onChange={(e) =>
                         library.setSort(
@@ -1160,14 +1225,8 @@ function LibraryScreen(props: LibraryScreenProps) {
                     </select>
                     <button
                       type="button"
-                      aria-label={
-                        library.sortOrder === "asc"
-                          ? "Sort ascending"
-                          : "Sort descending"
-                      }
-                      title={
-                        library.sortOrder === "asc" ? "Ascending" : "Descending"
-                      }
+                      aria-label={`Sort ${nextSortDirectionLabel}`}
+                      title={`Currently ${sortDirectionLabel}; click to sort ${nextSortDirectionLabel}`}
                       onClick={() =>
                         library.setSort(
                           library.sortBy,
@@ -1175,7 +1234,12 @@ function LibraryScreen(props: LibraryScreenProps) {
                         )
                       }
                     >
-                      {library.sortOrder === "asc" ? "↑" : "↓"}
+                      <span className="sort-direction-arrow" aria-hidden="true">
+                        {library.sortOrder === "asc" ? "↑" : "↓"}
+                      </span>
+                      <span className="sort-direction-label">
+                        {sortDirectionLabel}
+                      </span>
                     </button>
                   </div>
                 )}
@@ -1183,8 +1247,12 @@ function LibraryScreen(props: LibraryScreenProps) {
             </div>
           </div>
 
-          <div className="filter-cluster">
-            <span className="smart-label">SHOW</span>
+          <div
+            className="filter-cluster"
+            role="group"
+            aria-label="Filter by media type"
+          >
+            <span className="smart-label">TYPE</span>
             {(["All", "Photos", "Videos", "RAW", "Favorites"] as string[]).map(
               (f) => {
                 const count =
@@ -1205,6 +1273,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                   <button
                     key={f}
                     type="button"
+                    aria-pressed={props.filter === f}
                     className={`quick-filter ${props.filter === f ? "active" : ""}`}
                     onClick={() => props.onChangeFilter(f as Filter)}
                   >
@@ -1214,52 +1283,12 @@ function LibraryScreen(props: LibraryScreenProps) {
                 );
               },
             )}
-          </div>
-
-          <div className="filter-cluster">
-            <span className="smart-label">RATING</span>
-            {["★", "★★", "★★★", "★★★★", "★★★★★"].map((label, i) => {
-              const stars = i + 1;
-              const active = props.minRating === stars;
-              return (
-                <button
-                  key={stars}
-                  type="button"
-                  className={`quick-filter quick-filter-rating ${active ? "active" : ""}`}
-                  onClick={() =>
-                    props.onSetMinRating(active ? null : stars)
-                  }
-                  title={`Show ${stars}+ star${stars > 1 ? "s" : ""}`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-            <span className="smart-label" style={{ marginLeft: 16 }}>
-              COLOR
-            </span>
-            {([
-              ["red", "Red"],
-              ["yellow", "Yellow"],
-              ["green", "Green"],
-              ["blue", "Blue"],
-              ["purple", "Purple"],
-            ] as [string, string][]).map(([color, name]) => {
-              const active = props.colorLabelFilter === color;
-              return (
-                <button
-                  key={color}
-                  type="button"
-                  className={`quick-filter quick-filter-color quick-filter-color-${color} ${active ? "active" : ""}`}
-                  onClick={() =>
-                    props.onSetColorLabelFilter(active ? null : color)
-                  }
-                  title={`Filter by ${name} label`}
-                >
-                  <span className="color-dot-small" />
-                </button>
-              );
-            })}
+            <FilterDropdown
+              minRating={props.minRating}
+              colorLabelFilter={props.colorLabelFilter}
+              onSetMinRating={props.onSetMinRating}
+              onSetColorLabelFilter={props.onSetColorLabelFilter}
+            />
           </div>
 
           {props.selectedIds.length > 0 && (

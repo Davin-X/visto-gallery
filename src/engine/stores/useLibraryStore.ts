@@ -74,6 +74,8 @@ interface LibraryState {
   // Rating and color-label filters (applied on top of `filter`)
   minRating: number | null; // items at or above this star rating
   colorLabelFilter: string | null; // 'red' | 'yellow' | 'green' | 'blue' | 'purple'
+  cameraFilter: string | null; // filter by camera model
+  lensFilter: string | null; // filter by lens model
   // Which collection the viewer navigates when it opens. Hidden items are
   // deliberately absent from the normal viewer, so the Hidden gallery asks the
   // viewer to browse the hidden set instead.
@@ -152,6 +154,8 @@ interface LibraryState {
   setHiddenQuery: (query: string) => void;
   setMinRating: (rating: number | null) => void;
   setColorLabelFilter: (colorLabel: string | null) => void;
+  setCameraFilter: (camera: string | null) => void;
+  setLensFilter: (lens: string | null) => void;
   setLayout: (layout: LayoutMode) => void;
   setSort: (
     sortBy: LibraryState["sortBy"],
@@ -201,6 +205,10 @@ interface LibraryState {
 // Load generation and query debounce are per-app (not per-store-instance).
 let libraryLoadGeneration = 0;
 let queryReloadTimer: ReturnType<typeof setTimeout> | null = null;
+// Debounce for free-text camera/lens filters so typing doesn't reload the
+// library on every keystroke. State updates stay immediate; only the IPC
+// round-trip is deferred.
+let cameraLensReloadTimer: ReturnType<typeof setTimeout> | null = null;
 
 function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
   const kind =
@@ -221,6 +229,8 @@ function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
     sortOrder: state.sortOrder,
     rating: state.minRating ?? undefined,
     colorLabel: state.colorLabelFilter ?? undefined,
+    camera: state.cameraFilter ?? undefined,
+    lens: state.lensFilter ?? undefined,
   };
 }
 
@@ -409,6 +419,8 @@ export const useLibraryStore = create<LibraryState>()(
       viewerScope: "library",
       minRating: null,
       colorLabelFilter: null,
+      cameraFilter: null,
+      lensFilter: null,
       busy: false,
       canceling: false,
       progress: null,
@@ -751,6 +763,26 @@ export const useLibraryStore = create<LibraryState>()(
         set({ colorLabelFilter: colorLabel });
         get().refreshDerived();
         void get().loadLibrary();
+      },
+
+      setCameraFilter: (camera: string | null) => {
+        set({ cameraFilter: camera });
+        get().refreshDerived();
+        if (cameraLensReloadTimer) clearTimeout(cameraLensReloadTimer);
+        cameraLensReloadTimer = setTimeout(() => {
+          cameraLensReloadTimer = null;
+          void get().loadLibrary();
+        }, 180);
+      },
+
+      setLensFilter: (lens: string | null) => {
+        set({ lensFilter: lens });
+        get().refreshDerived();
+        if (cameraLensReloadTimer) clearTimeout(cameraLensReloadTimer);
+        cameraLensReloadTimer = setTimeout(() => {
+          cameraLensReloadTimer = null;
+          void get().loadLibrary();
+        }, 180);
       },
 
       setQuery: (query) => {
@@ -1314,6 +1346,8 @@ export const useShowInspector = () => useLibraryStore((s) => s.showInspector);
 export const useActiveAlbum = () => useLibraryStore((s) => s.activeAlbum);
 export const useMinRating = () => useLibraryStore((s) => s.minRating);
 export const useColorLabelFilter = () => useLibraryStore((s) => s.colorLabelFilter);
+export const useCameraFilter = () => useLibraryStore((s) => s.cameraFilter);
+export const useLensFilter = () => useLibraryStore((s) => s.lensFilter);
 export const useAlbums = () => useLibraryStore((s) => s.albums);
 export const useDuplicates = () => useLibraryStore((s) => s.duplicates);
 export const useBusy = () => useLibraryStore((s) => s.busy);

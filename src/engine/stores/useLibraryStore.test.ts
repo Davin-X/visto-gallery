@@ -85,6 +85,18 @@ test("setQuery narrows visible items", () => {
   ]);
 });
 
+test("setQuery searches camera and lens metadata", () => {
+  const a = { ...makeItem("a", "sunset.jpg"), camera: "Nikon Z8" };
+  const b = { ...makeItem("b", "mountain.jpg"), lens: "Nikkor 24-70mm" };
+  useLibraryStore.setState({ items: [a, b] });
+  useLibraryStore.getState().refreshDerived();
+
+  useLibraryStore.getState().setQuery("Nikkor");
+  expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual([
+    "b",
+  ]);
+});
+
 test("toggleFavorite updates item and derived state", async () => {
   const a = makeItem("a", "photo.jpg", false);
   useLibraryStore.setState({ items: [a] });
