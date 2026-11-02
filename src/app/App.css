@@ -771,7 +771,7 @@ body {
 
 .library-header .quick-filter .filter-count {
   margin-left: 0;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
   border-radius: 999px;
   padding: 0 6px;
   font-size: 10px;
@@ -892,7 +892,8 @@ body {
 }
 
 .quick-filter.active .filter-count {
-  color: inherit;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--accent-contrast);
 }
 
 /* Select all stays pinned to the right end of the filter row. */
