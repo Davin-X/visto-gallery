@@ -10,12 +10,23 @@ import {
   PlayIcon,
   PauseIcon,
 } from "./icons";
+import { tauri } from "../../engine/commands/tauri";
+import type { ExternalPlayer } from "../../engine/types/commands";
 import { formatDuration } from "../../engine/utils/time";
+import {
+  canPlayVideoInApp,
+  fileExtension,
+} from "../../engine/utils/mediaTypes";
+
+// WKWebView can decode MP4/MOV (H.264/HEVC) and WebM, but not Matroska or AVI.
+// Files outside the supported list never reach the <video> element: WebKit
+// renders a black frame for them, which made the whole viewer look broken.
 
 function VideoPlayer({
   itemId,
   active = true,
   src,
+  path,
   name,
   onFullscreen,
   onNext,
@@ -23,6 +34,7 @@ function VideoPlayer({
   itemId: string;
   active?: boolean;
   src: string;
+  path?: string;
   name?: string;
   onFullscreen?: () => void;
   onNext?: () => void;
@@ -42,6 +54,43 @@ function VideoPlayer({
   const [pip, setPip] = useState(false);
   const [autoAdvance, setAutoAdvance] = useState(false);
   const [pipSupported, setPipSupported] = useState(false);
+  const [failed, setFailed] = useState(() => !canPlayVideoInApp(path, name));
+  const [players, setPlayers] = useState<ExternalPlayer[]>([]);
+  const [openError, setOpenError] = useState<string | null>(null);
+
+  // A different item can use a different container, so re-evaluate on change.
+  useEffect(() => {
+    setFailed(!canPlayVideoInApp(path, name));
+    setOpenError(null);
+  }, [src, path, name]);
+
+  // Only look up external players when something actually failed.
+  useEffect(() => {
+    if (!failed) return;
+    let cancelled = false;
+    void tauri.items
+      .externalVideoPlayers()
+      .then((list) => {
+        if (!cancelled) setPlayers(list);
+      })
+      .catch(() => {
+        if (!cancelled) setPlayers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [failed]);
+
+  const openExternally = async (player?: string) => {
+    if (!path) return;
+    setOpenError(null);
+    try {
+      if (player) await tauri.items.openWithPlayer(path, player);
+      else await tauri.items.openFile(path);
+    } catch (error) {
+      setOpenError(String(error));
+    }
+  };
 
   // Expose this element to the mini-player that takes over when the user
   // navigates away from the Viewer. The viewer is kept mounted off-screen, so
@@ -351,6 +400,64 @@ function VideoPlayer({
     }, 220);
   };
 
+  if (failed) {
+    const ext = fileExtension(path) || fileExtension(name);
+    const player = players[0];
+    return (
+      <div className="viewer-video-fallback" role="alert">
+        <div className="viewer-video-fallback-art" aria-hidden="true">
+          <svg
+            width="34"
+            height="34"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <path d="M7 4v16M17 4v16M2 9h5M2 15h5M17 9h5M17 15h5" />
+          </svg>
+        </div>
+        <h3 className="viewer-video-fallback-title">{name || "This video"}</h3>
+        <p className="viewer-video-fallback-copy">
+          {ext ? `.${ext} files` : "This file"} can't be decoded by macOS's
+          built-in web player. Open it in a desktop player that supports this
+          format.
+        </p>
+        <div className="viewer-video-fallback-actions">
+          {player ? (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => void openExternally(player.path)}
+            >
+              Open in {player.name}
+            </button>
+          ) : null}
+          <button type="button" onClick={() => void openExternally()}>
+            Open in default app
+          </button>
+          <button
+            type="button"
+            onClick={() => path && void tauri.items.revealInFinder(path)}
+          >
+            Reveal in Finder
+          </button>
+        </div>
+        {!player && (
+          <p className="viewer-video-feedback">
+            Tip: IINA, VLC, or Elmedia Video Player all play MKV natively.
+          </p>
+        )}
+        {openError && (
+          <p className="viewer-video-feedback error">{openError}</p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <>
       <video
@@ -364,6 +471,7 @@ function VideoPlayer({
         preload="metadata"
         onClick={handleVideoClick}
         onDoubleClick={() => onFullscreen?.()}
+        onError={() => setFailed(true)}
         tabIndex={0}
       />
       {/* macOS hides a video's native control bar unless the pointer is over the

@@ -1,5 +1,7 @@
 import React from "react";
 import VideoThumb from "./VideoThumb";
+import { CachedThumbnail } from "./CachedThumbnail";
+import { canPlayVideoInApp } from "../../engine/utils/mediaTypes";
 import {
   useDraftTransforms,
   draftTransformStyle,
@@ -61,7 +63,11 @@ function AlbumPhotoStack({
             }
           >
             {albumItems[photoIndex]?.kind === "video" ? (
-              <VideoThumb src={assetUrl(item.path)} name={item.name} />
+              canPlayVideoInApp(item.path, item.name) ? (
+                <VideoThumb src={assetUrl(item.path)} name={item.name} />
+              ) : (
+                <CachedThumbnail itemId={item.id} name={item.name} size={128} />
+              )
             ) : (
               <img
                 src={assetUrl(item.path)}

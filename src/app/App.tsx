@@ -2383,6 +2383,10 @@ function App() {
               }
               onOpenViewer={(id?: string) => openViewer(id, "Library")}
               onOpenEdit={async (item: any) => {
+                if (item?.kind === "video") {
+                  openViewer(item.id, "Library");
+                  return;
+                }
                 await edit.saveDraft();
                 await edit.open(item);
                 setScreen("Edit");
@@ -2451,6 +2455,7 @@ function App() {
                 onToggleFavorite={library.toggleFavorite}
                 onToggleHidden={library.toggleHidden}
                 onOpenEdit={async (item: any) => {
+                  if (item?.kind === "video") return;
                   await edit.saveDraft();
                   await edit.open(item);
                   setScreen("Edit");
@@ -2641,6 +2646,10 @@ function App() {
                 setItemPendingDeleteCount(ids.length);
               }}
               onOpenEdit={async (item: any) => {
+                if (item?.kind === "video") {
+                  openViewer(item.id, "Hidden", "hidden");
+                  return;
+                }
                 await edit.saveDraft();
                 await edit.open(item);
                 setScreen("Edit");

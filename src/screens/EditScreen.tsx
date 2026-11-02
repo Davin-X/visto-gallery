@@ -306,6 +306,35 @@ function EditScreen(props: EditScreenProps) {
     );
   }
 
+  // The editor is a still-image pipeline. Rendering a video here used to pull
+  // the whole file through the asset protocol (a 3 GB MKV froze the app), so
+  // videos get an explanation instead of a preview.
+  if (props.item.kind === "video") {
+    return (
+      <div className="edit-page">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">NON-DESTRUCTIVE EDITING</p>
+            <h1>{props.item.name}</h1>
+            <p className="page-subtitle">
+              Videos aren't edited here. Play it from the Library, or use a
+              desktop video editor for cuts and colour work.
+            </p>
+          </div>
+          <div style={{ marginTop: 20 }}>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => props.onBack?.()}
+            >
+              Back to Library
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="edit-page">
       <div className="page-heading">

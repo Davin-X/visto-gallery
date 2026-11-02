@@ -38,7 +38,10 @@ import { useLibraryStore } from "../engine/stores/useLibraryStore";
 import { useSettingsStore } from "../engine/stores/useSettingsStore";
 import { useThumbnailSize } from "../engine/stores/useSettingsStore";
 import { tauri } from "../engine/commands/tauri";
-import { formatBytesSimple } from "../engine/utils/mediaTypes";
+import {
+  formatBytesSimple,
+  canPlayVideoInApp,
+} from "../engine/utils/mediaTypes";
 import type {
   MediaItem,
   Album,
@@ -753,6 +756,12 @@ function LibraryScreen(props: LibraryScreenProps) {
   const handleTileDoubleClick = (item: any) => {
     lastClickedRef.current = item.id;
     props.onInspectItem?.(item.id);
+    // Videos belong in the viewer: the editor renders a still image and would
+    // pull the entire (possibly multi-gigabyte) file over the asset protocol.
+    if (item.kind === "video") {
+      props.onOpenViewer?.(item.id);
+      return;
+    }
     props.onOpenEdit?.(item);
   };
 
@@ -773,6 +782,10 @@ function LibraryScreen(props: LibraryScreenProps) {
           },
         ]
       : []),
+    {
+      label: "Open in default app",
+      onClick: () => tauri.items.openFile(item.path),
+    },
     {
       label: "Open in Finder",
       onClick: () => tauri.items.revealInFinder(item.path),
@@ -1481,10 +1494,21 @@ function LibraryScreen(props: LibraryScreenProps) {
                       >
                         <span className="tile-image">
                           {item.kind === "video" ? (
-                            <VideoThumb
-                              src={assetUrl(item.path)}
-                              name={tileAlt(item)}
-                            />
+                            canPlayVideoInApp(item.path, item.name) ? (
+                              <VideoThumb
+                                src={assetUrl(item.path)}
+                                name={tileAlt(item)}
+                              />
+                            ) : (
+                              // Decoding a frame needs a playable container;
+                              // fall back to the cached QuickLook thumbnail so
+                              // MKV/AVI tiles never request the whole file.
+                              <CachedThumbnail
+                                itemId={item.id}
+                                name={tileAlt(item)}
+                                size={thumbnailPixels}
+                              />
+                            )
                           ) : item.kind === "photo" ? (
                             <CachedThumbnail
                               itemId={item.id}
@@ -1633,10 +1657,21 @@ function LibraryScreen(props: LibraryScreenProps) {
                                   >
                                     <span className="tile-image">
                                       {item.kind === "video" ? (
-                                        <VideoThumb
-                                          src={assetUrl(item.path)}
-                                          name={tileAlt(item)}
-                                        />
+                                        canPlayVideoInApp(
+                                          item.path,
+                                          item.name,
+                                        ) ? (
+                                          <VideoThumb
+                                            src={assetUrl(item.path)}
+                                            name={tileAlt(item)}
+                                          />
+                                        ) : (
+                                          <CachedThumbnail
+                                            itemId={item.id}
+                                            name={tileAlt(item)}
+                                            size={thumbnailPixels}
+                                          />
+                                        )
                                       ) : item.kind === "photo" ? (
                                         <CachedThumbnail
                                           itemId={item.id}
@@ -1755,10 +1790,18 @@ function LibraryScreen(props: LibraryScreenProps) {
                     >
                       <span className="tile-image">
                         {item.kind === "video" ? (
-                          <VideoThumb
-                            src={assetUrl(item.path)}
-                            name={tileAlt(item)}
-                          />
+                          canPlayVideoInApp(item.path, item.name) ? (
+                            <VideoThumb
+                              src={assetUrl(item.path)}
+                              name={tileAlt(item)}
+                            />
+                          ) : (
+                            <CachedThumbnail
+                              itemId={item.id}
+                              name={tileAlt(item)}
+                              size={thumbnailPixels}
+                            />
+                          )
                         ) : item.kind === "photo" ? (
                           <CachedThumbnail
                             itemId={item.id}

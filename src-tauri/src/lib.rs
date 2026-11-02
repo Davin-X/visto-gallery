@@ -172,6 +172,9 @@ pub fn run() {
             update_item_tags,
             move_to_trash,
             reveal_in_finder,
+            open_file,
+            open_with_player,
+            external_video_players,
             open_folder,
             // Albums
             create_album,

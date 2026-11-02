@@ -150,6 +150,111 @@ pub async fn reveal_in_finder(path: String, state: State<'_, AppState>) -> Resul
 }
 
 #[tauri::command]
+pub async fn open_file(
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let db = super::get_db(&state)?;
+    let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
+        .bind(&path)
+        .fetch_optional(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    if exists.is_none() {
+        return Err("Path is not part of the catalog.".to_string());
+    }
+    std::process::Command::new("open")
+        .arg(&path)
+        .status()
+        .map_err(|e| format!("Could not open {}: {}", path, e))?;
+    Ok(())
+}
+
+/// A desktop video player that can decode containers WebKit cannot (notably
+/// Matroska/`.mkv` and `.avi`), exposed to the viewer so unsupported videos can
+/// be handed off instead of failing silently.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalPlayer {
+    name: String,
+    path: String,
+}
+
+/// Apps commonly installed on macOS that play Matroska/AVI. Order is
+/// preference, so the first installed app becomes the primary action.
+const EXTERNAL_VIDEO_APPS: &[(&str, &str)] = &[
+    ("IINA", "IINA.app"),
+    ("VLC", "VLC.app"),
+    ("Elmedia Video Player", "Elmedia Video Player.app"),
+    ("Infuse", "Infuse.app"),
+    ("mpv", "mpv.app"),
+    ("QuickTime Player", "QuickTime Player.app"),
+];
+
+fn playable_app_locations(app: &str) -> Vec<PathBuf> {
+    let mut locations = vec![
+        PathBuf::from("/Applications").join(app),
+        PathBuf::from("/System/Applications").join(app),
+    ];
+    if let Some(home) = dirs::home_dir() {
+        locations.push(home.join("Applications").join(app));
+    }
+    locations
+}
+
+/// List installed external players, most preferred first. The viewer uses this
+/// to offer "Open in <player>" for in-app-unsupported video formats.
+#[tauri::command]
+pub fn external_video_players() -> Vec<ExternalPlayer> {
+    EXTERNAL_VIDEO_APPS
+        .iter()
+        .filter_map(|(name, app)| {
+            playable_app_locations(app)
+                .into_iter()
+                .find(|path| path.is_dir())
+                .map(|path| ExternalPlayer {
+                    name: (*name).to_string(),
+                    path: path.to_string_lossy().into_owned(),
+                })
+        })
+        .collect()
+}
+
+/// Open a cataloged item in a specific installed player (e.g. a `.mkv` in VLC).
+#[tauri::command]
+pub async fn open_with_player(
+    path: String,
+    player: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let db = super::get_db(&state)?;
+    let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
+        .bind(&path)
+        .fetch_optional(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    if exists.is_none() {
+        return Err("Path is not part of the catalog.".to_string());
+    }
+
+    let player_path = PathBuf::from(&player);
+    if player_path.extension().and_then(|ext| ext.to_str()) != Some("app")
+        || !player_path.is_dir()
+    {
+        return Err("Requested player is not an installed application.".to_string());
+    }
+
+    std::process::Command::new("open")
+        .arg("-a")
+        .arg(&player_path)
+        .arg(&path)
+        .status()
+        .map_err(|e| format!("Could not open {} with {}: {}", path, player, e))?;
+    Ok(())
+}
+
+/// Open a folder in Finder. Used by Batch export results.
+#[tauri::command]
 pub async fn open_folder(path: String) -> Result<(), String> {
     // Unlike `open -R` (which selects a file in its parent), this opens the
     // folder itself in Finder. Used by Batch export results.

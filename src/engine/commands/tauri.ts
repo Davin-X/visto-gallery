@@ -30,6 +30,7 @@ import type {
   TrashError,
   UpdateCheckResult,
   LibraryStats,
+  ExternalPlayer,
 } from "../types/commands";
 
 // Type-safe command wrappers
@@ -88,6 +89,15 @@ export const tauri = {
 
     revealInFinder: (path: string): Promise<void> =>
       invoke("reveal_in_finder", { path }),
+
+    openFile: (path: string): Promise<void> =>
+      invoke("open_file", { path }),
+
+    openWithPlayer: (path: string, player: string): Promise<void> =>
+      invoke("open_with_player", { path, player }),
+
+    externalVideoPlayers: (): Promise<ExternalPlayer[]> =>
+      invoke("external_video_players"),
 
     openFolder: (path: string): Promise<void> =>
       invoke("open_folder", { path }),
@@ -252,11 +262,9 @@ export const events = {
     listen("folder-changed", (e: any) => callback(e.payload)),
 };
 
-import { convertFileSrc } from "@tauri-apps/api/core";
-
-// Helper: Build thumbnail URL from response
+// Helper: Build thumbnail data URL from response
 export function thumbnailToDataUrl(response: ThumbnailResponse): string {
-  return convertFileSrc(response.path);
+  return response.dataUrl;
 }
 
 // Helper: Default edit values
