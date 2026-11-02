@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FilterIcon } from "./icons";
 
 interface FilterDropdownProps {
@@ -24,18 +24,33 @@ const COLORS: [string, string][] = [
 export function FilterDropdown(props: FilterDropdownProps) {
   const [open, setOpen] = useState(false);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!open) return;
+      const target = event.target as Element | null;
+      const currentTarget = event.currentTarget as Element | null;
+      if (target && currentTarget && !currentTarget.contains(target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
   const activeCount =
     (props.minRating ? 1 : 0) +
     (props.colorLabelFilter ? 1 : 0) +
     (props.cameraFilter ? 1 : 0) +
     (props.lensFilter ? 1 : 0);
 
+  const toggle = () => setOpen((o) => !o);
+
   return (
-    <div className="filter-dropdown" onClick={(e) => e.stopPropagation()}>
+    <div className="filter-dropdown">
       <button
         type="button"
-        className={`filter-dropdown-button ${open ? "active" : ""}`}
-        onClick={() => setOpen((o) => !o)}
+        className={`quick-filter ${open ? "active" : ""}`}
+        onClick={toggle}
         aria-expanded={open}
         aria-label="Filters"
       >
@@ -55,14 +70,12 @@ export function FilterDropdown(props: FilterDropdownProps) {
                   <button
                     key={stars}
                     type="button"
-                    className={`filter-chip ${active ? "active" : ""}`}
-                    onClick={() =>
-                      props.onSetMinRating(active ? null : stars)
-                    }
+                    className={`quick-filter quick-filter-rating ${active ? "active" : ""}`}
+                    onClick={() => props.onSetMinRating(active ? null : stars)}
                     title={`Show ${stars}+ star${stars > 1 ? "s" : ""}`}
                   >
                     {Array.from({ length: stars }).map(() => (
-                      <span key="star">★</span>
+                      <span key="star" className="ctx-star">★</span>
                     ))}
                   </button>
                 );
@@ -79,14 +92,12 @@ export function FilterDropdown(props: FilterDropdownProps) {
                   <button
                     key={color}
                     type="button"
-                    className={`filter-chip color-chip ${active ? "active" : ""}`}
-                    onClick={() =>
-                      props.onSetColorLabelFilter(active ? null : color)
-                    }
+                    className={`quick-filter quick-filter-color quick-filter-color-${color} ${active ? "active" : ""}`}
+                    onClick={() => props.onSetColorLabelFilter(active ? null : color)}
                     title={`Filter by ${name} label`}
                     aria-label={name}
                   >
-                    <span className="color-dot" style={{ backgroundColor: getColorHex(color) }} />
+                    <span className="color-dot-small" />
                   </button>
                 );
               })}
@@ -100,9 +111,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
               className="filter-input"
               placeholder="Camera model"
               value={props.cameraFilter ?? ""}
-              onChange={(e) =>
-                props.onSetCameraFilter(e.target.value.trim() || null)
-              }
+              onChange={(e) => props.onSetCameraFilter(e.target.value.trim() || null)}
             />
           </div>
 
@@ -120,16 +129,5 @@ export function FilterDropdown(props: FilterDropdownProps) {
       )}
     </div>
   );
-}
-
-function getColorHex(color: string): string {
-  const map: Record<string, string> = {
-    red: "#ef4444",
-    yellow: "#eab308",
-    green: "#22c55e",
-    blue: "#3b82f6",
-    purple: "#a855f7",
-  };
-  return map[color] ?? "#94a3b8";
 }
 

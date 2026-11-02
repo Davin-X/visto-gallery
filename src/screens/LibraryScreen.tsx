@@ -1222,49 +1222,16 @@ function LibraryScreen(props: LibraryScreenProps) {
           </div>
 
           <div className="filter-cluster">
-            <span className="smart-label">RATING</span>
-            {["★", "★★", "★★★", "★★★★", "★★★★★"].map((label, i) => {
-              const stars = i + 1;
-              const active = props.minRating === stars;
-              return (
-                <button
-                  key={stars}
-                  type="button"
-                  className={`quick-filter quick-filter-rating ${active ? "active" : ""}`}
-                  onClick={() =>
-                    props.onSetMinRating(active ? null : stars)
-                  }
-                  title={`Show ${stars}+ star${stars > 1 ? "s" : ""}`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-            <span className="smart-label" style={{ marginLeft: 16 }}>
-              COLOR
-            </span>
-            {([
-              ["red", "Red"],
-              ["yellow", "Yellow"],
-              ["green", "Green"],
-              ["blue", "Blue"],
-              ["purple", "Purple"],
-            ] as [string, string][]).map(([color, name]) => {
-              const active = props.colorLabelFilter === color;
-              return (
-                <button
-                  key={color}
-                  type="button"
-                  className={`quick-filter quick-filter-color quick-filter-color-${color} ${active ? "active" : ""}`}
-                  onClick={() =>
-                    props.onSetColorLabelFilter(active ? null : color)
-                  }
-                  title={`Filter by ${name} label`}
-                >
-                  <span className="color-dot-small" />
-                </button>
-              );
-            })}
+            <FilterDropdown
+              minRating={props.minRating}
+              colorLabelFilter={props.colorLabelFilter}
+              cameraFilter={props.cameraFilter}
+              lensFilter={props.lensFilter}
+              onSetMinRating={props.onSetMinRating}
+              onSetColorLabelFilter={props.onSetColorLabelFilter}
+              onSetCameraFilter={props.onSetCameraFilter}
+              onSetLensFilter={props.onSetLensFilter}
+            />
           </div>
 
           {props.selectedIds.length > 0 && (
