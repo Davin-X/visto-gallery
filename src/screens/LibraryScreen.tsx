@@ -947,12 +947,6 @@ function LibraryScreen(props: LibraryScreenProps) {
                 <div className="album-detail-copy">
                   <p className="eyebrow">ALBUM</p>
                   <h1>{activeAlbumName}</h1>
-                  <p className="page-subtitle">
-                    {activeAlbumCount.toLocaleString()}{" "}
-                    {activeAlbumCount === 1 ? "item" : "items"}
-                    {" · "}
-                    {props.items.length.toLocaleString()} shown
-                  </p>
                 </div>
                 <div className="album-detail-actions">
                   <button
