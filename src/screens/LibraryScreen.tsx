@@ -797,16 +797,8 @@ function LibraryScreen(props: LibraryScreenProps) {
     { divider: true },
     { label: "Favorite", onClick: () => props.onToggleFavorite(item.id) },
     {
-      label: item.rating ? (
-        <span className="ctx-trigger-label">
-          Rating
-          <span className="ctx-star" style={{ marginLeft: 8 }}>
-            {"★".repeat(item.rating)}
-          </span>
-        </span>
-      ) : (
-        "Rating"
-      ),
+      label: item.rating ? `Rating ${"★".repeat(item.rating)}` : "Rating",
+      icon: item.rating ? <span className="ctx-star">★</span> : <span className="ctx-star ctx-star-empty">☆</span>,
       submenu: [
         { label: <span className="ctx-star ctx-star-empty">Unrate</span>, onClick: () => props.onSetRatingForIds?.([item.id], 0) },
         { label: <span className="ctx-star">★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 1) },
@@ -817,17 +809,10 @@ function LibraryScreen(props: LibraryScreenProps) {
       ],
     },
     {
-      label: item.colorLabel ? (
-        <span className="ctx-trigger-label">
-          Color Label
-          <span
-            className={`ctx-dot ctx-dot-${item.colorLabel}`}
-            style={{ marginLeft: 8 }}
-          />
-        </span>
-      ) : (
-        "Color Label"
-      ),
+      label: "Color Label",
+      icon: item.colorLabel ? (
+        <span className={`ctx-dot ctx-dot-${item.colorLabel}`} />
+      ) : null,
       submenu: [
         { label: "None", icon: <span className="ctx-dot ctx-dot-none" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "") },
         { label: "Red", icon: <span className="ctx-dot ctx-dot-red" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "red") },
