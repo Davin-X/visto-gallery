@@ -797,7 +797,16 @@ function LibraryScreen(props: LibraryScreenProps) {
     { divider: true },
     { label: "Favorite", onClick: () => props.onToggleFavorite(item.id) },
     {
-      label: item.rating ? `Rating ${"★".repeat(item.rating)}` : "Rating",
+      label: item.rating ? (
+        <span className="ctx-trigger-label">
+          Rating
+          <span className="ctx-star" style={{ marginLeft: 8 }}>
+            {"★".repeat(item.rating)}
+          </span>
+        </span>
+      ) : (
+        "Rating"
+      ),
       submenu: [
         { label: <span className="ctx-star ctx-star-empty">Unrate</span>, onClick: () => props.onSetRatingForIds?.([item.id], 0) },
         { label: <span className="ctx-star">★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 1) },
@@ -810,8 +819,11 @@ function LibraryScreen(props: LibraryScreenProps) {
     {
       label: item.colorLabel ? (
         <span className="ctx-trigger-label">
-          Color Label{" "}
-          <span className={`ctx-dot ctx-dot-${item.colorLabel}`} />
+          Color Label
+          <span
+            className={`ctx-dot ctx-dot-${item.colorLabel}`}
+            style={{ marginLeft: 8 }}
+          />
         </span>
       ) : (
         "Color Label"
