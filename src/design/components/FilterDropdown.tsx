@@ -23,27 +23,23 @@ const COLORS: [string, string][] = [
 
 export function FilterDropdown(props: FilterDropdownProps) {
   const [open, setOpen] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (buttonRef.current?.contains(target)) return;
-      if (panelRef.current?.contains(target)) return;
-      setOpen(false);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside, true);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside, true);
+      document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
@@ -55,19 +51,16 @@ export function FilterDropdown(props: FilterDropdownProps) {
     (props.lensFilter ? 1 : 0);
 
   return (
-    <div className="filter-dropdown" style={{ position: "relative" }}>
+    <div ref={containerRef} className="filter-dropdown" style={{ position: "relative", display: "inline-flex" }}>
       <button
-        ref={buttonRef}
         type="button"
         className={`quick-filter ${open ? "active" : ""}`}
         onClick={(e) => {
-          e.preventDefault();
           e.stopPropagation();
-          setOpen((o) => !o);
+          setOpen((v) => !v);
         }}
         aria-expanded={open}
         aria-haspopup="true"
-        aria-label="Filters"
       >
         <FilterIcon size={13} />
         <span>Filters</span>
@@ -76,9 +69,13 @@ export function FilterDropdown(props: FilterDropdownProps) {
 
       {open && (
         <div
-          ref={panelRef}
           className="filter-dropdown-panel"
-          style={{ position: "absolute", top: "100%", left: 0, zIndex: 99999, marginTop: 6 }}
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            left: 0,
+            zIndex: 10000,
+          }}
         >
           <div className="filter-section">
             <span className="filter-section-label">Rating</span>
@@ -94,7 +91,6 @@ export function FilterDropdown(props: FilterDropdownProps) {
                       e.stopPropagation();
                       props.onSetMinRating(active ? null : stars);
                     }}
-                    title={`Show ${stars}+ star${stars > 1 ? "s" : ""}`}
                   >
                     {Array.from({ length: stars }).map((_, i) => (
                       <span key={i} className="ctx-star">
@@ -121,8 +117,8 @@ export function FilterDropdown(props: FilterDropdownProps) {
                       e.stopPropagation();
                       props.onSetColorLabelFilter(active ? null : color);
                     }}
-                    title={`Filter by ${name} label`}
                     aria-label={name}
+                    title={`Filter by ${name}`}
                   >
                     <span className="color-dot-small" />
                   </button>
@@ -138,9 +134,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
               className="filter-input"
               placeholder="Camera model"
               value={props.cameraFilter ?? ""}
-              onChange={(e) =>
-                props.onSetCameraFilter(e.target.value.trim() || null)
-              }
+              onChange={(e) => props.onSetCameraFilter(e.target.value.trim() || null)}
               onClick={(e) => e.stopPropagation()}
             />
           </div>
@@ -152,9 +146,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
               className="filter-input"
               placeholder="Lens model"
               value={props.lensFilter ?? ""}
-              onChange={(e) =>
-                props.onSetLensFilter(e.target.value.trim() || null)
-              }
+              onChange={(e) => props.onSetLensFilter(e.target.value.trim() || null)}
               onClick={(e) => e.stopPropagation()}
             />
           </div>
