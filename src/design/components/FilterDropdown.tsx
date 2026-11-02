@@ -27,14 +27,13 @@ export function FilterDropdown(props: FilterDropdownProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    if (!open) return;
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element | null;
       if (!target) return;
-      const insideButton = buttonRef.current?.contains(target);
-      const insidePanel = panelRef.current?.contains(target);
-      if (!insideButton && !insidePanel) {
-        setOpen(false);
-      }
+      if (buttonRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -48,7 +47,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [open]);
 
   const activeCount =
     (props.minRating ? 1 : 0) +
@@ -57,12 +56,13 @@ export function FilterDropdown(props: FilterDropdownProps) {
     (props.lensFilter ? 1 : 0);
 
   const toggle = (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     setOpen((o) => !o);
   };
 
   return (
-    <div className="filter-dropdown">
+    <div className="filter-dropdown" style={{ position: "relative" }}>
       <button
         ref={buttonRef}
         type="button"
@@ -78,7 +78,18 @@ export function FilterDropdown(props: FilterDropdownProps) {
       </button>
 
       {open && (
-        <div ref={panelRef} className="filter-dropdown-panel">
+        <div
+          ref={panelRef}
+          className="filter-dropdown-panel"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            left: 0,
+            zIndex: 9999,
+            background: "var(--surface)",
+            minWidth: 240,
+          }}
+        >
           <div className="filter-section">
             <span className="filter-section-label">Rating</span>
             <div className="filter-chip-row">
@@ -89,7 +100,10 @@ export function FilterDropdown(props: FilterDropdownProps) {
                     key={stars}
                     type="button"
                     className={`quick-filter quick-filter-rating ${active ? "active" : ""}`}
-                    onClick={() => props.onSetMinRating(active ? null : stars)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      props.onSetMinRating(active ? null : stars);
+                    }}
                     title={`Show ${stars}+ star${stars > 1 ? "s" : ""}`}
                   >
                     {Array.from({ length: stars }).map((_, i) => (
@@ -113,9 +127,10 @@ export function FilterDropdown(props: FilterDropdownProps) {
                     key={color}
                     type="button"
                     className={`quick-filter quick-filter-color quick-filter-color-${color} ${active ? "active" : ""}`}
-                    onClick={() =>
-                      props.onSetColorLabelFilter(active ? null : color)
-                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      props.onSetColorLabelFilter(active ? null : color);
+                    }}
                     title={`Filter by ${name} label`}
                     aria-label={name}
                   >
@@ -136,6 +151,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
               onChange={(e) =>
                 props.onSetCameraFilter(e.target.value.trim() || null)
               }
+              onClick={(e) => e.stopPropagation()}
             />
           </div>
 
@@ -149,6 +165,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
               onChange={(e) =>
                 props.onSetLensFilter(e.target.value.trim() || null)
               }
+              onClick={(e) => e.stopPropagation()}
             />
           </div>
         </div>
