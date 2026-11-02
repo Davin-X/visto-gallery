@@ -773,13 +773,7 @@ function LibraryScreen(props: LibraryScreenProps) {
   const handleTileDoubleClick = (item: any) => {
     lastClickedRef.current = item.id;
     props.onInspectItem?.(item.id);
-    // Videos belong in the viewer: the editor renders a still image and would
-    // pull the entire (possibly multi-gigabyte) file over the asset protocol.
-    if (item.kind === "video") {
-      props.onOpenViewer?.(item.id);
-      return;
-    }
-    props.onOpenEdit?.(item);
+    props.onOpenViewer?.(item.id);
   };
 
   const tileClass = (item: any) =>
