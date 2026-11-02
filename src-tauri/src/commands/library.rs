@@ -439,12 +439,10 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
             .push_bind(color_label.clone());
     }
     if let Some(camera) = &f.camera {
-        qb.push(" AND camera = ")
-            .push_bind(camera.clone());
+        qb.push(" AND camera = ").push_bind(camera.clone());
     }
     if let Some(lens) = &f.lens {
-        qb.push(" AND lens = ")
-            .push_bind(lens.clone());
+        qb.push(" AND lens = ").push_bind(lens.clone());
     }
 }
 
