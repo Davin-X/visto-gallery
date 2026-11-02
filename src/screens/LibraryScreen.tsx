@@ -36,6 +36,7 @@ import {
 import { draftImageStyle } from "../engine/utils/draftImage";
 import { searchShortcutLabel } from "../engine/utils/shortcut";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
+import { FilterDropdown } from "../design/components/FilterDropdown";
 import { useSettingsStore } from "../engine/stores/useSettingsStore";
 import { useThumbnailSize } from "../engine/stores/useSettingsStore";
 import { tauri } from "../engine/commands/tauri";
@@ -118,8 +119,12 @@ interface LibraryScreenProps {
     favorites: number;
   };
   colorLabelFilter: string | null;
+  cameraFilter: string | null;
+  lensFilter: string | null;
   onSetMinRating: (rating: number | null) => void;
   onSetColorLabelFilter: (colorLabel: string | null) => void;
+  onSetCameraFilter: (camera: string | null) => void;
+  onSetLensFilter: (lens: string | null) => void;
   notice: any;
   progress: any;
   searchInputRef: any;

@@ -36,6 +36,8 @@ export interface LibraryFilterDTO {
   sourcePath?: string;
   rating?: number;
   colorLabel?: string;
+  camera?: string;
+  lens?: string;
   limit?: number;
   /** Opaque keyset cursor returned by the preceding page. */
   cursor?: string;

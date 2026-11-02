@@ -78,6 +78,8 @@ pub struct LibraryFilterDTO {
     pub source_path: Option<String>,
     pub rating: Option<i32>,
     pub color_label: Option<String>,
+    pub camera: Option<String>,
+    pub lens: Option<String>,
     pub limit: Option<i32>,
     /// Opaque cursor returned by a previous `get_library_items` page.
     pub cursor: Option<String>,
