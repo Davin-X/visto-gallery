@@ -973,8 +973,10 @@
 
 .ctx-star {
   color: #f5a524;
-  font-size: 12px;
-  letter-spacing: -1px;
+  font-size: 14px;
+  letter-spacing: 1px;
+  display: inline-block;
+  min-width: 16px;
 }
 
 .ctx-star-empty {
