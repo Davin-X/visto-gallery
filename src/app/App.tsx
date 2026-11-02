@@ -135,7 +135,6 @@ import {
   DuplicatesIcon,
   EditIcon,
   BatchIcon,
-  CameraIcon,
   SearchIcon,
   PlusIcon,
   MinusIcon,
@@ -2112,11 +2111,6 @@ function App() {
                     label: "Batch",
                     Icon: BatchIcon,
                     screen: "Batch" as Screen,
-                  },
-                  {
-                    label: "Camera & Lens",
-                    Icon: CameraIcon,
-                    screen: "CameraLens" as Screen,
                   },
                   {
                     label: "Hidden",
