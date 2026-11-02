@@ -961,15 +961,15 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: currentColor;
+  border: 1px solid rgba(255, 255, 255, 0.7);
 }
 
-.ctx-dot-none { color: var(--faint); }
-.ctx-dot-red { color: #e5484d; }
-.ctx-dot-yellow { color: #f5a524; }
-.ctx-dot-green { color: #30a46c; }
-.ctx-dot-blue { color: #0090ff; }
-.ctx-dot-purple { color: #8e4ec6; }
+.ctx-dot-none { background: #9ca3af; }
+.ctx-dot-red { background: #ef4444; }
+.ctx-dot-yellow { background: #eab308; }
+.ctx-dot-green { background: #22c55e; }
+.ctx-dot-blue { background: #3b82f6; }
+.ctx-dot-purple { background: #a855f7; }
 
 .ctx-star {
   color: #f5a524;
