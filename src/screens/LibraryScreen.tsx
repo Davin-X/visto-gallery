@@ -1219,9 +1219,6 @@ function LibraryScreen(props: LibraryScreenProps) {
                 );
               },
             )}
-          </div>
-
-          <div className="filter-cluster">
             <FilterDropdown
               minRating={props.minRating}
               colorLabelFilter={props.colorLabelFilter}
