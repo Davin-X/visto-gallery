@@ -124,6 +124,12 @@ interface LibraryScreenProps {
   onUpdateTags: (id: string, tags: string[]) => void | Promise<void>;
   query: string;
   minRating: number | null;
+  libraryStats?: {
+    photos: number;
+    videos: number;
+    raws: number;
+    favorites: number;
+  };
   colorLabelFilter: string | null;
   onSetMinRating: (rating: number | null) => void;
   onSetColorLabelFilter: (colorLabel: string | null) => void;
@@ -1182,7 +1188,20 @@ function LibraryScreen(props: LibraryScreenProps) {
             <span className="smart-label">SHOW</span>
             {(["All", "Photos", "Videos", "RAW", "Favorites"] as string[]).map(
               (f) => {
-                const count = filterCounts[f as keyof typeof filterCounts] ?? 0;
+                const count =
+                  f === "All"
+                    ? (props.libraryStats?.photos ?? 0) +
+                      (props.libraryStats?.videos ?? 0) +
+                      (props.libraryStats?.raws ?? 0)
+                    : f === "Photos"
+                      ? (props.libraryStats?.photos ?? 0)
+                      : f === "Videos"
+                        ? (props.libraryStats?.videos ?? 0)
+                        : f === "RAW"
+                          ? (props.libraryStats?.raws ?? 0)
+                          : f === "Favorites"
+                            ? (props.libraryStats?.favorites ?? 0)
+                            : 0;
                 return (
                   <button
                     key={f}

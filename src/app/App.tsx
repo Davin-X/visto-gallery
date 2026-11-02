@@ -2368,6 +2368,7 @@ function App() {
               onSetRatingForIds={library.setRatingForIds}
               onSetColorLabelForIds={library.setColorLabelForIds}
               minRating={library.minRating}
+              libraryStats={libraryStats}
               colorLabelFilter={library.colorLabelFilter}
               onSetMinRating={library.setMinRating}
               onSetColorLabelFilter={library.setColorLabelFilter}
@@ -2412,16 +2413,6 @@ function App() {
                 library.setFilter("All");
                 library.setQuery("");
                 await library.loadAlbumItems(albumId);
-                setScreen("Library");
-              }}
-              onOpenSmartAlbum={(kind, value) => {
-                if (kind === "rating") {
-                  library.setMinRating(value as number);
-                } else if (kind === "color") {
-                  library.setColorLabelFilter(value as string);
-                }
-                library.setActiveAlbum(null);
-                library.setQuery("");
                 setScreen("Library");
               }}
             />
