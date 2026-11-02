@@ -27,13 +27,14 @@ export function FilterDropdown(props: FilterDropdownProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!open) return;
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element | null;
       if (!target) return;
       const insideButton = buttonRef.current?.contains(target);
       const insidePanel = panelRef.current?.contains(target);
-      if (!insideButton && !insidePanel) setOpen(false);
+      if (!insideButton && !insidePanel) {
+        setOpen(false);
+      }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -47,7 +48,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open]);
+  }, []);
 
   const activeCount =
     (props.minRating ? 1 : 0) +
@@ -55,7 +56,10 @@ export function FilterDropdown(props: FilterDropdownProps) {
     (props.cameraFilter ? 1 : 0) +
     (props.lensFilter ? 1 : 0);
 
-  const toggle = () => setOpen((o) => !o);
+  const toggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setOpen((o) => !o);
+  };
 
   return (
     <div className="filter-dropdown">
@@ -89,7 +93,9 @@ export function FilterDropdown(props: FilterDropdownProps) {
                     title={`Show ${stars}+ star${stars > 1 ? "s" : ""}`}
                   >
                     {Array.from({ length: stars }).map((_, i) => (
-                      <span key={i} className="ctx-star">★</span>
+                      <span key={i} className="ctx-star">
+                        ★
+                      </span>
                     ))}
                   </button>
                 );
@@ -107,7 +113,9 @@ export function FilterDropdown(props: FilterDropdownProps) {
                     key={color}
                     type="button"
                     className={`quick-filter quick-filter-color quick-filter-color-${color} ${active ? "active" : ""}`}
-                    onClick={() => props.onSetColorLabelFilter(active ? null : color)}
+                    onClick={() =>
+                      props.onSetColorLabelFilter(active ? null : color)
+                    }
                     title={`Filter by ${name} label`}
                     aria-label={name}
                   >
@@ -125,7 +133,9 @@ export function FilterDropdown(props: FilterDropdownProps) {
               className="filter-input"
               placeholder="Camera model"
               value={props.cameraFilter ?? ""}
-              onChange={(e) => props.onSetCameraFilter(e.target.value.trim() || null)}
+              onChange={(e) =>
+                props.onSetCameraFilter(e.target.value.trim() || null)
+              }
             />
           </div>
 
@@ -136,7 +146,9 @@ export function FilterDropdown(props: FilterDropdownProps) {
               className="filter-input"
               placeholder="Lens model"
               value={props.lensFilter ?? ""}
-              onChange={(e) => props.onSetLensFilter(e.target.value.trim() || null)}
+              onChange={(e) =>
+                props.onSetLensFilter(e.target.value.trim() || null)
+              }
             />
           </div>
         </div>
@@ -144,4 +156,3 @@ export function FilterDropdown(props: FilterDropdownProps) {
     </div>
   );
 }
-
