@@ -150,10 +150,7 @@ pub async fn reveal_in_finder(path: String, state: State<'_, AppState>) -> Resul
 }
 
 #[tauri::command]
-pub async fn open_file(
-    path: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn open_file(path: String, state: State<'_, AppState>) -> Result<(), String> {
     let db = super::get_db(&state)?;
     let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
         .bind(&path)
@@ -238,8 +235,7 @@ pub async fn open_with_player(
     }
 
     let player_path = PathBuf::from(&player);
-    if player_path.extension().and_then(|ext| ext.to_str()) != Some("app")
-        || !player_path.is_dir()
+    if player_path.extension().and_then(|ext| ext.to_str()) != Some("app") || !player_path.is_dir()
     {
         return Err("Requested player is not an installed application.".to_string());
     }
