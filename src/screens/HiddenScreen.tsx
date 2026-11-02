@@ -8,7 +8,7 @@ import type { MediaItem } from "../engine/types/media";
 interface HiddenScreenProps {
   assetUrl: (path: string) => string;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
-  onContextMenu: (items: any[], e: React.MouseEvent) => void;
+  onContextMenu: (items: MediaItem[], e: React.MouseEvent) => void;
   onNavigate: (screen: any) => void;
   onCreateAlbum: () => void;
   onOpenAlbumPicker: (itemIds?: string[]) => void;

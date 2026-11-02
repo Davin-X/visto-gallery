@@ -10,6 +10,40 @@ export interface DraftTransform {
 }
 
 const draftKey = (itemId: string) => `edit:draft:${itemId}`;
+const draftOrderKey = "edit:draft:order";
+
+const MAX_DRAFTS = 100;
+const MAX_DRAFT_SIZE_BYTES = 5 * 1024; // 5 KB per draft
+
+function getDraftOrder(): string[] {
+  if (typeof localStorage === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(draftOrderKey);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function setDraftOrder(order: string[]) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(draftOrderKey, JSON.stringify(order));
+  } catch {
+    // Ignore storage failures for order tracking.
+  }
+}
+
+function pruneDrafts() {
+  if (typeof localStorage === "undefined") return;
+  const order = getDraftOrder();
+  if (order.length <= MAX_DRAFTS) return;
+  const toRemove = order.slice(0, order.length - MAX_DRAFTS);
+  for (const id of toRemove) {
+    try { localStorage.removeItem(draftKey(id)); } catch {}
+  }
+  setDraftOrder(order.slice(order.length - MAX_DRAFTS));
+}
 
 // Revision counter used to signal draft changes to subscribers.
 let draftRevision = 0;
@@ -27,15 +61,31 @@ async function persistDraft(
   historyIndex: number,
   crop?: CropState,
 ) {
-  // Synchronous localStorage fallback: drafts survive even if the Tauri
-  // invoke is cancelled by navigation before SQLite completes.
+  if (typeof localStorage === "undefined") return;
   try {
-    localStorage.setItem(
-      draftKey(itemId),
-      JSON.stringify({ edits: values, crop, history, historyIndex, updatedAt: Date.now() }),
-    );
+    const payload = JSON.stringify({
+      edits: values,
+      crop,
+      history,
+      historyIndex,
+      updatedAt: Date.now(),
+    });
+    // Enforce per-draft size cap: drop oversized drafts.
+    if (new TextEncoder().encode(payload).length > MAX_DRAFT_SIZE_BYTES) {
+      return;
+    }
+    localStorage.setItem(draftKey(itemId), payload);
+
+    // Update LRU order: move itemId to end (most recently used).
+    let order = getDraftOrder();
+    order = order.filter((id) => id !== itemId);
+    order.push(itemId);
+    setDraftOrder(order);
+
+    // Prune oldest drafts beyond the cap.
+    pruneDrafts();
   } catch {
-    // localStorage may be unavailable in private mode.
+    // A full or unavailable localStorage should not break editing.
   }
   try {
     await tauri.edit.saveRecipe({
@@ -57,15 +107,18 @@ export function resetDraftRevision(): void {
 }
 
 export async function clearEditDraft(itemId: string) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.removeItem(draftKey(itemId));
+    // Remove from LRU order.
+    const order = getDraftOrder().filter((id) => id !== itemId);
+    setDraftOrder(order);
+  } catch {}
   try {
     await tauri.edit.deleteRecipe(itemId);
   } catch {}
-  try {
-    localStorage.removeItem(draftKey(itemId));
-  } catch {}
   notifyDraftChanged();
 }
-
 function subscribeDraft(listener: () => void) {
   draftListeners.add(listener);
   return () => {

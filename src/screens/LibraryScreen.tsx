@@ -32,8 +32,9 @@ import VideoThumb from "../design/components/VideoThumb";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
 import {
   useDraftTransforms,
-  draftTransformStyle,
 } from "../engine/stores/useEditStore";
+import { draftImageStyle } from "../engine/utils/draftImage";
+import { searchShortcutLabel } from "../engine/utils/shortcut";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
 import { useSettingsStore } from "../engine/stores/useSettingsStore";
 import { useThumbnailSize } from "../engine/stores/useSettingsStore";
@@ -50,27 +51,10 @@ import type {
 } from "../engine/types/media";
 import type { LibraryFolder } from "../engine/types/commands";
 
-function draftImageStyle(
-  transforms: Map<string, any> | undefined,
-  itemId: string,
-) {
-  const transform = draftTransformStyle(transforms?.get(itemId));
-  return transform ? { transform } : undefined;
-}
-
 const GALLERY_PAGE_SIZE = 180;
 const VIRTUAL_GRID_OVERSCAN_ROWS = 6;
 const MAX_VIRTUAL_GRID_ITEMS = 480;
 const GRID_HORIZONTAL_PADDING = 40;
-
-function searchShortcutLabel(): string {
-  if (typeof navigator === "undefined") return "⌘F";
-  const uaData = (
-    navigator as unknown as { userAgentData?: { platform?: string } }
-  ).userAgentData;
-  const platform = uaData?.platform || navigator.platform || "";
-  return /mac|iphone|ipad|ipod/i.test(platform) ? "⌘F" : "Ctrl F";
-}
 
 interface LibraryScreenProps {
   activeAlbum: string | null;

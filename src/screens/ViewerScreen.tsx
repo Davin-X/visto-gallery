@@ -30,15 +30,8 @@ import {
   canPlayVideoInApp,
 } from "../engine/utils/mediaTypes";
 import { formatDuration } from "../engine/utils/time";
+import { draftImageStyle } from "../engine/utils/draftImage";
 import type { MediaItem, EditValues } from "../engine/types/media";
-
-function draftImageStyle(
-  transforms: Map<string, any> | undefined,
-  itemId: string,
-) {
-  const transform = draftTransformStyle(transforms?.get(itemId));
-  return transform ? { transform } : undefined;
-}
 
 interface ViewerScreenProps {
   active: boolean;
@@ -63,7 +56,7 @@ interface ViewerScreenProps {
   onToggleFavorite: (id: string) => void | Promise<void>;
   onToggleHidden: (id: string) => void | Promise<void>;
   onOpenEdit: (item: MediaItem) => void;
-  onContextMenu: (items: any[], e: React.MouseEvent) => void;
+  onContextMenu: (items: MediaItem[], e: React.MouseEvent) => void;
   assetUrl: (path: string) => string;
 }
 
@@ -678,13 +671,13 @@ interface EditScreenProps {
     height: number;
     aspectRatio?: number | "free";
   };
-  history: any[];
+  history: EditValues[];
   historyIndex: number;
   items: MediaItem[];
   assetUrl: (path: string) => string;
   canUndo: boolean;
   canRedo: boolean;
-  onSetValue: (key: keyof EditValues, value: any) => void;
+  onSetValue: (key: keyof EditValues, value: EditValues[keyof EditValues]) => void;
   onSetValues: (values: EditValues) => void;
   onReset: () => void;
   onAuto: () => void;

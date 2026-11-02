@@ -20,10 +20,31 @@ import {
   useDraftIds,
   clearEditDraft,
   refreshDraftMeta,
+  draftTransformStyle,
 } from "../engine/stores/useEditStore";
 import type { MediaItem, EditValues, CropRect } from "../engine/types/media";
 import { draftImageStyle } from "../engine/utils/draftImage";
 
+function PickerThumbnail({
+  itemId,
+  name,
+  style,
+}: {
+  itemId: string;
+  name: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <CachedThumbnail
+      itemId={itemId}
+      name={name}
+      size={256}
+      style={style}
+      showStatus
+      placeholderClassName="edit-picker-thumb"
+    />
+  );
+}
 const initialEdits = {
   exposure: 0,
   contrast: 0,

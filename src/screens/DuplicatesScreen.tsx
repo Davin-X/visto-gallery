@@ -4,18 +4,10 @@ import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import { KindBadge } from "../design/components/KindBadge";
 import {
   useDraftTransforms,
-  draftTransformStyle,
 } from "../engine/stores/useEditStore";
 import type { MediaItem, DuplicateGroup } from "../engine/types/media";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
-
-function draftImageStyle(
-  transforms: Map<string, any> | undefined,
-  itemId: string,
-) {
-  const transform = draftTransformStyle(transforms?.get(itemId));
-  return transform ? { transform } : undefined;
-}
+import { draftImageStyle } from "../engine/utils/draftImage";
 
 interface DuplicatesScreenProps {
   groups: DuplicateGroup[];

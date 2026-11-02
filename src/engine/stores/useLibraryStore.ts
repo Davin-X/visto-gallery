@@ -114,9 +114,14 @@ interface LibraryState {
   hiddenItems: MediaItem[];
   hiddenCount: number;
 
+  // Internal sort cache (per-store-instance, replaces module-level vars)
+  _sortedSource: MediaItem[] | null;
+  _sortedBy: LibraryState["sortBy"] | null;
+  _sortedOrder: LibraryState["sortOrder"] | null;
+  _sortedCache: MediaItem[];
+
   // Per-album item cache (all items in an album, not paginated)
   albumItems: Record<string, MediaItem[]>;
-
   // Actions - Data Loading
   loadLibrary: (filter?: LibraryFilter) => Promise<void>;
   loadNextPage: () => Promise<void>;
@@ -191,11 +196,9 @@ interface LibraryState {
 
 // Sorting is the most expensive part of deriving the gallery collections.
 // Keep it stable across query, selection, and screen changes, which do not
-// replace the underlying items or alter the sort order.
-let sortedSource: MediaItem[] | null = null;
-let sortedBy: LibraryState["sortBy"] | null = null;
-let sortedOrder: LibraryState["sortOrder"] | null = null;
-let sortedCache: MediaItem[] = [];
+// replace the underlying items or alter the sort order. Cache lives on the
+// store instance (see _sortedSource / _sortedBy / _sortedOrder / _sortedCache)
+// Load generation and query debounce are per-app (not per-store-instance).
 let libraryLoadGeneration = 0;
 let queryReloadTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -222,27 +225,25 @@ function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
 }
 
 export function resetSortedItemsCache(): void {
-  sortedSource = null;
-  sortedBy = null;
-  sortedOrder = null;
-  sortedCache = [];
+  // No-op: sort cache is now per-store-instance in state.
 }
 
 function getSortedItems(
+  state: LibraryState,
   items: MediaItem[],
   sortBy: LibraryState["sortBy"],
   sortOrder: LibraryState["sortOrder"],
 ) {
   if (
-    items === sortedSource &&
-    sortBy === sortedBy &&
-    sortOrder === sortedOrder
+    items === state._sortedSource &&
+    sortBy === state._sortedBy &&
+    sortOrder === state._sortedOrder
   )
-    return sortedCache;
-  sortedSource = items;
-  sortedBy = sortBy;
-  sortedOrder = sortOrder;
-  sortedCache = [...items].sort((a, b) => {
+    return state._sortedCache;
+  state._sortedSource = items;
+  state._sortedBy = sortBy;
+  state._sortedOrder = sortOrder;
+  state._sortedCache = [...items].sort((a, b) => {
     let comparison = 0;
     switch (sortBy) {
       case "name":
@@ -273,7 +274,7 @@ function getSortedItems(
       });
     return sortOrder === "asc" ? comparison : -comparison;
   });
-  return sortedCache;
+  return state._sortedCache;
 }
 
 function computeInspectionDerived(state: LibraryState) {
@@ -309,7 +310,7 @@ function computeDerived(state: LibraryState) {
   // One sort for every derived collection. Hidden items are a separate,
   // first-class set: they never appear in the normal grid, viewer, album
   // covers, or counts.
-  const sorted = getSortedItems(items, sortBy, sortOrder);
+  const sorted = getSortedItems(state, items, sortBy, sortOrder);
   const hiddenItems = sorted.filter((item) => item.hidden);
   let visible = sorted.filter((item) => !item.hidden);
 
@@ -432,9 +433,14 @@ export const useLibraryStore = create<LibraryState>()(
       hiddenItems: [],
       hiddenCount: 0,
 
+      // Internal sort cache (per-store-instance)
+      _sortedSource: null,
+      _sortedBy: null,
+      _sortedOrder: null,
+      _sortedCache: [],
+
       // Per-album item cache (all items in an album, not paginated)
       albumItems: {},
-
       // Data Loading
       loadLibrary: async (filter) => {
         const generation = ++libraryLoadGeneration;
