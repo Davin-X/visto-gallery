@@ -900,7 +900,6 @@ mod exif_tests {
     use super::{read_exif_bytes, write_jpeg_with_exif};
     use image::ImageEncoder;
     use image::RgbImage;
-    use std::io::Cursor;
 
     fn temp_path(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
