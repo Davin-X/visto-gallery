@@ -808,9 +808,14 @@ function LibraryScreen(props: LibraryScreenProps) {
       ],
     },
     {
-      label: item.colorLabel
-        ? `Color Label: ${item.colorLabel}`
-        : "Color Label",
+      label: item.colorLabel ? (
+        <span className="ctx-trigger-label">
+          Color Label{" "}
+          <span className={`ctx-dot ctx-dot-${item.colorLabel}`} />
+        </span>
+      ) : (
+        "Color Label"
+      ),
       submenu: [
         { label: "None", icon: <span className="ctx-dot ctx-dot-none" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "") },
         { label: "Red", icon: <span className="ctx-dot ctx-dot-red" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "red") },
