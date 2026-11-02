@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import { FilterIcon } from "./icons";
 
 interface FilterDropdownProps {
@@ -23,26 +23,6 @@ const COLORS: [string, string][] = [
 
 export function FilterDropdown(props: FilterDropdownProps) {
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
 
   const activeCount =
     (props.minRating ? 1 : 0) +
@@ -51,16 +31,15 @@ export function FilterDropdown(props: FilterDropdownProps) {
     (props.lensFilter ? 1 : 0);
 
   return (
-    <div ref={containerRef} className="filter-dropdown" style={{ position: "relative", display: "inline-flex" }}>
+    <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
       <button
         type="button"
         className={`quick-filter ${open ? "active" : ""}`}
         onClick={(e) => {
+          e.preventDefault();
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        aria-expanded={open}
-        aria-haspopup="true"
       >
         <FilterIcon size={13} />
         <span>Filters</span>
@@ -70,11 +49,12 @@ export function FilterDropdown(props: FilterDropdownProps) {
       {open && (
         <div
           className="filter-dropdown-panel"
+          onClick={(e) => e.stopPropagation()}
           style={{
             position: "absolute",
             top: "calc(100% + 6px)",
             left: 0,
-            zIndex: 10000,
+            zIndex: 99999,
           }}
         >
           <div className="filter-section">
@@ -93,9 +73,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
                     }}
                   >
                     {Array.from({ length: stars }).map((_, i) => (
-                      <span key={i} className="ctx-star">
-                        ★
-                      </span>
+                      <span key={i} className="ctx-star">★</span>
                     ))}
                   </button>
                 );
@@ -117,8 +95,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
                       e.stopPropagation();
                       props.onSetColorLabelFilter(active ? null : color);
                     }}
-                    aria-label={name}
-                    title={`Filter by ${name}`}
+                    title={name}
                   >
                     <span className="color-dot-small" />
                   </button>
