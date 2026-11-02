@@ -1540,6 +1540,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                               <HeartIcon size={11} filled />
                             </span>
                           ) : null}
+                          {item.colorLabel && !masked(item) ? (
+                            <span
+                              className={`tile-color-label tile-color-${item.colorLabel}`}
+                              aria-label={`Color label: ${item.colorLabel}`}
+                              title={`Color: ${item.colorLabel}`}
+                            >
+                              <span className="color-dot" />
+                            </span>
+                          ) : null}
                         </span>
                           <span
                             className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
@@ -1704,6 +1713,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                                           aria-label="Favorite"
                                         >
                                           <HeartIcon size={11} filled />
+                                        </span>
+                                      ) : null}
+                                      {item.colorLabel && !masked(item) ? (
+                                        <span
+                                          className={`tile-color-label tile-color-${item.colorLabel}`}
+                                          aria-label={`Color label: ${item.colorLabel}`}
+                                          title={`Color: ${item.colorLabel}`}
+                                        >
+                                          <span className="color-dot" />
                                         </span>
                                       ) : null}
                                     </span>
