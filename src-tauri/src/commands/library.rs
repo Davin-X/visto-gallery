@@ -1,5 +1,6 @@
 use super::*;
 use crate::{models::*, AppState};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::{QueryBuilder, SqlitePool};
@@ -430,6 +431,13 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
             .push_bind(prefix)
             .push(")");
     }
+    if let Some(rating) = f.rating {
+        qb.push(" AND rating >= ").push_bind(rating);
+    }
+    if let Some(color_label) = &f.color_label {
+        qb.push(" AND color_label = ")
+            .push_bind(color_label.clone());
+    }
 }
 
 async fn get_library_items_page(
@@ -657,7 +665,7 @@ pub struct ThumbnailRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ThumbnailResponse {
     item_id: String,
-    path: String,
+    data_url: String,
     width: u32,
     height: u32,
 }
@@ -680,14 +688,14 @@ pub async fn get_item_thumbnail(
     }
 
     let db = super::get_db(&state)?;
-    let item = sqlx::query_as::<_, (String, i64, i64)>(
-        "SELECT path, modified_at, size FROM media_items WHERE id = ? AND kind = 'photo'",
+    let item = sqlx::query_as::<_, (String, String, i64, i64)>(
+        "SELECT path, kind, modified_at, size FROM media_items WHERE id = ?",
     )
     .bind(&request.item_id)
     .fetch_optional(&db)
     .await
     .map_err(|error| error.to_string())?
-    .ok_or_else(|| "Photo not found in library".to_string())?;
+    .ok_or_else(|| "Item not found in library".to_string())?;
 
     let quality = request.quality.unwrap_or(78).clamp(1, 100);
     let max_cache_bytes = request.max_cache_bytes.unwrap_or(512 * 1024 * 1024);
@@ -700,7 +708,7 @@ pub async fn get_item_thumbnail(
     tokio::fs::create_dir_all(&cache_root)
         .await
         .map_err(|error| error.to_string())?;
-    let cache_key = thumbnail_cache_key(&request.item_id, item.1, item.2, request.size);
+    let cache_key = thumbnail_cache_key(&request.item_id, item.2, item.3, request.size);
     let digest = ring::digest::digest(&ring::digest::SHA256, cache_key.as_bytes());
     let cache_path = cache_root.join(format!("{}.jpg", hex::encode(digest.as_ref())));
 
@@ -716,11 +724,19 @@ pub async fn get_item_thumbnail(
     } else {
         let _ = tokio::fs::remove_file(&cache_path).await;
         let source_path = item.0;
-        let source_size = item.2;
+        let source_size = item.3;
+        let item_kind = item.1;
         let target_path = cache_path.clone();
         let size = request.size;
         let generated = tokio::task::spawn_blocking(move || {
-            generate_cached_thumbnail(&source_path, &target_path, size, source_size, quality)
+            generate_cached_thumbnail(
+                &source_path,
+                &target_path,
+                size,
+                source_size,
+                quality,
+                &item_kind,
+            )
         })
         .await
         .map_err(|error| format!("Thumbnail worker failed: {error}"))??;
@@ -728,9 +744,13 @@ pub async fn get_item_thumbnail(
         generated
     };
 
+    let bytes = tokio::fs::read(&cache_path)
+        .await
+        .map_err(|e| e.to_string())?;
+
     Ok(ThumbnailResponse {
         item_id: request.item_id,
-        path: cache_path.to_string_lossy().into_owned(),
+        data_url: format!("data:image/jpeg;base64,{}", BASE64.encode(bytes)),
         width,
         height,
     })
@@ -833,10 +853,30 @@ pub(crate) fn generate_cached_thumbnail(
     size: u32,
     source_size: i64,
     quality: u8,
+    kind: &str,
 ) -> Result<(Vec<u8>, u32, u32), String> {
     #[cfg(target_os = "macos")]
     {
-        // Use sips for large images on macOS; fall back to image crate for smaller ones
+        // RAW files: try macOS ImageIO (sips) which supports some RAW via Camera Raw.
+        if kind == "raw" {
+            if let Ok(result) = generate_with_macos_sips(
+                source,
+                destination,
+                size,
+                quality,
+                "macOS sips (RAW via ImageIO)",
+            ) {
+                return Ok(result);
+            }
+        }
+        // Video files: try QuickLook thumbnail generator (qlmanage).
+        if kind == "video" {
+            if let Ok(result) = generate_thumbnail_with_qlmanage(source, destination, size) {
+                return Ok(result);
+            }
+        }
+
+        // Large images: use sips for macOS ImageIO downsampling (HEIC/HEIF/large photos).
         if source_size > LARGE_THUMBNAIL_SOURCE_BYTES {
             return generate_with_macos_sips(
                 source,
@@ -847,7 +887,11 @@ pub(crate) fn generate_cached_thumbnail(
             );
         }
     }
-    // Fallback: use image crate (used on non-macOS, and for small images on macOS)
+    // Fallback: use image crate (used on non-macOS, and for small images on macOS).
+    // Only photo kinds are supported here; RAW/video will fall through to placeholder.
+    if kind != "photo" {
+        return generate_placeholder_thumbnail(destination, size, kind);
+    }
     let reader = image::ImageReader::open(source)
         .map_err(|error| format!("Could not read photo: {error}"))?
         .with_guessed_format()
@@ -881,6 +925,142 @@ pub(crate) fn generate_cached_thumbnail(
     std::fs::write(&temporary, &bytes).map_err(|error| error.to_string())?;
     commit_thumbnail_file(&temporary, destination)?;
     Ok((bytes, width, height))
+}
+
+/// Generate a placeholder thumbnail for RAW/video files that cannot be decoded
+/// by the available image libraries. Draws a solid color with a kind label.
+fn generate_placeholder_thumbnail(
+    destination: &Path,
+    size: u32,
+    kind: &str,
+) -> Result<(Vec<u8>, u32, u32), String> {
+    use image::{Rgb, RgbImage};
+    let color = match kind {
+        "raw" => Rgb([120, 110, 90]),   // warm gray for RAW
+        "video" => Rgb([70, 110, 160]), // blue-gray for video
+        _ => Rgb([150, 150, 150]),      // neutral gray fallback
+    };
+    let img = RgbImage::from_pixel(size, size, color);
+    let (width, height) = (img.width(), img.height());
+    let mut bytes = Vec::new();
+    JpegEncoder::new_with_quality(&mut bytes, 78)
+        .encode(&img, width, height, image::ExtendedColorType::Rgb8)
+        .map_err(|error| format!("Could not encode placeholder thumbnail: {error}"))?;
+
+    let temporary = destination.with_extension(format!("{}.tmp", Uuid::new_v4()));
+    std::fs::write(&temporary, &bytes).map_err(|error| error.to_string())?;
+    commit_thumbnail_file(&temporary, destination)?;
+    Ok((bytes, width, height))
+}
+
+/// Generate a video thumbnail using macOS QuickLook (qlmanage).
+/// Extracts a representative frame from the video file.
+#[cfg(target_os = "macos")]
+fn generate_thumbnail_with_qlmanage(
+    source: &str,
+    destination: &Path,
+    size: u32,
+) -> Result<(Vec<u8>, u32, u32), String> {
+    use std::process::Command;
+
+    let tmp_dir = std::env::temp_dir().join(format!("visto-qlmanage-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&tmp_dir)
+        .map_err(|error| format!("Could not create temp dir: {error}"))?;
+
+    let mut child = Command::new("/usr/bin/qlmanage")
+        .args([
+            "-t",
+            "-s",
+            &size.to_string(),
+            "-o",
+            tmp_dir.to_str().unwrap(),
+            source,
+        ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("qlmanage not available: {error}"))?;
+
+    // QuickLook can hang on large or exotic video containers (a multi-GB MKV
+    // is a real example), so cap the wait instead of occupying a thumbnail
+    // worker indefinitely.
+    let timeout = std::time::Duration::from_secs(10);
+    let deadline = std::time::Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = std::fs::remove_dir_all(&tmp_dir);
+                return Err("qlmanage thumbnail timed out".to_string());
+            }
+            Err(error) => {
+                let _ = std::fs::remove_dir_all(&tmp_dir);
+                return Err(format!("qlmanage thumbnail failed: {error}"));
+            }
+        }
+    };
+
+    if !status.success() {
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+        return Err("qlmanage thumbnail failed".to_string());
+    }
+
+    // Find the generated thumbnail: qlmanage names output based on source filename.
+    let thumbnail_path = find_qlmanage_output(&tmp_dir)?;
+
+    let dimensions = match image::image_dimensions(&thumbnail_path) {
+        Ok(dimensions) => dimensions,
+        Err(error) => {
+            let _ = std::fs::remove_dir_all(&tmp_dir);
+            return Err(error.to_string());
+        }
+    };
+    let bytes = match std::fs::read(&thumbnail_path) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            let _ = std::fs::remove_dir_all(&tmp_dir);
+            return Err(error.to_string());
+        }
+    };
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+    commit_thumbnail_file(&thumbnail_path, destination)?;
+    Ok((bytes, dimensions.0, dimensions.1))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn generate_thumbnail_with_qlmanage(
+    _source: &str,
+    _destination: &Path,
+    _size: u32,
+) -> Result<(Vec<u8>, u32, u32), String> {
+    Err("qlmanage not available on this platform".to_string())
+}
+
+/// Find the qlmanage-generated thumbnail in a directory by looking for recent .jpg files.
+fn find_qlmanage_output(dir: &Path) -> Result<std::path::PathBuf, String> {
+    let mut best: Option<std::path::PathBuf> = None;
+    let mut best_time: Option<std::time::SystemTime> = None;
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map(|e| e == "jpg").unwrap_or(false) {
+                if let Ok(meta) = entry.metadata() {
+                    if let Ok(mtime) = meta.modified() {
+                        if best_time.map(|t| mtime > t).unwrap_or(true) {
+                            best_time = Some(mtime);
+                            best = Some(path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    best.ok_or_else(|| "qlmanage output not found".to_string())
 }
 
 fn commit_thumbnail_file(temporary: &Path, destination: &Path) -> Result<(), String> {
@@ -1332,6 +1512,43 @@ pub async fn toggle_hidden(
     Ok(())
 }
 
+/// Set the star rating (0-5) on a media item. Pass 0 to unrate.
+#[tauri::command]
+pub async fn set_rating(
+    item_id: String,
+    rating: i32,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let db = super::get_db(&state)?;
+    sqlx::query("UPDATE media_items SET rating = ?, updated_at = ? WHERE id = ?")
+        .bind(rating)
+        .bind(super::now_ms())
+        .bind(&item_id)
+        .execute(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Set the color label on a media item. Valid values: red, yellow, green,
+/// blue, purple. Pass empty string to clear.
+#[tauri::command]
+pub async fn set_color_label(
+    item_id: String,
+    color_label: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let db = super::get_db(&state)?;
+    sqlx::query("UPDATE media_items SET color_label = ?, updated_at = ? WHERE id = ?")
+        .bind(color_label)
+        .bind(super::now_ms())
+        .bind(&item_id)
+        .execute(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Core implementation of `update_item_tags`, extracted so it can be tested
 /// against an in-memory database without a Tauri `State`.
 pub async fn apply_item_tags(
@@ -1419,7 +1636,7 @@ mod tag_tests {
             .await
             .expect("enable foreign keys");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, rating INTEGER, color_label TEXT)",
         )
         .execute(&db)
         .await
@@ -1584,7 +1801,7 @@ mod pagination_tests {
             .await
             .expect("open in-memory page database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
         )
         .execute(&db)
         .await

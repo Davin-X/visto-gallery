@@ -1,11 +1,5 @@
-export type {
-  MediaItem,
-  Album,
-  Tag,
-  ImportSession,
-  LibraryFilter,
-  DuplicateGroup,
-} from "./media";
+import type { CropState, EditRecipe, EditPreset } from "./media";
+export type { CropState, EditRecipe, EditPreset, MediaItem, Album, Tag, ImportSession, LibraryFilter, DuplicateGroup } from "./media";
 export type { AppSettings } from "./settings";
 
 import type {
@@ -40,6 +34,8 @@ export interface LibraryFilterDTO {
   dateFrom?: number;
   dateTo?: number;
   sourcePath?: string;
+  rating?: number;
+  colorLabel?: string;
   limit?: number;
   /** Opaque keyset cursor returned by the preceding page. */
   cursor?: string;
@@ -65,7 +61,7 @@ export interface ThumbnailRequest {
 
 export interface ThumbnailResponse {
   itemId: string;
-  path: string; // cache file path; convert with convertFileSrc
+  dataUrl: string;
   width: number;
   height: number;
 }
@@ -205,6 +201,12 @@ export interface UpdateCheckResult {
   checkedAt: number;
 }
 
+/** A desktop app that can play video containers WebKit cannot (MKV, AVI, ...). */
+export interface ExternalPlayer {
+  name: string;
+  path: string;
+}
+
 /** Exact library statistics computed from the catalog (not from loaded pages). */
 export interface LibraryStats {
   photos: number;
@@ -241,9 +243,12 @@ export type TauriCommandSignature = {
   // Items
   toggle_favorite: (itemId: string, favorite: boolean) => void;
   toggle_hidden: (itemId: string, hidden: boolean) => void;
+  set_rating: (itemId: string, rating: number) => void;
+  set_color_label: (itemId: string, colorLabel: string) => void;
   update_item_tags: (itemId: string, tags: string[]) => void;
   move_to_trash: (paths: string[]) => void;
   reveal_in_finder: (path: string) => void;
+  open_file: (path: string) => void;
   open_folder: (path: string) => void;
 
   // Albums
@@ -259,6 +264,37 @@ export type TauriCommandSignature = {
 
   // Editing
   render_edited: (request: RenderRequest) => ExportResult;
+  save_edit_recipe: (req: {
+    mediaId: string;
+    edits: EditValues;
+    crop?: CropState;
+    history: EditValues[];
+    historyIndex: number;
+  }) => EditRecipe;
+  get_edit_recipe: (mediaId: string) => EditRecipe | null;
+  list_edit_recipes: () => EditRecipe[];
+  delete_edit_recipe: (mediaId: string) => boolean;
+  copy_edit_recipe: (req: {
+    fromMediaId: string;
+    toMediaId: string;
+  }) => EditRecipe;
+  batch_apply_edit: (req: {
+    mediaIds: string[];
+    edits: EditValues;
+    crop?: CropState;
+  }) => number;
+  save_edit_preset: (req: {
+    id?: string;
+    name: string;
+    edits: EditValues;
+    crop?: CropState;
+  }) => EditPreset;
+  list_edit_presets: () => EditPreset[];
+  delete_edit_preset: (id: string) => boolean;
+  apply_edit_preset: (req: {
+    presetId: string;
+    mediaId: string;
+  }) => EditRecipe;
 
   // Batch
   batch_export: (request: BatchExportRequest) => BatchExportResult;

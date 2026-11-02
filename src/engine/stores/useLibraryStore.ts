@@ -71,6 +71,9 @@ interface LibraryState {
   // the media-kind filter; the two compose so "Photos inside Pictures" works.
   activeSource: string | null;
   screen: Screen;
+  // Rating and color-label filters (applied on top of `filter`)
+  minRating: number | null; // items at or above this star rating
+  colorLabelFilter: string | null; // 'red' | 'yellow' | 'green' | 'blue' | 'purple'
   // Which collection the viewer navigates when it opens. Hidden items are
   // deliberately absent from the normal viewer, so the Hidden gallery asks the
   // viewer to browse the hidden set instead.
@@ -117,6 +120,8 @@ interface LibraryState {
   _sortedOrder: LibraryState["sortOrder"] | null;
   _sortedCache: MediaItem[];
 
+  // Per-album item cache (all items in an album, not paginated)
+  albumItems: Record<string, MediaItem[]>;
   // Actions - Data Loading
   loadLibrary: (filter?: LibraryFilter) => Promise<void>;
   loadNextPage: () => Promise<void>;
@@ -145,6 +150,8 @@ interface LibraryState {
   setActiveSource: (path: string | null) => void;
   setQuery: (query: string) => void;
   setHiddenQuery: (query: string) => void;
+  setMinRating: (rating: number | null) => void;
+  setColorLabelFilter: (colorLabel: string | null) => void;
   setLayout: (layout: LayoutMode) => void;
   setSort: (
     sortBy: LibraryState["sortBy"],
@@ -161,6 +168,10 @@ interface LibraryState {
   toggleHidden: (id: string) => Promise<void>;
   setFavoriteForIds: (ids: string[], favorite: boolean) => Promise<void>;
   setHiddenForIds: (ids: string[], hidden: boolean) => Promise<void>;
+  setRating: (id: string, rating: number) => Promise<void>;
+  setColorLabel: (id: string, colorLabel: string) => Promise<void>;
+  setRatingForIds: (ids: string[], rating: number) => Promise<void>;
+  setColorLabelForIds: (ids: string[], colorLabel: string) => Promise<void>;
   updateItemTags: (id: string, tags: string[]) => Promise<void>;
   deleteItems: (ids: string[]) => Promise<void>;
 
@@ -170,6 +181,7 @@ interface LibraryState {
   renameAlbum: (albumId: string, name: string) => Promise<void>;
   addToAlbum: (albumId: string, itemIds?: string[]) => Promise<void>;
   removeFromAlbum: (albumId: string, itemIds: string[]) => Promise<void>;
+  loadAlbumItems: (albumId: string) => Promise<void>;
 
   // Actions - Duplicates
   scanDuplicates: () => Promise<void>;
@@ -207,6 +219,8 @@ function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
     sourcePath: state.activeSource ?? undefined,
     sortBy: state.sortBy,
     sortOrder: state.sortOrder,
+    rating: state.minRating ?? undefined,
+    colorLabel: state.colorLabelFilter ?? undefined,
   };
 }
 
@@ -393,6 +407,8 @@ export const useLibraryStore = create<LibraryState>()(
       activeSource: null,
       screen: "Library",
       viewerScope: "library",
+      minRating: null,
+      colorLabelFilter: null,
       busy: false,
       canceling: false,
       progress: null,
@@ -423,6 +439,8 @@ export const useLibraryStore = create<LibraryState>()(
       _sortedOrder: null,
       _sortedCache: [],
 
+      // Per-album item cache (all items in an album, not paginated)
+      albumItems: {},
       // Data Loading
       loadLibrary: async (filter) => {
         const generation = ++libraryLoadGeneration;
@@ -723,6 +741,18 @@ export const useLibraryStore = create<LibraryState>()(
         void get().loadLibrary();
       },
 
+      setMinRating: (rating) => {
+        set({ minRating: rating });
+        get().refreshDerived();
+        void get().loadLibrary();
+      },
+
+      setColorLabelFilter: (colorLabel) => {
+        set({ colorLabelFilter: colorLabel });
+        get().refreshDerived();
+        void get().loadLibrary();
+      },
+
       setQuery: (query) => {
         set({ query });
         get().refreshDerived();
@@ -845,6 +875,97 @@ export const useLibraryStore = create<LibraryState>()(
         const item = get().items.find((i) => i.id === id);
         if (!item) return;
         await get().setHiddenForIds([id], !item.hidden);
+      },
+
+      setRating: async (id, rating) => {
+        const item = get().items.find((i) => i.id === id);
+        if (!item) return;
+        const prev = { ...item };
+        set((s) => ({
+          items: s.items.map((i) => (i.id === id ? { ...i, rating } : i)),
+        }));
+        get().refreshDerived();
+        try {
+          await tauri.items.setRating(id, rating);
+        } catch (error) {
+          console.error(`Failed to set rating for ${id}:`, error);
+          set((s) => ({
+            items: s.items.map((i) => (i.id === id ? { ...prev } : i)),
+          }));
+          get().refreshDerived();
+        }
+      },
+
+      setColorLabel: async (id, colorLabel) => {
+        const item = get().items.find((i) => i.id === id);
+        if (!item) return;
+        const prev = { ...item };
+        set((s) => ({
+          items: s.items.map((i) => (i.id === id ? { ...i, colorLabel } : i)),
+        }));
+        get().refreshDerived();
+        try {
+          await tauri.items.setColorLabel(id, colorLabel);
+        } catch (error) {
+          console.error(`Failed to set color label for ${id}:`, error);
+          set((s) => ({
+            items: s.items.map((i) => (i.id === id ? { ...prev } : i)),
+          }));
+          get().refreshDerived();
+        }
+      },
+
+      setRatingForIds: async (ids, rating) => {
+        const targets = get().items.filter((i) => ids.includes(i.id));
+        if (!targets.length) return;
+        const prevs = new Map(
+          targets.map((i) => [i.id, { ...i }]),
+        );
+        set((s) => ({
+          items: s.items.map((i) => (ids.includes(i.id) ? { ...i, rating } : i)),
+        }));
+        get().refreshDerived();
+        try {
+          await Promise.all(
+            targets.map((i) => tauri.items.setRating(i.id, rating)),
+          );
+        } catch (error) {
+          console.error(`Failed to set rating for ${ids.length} items:`, error);
+          set((s) => ({
+            items: s.items.map((i) =>
+              ids.includes(i.id) ? { ...prevs.get(i.id)! } : i,
+            ),
+          }));
+          get().refreshDerived();
+        }
+      },
+
+      setColorLabelForIds: async (ids, colorLabel) => {
+        const targets = get().items.filter((i) => ids.includes(i.id));
+        if (!targets.length) return;
+        const prevs = new Map(
+          targets.map((i) => [i.id, { ...i }]),
+        );
+        set((s) => ({
+          items: s.items.map((i) => (ids.includes(i.id) ? { ...i, colorLabel } : i)),
+        }));
+        get().refreshDerived();
+        try {
+          await Promise.all(
+            targets.map((i) => tauri.items.setColorLabel(i.id, colorLabel)),
+          );
+        } catch (error) {
+          console.error(
+            `Failed to set color label for ${ids.length} items:`,
+            error,
+          );
+          set((s) => ({
+            items: s.items.map((i) =>
+              ids.includes(i.id) ? { ...prevs.get(i.id)! } : i,
+            ),
+          }));
+          get().refreshDerived();
+        }
       },
 
       updateItemTags: async (id, tags) => {
@@ -1080,6 +1201,13 @@ export const useLibraryStore = create<LibraryState>()(
         );
       },
 
+      loadAlbumItems: async (albumId) => {
+        const items = await tauri.albums.getItems(albumId);
+        set((s) => ({
+          albumItems: { ...s.albumItems, [albumId]: items },
+        }));
+      },
+
       // Duplicates
       scanDuplicates: async () => {
         // Keep previous results so we can merge partial results on cancel
@@ -1184,6 +1312,8 @@ export const useQuery = () => useLibraryStore((s) => s.query);
 export const useLayout = () => useLibraryStore((s) => s.layout);
 export const useShowInspector = () => useLibraryStore((s) => s.showInspector);
 export const useActiveAlbum = () => useLibraryStore((s) => s.activeAlbum);
+export const useMinRating = () => useLibraryStore((s) => s.minRating);
+export const useColorLabelFilter = () => useLibraryStore((s) => s.colorLabelFilter);
 export const useAlbums = () => useLibraryStore((s) => s.albums);
 export const useDuplicates = () => useLibraryStore((s) => s.duplicates);
 export const useBusy = () => useLibraryStore((s) => s.busy);

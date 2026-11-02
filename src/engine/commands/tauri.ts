@@ -23,10 +23,14 @@ import type {
   AppSettings,
   EditValues,
   CropRect,
+  CropState,
+  EditRecipe,
+  EditPreset,
   TrashResult,
   TrashError,
   UpdateCheckResult,
   LibraryStats,
+  ExternalPlayer,
 } from "../types/commands";
 
 // Type-safe command wrappers
@@ -69,6 +73,12 @@ export const tauri = {
     toggleHidden: (itemId: string, hidden: boolean): Promise<void> =>
       invoke("toggle_hidden", { itemId, hidden }),
 
+    setRating: (itemId: string, rating: number): Promise<void> =>
+      invoke("set_rating", { itemId, rating }),
+
+    setColorLabel: (itemId: string, colorLabel: string): Promise<void> =>
+      invoke("set_color_label", { itemId, colorLabel }),
+
     updateTags: (itemId: string, tags: string[]): Promise<void> =>
       invoke("update_item_tags", { itemId, tags }),
 
@@ -80,12 +90,24 @@ export const tauri = {
     revealInFinder: (path: string): Promise<void> =>
       invoke("reveal_in_finder", { path }),
 
+    openFile: (path: string): Promise<void> =>
+      invoke("open_file", { path }),
+
+    openWithPlayer: (path: string, player: string): Promise<void> =>
+      invoke("open_with_player", { path, player }),
+
+    externalVideoPlayers: (): Promise<ExternalPlayer[]> =>
+      invoke("external_video_players"),
+
     openFolder: (path: string): Promise<void> =>
       invoke("open_folder", { path }),
   },
 
   albums: {
     get: (): Promise<Album[]> => invoke("get_albums"),
+
+    getItems: (albumId: string): Promise<MediaItem[]> =>
+      invoke("get_album_items", { albumId }),
 
     getTags: (): Promise<Tag[]> => invoke("get_tags"),
 
@@ -152,6 +174,52 @@ export const tauri = {
       invoke("save_settings", { patch: settings }),
   },
 
+  edit: {
+    saveRecipe: (req: {
+      mediaId: string;
+      edits: EditValues;
+      crop?: CropState;
+      history: EditValues[];
+      historyIndex: number;
+    }) => invoke<EditRecipe>("save_edit_recipe", req),
+
+    getRecipe: (mediaId: string) =>
+      invoke<EditRecipe | null>("get_edit_recipe", { mediaId }),
+
+    listRecipes: () => invoke<EditRecipe[]>("list_edit_recipes"),
+
+    deleteRecipe: (mediaId: string) =>
+      invoke<boolean>("delete_edit_recipe", { mediaId }),
+
+    copyRecipe: (req: {
+      fromMediaId: string;
+      toMediaId: string;
+    }) => invoke<EditRecipe>("copy_edit_recipe", req),
+
+    batchApply: (req: {
+      mediaIds: string[];
+      edits: EditValues;
+      crop?: CropState;
+    }) => invoke<number>("batch_apply_edit", req),
+
+    savePreset: (req: {
+      id?: string;
+      name: string;
+      edits: EditValues;
+      crop?: CropState;
+    }) => invoke<EditPreset>("save_edit_preset", req),
+
+    listPresets: () => invoke<EditPreset[]>("list_edit_presets"),
+
+    deletePreset: (id: string) =>
+      invoke<boolean>("delete_edit_preset", { id }),
+
+    applyPreset: (req: {
+      presetId: string;
+      mediaId: string;
+    }) => invoke<EditRecipe>("apply_edit_preset", req),
+  },
+
   app: {
     getVersion: (): Promise<string> => invoke("get_version"),
 
@@ -194,11 +262,9 @@ export const events = {
     listen("folder-changed", (e: any) => callback(e.payload)),
 };
 
-import { convertFileSrc } from "@tauri-apps/api/core";
-
-// Helper: Build thumbnail URL from response
+// Helper: Build thumbnail data URL from response
 export function thumbnailToDataUrl(response: ThumbnailResponse): string {
-  return convertFileSrc(response.path);
+  return response.dataUrl;
 }
 
 // Helper: Default edit values

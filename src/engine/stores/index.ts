@@ -43,6 +43,7 @@ export {
   useDraftIds,
   draftTransformStyle,
   clearEditDraft,
+  refreshDraftMeta,
   type DraftTransform,
 } from "./useEditStore";
 export {

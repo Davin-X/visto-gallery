@@ -1,6 +1,7 @@
 mod albums;
 mod batch;
 mod duplicates;
+mod edit_recipes;
 mod library;
 mod media;
 mod settings;
@@ -10,6 +11,7 @@ pub use albums::*;
 use anyhow::Result;
 pub use batch::*;
 pub use duplicates::*;
+pub use edit_recipes::*;
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::codecs::webp::WebPEncoder;
@@ -74,6 +76,8 @@ pub struct LibraryFilterDTO {
     pub date_from: Option<i64>,
     pub date_to: Option<i64>,
     pub source_path: Option<String>,
+    pub rating: Option<i32>,
+    pub color_label: Option<String>,
     pub limit: Option<i32>,
     /// Opaque cursor returned by a previous `get_library_items` page.
     pub cursor: Option<String>,
@@ -458,12 +462,18 @@ fn is_media_file(ext: &str) -> bool {
         "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",
         "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f",
     ];
-    let video_exts = ["m4v", "mov", "mp4", "mpeg", "mpg", "webm"];
+    let video_exts = [
+        "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
+        "mts", "ogv", "ts", "vob", "webm", "wmv",
+    ];
     image_exts.contains(&ext) || raw_exts.contains(&ext) || video_exts.contains(&ext)
 }
 
 fn kind_for_ext(ext: &str) -> &'static str {
-    let video_exts = ["m4v", "mov", "mp4", "mpeg", "mpg", "webm"];
+    let video_exts = [
+        "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
+        "mts", "ogv", "ts", "vob", "webm", "wmv",
+    ];
     let raw_exts = [
         "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf",
         "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",
@@ -579,7 +589,7 @@ async fn upsert_media_batch(
     }
 
     let mut query = QueryBuilder::<Sqlite>::new(
-        "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, width, height, camera, lens, exposure, iso, latitude, longitude, created_at, updated_at, favorite, hidden) ",
+        "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, width, height, camera, lens, exposure, iso, latitude, longitude, sha256, created_at, updated_at, favorite, hidden, rating, color_label) ",
     );
     query.push_values(rows, |mut values, (item, width, height)| {
         values
@@ -599,13 +609,16 @@ async fn upsert_media_batch(
             .push_bind(item.iso)
             .push_bind(item.latitude)
             .push_bind(item.longitude)
+            .push_bind(&item.sha256)
             .push_bind(item.created_at)
             .push_bind(item.updated_at)
             .push_bind(0i32)
-            .push_bind(0i32);
+            .push_bind(0i32)
+            .push_bind(item.rating)
+            .push_bind(&item.color_label);
     });
     query.push(
-        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), updated_at = excluded.updated_at, sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END",
+        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END, updated_at = excluded.updated_at, favorite = excluded.favorite, hidden = excluded.hidden, rating = COALESCE(excluded.rating, media_items.rating), color_label = COALESCE(excluded.color_label, media_items.color_label)",
     );
     query.build().execute(db).await.map_err(|e| e.to_string())?;
     Ok(())

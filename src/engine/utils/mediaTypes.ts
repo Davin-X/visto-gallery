@@ -20,6 +20,26 @@ export interface TypeIdentity {
   hasDuration: boolean;
 }
 
+// Containers WKWebView can decode on macOS. Everything else (Matroska, AVI,
+// WMV, MPEG-TS, ...) would render as a black frame, so the app must not hand
+// those files to a <video> element: WebKit asks for the whole file and can
+// freeze the UI on multi-gigabyte media.
+const IN_APP_VIDEO_EXTENSIONS = new Set(["mp4", "m4v", "mov", "webm", "ogv"]);
+
+/** Lowercase extension of a path or file name, ignoring query strings. */
+export function fileExtension(value?: string): string {
+  if (!value) return "";
+  const clean = value.split(/[?#]/)[0];
+  const dot = clean.lastIndexOf(".");
+  return dot === -1 ? "" : clean.slice(dot + 1).toLowerCase();
+}
+
+/** Whether a video container can play inside the app's <video> element. */
+export function canPlayVideoInApp(path?: string, name?: string): boolean {
+  const ext = fileExtension(path) || fileExtension(name);
+  return !ext || IN_APP_VIDEO_EXTENSIONS.has(ext);
+}
+
 export const TYPE_IDENTITY: Record<MediaKind, TypeIdentity> = {
   photo: {
     label: "Photo",

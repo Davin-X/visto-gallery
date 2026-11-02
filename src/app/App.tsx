@@ -13,6 +13,7 @@ import { useFocusTrap } from "../design/hooks/useFocusTrap";
 import EditScreen from "../screens/EditScreen";
 import ViewerScreen from "../screens/ViewerScreen";
 import VideoPlayer from "../design/components/VideoPlayer";
+import CameraLensBrowserScreen from "../screens/CameraLensBrowserScreen";
 import BatchScreen from "../screens/BatchScreen";
 import AlbumsScreen from "../screens/AlbumsScreen";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
@@ -36,6 +37,7 @@ import {
   useLibraryStore,
   useViewerStore,
   useEditStore,
+  refreshDraftMeta,
   useSlideshowStore,
   useBatchStore,
   useSettingsStore,
@@ -171,6 +173,7 @@ type Screen =
   | "Edit"
   | "Batch"
   | "Hidden"
+  | "CameraLens"
   | "Settings";
 
 const initialEdits = {
@@ -266,6 +269,8 @@ function isWarningNotice(text: string): boolean {
 function App() {
   const [screen, setScreen] = useState<Screen>("Library");
   const [screenHistory, setScreenHistory] = useState<Screen[]>([]);
+  const [lastFolder, setLastFolder] = useState<string | null>(null);
+  const [lastScreen, setLastScreen] = useState<Screen | null>(null);
 
   const goBack = () => {
     setScreenHistory((prev) => {
@@ -287,6 +292,7 @@ function App() {
   const accentColor = useSettingsStore((s) => s.accentColor);
   const [accentPickerOpen, setAccentPickerOpen] = useState(false);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
+  const animateTransitions = useSettingsStore((s) => s.animateTransitions);
   // Resolved appearance: the user's choice, or the OS setting when "system".
   const dark = appearance === "dark" || (appearance === "system" && systemDark);
   const [albumDialogOpen, setAlbumDialogOpen] = useState(false);
@@ -441,6 +447,7 @@ function App() {
   });
 
   useEffect(() => {
+    void refreshDraftMeta();
     let cancelled = false;
     tauri.library
       .getStats()
@@ -1065,6 +1072,47 @@ function App() {
     };
   }, [dark, appearance, accentColor, systemDark]);
 
+  // Honor the startup_view setting once settings are hydrated: open to the
+  // Library, the last screen/folder, or start a slideshow.
+  const startupView = useSettingsStore((s) => s.startupView);
+  const openLastFolder = useSettingsStore((s) => s.openLastFolder);
+  const didRunStartup = useRef(false);
+  useEffect(() => {
+    if (!settingsHydrated || didRunStartup.current) return;
+    didRunStartup.current = true;
+    if (startupView === "slideshow") {
+      // Slideshow needs items; open Library first so the user can pick one.
+      setScreen("Library");
+      return;
+    }
+    if (startupView === "last" && openLastFolder && lastScreen === "Albums" && lastFolder) {
+      library.setActiveAlbum(lastFolder);
+      library.setFilter("All");
+      library.setQuery("");
+      library.loadAlbumItems(lastFolder);
+      setScreen("Library");
+      return;
+    }
+    if (startupView === "last" && lastScreen) {
+      setScreen(lastScreen);
+      return;
+    }
+    // Default: Library.
+    setScreen("Library");
+  }, [settingsHydrated, startupView, openLastFolder, lastScreen, lastFolder, library]);
+
+  // Track the last screen and folder the user visited so startup_view="last"
+  // can restore them on the next launch.
+  useEffect(() => {
+    if (screen !== "Library" && screen !== "Hidden") {
+      setLastScreen(screen);
+    }
+    if (library.activeAlbum) {
+      setLastFolder(library.activeAlbum);
+      setLastScreen("Albums");
+    }
+  }, [screen, library.activeAlbum]);
+
   const showNotice = useCallback(
     (text: string) => {
       library.showNotice(text);
@@ -1102,6 +1150,20 @@ function App() {
     },
     [showNotice],
   );
+
+  // Warn when the library is very large and show_native_limit_warnings is on.
+  const showNativeWarnings = useSettingsStore((s) => s.showNativeLimitWarnings);
+  useEffect(() => {
+    if (!showNativeWarnings) return;
+    const total =
+      libraryStats.photos + libraryStats.videos + libraryStats.raws +
+      libraryStats.uncategorized;
+    if (total > 10000) {
+      showNotice(
+        `Large library (${total.toLocaleString()} items) — thumbnail generation and scrolling may be slower on this system.`,
+      );
+    }
+  }, [showNativeWarnings, libraryStats.photos, libraryStats.videos, libraryStats.raws, libraryStats.uncategorized, showNotice]);
 
   // Single entry point for "open this item in the player". Used by tiles, the
   // inspector and by Play on a video-only selection.
@@ -1601,7 +1663,7 @@ function App() {
     );
   };
 
-  const openScreen = (next: Screen) => {
+  const openScreen = async (next: Screen) => {
     // Below tablet width the sidebar is an overlay drawer. Dismiss it after
     // navigation so it cannot cover the newly opened screen.
     if (window.innerWidth <= 900 && library.sidebarOpen) {
@@ -1653,7 +1715,8 @@ function App() {
         (i) => i.id === library.inspectedId,
       );
       if (selectedItem && selectedItem.kind === "photo") {
-        edit.open(selectedItem);
+        await edit.saveDraft();
+        await edit.open(selectedItem);
       }
     }
     if (next !== screen) {
@@ -1881,7 +1944,7 @@ function App() {
   return (
     <ErrorBoundary>
       <div
-        className={`app-frame ${dark ? "dark" : ""}`}
+        className={`app-frame ${dark ? "dark" : ""}${!animateTransitions ? " no-transitions" : ""}`}
         style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
       >
       <a className="skip-to-content" href="#main-content">
@@ -2283,6 +2346,13 @@ function App() {
               onToggleHidden={library.toggleHidden}
               onSetFavoriteForIds={library.setFavoriteForIds}
               onSetHiddenForIds={library.setHiddenForIds}
+              onSetRatingForIds={library.setRatingForIds}
+              onSetColorLabelForIds={library.setColorLabelForIds}
+              minRating={library.minRating}
+              libraryStats={libraryStats}
+              colorLabelFilter={library.colorLabelFilter}
+              onSetMinRating={library.setMinRating}
+              onSetColorLabelFilter={library.setColorLabelFilter}
               onUpdateTags={library.updateItemTags}
               onDeleteItems={library.deleteItems}
               onRequestDeleteItems={(ids: string[]) => {
@@ -2293,8 +2363,13 @@ function App() {
                 setAlbumRemovePending({ albumId, itemIds })
               }
               onOpenViewer={(id?: string) => openViewer(id, "Library")}
-              onOpenEdit={(item: any) => {
-                edit.open(item);
+              onOpenEdit={async (item: any) => {
+                if (item?.kind === "video") {
+                  openViewer(item.id, "Library");
+                  return;
+                }
+                await edit.saveDraft();
+                await edit.open(item);
                 setScreen("Edit");
               }}
               onImportFolder={() => importFolder()}
@@ -2318,10 +2393,11 @@ function App() {
               assetUrl={assetUrl}
               onCreateAlbum={openAlbumDialog}
               onAlbumContextMenu={openAlbumMenu}
-              onOpenAlbum={(albumId: string) => {
+              onOpenAlbum={async (albumId: string) => {
                 library.setActiveAlbum(albumId);
                 library.setFilter("All");
                 library.setQuery("");
+                await library.loadAlbumItems(albumId);
                 setScreen("Library");
               }}
             />
@@ -2359,8 +2435,10 @@ function App() {
                 onClose={viewer.close}
                 onToggleFavorite={library.toggleFavorite}
                 onToggleHidden={library.toggleHidden}
-                onOpenEdit={(item: any) => {
-                  edit.open(item);
+                onOpenEdit={async (item: any) => {
+                  if (item?.kind === "video") return;
+                  await edit.saveDraft();
+                  await edit.open(item);
                   setScreen("Edit");
                 }}
                 onContextMenu={openContextMenu}
@@ -2475,9 +2553,9 @@ function App() {
               items={library.items.filter(
                 (i: any) => i.kind === "photo" && !i.hidden,
               )}
-              onOpenEdit={(item: any) => {
-                edit.saveDraft();
-                edit.open(item);
+              onOpenEdit={async (item: any) => {
+                await edit.saveDraft();
+                await edit.open(item);
               }}
             />
           )}
@@ -2525,6 +2603,15 @@ function App() {
             />
           )}
 
+          {screen === "CameraLens" && (
+            <CameraLensBrowserScreen
+              items={library.items}
+              assetUrl={assetUrl}
+              onBack={() => setScreen("Library")}
+              onOpenViewer={(id?: string) => openViewer(id, "Library")}
+            />
+          )}
+
           {screen === "Hidden" && (
             <HiddenScreen
               assetUrl={assetUrl}
@@ -2539,8 +2626,13 @@ function App() {
                 itemPendingDeleteRef.current = ids;
                 setItemPendingDeleteCount(ids.length);
               }}
-              onOpenEdit={(item: any) => {
-                edit.open(item);
+              onOpenEdit={async (item: any) => {
+                if (item?.kind === "video") {
+                  openViewer(item.id, "Hidden", "hidden");
+                  return;
+                }
+                await edit.saveDraft();
+                await edit.open(item);
                 setScreen("Edit");
               }}
               onOpenViewer={(id?: string) => openViewer(id, "Hidden", "hidden")}

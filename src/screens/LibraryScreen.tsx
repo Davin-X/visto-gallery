@@ -39,7 +39,10 @@ import { useLibraryStore } from "../engine/stores/useLibraryStore";
 import { useSettingsStore } from "../engine/stores/useSettingsStore";
 import { useThumbnailSize } from "../engine/stores/useSettingsStore";
 import { tauri } from "../engine/commands/tauri";
-import { formatBytesSimple } from "../engine/utils/mediaTypes";
+import {
+  formatBytesSimple,
+  canPlayVideoInApp,
+} from "../engine/utils/mediaTypes";
 import type {
   MediaItem,
   Album,
@@ -94,6 +97,11 @@ interface LibraryScreenProps {
   ) => void | Promise<void>;
   onSetHiddenForIds: (ids: string[], hidden: boolean) => void | Promise<void>;
   onSetSelection: (ids: string[]) => void;
+  onSetRatingForIds: (ids: string[], rating: number) => void | Promise<void>;
+  onSetColorLabelForIds: (
+    ids: string[],
+    colorLabel: string,
+  ) => void | Promise<void>;
   onToggleFavorite: (id: string) => void | Promise<void>;
   onToggleHidden: (id: string) => void | Promise<void>;
   onToggleInspector: () => void;
@@ -102,6 +110,16 @@ interface LibraryScreenProps {
   onDeleteItems: (ids: string[]) => void | Promise<void>;
   onUpdateTags: (id: string, tags: string[]) => void | Promise<void>;
   query: string;
+  minRating: number | null;
+  libraryStats?: {
+    photos: number;
+    videos: number;
+    raws: number;
+    favorites: number;
+  };
+  colorLabelFilter: string | null;
+  onSetMinRating: (rating: number | null) => void;
+  onSetColorLabelFilter: (colorLabel: string | null) => void;
   notice: any;
   progress: any;
   searchInputRef: any;
@@ -114,6 +132,7 @@ function LibraryScreen(props: LibraryScreenProps) {
   const draftTransforms = useDraftTransforms();
   const thumbnailSize = useThumbnailSize();
   const settingsStore = useSettingsStore();
+  const showExtensions = settingsStore.showExtensions;
   // The grid can request a cached JPEG instead of decoding the original. Use
   // roughly 2x the CSS tile width so retina displays stay sharp; the details
   // preview is only 42-52 px, so a 128 px thumbnail is plenty there.
@@ -185,12 +204,13 @@ function LibraryScreen(props: LibraryScreenProps) {
   const activeAlbumItems = useMemo(
     () =>
       props.activeAlbum
-        ? library.items.filter(
+        ? library.albumItems?.[props.activeAlbum] ??
+          library.items.filter(
             (item: any) =>
               item.albumIds?.includes(props.activeAlbum) && !item.hidden,
           )
         : [],
-    [library.items, props.activeAlbum],
+    [library.items, library.albumItems, props.activeAlbum],
   );
   const activeAlbumPhotos = useMemo(
     () =>
@@ -720,7 +740,13 @@ function LibraryScreen(props: LibraryScreenProps) {
   const handleTileDoubleClick = (item: any) => {
     lastClickedRef.current = item.id;
     props.onInspectItem?.(item.id);
-    props.onOpenViewer?.(item.id);
+    // Videos belong in the viewer: the editor renders a still image and would
+    // pull the entire (possibly multi-gigabyte) file over the asset protocol.
+    if (item.kind === "video") {
+      props.onOpenViewer?.(item.id);
+      return;
+    }
+    props.onOpenEdit?.(item);
   };
 
   const tileClass = (item: any) =>
@@ -740,6 +766,10 @@ function LibraryScreen(props: LibraryScreenProps) {
           },
         ]
       : []),
+    {
+      label: "Open in default app",
+      onClick: () => tauri.items.openFile(item.path),
+    },
     {
       label: "Open in Finder",
       onClick: () => tauri.items.revealInFinder(item.path),
@@ -763,6 +793,32 @@ function LibraryScreen(props: LibraryScreenProps) {
     { label: "New Album…", onClick: () => props.onCreateAlbum?.([item.id]) },
     { divider: true },
     { label: "Favorite", onClick: () => props.onToggleFavorite(item.id) },
+    {
+      label: item.rating ? `Rating ${"★".repeat(item.rating)}` : "Rating",
+      icon: item.rating ? <span className="ctx-star">★</span> : <span className="ctx-star ctx-star-empty">☆</span>,
+      submenu: [
+        { label: <span className="ctx-star ctx-star-empty">Unrate</span>, onClick: () => props.onSetRatingForIds?.([item.id], 0) },
+        { label: <span className="ctx-star">★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 1) },
+        { label: <span className="ctx-star">★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 2) },
+        { label: <span className="ctx-star">★★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 3) },
+        { label: <span className="ctx-star">★★★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 4) },
+        { label: <span className="ctx-star">★★★★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 5) },
+      ],
+    },
+    {
+      label: "Color Label",
+      icon: item.colorLabel ? (
+        <span className={`ctx-dot ctx-dot-${item.colorLabel}`} />
+      ) : null,
+      submenu: [
+        { label: "None", icon: <span className="ctx-dot ctx-dot-none" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "") },
+        { label: "Red", icon: <span className="ctx-dot ctx-dot-red" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "red") },
+        { label: "Yellow", icon: <span className="ctx-dot ctx-dot-yellow" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "yellow") },
+        { label: "Green", icon: <span className="ctx-dot ctx-dot-green" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "green") },
+        { label: "Blue", icon: <span className="ctx-dot ctx-dot-blue" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "blue") },
+        { label: "Purple", icon: <span className="ctx-dot ctx-dot-purple" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "purple") },
+      ],
+    },
     {
       label: item.hidden ? "Unhide" : "Hide",
       onClick: () => props.onToggleHidden(item.id),
@@ -827,11 +883,19 @@ function LibraryScreen(props: LibraryScreenProps) {
           {inAlbum ? (
             <div className="album-detail-top">
               <button
-                className="album-breadcrumb"
+                className="quiet-button album-breadcrumb"
                 type="button"
                 onClick={() => props.onOpenAlbums?.()}
+                style={{
+                  fontSize: 15,
+                  fontWeight: 600,
+                  padding: "8px 12px",
+                  gap: 6,
+                  marginRight: 12,
+                }}
               >
-                <AlbumsIcon size={15} /> All albums
+                <span style={{ fontSize: 14 }}>←</span>
+                <AlbumsIcon size={17} /> All albums
               </button>
               <div className="album-detail-heading">
                 <div
@@ -1123,7 +1187,20 @@ function LibraryScreen(props: LibraryScreenProps) {
             <span className="smart-label">SHOW</span>
             {(["All", "Photos", "Videos", "RAW", "Favorites"] as string[]).map(
               (f) => {
-                const count = filterCounts[f as keyof typeof filterCounts] ?? 0;
+                const count =
+                  f === "All"
+                    ? (props.libraryStats?.photos ?? 0) +
+                      (props.libraryStats?.videos ?? 0) +
+                      (props.libraryStats?.raws ?? 0)
+                    : f === "Photos"
+                      ? (props.libraryStats?.photos ?? 0)
+                      : f === "Videos"
+                        ? (props.libraryStats?.videos ?? 0)
+                        : f === "RAW"
+                          ? (props.libraryStats?.raws ?? 0)
+                          : f === "Favorites"
+                            ? (props.libraryStats?.favorites ?? 0)
+                            : 0;
                 return (
                   <button
                     key={f}
@@ -1137,6 +1214,52 @@ function LibraryScreen(props: LibraryScreenProps) {
                 );
               },
             )}
+          </div>
+
+          <div className="filter-cluster">
+            <span className="smart-label">RATING</span>
+            {["★", "★★", "★★★", "★★★★", "★★★★★"].map((label, i) => {
+              const stars = i + 1;
+              const active = props.minRating === stars;
+              return (
+                <button
+                  key={stars}
+                  type="button"
+                  className={`quick-filter quick-filter-rating ${active ? "active" : ""}`}
+                  onClick={() =>
+                    props.onSetMinRating(active ? null : stars)
+                  }
+                  title={`Show ${stars}+ star${stars > 1 ? "s" : ""}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+            <span className="smart-label" style={{ marginLeft: 16 }}>
+              COLOR
+            </span>
+            {([
+              ["red", "Red"],
+              ["yellow", "Yellow"],
+              ["green", "Green"],
+              ["blue", "Blue"],
+              ["purple", "Purple"],
+            ] as [string, string][]).map(([color, name]) => {
+              const active = props.colorLabelFilter === color;
+              return (
+                <button
+                  key={color}
+                  type="button"
+                  className={`quick-filter quick-filter-color quick-filter-color-${color} ${active ? "active" : ""}`}
+                  onClick={() =>
+                    props.onSetColorLabelFilter(active ? null : color)
+                  }
+                  title={`Filter by ${name} label`}
+                >
+                  <span className="color-dot-small" />
+                </button>
+              );
+            })}
           </div>
 
           {props.selectedIds.length > 0 && (
@@ -1355,10 +1478,21 @@ function LibraryScreen(props: LibraryScreenProps) {
                       >
                         <span className="tile-image">
                           {item.kind === "video" ? (
-                            <VideoThumb
-                              src={assetUrl(item.path)}
-                              name={tileAlt(item)}
-                            />
+                            canPlayVideoInApp(item.path, item.name) ? (
+                              <VideoThumb
+                                src={assetUrl(item.path)}
+                                name={tileAlt(item)}
+                              />
+                            ) : (
+                              // Decoding a frame needs a playable container;
+                              // fall back to the cached QuickLook thumbnail so
+                              // MKV/AVI tiles never request the whole file.
+                              <CachedThumbnail
+                                itemId={item.id}
+                                name={tileAlt(item)}
+                                size={thumbnailPixels}
+                              />
+                            )
                           ) : item.kind === "photo" ? (
                             <CachedThumbnail
                               itemId={item.id}
@@ -1390,11 +1524,25 @@ function LibraryScreen(props: LibraryScreenProps) {
                               <HeartIcon size={11} filled />
                             </span>
                           ) : null}
+                          {item.colorLabel && !masked(item) ? (
+                            <span
+                              className={`tile-color-label tile-color-${item.colorLabel}`}
+                              aria-label={`Color label: ${item.colorLabel}`}
+                              title={`Color: ${item.colorLabel}`}
+                            >
+                              <span className="color-dot" />
+                            </span>
+                          ) : null}
                         </span>
-                        <span
-                          className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
-                        >
-                          <b>{masked(item) ? "Hidden item" : item.name}</b>
+                          <span
+                            className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
+                          >
+                            <b>
+                              {masked(item)
+                                ? "Hidden item"
+                                : item.name +
+                                  (showExtensions ? `.${item.extension}` : "")}
+                            </b>
                           <small className="tile-date">
                             {new Date(captureDate(item)).toLocaleDateString()}
                           </small>
@@ -1486,7 +1634,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                                       onClick={(e: any) => e.stopPropagation()}
                                     />
                                     <CheckIcon size={12} />
-                                  </div>
+          </div>
                                   <button
                                     type="button"
                                     className="tile-open-button"
@@ -1502,10 +1650,21 @@ function LibraryScreen(props: LibraryScreenProps) {
                                   >
                                     <span className="tile-image">
                                       {item.kind === "video" ? (
-                                        <VideoThumb
-                                          src={assetUrl(item.path)}
-                                          name={tileAlt(item)}
-                                        />
+                                        canPlayVideoInApp(
+                                          item.path,
+                                          item.name,
+                                        ) ? (
+                                          <VideoThumb
+                                            src={assetUrl(item.path)}
+                                            name={tileAlt(item)}
+                                          />
+                                        ) : (
+                                          <CachedThumbnail
+                                            itemId={item.id}
+                                            name={tileAlt(item)}
+                                            size={thumbnailPixels}
+                                          />
+                                        )
                                       ) : item.kind === "photo" ? (
                                         <CachedThumbnail
                                           itemId={item.id}
@@ -1540,11 +1699,25 @@ function LibraryScreen(props: LibraryScreenProps) {
                                           <HeartIcon size={11} filled />
                                         </span>
                                       ) : null}
+                                      {item.colorLabel && !masked(item) ? (
+                                        <span
+                                          className={`tile-color-label tile-color-${item.colorLabel}`}
+                                          aria-label={`Color label: ${item.colorLabel}`}
+                                          title={`Color: ${item.colorLabel}`}
+                                        >
+                                          <span className="color-dot" />
+                                        </span>
+                                      ) : null}
                                     </span>
                                     <span
                                       className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
                                     >
-                                      <b>{item.name}</b>
+                                      <b>
+                                        {item.name +
+                                          (showExtensions
+                                            ? `.${item.extension}`
+                                            : "")}
+                                      </b>
                                       <small className="tile-date">
                                         {new Date(
                                           captureDate(item),
@@ -1619,10 +1792,18 @@ function LibraryScreen(props: LibraryScreenProps) {
                     >
                       <span className="tile-image">
                         {item.kind === "video" ? (
-                          <VideoThumb
-                            src={assetUrl(item.path)}
-                            name={tileAlt(item)}
-                          />
+                          canPlayVideoInApp(item.path, item.name) ? (
+                            <VideoThumb
+                              src={assetUrl(item.path)}
+                              name={tileAlt(item)}
+                            />
+                          ) : (
+                            <CachedThumbnail
+                              itemId={item.id}
+                              name={tileAlt(item)}
+                              size={thumbnailPixels}
+                            />
+                          )
                         ) : item.kind === "photo" ? (
                           <CachedThumbnail
                             itemId={item.id}
@@ -1651,11 +1832,35 @@ function LibraryScreen(props: LibraryScreenProps) {
                             <HeartIcon size={11} filled />
                           </span>
                         ) : null}
+                        {item.colorLabel && !masked(item) ? (
+                          <span
+                            className={`tile-color-label tile-color-${item.colorLabel}`}
+                            aria-label={`Color label: ${item.colorLabel}`}
+                            title={`Color: ${item.colorLabel}`}
+                          >
+                            <span className="color-dot" />
+                          </span>
+                        ) : null}
+                        {item.rating != null && item.rating > 0 && !masked(item) ? (
+                          <span className="tile-rating" aria-label={`Rating: ${item.rating} stars`}>
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <span
+                                key={i}
+                                className={`star ${i < item.rating ? "filled" : ""}`}
+                              >
+                                {"\u2605"}
+                              </span>
+                            ))}
+                          </span>
+                        ) : null}
                       </span>
                       <span
                         className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
                       >
-                        <b>{item.name}</b>
+                        <b>
+                          {item.name +
+                            (showExtensions ? `.${item.extension}` : "")}
+                        </b>
                         <small className="tile-date">
                           {new Date(captureDate(item)).toLocaleDateString()}
                         </small>

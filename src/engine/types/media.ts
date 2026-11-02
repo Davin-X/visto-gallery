@@ -20,6 +20,8 @@ export interface MediaItem {
   sha256?: string; // Content hash
   favorite: boolean;
   hidden: boolean;
+  rating?: number; // 0-5 star rating, undefined = unrated
+  colorLabel?: string; // 'red' | 'yellow' | 'green' | 'blue' | 'purple', undefined = unlabeled
   tags: string[];
   albumIds: string[]; // Album IDs this item belongs to
   duration?: number; // Video duration (seconds), hydrated client-side
@@ -131,6 +133,7 @@ export type Screen =
   | "Library"
   | "Viewer"
   | "Explore"
+  | "CameraLens"
   | "Duplicates"
   | "Edit"
   | "Batch"
@@ -146,6 +149,8 @@ export interface LibraryFilter {
   query?: string;
   dateFrom?: number;
   dateTo?: number;
+  rating?: number; // filter items at or above this star rating (0-5)
+  colorLabel?: string; // 'red' | 'yellow' | 'green' | 'blue' | 'purple'
 }
 
 export interface DuplicateGroup {
@@ -153,4 +158,32 @@ export interface DuplicateGroup {
   sha256: string;
   size: number;
   items: MediaItem[];
+}
+
+export interface EditRecipe {
+  mediaId: string;
+  edits: EditValues;
+  crop?: CropState;
+  history: EditValues[];
+  historyIndex: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface EditPreset {
+  id: string;
+  name: string;
+  edits: EditValues;
+  crop?: CropState;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CropState {
+  enabled: boolean;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  aspectRatio: number | "free";
 }

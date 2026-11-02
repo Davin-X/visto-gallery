@@ -25,7 +25,10 @@ import {
 } from "../engine/stores/useEditStore";
 import { useSlideshowStore } from "../engine/stores/useSlideshowStore";
 import { tauri, thumbnailToDataUrl } from "../engine/commands/tauri";
-import { formatBytesSimple } from "../engine/utils/mediaTypes";
+import {
+  formatBytesSimple,
+  canPlayVideoInApp,
+} from "../engine/utils/mediaTypes";
 import { formatDuration } from "../engine/utils/time";
 import { draftImageStyle } from "../engine/utils/draftImage";
 import type { MediaItem, EditValues } from "../engine/types/media";
@@ -390,6 +393,7 @@ function ViewerScreen(props: ViewerScreenProps) {
             itemId={selected.id}
             active={!!props.active}
             src={props.assetUrl(selected.path)}
+            path={selected.path}
             name={selected.name}
             onFullscreen={() => void props.onToggleFullscreen()}
             onNext={() => props.onNavigate(1)}
@@ -413,8 +417,7 @@ function ViewerScreen(props: ViewerScreenProps) {
               void tauri.library
                 .getThumbnail({ itemId: selected.id, size: 1024 })
                 .then((response) => {
-                  if (response?.path)
-                    target.src = thumbnailToDataUrl(response);
+                  if (response?.dataUrl) target.src = response.dataUrl;
                 })
                 .catch(() => {
                   target.dataset.failed = "1";
@@ -630,7 +633,15 @@ function ViewerScreen(props: ViewerScreenProps) {
                 style={draftImageStyle(draftTransforms, item.id)}
               />
             ) : item.kind === "video" ? (
-              <VideoThumb src={props.assetUrl(item.path)} name={item.name} />
+              canPlayVideoInApp(item.path, item.name) ? (
+                <VideoThumb src={props.assetUrl(item.path)} name={item.name} />
+              ) : (
+                <CachedThumbnail
+                  itemId={item.id}
+                  name={item.name}
+                  size={128}
+                />
+              )
             ) : (
               <span>{item.extension.toUpperCase()}</span>
             )}
@@ -686,7 +697,7 @@ interface EditScreenProps {
   onUndo: () => void;
   onRedo: () => void;
   onClose: () => void;
-  onSaveDraft: () => void;
+  onSaveDraft: () => Promise<void>;
   onBack: () => void;
   onExport: (inPlace?: boolean) => void | Promise<void>;
   onClearDraft: (id: string) => void;

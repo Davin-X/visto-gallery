@@ -150,6 +150,107 @@ pub async fn reveal_in_finder(path: String, state: State<'_, AppState>) -> Resul
 }
 
 #[tauri::command]
+pub async fn open_file(path: String, state: State<'_, AppState>) -> Result<(), String> {
+    let db = super::get_db(&state)?;
+    let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
+        .bind(&path)
+        .fetch_optional(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    if exists.is_none() {
+        return Err("Path is not part of the catalog.".to_string());
+    }
+    std::process::Command::new("open")
+        .arg(&path)
+        .status()
+        .map_err(|e| format!("Could not open {}: {}", path, e))?;
+    Ok(())
+}
+
+/// A desktop video player that can decode containers WebKit cannot (notably
+/// Matroska/`.mkv` and `.avi`), exposed to the viewer so unsupported videos can
+/// be handed off instead of failing silently.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalPlayer {
+    name: String,
+    path: String,
+}
+
+/// Apps commonly installed on macOS that play Matroska/AVI. Order is
+/// preference, so the first installed app becomes the primary action.
+const EXTERNAL_VIDEO_APPS: &[(&str, &str)] = &[
+    ("IINA", "IINA.app"),
+    ("VLC", "VLC.app"),
+    ("Elmedia Video Player", "Elmedia Video Player.app"),
+    ("Infuse", "Infuse.app"),
+    ("mpv", "mpv.app"),
+    ("QuickTime Player", "QuickTime Player.app"),
+];
+
+fn playable_app_locations(app: &str) -> Vec<PathBuf> {
+    let mut locations = vec![
+        PathBuf::from("/Applications").join(app),
+        PathBuf::from("/System/Applications").join(app),
+    ];
+    if let Some(home) = dirs::home_dir() {
+        locations.push(home.join("Applications").join(app));
+    }
+    locations
+}
+
+/// List installed external players, most preferred first. The viewer uses this
+/// to offer "Open in <player>" for in-app-unsupported video formats.
+#[tauri::command]
+pub fn external_video_players() -> Vec<ExternalPlayer> {
+    EXTERNAL_VIDEO_APPS
+        .iter()
+        .filter_map(|(name, app)| {
+            playable_app_locations(app)
+                .into_iter()
+                .find(|path| path.is_dir())
+                .map(|path| ExternalPlayer {
+                    name: (*name).to_string(),
+                    path: path.to_string_lossy().into_owned(),
+                })
+        })
+        .collect()
+}
+
+/// Open a cataloged item in a specific installed player (e.g. a `.mkv` in VLC).
+#[tauri::command]
+pub async fn open_with_player(
+    path: String,
+    player: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let db = super::get_db(&state)?;
+    let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
+        .bind(&path)
+        .fetch_optional(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    if exists.is_none() {
+        return Err("Path is not part of the catalog.".to_string());
+    }
+
+    let player_path = PathBuf::from(&player);
+    if player_path.extension().and_then(|ext| ext.to_str()) != Some("app") || !player_path.is_dir()
+    {
+        return Err("Requested player is not an installed application.".to_string());
+    }
+
+    std::process::Command::new("open")
+        .arg("-a")
+        .arg(&player_path)
+        .arg(&path)
+        .status()
+        .map_err(|e| format!("Could not open {} with {}: {}", path, player, e))?;
+    Ok(())
+}
+
+/// Open a folder in Finder. Used by Batch export results.
+#[tauri::command]
 pub async fn open_folder(path: String) -> Result<(), String> {
     // Unlike `open -R` (which selects a file in its parent), this opens the
     // folder itself in Finder. Used by Batch export results.
@@ -282,6 +383,23 @@ fn dms_to_decimal(field: &exif::Field) -> Option<f64> {
     let min = vals[1].to_f64();
     let sec = vals[2].to_f64();
     Some(deg + min / 60.0 + sec / 3600.0)
+}
+
+/// Compute the SHA-256 digest of a file's contents as a hex string.
+/// Used during backfill to populate `sha256` for items that lack it.
+pub(crate) fn compute_sha256(path: &std::path::Path) -> Option<String> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
+    let mut buf = [0u8; 1024 * 1024]; // 1 MiB buffer
+    loop {
+        let n = file.read(&mut buf).ok()?;
+        if n == 0 {
+            break;
+        }
+        ctx.update(&buf[..n]);
+    }
+    Some(hex::encode(ctx.finish()))
 }
 
 #[tauri::command]
@@ -897,7 +1015,7 @@ pub(crate) fn write_jpeg_with_exif(
 
 #[cfg(test)]
 mod exif_tests {
-    use super::{read_exif_bytes, write_jpeg_with_exif};
+    use super::{compute_sha256, read_exif_bytes, write_jpeg_with_exif};
     use image::ImageEncoder;
     use image::RgbImage;
 
@@ -979,13 +1097,42 @@ mod exif_tests {
         assert_eq!(app1, 1, "APP1 (EXIF) must appear exactly once");
         let _ = std::fs::remove_file(&path);
     }
+
+    #[test]
+    fn compute_sha256_produces_deterministic_hex() {
+        let path =
+            std::env::temp_dir().join(format!("visto-sha256-test-{}.bin", uuid::Uuid::new_v4()));
+        let contents = b"hello world";
+        std::fs::write(&path, contents).unwrap();
+
+        let hash = compute_sha256(&path).expect("sha256 should be computed");
+        let expected = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
+        assert_eq!(hash, expected);
+
+        // Same file → same hash.
+        let hash2 = compute_sha256(&path).expect("sha256 should be computed");
+        assert_eq!(hash, hash2);
+
+        // Different content → different hash.
+        std::fs::write(&path, b"goodbye world").unwrap();
+        let hash3 = compute_sha256(&path).expect("sha256 should be computed");
+        assert_ne!(hash, hash3);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn compute_sha256_returns_none_for_missing_file() {
+        let path = std::path::Path::new("/tmp/does-not-exist-xyz123.bin");
+        assert!(compute_sha256(path).is_none());
+    }
 }
 
 #[tauri::command]
 pub async fn backfill_metadata(state: State<'_, AppState>) -> Result<i64, String> {
     let db = super::get_db(&state)?;
     let rows: Vec<(String, String)> = sqlx::query_as(
-        "SELECT id, path FROM media_items WHERE captured_at IS NULL OR camera IS NULL",
+        "SELECT id, path FROM media_items WHERE captured_at IS NULL OR camera IS NULL OR sha256 IS NULL",
     )
     .fetch_all(&db)
     .await
@@ -994,14 +1141,23 @@ pub async fn backfill_metadata(state: State<'_, AppState>) -> Result<i64, String
     let mut updated = 0i64;
     for (id, path) in rows {
         let path_buf = std::path::PathBuf::from(&path);
-        let exif = tokio::task::spawn_blocking(move || extract_exif(&path_buf))
+        let exif_path = path_buf.clone();
+        let exif = tokio::task::spawn_blocking(move || extract_exif(&exif_path))
             .await
             .map_err(|e| e.to_string())?;
         if exif.metadata_error.is_some() && exif.captured_at.is_none() && exif.camera.is_none() {
             continue;
         }
+        // Compute SHA-256 only when it's missing; skip if file is unreadable.
+        let sha256 = if path_buf.exists() {
+            tokio::task::spawn_blocking(move || compute_sha256(&path_buf))
+                .await
+                .map_err(|e| e.to_string())?
+        } else {
+            None
+        };
         sqlx::query(
-            "UPDATE media_items SET captured_at = COALESCE(?, captured_at), camera = COALESCE(?, camera), lens = COALESCE(?, lens), exposure = COALESCE(?, exposure), iso = COALESCE(?, iso), latitude = COALESCE(?, latitude), longitude = COALESCE(?, longitude), updated_at = ? WHERE id = ?",
+            "UPDATE media_items SET captured_at = COALESCE(?, captured_at), camera = COALESCE(?, camera), lens = COALESCE(?, lens), exposure = COALESCE(?, exposure), iso = COALESCE(?, iso), latitude = COALESCE(?, latitude), longitude = COALESCE(?, longitude), sha256 = COALESCE(?, sha256), updated_at = ? WHERE id = ?",
         )
         .bind(exif.captured_at)
         .bind(&exif.camera)
@@ -1010,6 +1166,7 @@ pub async fn backfill_metadata(state: State<'_, AppState>) -> Result<i64, String
         .bind(exif.iso)
         .bind(exif.latitude)
         .bind(exif.longitude)
+        .bind(&sha256)
         .bind(super::now_ms())
         .bind(&id)
         .execute(&db)

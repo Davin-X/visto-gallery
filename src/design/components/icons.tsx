@@ -750,4 +750,50 @@ export function ChevronRightIcon({
   );
 }
 
+export function CameraIcon({
+  size = 16,
+  className = "",
+  strokeWidth = 1.8,
+}: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <rect x="5" y="4" width="14" height="14" rx="2" ry="2" />
+      <circle cx="12" cy="11" r="2" />
+      <path d="M7 18h10" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function LensIcon({
+  size = 16,
+  className = "",
+  strokeWidth = 1.8,
+}: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 4v16" strokeLinecap="round" />
+      <path d="M4 12h16" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function ArrowLeftIcon({
+  size = 16,
+  className = "",
+  strokeWidth = 1.8,
+}: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <path
+        d="M12 4l-8 8 8 8"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 export default GearIcon;
