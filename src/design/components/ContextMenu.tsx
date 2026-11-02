@@ -120,6 +120,9 @@ function ContextMenuContent({
                   !item.disabled &&
                   setSubmenuOpen({ index, items: item.submenu! })
                 }
+                onMouseEnter={() => {
+                  if (!item.disabled) setSubmenuOpen({ index, items: item.submenu! });
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "ArrowRight" && !item.disabled) {
                     setSubmenuOpen({ index, items: item.submenu! });
@@ -137,7 +140,10 @@ function ContextMenuContent({
               {submenuOpen?.index === index && (
                 <ContextMenuContent
                   items={item.submenu}
-                  onClose={() => setSubmenuOpen(null)}
+                  onClose={() => {
+                    setSubmenuOpen(null);
+                    onClose();
+                  }}
                 />
               )}
             </div>
@@ -239,7 +245,6 @@ export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
         zIndex: 1000,
         pointerEvents: "none",
       }}
-      onClick={onClose}
     >
       <div style={{ pointerEvents: "auto" }}>{content}</div>
     </div>,

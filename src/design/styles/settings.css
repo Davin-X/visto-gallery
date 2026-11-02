@@ -956,6 +956,31 @@
   flex-shrink: 0;
 }
 
+.ctx-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.ctx-dot-none { color: var(--faint); }
+.ctx-dot-red { color: #e5484d; }
+.ctx-dot-yellow { color: #f5a524; }
+.ctx-dot-green { color: #30a46c; }
+.ctx-dot-blue { color: #0090ff; }
+.ctx-dot-purple { color: #8e4ec6; }
+
+.ctx-star {
+  color: #f5a524;
+  font-size: 12px;
+  letter-spacing: -1px;
+}
+
+.ctx-star-empty {
+  color: var(--faint);
+}
+
 .context-menu-submenu-indicator {
   margin-left: auto;
   width: 14px;

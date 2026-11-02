@@ -791,25 +791,27 @@ function LibraryScreen(props: LibraryScreenProps) {
     { divider: true },
     { label: "Favorite", onClick: () => props.onToggleFavorite(item.id) },
     {
-      label: "Rating",
+      label: item.rating ? `Rating ${"★".repeat(item.rating)}` : "Rating",
       submenu: [
-        { label: "Unrate", onClick: () => props.onSetRatingForIds?.([item.id], 0) },
-        { label: "★ 1", onClick: () => props.onSetRatingForIds?.([item.id], 1) },
-        { label: "★ 2", onClick: () => props.onSetRatingForIds?.([item.id], 2) },
-        { label: "★ 3", onClick: () => props.onSetRatingForIds?.([item.id], 3) },
-        { label: "★ 4", onClick: () => props.onSetRatingForIds?.([item.id], 4) },
-        { label: "★ 5", onClick: () => props.onSetRatingForIds?.([item.id], 5) },
+        { label: "Unrate", icon: <span className="ctx-star ctx-star-empty">☆</span>, onClick: () => props.onSetRatingForIds?.([item.id], 0) },
+        { label: "1", icon: <span className="ctx-star">★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 1) },
+        { label: "2", icon: <span className="ctx-star">★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 2) },
+        { label: "3", icon: <span className="ctx-star">★★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 3) },
+        { label: "4", icon: <span className="ctx-star">★★★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 4) },
+        { label: "5", icon: <span className="ctx-star">★★★★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 5) },
       ],
     },
     {
-      label: "Color Label",
+      label: item.colorLabel
+        ? `Color Label: ${item.colorLabel}`
+        : "Color Label",
       submenu: [
-        { label: "None", onClick: () => props.onSetColorLabelForIds?.([item.id], "") },
-        { label: "Red", onClick: () => props.onSetColorLabelForIds?.([item.id], "red") },
-        { label: "Yellow", onClick: () => props.onSetColorLabelForIds?.([item.id], "yellow") },
-        { label: "Green", onClick: () => props.onSetColorLabelForIds?.([item.id], "green") },
-        { label: "Blue", onClick: () => props.onSetColorLabelForIds?.([item.id], "blue") },
-        { label: "Purple", onClick: () => props.onSetColorLabelForIds?.([item.id], "purple") },
+        { label: "None", icon: <span className="ctx-dot ctx-dot-none" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "") },
+        { label: "Red", icon: <span className="ctx-dot ctx-dot-red" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "red") },
+        { label: "Yellow", icon: <span className="ctx-dot ctx-dot-yellow" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "yellow") },
+        { label: "Green", icon: <span className="ctx-dot ctx-dot-green" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "green") },
+        { label: "Blue", icon: <span className="ctx-dot ctx-dot-blue" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "blue") },
+        { label: "Purple", icon: <span className="ctx-dot ctx-dot-purple" />, onClick: () => props.onSetColorLabelForIds?.([item.id], "purple") },
       ],
     },
     {
