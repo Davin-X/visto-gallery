@@ -5131,3 +5131,24 @@ body {
   justify-content: center;
   margin-left: 4px;
 }
+
+/* Dropdown button interaction states */
+.filter-dropdown .quick-filter {
+  cursor: pointer;
+}
+.filter-dropdown .quick-filter:hover:not(.active) {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.filter-dropdown .quick-filter:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
+/* Chips inside the panel */
+.filter-dropdown-panel .quick-filter:hover:not(.active) {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+}

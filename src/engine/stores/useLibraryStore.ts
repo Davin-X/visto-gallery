@@ -205,6 +205,10 @@ interface LibraryState {
 // Load generation and query debounce are per-app (not per-store-instance).
 let libraryLoadGeneration = 0;
 let queryReloadTimer: ReturnType<typeof setTimeout> | null = null;
+// Debounce for free-text camera/lens filters so typing doesn't reload the
+// library on every keystroke. State updates stay immediate; only the IPC
+// round-trip is deferred.
+let cameraLensReloadTimer: ReturnType<typeof setTimeout> | null = null;
 
 function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
   const kind =
@@ -764,13 +768,21 @@ export const useLibraryStore = create<LibraryState>()(
       setCameraFilter: (camera: string | null) => {
         set({ cameraFilter: camera });
         get().refreshDerived();
-        void get().loadLibrary();
+        if (cameraLensReloadTimer) clearTimeout(cameraLensReloadTimer);
+        cameraLensReloadTimer = setTimeout(() => {
+          cameraLensReloadTimer = null;
+          void get().loadLibrary();
+        }, 180);
       },
 
       setLensFilter: (lens: string | null) => {
         set({ lensFilter: lens });
         get().refreshDerived();
-        void get().loadLibrary();
+        if (cameraLensReloadTimer) clearTimeout(cameraLensReloadTimer);
+        cameraLensReloadTimer = setTimeout(() => {
+          cameraLensReloadTimer = null;
+          void get().loadLibrary();
+        }, 180);
       },
 
       setQuery: (query) => {

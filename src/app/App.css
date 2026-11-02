@@ -738,7 +738,7 @@ body {
   border-top: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
   background: transparent;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
   scrollbar-width: none;
   overscroll-behavior-x: contain;
 }

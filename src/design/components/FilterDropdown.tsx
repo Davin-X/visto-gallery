@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { FilterIcon } from "./icons";
 
 interface FilterDropdownProps {
@@ -23,18 +23,30 @@ const COLORS: [string, string][] = [
 
 export function FilterDropdown(props: FilterDropdownProps) {
   const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    if (!open) return;
     const handleClickOutside = (event: MouseEvent) => {
-      if (!open) return;
       const target = event.target as Element | null;
-      const currentTarget = event.currentTarget as Element | null;
-      if (target && currentTarget && !currentTarget.contains(target)) {
+      if (!target) return;
+      const insideButton = buttonRef.current?.contains(target);
+      const insidePanel = panelRef.current?.contains(target);
+      if (!insideButton && !insidePanel) setOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
         setOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [open]);
 
   const activeCount =
@@ -48,11 +60,13 @@ export function FilterDropdown(props: FilterDropdownProps) {
   return (
     <div className="filter-dropdown">
       <button
+        ref={buttonRef}
         type="button"
         className={`quick-filter ${open ? "active" : ""}`}
         onClick={toggle}
         aria-expanded={open}
         aria-label="Filters"
+        aria-haspopup="true"
       >
         <FilterIcon size={13} />
         <span>Filters</span>
@@ -60,7 +74,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
       </button>
 
       {open && (
-        <div className="filter-dropdown-panel">
+        <div ref={panelRef} className="filter-dropdown-panel">
           <div className="filter-section">
             <span className="filter-section-label">Rating</span>
             <div className="filter-chip-row">
@@ -74,8 +88,8 @@ export function FilterDropdown(props: FilterDropdownProps) {
                     onClick={() => props.onSetMinRating(active ? null : stars)}
                     title={`Show ${stars}+ star${stars > 1 ? "s" : ""}`}
                   >
-                    {Array.from({ length: stars }).map(() => (
-                      <span key="star" className="ctx-star">★</span>
+                    {Array.from({ length: stars }).map((_, i) => (
+                      <span key={i} className="ctx-star">★</span>
                     ))}
                   </button>
                 );
