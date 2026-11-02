@@ -794,13 +794,14 @@ body {
 
 .library-header .quick-filter .filter-count {
   margin-left: 0;
-  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
   border-radius: 999px;
   padding: 0 6px;
   font-size: 10px;
   font-weight: 700;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--muted);
+  color: var(--ink);
 }
 
 .library-header .quick-filter-rating {
