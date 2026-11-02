@@ -11,7 +11,6 @@ interface AlbumsScreenProps {
   onCreateAlbum: () => void;
   onAlbumContextMenu: (album: any, e: React.MouseEvent) => void;
   onOpenAlbum: (albumId: string) => void;
-  onOpenSmartAlbum: (kind: "rating" | "color", value: number | string) => void;
 }
 
 function AlbumsScreen(props: AlbumsScreenProps) {
@@ -155,73 +154,6 @@ function AlbumsScreen(props: AlbumsScreenProps) {
           </button>
         </div>
       )}
-
-      {/* Smart Collections */}
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">SMART COLLECTIONS</p>
-          <h1>Smart Albums</h1>
-          <p className="page-subtitle">
-            Filter by rating or color label across your library.
-          </p>
-        </div>
-      </div>
-      <div className="smart-albums-grid">
-        <h2 className="smart-section-title">By Rating</h2>
-        <div className="smart-rating-row">
-          {[1, 2, 3, 4, 5].map((stars) => (
-            <button
-              key={stars}
-              type="button"
-              className="smart-card smart-card-rating"
-              onClick={() =>
-                props.onOpenSmartAlbum("rating", stars)
-              }
-              title={`Show ${stars}+ star${stars > 1 ? "s" : ""} photos`}
-            >
-              <span className="smart-card-label">
-                {Array.from({ length: stars }).map(() => (
-                  <span key="star" className="star filled">
-                    {"\u2605"}
-                  </span>
-                ))}
-                {Array.from({ length: 5 - stars }).map(() => (
-                  <span key="empty" className="star">
-                    {"\u2605"}
-                  </span>
-                ))}
-              </span>
-              <span className="smart-card-count">{stars}+</span>
-            </button>
-          ))}
-        </div>
-        <h2 className="smart-section-title">By Color Label</h2>
-        <div className="smart-color-row">
-          {([
-            ["red", "Red", "#ef4444"],
-            ["yellow", "Yellow", "#eab308"],
-            ["green", "Green", "#22c55e"],
-            ["blue", "Blue", "#3b82f6"],
-            ["purple", "Purple", "#a855f7"],
-          ] as [string, string, string][]).map(([color, name, hex]) => (
-            <button
-              key={color}
-              type="button"
-              className={`smart-card smart-card-color smart-card-color-${color}`}
-              onClick={() =>
-                props.onOpenSmartAlbum("color", color)
-              }
-              title={`Show ${name} labeled photos`}
-            >
-              <span
-                className="smart-color-dot"
-                style={{ backgroundColor: hex }}
-              />
-              <span className="smart-card-label">{name}</span>
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

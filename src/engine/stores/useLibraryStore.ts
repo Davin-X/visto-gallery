@@ -874,43 +874,92 @@ export const useLibraryStore = create<LibraryState>()(
       setRating: async (id, rating) => {
         const item = get().items.find((i) => i.id === id);
         if (!item) return;
-        await tauri.items.setRating(id, rating);
+        const prev = { ...item };
         set((s) => ({
           items: s.items.map((i) => (i.id === id ? { ...i, rating } : i)),
         }));
         get().refreshDerived();
+        try {
+          await tauri.items.setRating(id, rating);
+        } catch (error) {
+          console.error(`Failed to set rating for ${id}:`, error);
+          set((s) => ({
+            items: s.items.map((i) => (i.id === id ? { ...prev } : i)),
+          }));
+          get().refreshDerived();
+        }
       },
 
       setColorLabel: async (id, colorLabel) => {
         const item = get().items.find((i) => i.id === id);
         if (!item) return;
-        await tauri.items.setColorLabel(id, colorLabel);
+        const prev = { ...item };
         set((s) => ({
           items: s.items.map((i) => (i.id === id ? { ...i, colorLabel } : i)),
         }));
         get().refreshDerived();
+        try {
+          await tauri.items.setColorLabel(id, colorLabel);
+        } catch (error) {
+          console.error(`Failed to set color label for ${id}:`, error);
+          set((s) => ({
+            items: s.items.map((i) => (i.id === id ? { ...prev } : i)),
+          }));
+          get().refreshDerived();
+        }
       },
 
       setRatingForIds: async (ids, rating) => {
         const targets = get().items.filter((i) => ids.includes(i.id));
         if (!targets.length) return;
-        await Promise.all(targets.map((i) => tauri.items.setRating(i.id, rating)));
+        const prevs = new Map(
+          targets.map((i) => [i.id, { ...i }]),
+        );
         set((s) => ({
           items: s.items.map((i) => (ids.includes(i.id) ? { ...i, rating } : i)),
         }));
         get().refreshDerived();
+        try {
+          await Promise.all(
+            targets.map((i) => tauri.items.setRating(i.id, rating)),
+          );
+        } catch (error) {
+          console.error(`Failed to set rating for ${ids.length} items:`, error);
+          set((s) => ({
+            items: s.items.map((i) =>
+              ids.includes(i.id) ? { ...prevs.get(i.id)! } : i,
+            ),
+          }));
+          get().refreshDerived();
+        }
       },
 
       setColorLabelForIds: async (ids, colorLabel) => {
         const targets = get().items.filter((i) => ids.includes(i.id));
         if (!targets.length) return;
-        await Promise.all(
-          targets.map((i) => tauri.items.setColorLabel(i.id, colorLabel)),
+        const prevs = new Map(
+          targets.map((i) => [i.id, { ...i }]),
         );
         set((s) => ({
           items: s.items.map((i) => (ids.includes(i.id) ? { ...i, colorLabel } : i)),
         }));
         get().refreshDerived();
+        try {
+          await Promise.all(
+            targets.map((i) => tauri.items.setColorLabel(i.id, colorLabel)),
+          );
+        } catch (error) {
+          console.error(
+            `Failed to set color label for ${ids.length} items:`,
+            error,
+          );
+          set((s) => ({
+            items: s.items.map((i) =>
+              ids.includes(i.id) ? { ...prevs.get(i.id)! } : i,
+            ),
+          }));
+          get().refreshDerived();
+        }
       },
 
       updateItemTags: async (id, tags) => {
