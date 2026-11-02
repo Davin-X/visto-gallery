@@ -462,12 +462,18 @@ fn is_media_file(ext: &str) -> bool {
         "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",
         "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f",
     ];
-    let video_exts = ["m4v", "mov", "mp4", "mpeg", "mpg", "webm"];
+    let video_exts = [
+        "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
+        "mts", "ogv", "ts", "vob", "webm", "wmv",
+    ];
     image_exts.contains(&ext) || raw_exts.contains(&ext) || video_exts.contains(&ext)
 }
 
 fn kind_for_ext(ext: &str) -> &'static str {
-    let video_exts = ["m4v", "mov", "mp4", "mpeg", "mpg", "webm"];
+    let video_exts = [
+        "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
+        "mts", "ogv", "ts", "vob", "webm", "wmv",
+    ];
     let raw_exts = [
         "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf",
         "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",

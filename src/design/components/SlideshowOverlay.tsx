@@ -19,6 +19,8 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
 } from "./icons";
+import { CachedThumbnail } from "./CachedThumbnail";
+import { canPlayVideoInApp } from "../../engine/utils/mediaTypes";
 
 interface SlideshowOverlayProps {
   assetUrl: (path: string) => string;
@@ -309,7 +311,15 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
         onClick={toggle}
         title={playing ? "Pause" : "Play"}
       >
-        {isVideo ? (
+        {isVideo && !canPlayVideoInApp(item.path, item.name) ? (
+          <div className="slideshow-video-fallback">
+            <CachedThumbnail itemId={item.id} name={item.name} size={1024} />
+            <p>
+              This format can't play in the slideshow. Open it from the Library
+              in a desktop player.
+            </p>
+          </div>
+        ) : isVideo ? (
           <video
             ref={videoRef}
             src={assetUrl(item.path)}

@@ -61,7 +61,7 @@ export interface ThumbnailRequest {
 
 export interface ThumbnailResponse {
   itemId: string;
-  path: string; // cache file path; convert with convertFileSrc
+  dataUrl: string;
   width: number;
   height: number;
 }
@@ -201,6 +201,12 @@ export interface UpdateCheckResult {
   checkedAt: number;
 }
 
+/** A desktop app that can play video containers WebKit cannot (MKV, AVI, ...). */
+export interface ExternalPlayer {
+  name: string;
+  path: string;
+}
+
 /** Exact library statistics computed from the catalog (not from loaded pages). */
 export interface LibraryStats {
   photos: number;
@@ -242,6 +248,7 @@ export type TauriCommandSignature = {
   update_item_tags: (itemId: string, tags: string[]) => void;
   move_to_trash: (paths: string[]) => void;
   reveal_in_finder: (path: string) => void;
+  open_file: (path: string) => void;
   open_folder: (path: string) => void;
 
   // Albums

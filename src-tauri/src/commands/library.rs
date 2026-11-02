@@ -1,5 +1,6 @@
 use super::*;
 use crate::{models::*, AppState};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::{QueryBuilder, SqlitePool};
@@ -664,7 +665,7 @@ pub struct ThumbnailRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ThumbnailResponse {
     item_id: String,
-    path: String,
+    data_url: String,
     width: u32,
     height: u32,
 }
@@ -743,9 +744,13 @@ pub async fn get_item_thumbnail(
         generated
     };
 
+    let bytes = tokio::fs::read(&cache_path)
+        .await
+        .map_err(|e| e.to_string())?;
+
     Ok(ThumbnailResponse {
         item_id: request.item_id,
-        path: cache_path.to_string_lossy().into_owned(),
+        data_url: format!("data:image/jpeg;base64,{}", BASE64.encode(bytes)),
         width,
         height,
     })
@@ -962,7 +967,7 @@ fn generate_thumbnail_with_qlmanage(
     std::fs::create_dir_all(&tmp_dir)
         .map_err(|error| format!("Could not create temp dir: {error}"))?;
 
-    let output = Command::new("/usr/bin/qlmanage")
+    let mut child = Command::new("/usr/bin/qlmanage")
         .args([
             "-t",
             "-s",
@@ -971,13 +976,38 @@ fn generate_thumbnail_with_qlmanage(
             tmp_dir.to_str().unwrap(),
             source,
         ])
-        .output()
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
         .map_err(|error| format!("qlmanage not available: {error}"))?;
 
-    if !output.status.success() {
+    // QuickLook can hang on large or exotic video containers (a multi-GB MKV
+    // is a real example), so cap the wait instead of occupying a thumbnail
+    // worker indefinitely.
+    let timeout = std::time::Duration::from_secs(10);
+    let deadline = std::time::Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = std::fs::remove_dir_all(&tmp_dir);
+                return Err("qlmanage thumbnail timed out".to_string());
+            }
+            Err(error) => {
+                let _ = std::fs::remove_dir_all(&tmp_dir);
+                return Err(format!("qlmanage thumbnail failed: {error}"));
+            }
+        }
+    };
+
+    if !status.success() {
         let _ = std::fs::remove_dir_all(&tmp_dir);
-        let detail = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("qlmanage thumbnail failed: {}", detail.trim()));
+        return Err("qlmanage thumbnail failed".to_string());
     }
 
     // Find the generated thumbnail: qlmanage names output based on source filename.
