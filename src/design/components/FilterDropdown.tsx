@@ -1,15 +1,12 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { FilterIcon } from "./icons";
 
 interface FilterDropdownProps {
   minRating: number | null;
   colorLabelFilter: string | null;
-  cameraFilter: string | null;
-  lensFilter: string | null;
   onSetMinRating: (rating: number | null) => void;
   onSetColorLabelFilter: (colorLabel: string | null) => void;
-  onSetCameraFilter: (camera: string | null) => void;
-  onSetLensFilter: (lens: string | null) => void;
 }
 
 const RATINGS = [1, 2, 3, 4, 5];
@@ -23,11 +20,21 @@ const COLORS: [string, string][] = [
 
 export function FilterDropdown(props: FilterDropdownProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const portalRoot =
+    typeof document === "undefined"
+      ? null
+      : (document.querySelector<HTMLElement>(".app-frame") ?? document.body);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        !buttonRef.current?.contains(target) &&
+        !panelRef.current?.contains(target)
+      ) {
         setOpen(false);
       }
     };
@@ -42,20 +49,59 @@ export function FilterDropdown(props: FilterDropdownProps) {
     };
   }, []);
 
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    const positionPanel = () => {
+      const button = buttonRef.current;
+      const panel = panelRef.current;
+      if (!button || !panel) return;
+
+      const buttonRect = button.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const padding = 8;
+      const gap = 6;
+      const left = Math.max(
+        padding,
+        Math.min(buttonRect.left, window.innerWidth - panelRect.width - padding),
+      );
+      let top = buttonRect.bottom + gap;
+      if (
+        top + panelRect.height > window.innerHeight - padding &&
+        buttonRect.top - panelRect.height - gap >= padding
+      ) {
+        top = buttonRect.top - panelRect.height - gap;
+      }
+
+      setPosition({ top, left });
+    };
+
+    positionPanel();
+    window.addEventListener("resize", positionPanel);
+    window.addEventListener("scroll", positionPanel, true);
+    return () => {
+      window.removeEventListener("resize", positionPanel);
+      window.removeEventListener("scroll", positionPanel, true);
+    };
+  }, [open]);
+
   const activeCount =
     (props.minRating ? 1 : 0) +
-    (props.colorLabelFilter ? 1 : 0) +
-    (props.cameraFilter ? 1 : 0) +
-    (props.lensFilter ? 1 : 0);
+    (props.colorLabelFilter ? 1 : 0);
 
   return (
-    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+    <div style={{ display: "inline-block" }}>
       <button
+        ref={buttonRef}
         type="button"
         className={`quick-filter ${open ? "active" : ""}`}
         onClick={(e) => {
           e.stopPropagation();
-          setOpen((o) => !o);
+          if (!open) {
+            const rect = buttonRef.current?.getBoundingClientRect();
+            if (rect) setPosition({ top: rect.bottom + 6, left: rect.left });
+          }
+          setOpen(!open);
         }}
         aria-expanded={open}
       >
@@ -64,84 +110,105 @@ export function FilterDropdown(props: FilterDropdownProps) {
         {activeCount > 0 && <span className="filter-badge">{activeCount}</span>}
       </button>
 
-      {open && (
-        <div
-          className="filter-dropdown-panel"
-          style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 100000 }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="filter-section">
-            <span className="filter-section-label">Rating</span>
-            <div className="filter-chip-row">
-              {RATINGS.map((stars) => {
-                const active = props.minRating === stars;
-                return (
-                  <button
-                    key={stars}
-                    type="button"
-                    className={`quick-filter quick-filter-rating ${active ? "active" : ""}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      props.onSetMinRating(active ? null : stars);
-                    }}
-                  >
-                    {Array.from({ length: stars }).map((_, i) => (
-                      <span key={i} className="ctx-star">★</span>
-                    ))}
-                  </button>
-                );
-              })}
+      {open &&
+        portalRoot &&
+        createPortal(
+          <div
+            ref={panelRef}
+            className="filter-dropdown-panel"
+            style={{
+              position: "fixed",
+              top: position.top,
+              left: position.left,
+              zIndex: 100000,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="filter-dropdown-heading">
+              <div>
+                <span className="filter-dropdown-kicker">YOUR LIBRARY</span>
+                <h2>Refine your view</h2>
+              </div>
+              {activeCount > 0 && (
+                <button
+                  type="button"
+                  className="filter-clear-button"
+                  onClick={() => {
+                    props.onSetMinRating(null);
+                    props.onSetColorLabelFilter(null);
+                  }}
+                >
+                  Clear all
+                </button>
+              )}
             </div>
-          </div>
 
-          <div className="filter-section">
-            <span className="filter-section-label">Color</span>
-            <div className="filter-chip-row">
-              {COLORS.map(([color, name]) => {
-                const active = props.colorLabelFilter === color;
-                return (
-                  <button
-                    key={color}
-                    type="button"
-                    className={`quick-filter quick-filter-color quick-filter-color-${color} ${active ? "active" : ""}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      props.onSetColorLabelFilter(active ? null : color);
-                    }}
-                    title={name}
-                  >
-                    <span className="color-dot-small" />
-                  </button>
-                );
-              })}
+            <div className="filter-section">
+              <div className="filter-section-heading">
+                <span className="filter-section-label">Rating</span>
+                <span className="filter-section-hint">AT LEAST</span>
+              </div>
+              <div className="filter-chip-row">
+                {RATINGS.map((stars) => {
+                  const active = props.minRating === stars;
+                  return (
+                    <button
+                      key={stars}
+                      type="button"
+                      className={`quick-filter quick-filter-rating ${active ? "active" : ""}`}
+                      aria-label={`${stars} star${stars === 1 ? "" : "s"} and up`}
+                      aria-pressed={active}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        props.onSetMinRating(active ? null : stars);
+                      }}
+                    >
+                      {Array.from({ length: stars }).map((_, i) => (
+                        <span key={i} className="ctx-star">
+                          ★
+                        </span>
+                      ))}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
-          <div className="filter-section">
-            <span className="filter-section-label">Camera</span>
-            <input
-              type="text"
-              className="filter-input"
-              placeholder="Camera model"
-              value={props.cameraFilter ?? ""}
-              onChange={(e) => props.onSetCameraFilter(e.target.value.trim() || null)}
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
+            <div className="filter-section">
+              <div className="filter-section-heading">
+                <span className="filter-section-label">Color label</span>
+                {props.colorLabelFilter && (
+                  <span className="filter-current-value">
+                    {props.colorLabelFilter}
+                  </span>
+                )}
+              </div>
+              <div className="filter-chip-row">
+                {COLORS.map(([color, name]) => {
+                  const active = props.colorLabelFilter === color;
+                  return (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`quick-filter quick-filter-color quick-filter-color-${color} ${active ? "active" : ""}`}
+                      aria-label={`${name} color`}
+                      aria-pressed={active}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        props.onSetColorLabelFilter(active ? null : color);
+                      }}
+                      title={name}
+                    >
+                      <span className="color-dot-small" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-          <div className="filter-section">
-            <span className="filter-section-label">Lens</span>
-            <input
-              type="text"
-              className="filter-input"
-              placeholder="Lens model"
-              value={props.lensFilter ?? ""}
-              onChange={(e) => props.onSetLensFilter(e.target.value.trim() || null)}
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        </div>
-      )}
+          </div>,
+          portalRoot,
+        )}
     </div>
   );
 }

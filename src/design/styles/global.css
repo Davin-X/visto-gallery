@@ -5060,37 +5060,130 @@ body {
   top: 100%;
   left: 0;
   z-index: 50;
-  min-width: 240px;
-  padding: 12px;
+  width: 286px;
+  max-width: calc(100vw - 24px);
+  max-height: min(560px, calc(100vh - 24px));
+  overflow-y: auto;
+  padding: 16px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  margin-top: 6px;
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--accent) 5%, var(--surface)) 0%,
+      var(--surface) 36%
+    );
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.22),
+    0 2px 8px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+  animation: filter-panel-enter 150ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes filter-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.filter-dropdown-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+}
+
+.filter-dropdown-heading h2 {
+  margin: 3px 0 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.filter-dropdown-kicker {
+  color: var(--accent-text);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+}
+
+.filter-clear-button {
+  flex: 0 0 auto;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.filter-clear-button:hover {
+  color: var(--accent-text);
+}
+
+.filter-clear-button:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 .filter-section {
-  margin-bottom: 12px;
+  margin: 0;
+  padding: 13px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
 }
 
 .filter-section:last-child {
-  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.filter-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .filter-section-label {
   display: block;
-  margin-bottom: 6px;
-  color: var(--faint);
+  margin: 0;
+  color: var(--text);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.filter-section-hint,
+.filter-current-value {
+  color: var(--faint);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+.filter-current-value {
+  color: var(--accent-text);
 }
 
 .filter-chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  gap: 7px;
 }
 
 .filter-cluster {
@@ -5102,34 +5195,117 @@ body {
 
 .filter-input {
   width: 100%;
-  min-height: 24px;
-  padding: 0 9px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--surface);
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-2) 76%, transparent);
   color: var(--ink);
   font-size: 12px;
   box-sizing: border-box;
+  transition:
+    border-color 130ms ease,
+    box-shadow 130ms ease,
+    background 130ms ease;
+}
+
+.filter-input::placeholder {
+  color: var(--faint);
 }
 
 .filter-input:focus {
   border-color: var(--accent);
   outline: none;
+  background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.filter-dropdown-panel .quick-filter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-2) 74%, transparent);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.filter-dropdown-panel .quick-filter:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.filter-dropdown-panel .quick-filter:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.filter-dropdown-panel .quick-filter-rating {
+  color: #d99721;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+
+.app-frame.dark .filter-dropdown-panel .quick-filter-rating {
+  color: #f3bb52;
+}
+
+.filter-dropdown-panel .quick-filter-rating.active {
+  border-color: color-mix(in srgb, #e5a82f 45%, var(--line));
+  background: color-mix(in srgb, #e5a82f 16%, var(--surface));
+  color: #b77708;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #e5a82f 12%, transparent);
+}
+
+.app-frame.dark .filter-dropdown-panel .quick-filter-rating.active {
+  color: #ffd273;
+}
+
+.filter-dropdown-panel .quick-filter-color {
+  min-width: 34px;
+  padding: 0;
+}
+
+.filter-dropdown-panel .quick-filter-color.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 11%, var(--surface));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.filter-dropdown-panel .color-dot-small {
+  width: 12px;
+  height: 12px;
+  border: 2px solid color-mix(in srgb, var(--surface) 86%, transparent);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 12%, transparent);
 }
 
 .filter-badge {
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 9px;
   background: var(--accent);
   color: var(--accent-contrast);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   margin-left: 4px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Dropdown button interaction states */
