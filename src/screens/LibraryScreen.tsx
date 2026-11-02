@@ -793,12 +793,12 @@ function LibraryScreen(props: LibraryScreenProps) {
     {
       label: item.rating ? `Rating ${"★".repeat(item.rating)}` : "Rating",
       submenu: [
-        { label: "Unrate", icon: <span className="ctx-star ctx-star-empty">☆</span>, onClick: () => props.onSetRatingForIds?.([item.id], 0) },
-        { label: "1", icon: <span className="ctx-star">★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 1) },
-        { label: "2", icon: <span className="ctx-star">★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 2) },
-        { label: "3", icon: <span className="ctx-star">★★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 3) },
-        { label: "4", icon: <span className="ctx-star">★★★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 4) },
-        { label: "5", icon: <span className="ctx-star">★★★★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 5) },
+        { label: <span className="ctx-star ctx-star-empty">Unrate</span>, onClick: () => props.onSetRatingForIds?.([item.id], 0) },
+        { label: <span className="ctx-star">★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 1) },
+        { label: <span className="ctx-star">★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 2) },
+        { label: <span className="ctx-star">★★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 3) },
+        { label: <span className="ctx-star">★★★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 4) },
+        { label: <span className="ctx-star">★★★★★</span>, onClick: () => props.onSetRatingForIds?.([item.id], 5) },
       ],
     },
     {
@@ -1200,7 +1200,7 @@ function LibraryScreen(props: LibraryScreenProps) {
 
           <div className="filter-cluster">
             <span className="smart-label">RATING</span>
-            {["★ 1", "★ 2", "★ 3", "★ 4", "★ 5"].map((label, i) => {
+            {["★", "★★", "★★★", "★★★★", "★★★★★"].map((label, i) => {
               const stars = i + 1;
               const active = props.minRating === stars;
               return (

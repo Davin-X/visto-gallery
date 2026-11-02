@@ -738,6 +738,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
   border-radius: 999px;
   transition:
     background 0.16s cubic-bezier(0.16, 1, 0.3, 1),
