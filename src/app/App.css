@@ -780,9 +780,13 @@ body {
   color: var(--muted);
 }
 
-.library-header .quick-filter.active .filter-count {
-  background: rgba(255, 255, 255, 0.2);
-  color: inherit;
+.library-header .quick-filter-rating {
+  color: #f5a524;
+  font-size: 13px;
+  letter-spacing: 1px;
+  padding: 0 8px;
+  min-width: 32px;
+  justify-content: center;
 }
 
 .sort-hint {

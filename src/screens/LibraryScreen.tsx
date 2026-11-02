@@ -1207,7 +1207,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                 <button
                   key={stars}
                   type="button"
-                  className={`quick-filter ${active ? "active" : ""}`}
+                  className={`quick-filter quick-filter-rating ${active ? "active" : ""}`}
                   onClick={() =>
                     props.onSetMinRating(active ? null : stars)
                   }
@@ -1239,7 +1239,6 @@ function LibraryScreen(props: LibraryScreenProps) {
                   title={`Filter by ${name} label`}
                 >
                   <span className="color-dot-small" />
-                  {name}
                 </button>
               );
             })}

@@ -664,86 +664,23 @@ kbd {
 .tile-rating .star.filled { color: #fbbf24; }
 .color-dot-small {
   display: inline-block;
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  margin-right: 6px;
   border: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+/* Compact color filter buttons (dot only) */
+.library-header .quick-filter-color {
+  padding: 0 8px;
+  min-width: 32px;
+  justify-content: center;
 }
 .quick-filter-color-red .color-dot-small { background: #ef4444; }
 .quick-filter-color-yellow .color-dot-small { background: #eab308; }
 .quick-filter-color-green .color-dot-small { background: #22c55e; }
 .quick-filter-color-blue .color-dot-small { background: #3b82f6; }
 .quick-filter-color-purple .color-dot-small { background: #a855f7; }
-/* Smart Collections */
-.smart-albums-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 0 16px;
-}
-.smart-section-title {
-  margin: 0 0 8px 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--faint);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-.smart-rating-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.smart-color-row {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.smart-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.smart-card:hover {
-  border-color: var(--accent);
-  background: var(--surface-2);
-}
-.smart-card-rating .star {
-  font-size: 14px;
-  line-height: 1;
-}
-.smart-card-rating .star.filled { color: #fbbf24; }
-.smart-card-color {
-  flex-direction: row;
-  gap: 10px;
-  padding: 10px 14px;
-}
-.smart-color-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.7);
-}
-.smart-card-count {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--muted);
-}
-/* Keep rating + color chips separated within the same row */
-.filter-cluster .smart-label {
-  margin-right: 6px;
-}
-.filter-cluster .smart-label + .quick-filter-color {
-  margin-left: 4px;
-}
 .empty-state {
   grid-column: 1/-1;
   display: grid;
