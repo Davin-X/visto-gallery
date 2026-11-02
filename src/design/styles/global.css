@@ -626,6 +626,61 @@ kbd {
   color: var(--faint);
   font-size: 12px;
 }
+.tile-color-label {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  z-index: 3;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.tile-color-label .color-dot {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+.tile-color-red .color-dot { background: #ef4444; }
+.tile-color-yellow .color-dot { background: #eab308; }
+.tile-color-green .color-dot { background: #22c55e; }
+.tile-color-blue .color-dot { background: #3b82f6; }
+.tile-color-purple .color-dot { background: #a855f7; }
+.tile-rating {
+  position: absolute;
+  bottom: 7px;
+  left: 7px;
+  z-index: 3;
+  display: flex;
+  gap: 1px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+.tile-rating .star {
+  font-size: 10px;
+  line-height: 1;
+}
+.tile-rating .star.filled { color: #fbbf24; }
+.color-dot-small {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+/* Compact color filter buttons (dot only) */
+.library-header .quick-filter-color {
+  padding: 0 8px;
+  min-width: 32px;
+  justify-content: center;
+}
+.quick-filter-color-red .color-dot-small { background: #ef4444; }
+.quick-filter-color-yellow .color-dot-small { background: #eab308; }
+.quick-filter-color-green .color-dot-small { background: #22c55e; }
+.quick-filter-color-blue .color-dot-small { background: #3b82f6; }
+.quick-filter-color-purple .color-dot-small { background: #a855f7; }
 .empty-state {
   grid-column: 1/-1;
   display: grid;

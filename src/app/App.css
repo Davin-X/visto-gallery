@@ -464,17 +464,27 @@ body {
 @media (max-width: 640px) {
   .header-actions {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
+
+  .header-actions::-webkit-scrollbar {
+    display: none;
+  }
+
   .header-actions .source-select {
-    flex: 1 1 100%;
-    justify-content: center;
-    max-width: none;
+    flex: 0 0 auto;
+    max-width: 160px;
   }
+
   .header-actions .primary-button,
   .header-actions .quiet-button {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     justify-content: center;
+    padding: 0 10px;
   }
 }
 .source-select {
@@ -533,13 +543,26 @@ body {
     order: 2;
     flex: 1 1 100%;
     min-width: 0;
-    justify-content: space-between;
-    gap: 8px;
+    justify-content: flex-start;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .toolbar-right::-webkit-scrollbar {
+    display: none;
   }
 
   .filter-cluster {
-    flex: 1 1 auto;
-    min-width: 140px;
+    flex: 1 1 100%;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .filter-cluster::-webkit-scrollbar {
+    display: none;
   }
 
   .library-header .toolbar-actions {
@@ -738,6 +761,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
   border-radius: 999px;
   transition:
     background 0.16s cubic-bezier(0.16, 1, 0.3, 1),
@@ -770,18 +794,23 @@ body {
 
 .library-header .quick-filter .filter-count {
   margin-left: 0;
-  background: var(--surface);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
   border-radius: 999px;
   padding: 0 6px;
   font-size: 10px;
   font-weight: 700;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--muted);
+  color: var(--ink);
 }
 
-.library-header .quick-filter.active .filter-count {
-  background: rgba(255, 255, 255, 0.2);
-  color: inherit;
+.library-header .quick-filter-rating {
+  color: #f5a524;
+  font-size: 13px;
+  letter-spacing: 1px;
+  padding: 0 8px;
+  min-width: 32px;
+  justify-content: center;
 }
 
 .sort-hint {
@@ -887,7 +916,8 @@ body {
 }
 
 .quick-filter.active .filter-count {
-  color: inherit;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--accent-contrast);
 }
 
 /* Select all stays pinned to the right end of the filter row. */

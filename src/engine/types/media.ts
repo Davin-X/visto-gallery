@@ -133,6 +133,7 @@ export type Screen =
   | "Library"
   | "Viewer"
   | "Explore"
+  | "CameraLens"
   | "Duplicates"
   | "Edit"
   | "Batch"
@@ -148,6 +149,8 @@ export interface LibraryFilter {
   query?: string;
   dateFrom?: number;
   dateTo?: number;
+  rating?: number; // filter items at or above this star rating (0-5)
+  colorLabel?: string; // 'red' | 'yellow' | 'green' | 'blue' | 'purple'
 }
 
 export interface DuplicateGroup {

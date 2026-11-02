@@ -56,7 +56,6 @@ pub async fn export_bytes(
 #[cfg(test)]
 mod thumbnail_cache_tests {
     use super::library::{prune_thumbnail_cache, thumbnail_cache_key};
-    use super::{prune_missing_items, upsert_media_batch, MediaItem};
     use std::collections::HashSet;
     use std::fs;
     use uuid::Uuid;
@@ -179,7 +178,7 @@ mod thumbnail_cache_tests {
             1000,
         );
         let deleted_path = root.join("deleted.jpg").to_string_lossy().into_owned();
-        let mut item3 = MediaItem::new(
+        let item3 = MediaItem::new(
             deleted_path.clone(),
             "deleted.jpg".into(),
             "jpg".into(),

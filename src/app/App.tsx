@@ -13,6 +13,7 @@ import { useFocusTrap } from "../design/hooks/useFocusTrap";
 import EditScreen from "../screens/EditScreen";
 import ViewerScreen from "../screens/ViewerScreen";
 import VideoPlayer from "../design/components/VideoPlayer";
+import CameraLensBrowserScreen from "../screens/CameraLensBrowserScreen";
 import BatchScreen from "../screens/BatchScreen";
 import AlbumsScreen from "../screens/AlbumsScreen";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
@@ -181,6 +182,7 @@ type Screen =
   | "Edit"
   | "Batch"
   | "Hidden"
+  | "CameraLens"
   | "Settings";
 
 const initialEdits = {
@@ -2363,6 +2365,13 @@ function App() {
               onToggleHidden={library.toggleHidden}
               onSetFavoriteForIds={library.setFavoriteForIds}
               onSetHiddenForIds={library.setHiddenForIds}
+              onSetRatingForIds={library.setRatingForIds}
+              onSetColorLabelForIds={library.setColorLabelForIds}
+              minRating={library.minRating}
+              libraryStats={libraryStats}
+              colorLabelFilter={library.colorLabelFilter}
+              onSetMinRating={library.setMinRating}
+              onSetColorLabelFilter={library.setColorLabelFilter}
               onUpdateTags={library.updateItemTags}
               onDeleteItems={library.deleteItems}
               onRequestDeleteItems={(ids: string[]) => {
@@ -2605,6 +2614,15 @@ function App() {
               result={batch.result}
               error={batch.error}
               assetUrl={assetUrl}
+            />
+          )}
+
+          {screen === "CameraLens" && (
+            <CameraLensBrowserScreen
+              items={library.items}
+              assetUrl={assetUrl}
+              onBack={() => setScreen("Library")}
+              onOpenViewer={(id?: string) => openViewer(id, "Library")}
             />
           )}
 
