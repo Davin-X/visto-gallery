@@ -636,8 +636,12 @@ kbd {
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  background: rgba(10, 14, 18, 0.45);
 }
 .tile-color-label .color-dot {
+  /* A span is inline by default, which collapsed the dot to 0×0 and left an
+     empty white ring on every colour-labelled tile. */
+  display: block;
   width: 100%;
   height: 100%;
   border-radius: 50%;
@@ -647,6 +651,14 @@ kbd {
 .tile-color-green .color-dot { background: #22c55e; }
 .tile-color-blue .color-dot { background: #3b82f6; }
 .tile-color-purple .color-dot { background: #a855f7; }
+
+/* Favourite and colour label share the top-left corner. When both exist, move
+   the heart beside the dot so neither badge covers the other, and align their
+   vertical centres (16px dot vs 22px heart). */
+.gallery-tile:has(.tile-color-label) .tile-favorite {
+  top: 4px;
+  left: 29px;
+}
 .tile-rating {
   position: absolute;
   bottom: 7px;
