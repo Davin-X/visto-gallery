@@ -7,6 +7,7 @@ import React, {
   useRef,
   useDeferredValue,
 } from "react";
+import { useKeyboard } from "../engine/hooks/useKeyboard";
 import {
   AlbumsIcon,
   BatchIcon,
@@ -521,13 +522,13 @@ function LibraryScreen(props: LibraryScreenProps) {
     [props.onInspectItem],
   );
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      handleGridKeyDown(e as unknown as React.KeyboardEvent<HTMLDivElement>);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [handleGridKeyDown]);
+  // Grid arrow-key navigation shares the single window listener via useKeyboard.
+  // The handler only acts when a tile-open-button is focused, so it never
+  // interferes with inputs or App-level shortcuts (which run first and call
+  // preventDefault to stop the chain).
+  useKeyboard([
+    (e: KeyboardEvent) => handleGridKeyDown(e as unknown as React.KeyboardEvent<HTMLDivElement>),
+  ]);
 
   const renderedItems = useMemo(() => {
     // Virtualized grid/overview layouts already window which tiles the DOM
