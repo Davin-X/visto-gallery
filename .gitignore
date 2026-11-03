@@ -25,6 +25,9 @@ yarn-error.log*
 # Local-only review notes (not part of the app)
 untracked/
 
+# Freebuff Desktop local artifact (not part of the app)
+.freebuff/
+
 # Cline workspace rules (local)
 .clinerules
 
