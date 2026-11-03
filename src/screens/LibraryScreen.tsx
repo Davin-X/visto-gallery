@@ -23,6 +23,7 @@ import {
   PlayIcon,
   PlusIcon,
   SearchIcon,
+  TagIcon,
   TimelineIcon,
   TrashIcon,
 } from "../design/components/icons";
@@ -78,6 +79,7 @@ interface LibraryScreenProps {
   onChangeQuery: (query: string) => void;
   onClearSelection: () => void;
   onContextMenu: (items: any[], e: React.MouseEvent) => void;
+  onCopyTagsToFinder?: (ids: string[]) => void | Promise<void>;
   onCreateAlbum: (itemIds?: string[]) => void;
   onImportFiles?: () => void;
   onImportFolder?: () => void;
@@ -119,8 +121,12 @@ interface LibraryScreenProps {
     favorites: number;
   };
   colorLabelFilter: string | null;
+  dateFrom: number | null;
+  dateTo: number | null;
   onSetMinRating: (rating: number | null) => void;
   onSetColorLabelFilter: (colorLabel: string | null) => void;
+  onSetDateRange: (from: number | null, to: number | null) => void;
+  onCreateSmartAlbum?: (name: string) => void;
   notice: any;
   progress: any;
   searchInputRef: any;
@@ -130,6 +136,17 @@ interface LibraryScreenProps {
 
 function LibraryScreen(props: LibraryScreenProps) {
   const library = useLibraryStore();
+  const [showRefreshHint, setShowRefreshHint] = useState(false);
+  useEffect(() => {
+    if (!library.refreshingLibrary) {
+      setShowRefreshHint(false);
+      return;
+    }
+    // Do not flash a spinner for cheap local queries. Only very large or
+    // uncached refreshes earn a subtle indication.
+    const timer = window.setTimeout(() => setShowRefreshHint(true), 180);
+    return () => window.clearTimeout(timer);
+  }, [library.refreshingLibrary]);
   const draftTransforms = useDraftTransforms();
   const thumbnailSize = useThumbnailSize();
   const settingsStore = useSettingsStore();
@@ -287,10 +304,26 @@ function LibraryScreen(props: LibraryScreenProps) {
     }
     return counts;
   }, [filterSource, props.hiddenView]);
-  const clearEmptyView = () => {
-    props.onChangeQuery("");
-    props.onChangeFilter("All");
-    if (!props.hiddenView) library.setActiveSource(null);
+  const hasActiveRefinements = props.hiddenView
+    ? Boolean(
+        (props.query || "").trim() ||
+          props.filter !== "All",
+      )
+    : Boolean(
+        (props.query || "").trim() ||
+          props.filter !== "All" ||
+          library.activeSource ||
+          library.activeSmartAlbum ||
+          library.cameraFilter ||
+          library.lensFilter ||
+          props.minRating !== null ||
+          props.colorLabelFilter ||
+          props.dateFrom != null ||
+          props.dateTo != null,
+      );
+  const clearRefinements = () => {
+    if (props.hiddenView) library.clearHiddenFilters();
+    else library.clearFilters();
   };
 
   const emptyView = () => {
@@ -320,7 +353,7 @@ function LibraryScreen(props: LibraryScreenProps) {
               Browse Library
             </button>
           ) : (
-            <button type="button" onClick={clearEmptyView}>
+            <button type="button" onClick={clearRefinements}>
               Clear filters
             </button>
           )}
@@ -383,7 +416,7 @@ function LibraryScreen(props: LibraryScreenProps) {
             <PlusIcon size={14} /> Add a folder
           </button>
         ) : (
-          <button type="button" onClick={clearEmptyView}>
+          <button type="button" onClick={clearRefinements}>
             Clear filters
           </button>
         )}
@@ -474,6 +507,16 @@ function LibraryScreen(props: LibraryScreenProps) {
   ]);
 
   const loadMore = () => {
+    if (supportsGridVirtualization) {
+      // The virtualizer handles local DOM windowing. Near-bottom scrolling
+      // should fetch the next catalog page without stepping a second,
+      // redundant local render limit.
+      if (!library.loadingNextPage && library.hasMore && !library.busy) {
+        void library.loadNextPage();
+      }
+      return;
+    }
+
     const nextRenderLimit = Math.min(
       renderLimit + GALLERY_PAGE_SIZE,
       props.items.length,
@@ -548,10 +591,14 @@ function LibraryScreen(props: LibraryScreenProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [handleGridKeyDown]);
 
-  const renderedItems = useMemo(
-    () => props.items.slice(0, renderLimit),
-    [props.items, renderLimit],
-  );
+  const renderedItems = useMemo(() => {
+    // Virtualized grid/overview layouts already window which tiles the DOM
+    // contains, so slicing them a second time creates a misleading "show
+    // more" footer and limits scroll-triggered page loading.
+    return supportsGridVirtualization
+      ? props.items
+      : props.items.slice(0, renderLimit);
+  }, [props.items, renderLimit, supportsGridVirtualization]);
   const virtualGrid = useMemo(() => {
     if (!supportsGridVirtualization || renderedItems.length === 0) {
       return { items: renderedItems, topSpacer: 0, bottomSpacer: 0 };
@@ -800,6 +847,11 @@ function LibraryScreen(props: LibraryScreenProps) {
     {
       label: "Open in Finder",
       onClick: () => tauri.items.revealInFinder(item.path),
+    },
+    {
+      label: "Copy tags to Finder",
+      disabled: !(item.tags || []).length,
+      onClick: () => props.onCopyTagsToFinder?.([item.id]),
     },
     { divider: true },
     {
@@ -1274,9 +1326,30 @@ function LibraryScreen(props: LibraryScreenProps) {
             <FilterDropdown
               minRating={props.minRating}
               colorLabelFilter={props.colorLabelFilter}
+              dateFrom={props.dateFrom}
+              dateTo={props.dateTo}
               onSetMinRating={props.onSetMinRating}
               onSetColorLabelFilter={props.onSetColorLabelFilter}
+              onSetDateRange={props.onSetDateRange}
+              onCreateSmartAlbum={props.onCreateSmartAlbum}
             />
+            {hasActiveRefinements && (
+              <button
+                type="button"
+                className="quick-filter clear-refinements-button"
+                onClick={clearRefinements}
+                aria-label="Clear all filters"
+                title="Clear search and all filter refinements"
+              >
+                Clear all
+              </button>
+            )}
+            {!props.hiddenView && showRefreshHint && (
+              <span className="filter-refreshing" role="status">
+                <span className="filter-refreshing-spinner" aria-hidden="true" />
+                Refreshing…
+              </span>
+            )}
           </div>
 
           {props.selectedIds.length > 0 && (
@@ -1397,6 +1470,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                     <AlbumsIcon size={13} /> Add to album
                   </button>
                 )}
+                <button
+                  type="button"
+                  className="selection-bar-action"
+                  onClick={() => props.onCopyTagsToFinder?.(props.selectedIds)}
+                  disabled={!selectedItems.some((item) => item.tags?.length)}
+                  title="Merge VistoGallery tags into each file's Finder tags. Existing Finder tags are kept."
+                >
+                  <TagIcon size={13} /> Tags to Finder
+                </button>
                 {inAlbum && (
                   <button
                     type="button"
@@ -1906,14 +1988,15 @@ function LibraryScreen(props: LibraryScreenProps) {
               </div>
             );
           })()}
-          {renderLimit < props.items.length && (
-            <div className="grid-more">
-              <button type="button" className="quiet-button" onClick={loadMore}>
-                Show more ·{" "}
-                {(props.items.length - renderLimit).toLocaleString()} remaining
-              </button>
-            </div>
-          )}
+          {!supportsGridVirtualization &&
+            renderLimit < props.items.length && (
+              <div className="grid-more">
+                <button type="button" className="quiet-button" onClick={loadMore}>
+                  Show more loaded items ·{" "}
+                  {(props.items.length - renderLimit).toLocaleString()}
+                </button>
+              </div>
+            )}
         </div>
       </section>
 

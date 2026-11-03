@@ -9,8 +9,10 @@ import {
   useSystemDark,
   ACCENT_PALETTE,
 } from "../../engine/stores";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import { tauri } from "../../engine/commands/tauri";
-import type { LibraryFolder } from "../../engine/types/commands";
+import { save, open as openDialog } from "@tauri-apps/plugin-dialog";
+import type { BackupInfo, LibraryFolder } from "../../engine/types/commands";
 import { GeneralPanel } from "./settings/GeneralPanel";
 import { ViewingPanel } from "./settings/ViewingPanel";
 import { LibraryPanel } from "./settings/LibraryPanel";
@@ -41,7 +43,20 @@ export function SettingsScreen(props: {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingLibrary, setDeletingLibrary] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [pendingRestore, setPendingRestore] = useState<{
+    path: string;
+    info: BackupInfo;
+  } | null>(null);
+  const [suggestedOldRoot, setSuggestedOldRoot] = useState<string | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const resetDialogRef = useRef<HTMLDivElement | null>(null);
+  const deleteDialogRef = useRef<HTMLDivElement | null>(null);
+  const restoreDialogRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(showResetConfirm, resetDialogRef);
+  useFocusTrap(showDeleteConfirm, deleteDialogRef);
+  useFocusTrap(!!pendingRestore, restoreDialogRef);
 
   // Settings values
   const appearance = useAppearance();
@@ -70,6 +85,9 @@ export function SettingsScreen(props: {
   const thumbnailQuality = useSettingsStore((s) => s.thumbnailQuality);
   const debugLogging = useSettingsStore((s) => s.enableDebugLogging);
   const showNativeWarnings = useSettingsStore((s) => s.showNativeLimitWarnings);
+  const checkForUpdatesOnLaunch = useSettingsStore(
+    (s) => s.checkForUpdatesOnLaunch,
+  );
 
   const update = useSettingsStore((s) => s.update);
   const updateMany = useSettingsStore((s) => s.updateMany);
@@ -132,6 +150,77 @@ export function SettingsScreen(props: {
       setRebuilding(false);
     }
   }, [loadLibrary, showNotice]);
+
+  const handleCreateBackup = useCallback(async () => {
+    try {
+      const destination = await save({
+        title: "Save VistoGallery catalog backup",
+        defaultPath: `VistoGallery-Catalog-${new Date().toISOString().slice(0, 10)}.db`,
+        filters: [{ name: "VistoGallery catalog backup", extensions: ["db"] }],
+      });
+      if (!destination) return;
+      setBackupBusy(true);
+      const info = await tauri.backup.create(destination);
+      showNotice(
+        `Catalog backup saved (${info.itemCount.toLocaleString()} items, ${info.albumCount.toLocaleString()} albums). Original media files were not touched.`,
+      );
+    } catch (error) {
+      showNotice(
+        `Could not create the catalog backup: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    } finally {
+      setBackupBusy(false);
+    }
+  }, [showNotice]);
+
+  const handleChooseRestore = useCallback(async () => {
+    try {
+      const path = await openDialog({
+        title: "Choose a VistoGallery catalog backup",
+        multiple: false,
+        filters: [{ name: "VistoGallery catalog backup", extensions: ["db"] }],
+      });
+      if (!path || Array.isArray(path)) return;
+      setBackupBusy(true);
+      const info = await tauri.backup.validate(path);
+      setPendingRestore({ path, info });
+    } catch (error) {
+      showNotice(
+        `That file is not a restorable VistoGallery backup: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    } finally {
+      setBackupBusy(false);
+    }
+  }, [showNotice]);
+
+  const handleConfirmRestore = useCallback(async () => {
+    if (!pendingRestore) return;
+    setRestoring(true);
+    try {
+      const result = await tauri.backup.restore(pendingRestore.path);
+      setPendingRestore(null);
+      setSuggestedOldRoot(result.missingRoots[0] ?? null);
+      await loadLibrary();
+      const missing = result.missingRoots.length
+        ? ` Missing source folder(s): ${result.missingRoots.slice(0, 3).join(", ")}${result.missingRoots.length > 3 ? ", …" : ""}.`
+        : "";
+      showNotice(
+        `Catalog restored (${result.backup.itemCount.toLocaleString()} items, ${result.backup.albumCount.toLocaleString()} albums). Pre-restore backup: ${result.preRestoreBackup}.${missing} Original media files were not modified.`,
+      );
+    } catch (error) {
+      showNotice(
+        `Restore failed; the active catalog was left in place: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    } finally {
+      setRestoring(false);
+    }
+  }, [loadLibrary, pendingRestore, showNotice]);
 
   // Standard ARIA tabs keyboard model: arrows cycle, Home/End jump.
   const handleTabKeyDown = (event: React.KeyboardEvent, index: number) => {
@@ -295,7 +384,12 @@ export function SettingsScreen(props: {
             onChange={update}
           />
         )}
-        {activeTab === "privacy" && <PrivacyPanel />}
+        {activeTab === "privacy" && (
+          <PrivacyPanel
+            checkForUpdatesOnLaunch={checkForUpdatesOnLaunch}
+            onChange={update}
+          />
+        )}
         {activeTab === "advanced" && (
           <AdvancedPanel
             maxCacheSize={maxCacheSize}
@@ -308,6 +402,13 @@ export function SettingsScreen(props: {
             deleting={deletingLibrary}
             onRebuild={handleRebuildLibrary}
             rebuilding={rebuilding}
+            onCreateBackup={handleCreateBackup}
+            onChooseRestore={handleChooseRestore}
+            backupBusy={backupBusy}
+            restoring={restoring}
+            suggestedOldRoot={suggestedOldRoot}
+            onRootMappingApplied={loadLibrary}
+            showNotice={showNotice}
           />
         )}
       </div>
@@ -319,6 +420,7 @@ export function SettingsScreen(props: {
           onClick={() => setShowResetConfirm(false)}
         >
           <div
+            ref={resetDialogRef}
             className="album-dialog confirm-dialog"
             onClick={(e) => e.stopPropagation()}
           >
@@ -351,12 +453,62 @@ export function SettingsScreen(props: {
           </div>
         </div>
       )}
+      {pendingRestore && (
+        <div
+          className="dialog-backdrop"
+          onClick={() => {
+            if (!restoring) setPendingRestore(null);
+          }}
+        >
+          <div
+            ref={restoreDialogRef}
+            className="album-dialog delete-album-dialog confirm-dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="dialog-heading">
+              <div>
+                <p className="eyebrow">RESTORE</p>
+                <h2>Replace the Current Catalog?</h2>
+              </div>
+            </div>
+            <p className="dialog-body">
+              This backup contains{" "}
+              <b>{pendingRestore.info.itemCount.toLocaleString()} items</b>,{" "}
+              {pendingRestore.info.albumCount.toLocaleString()} albums, and{" "}
+              {pendingRestore.info.tagCount.toLocaleString()} tags, created with
+              app version {pendingRestore.info.appVersion}. Restoring replaces
+              the current catalog organization. A pre-restore snapshot is
+              written automatically, and <b>original media files are never
+              modified</b>.
+            </p>
+            <div className="dialog-actions">
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={() => setPendingRestore(null)}
+                disabled={restoring}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="danger-button"
+                onClick={handleConfirmRestore}
+                disabled={restoring}
+              >
+                {restoring ? "Restoring…" : "Restore Catalog"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showDeleteConfirm && (
         <div
           className="dialog-backdrop"
           onClick={() => setShowDeleteConfirm(false)}
         >
           <div
+            ref={deleteDialogRef}
             className="album-dialog delete-album-dialog confirm-dialog"
             onClick={(e) => e.stopPropagation()}
           >

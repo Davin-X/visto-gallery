@@ -24,9 +24,22 @@ export interface AppSettings {
   // Library
   watchFolders: string[];
   autoImport: boolean;
+  /**
+   * Dormant compatibility fields. RAW+JPEG pairing and burst stacking are not
+   * implemented yet; the controls are marked unavailable in Settings, but the
+   * persisted values are kept so an upgrade never drops a user preference.
+   */
   pairRawJpeg: boolean;
   stackBursts: boolean;
   stackLivePhotos: boolean;
+
+  // Updates
+  /**
+   * Contact GitHub for public release metadata once after launch. Defaults to
+   * false to preserve the local-first promise; Help > Check for Updates always
+   * works regardless of this preference.
+   */
+  checkForUpdatesOnLaunch: boolean;
 
   // Advanced
   maxCacheSizeGB: number;
@@ -57,6 +70,7 @@ export const defaultSettings: AppSettings = {
   pairRawJpeg: true,
   stackBursts: true,
   stackLivePhotos: true,
+  checkForUpdatesOnLaunch: false,
   maxCacheSizeGB: 5,
   thumbnailQuality: 80,
   enableDebugLogging: false,

@@ -35,3 +35,14 @@ test("settings hydrate and update", async () => {
   expect(useSettingsStore.getState().appearance).toBe("dark");
   flushSettingsSaves();
 });
+
+test("automatic update checks are opt-in by default", async () => {
+  resetPendingSettingsSave();
+  const { defaultSettings } = await import("../types/settings");
+
+  expect(defaultSettings.checkForUpdatesOnLaunch).toBe(false);
+  await act(async () => {
+    await useSettingsStore.getState().hydrate();
+  });
+  expect(useSettingsStore.getState().checkForUpdatesOnLaunch).toBe(false);
+});

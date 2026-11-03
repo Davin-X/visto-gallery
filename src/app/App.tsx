@@ -53,6 +53,15 @@ import { draftImageStyle } from "../engine/utils/draftImage";
 import { formatDuration } from "../engine/utils/time";
 import { MiniPlayer } from "../design/components/MiniPlayer";
 import { getTypeIdentity, formatBytesSimple } from "../engine/utils/mediaTypes";
+import { dispatchNativeMenuEvent } from "./nativeMenu";
+import { isExportShortcut } from "./shortcuts";
+import { shouldCheckForUpdatesOnLaunch } from "./startup";
+import { navigateToBatchExport } from "./exportFlow";
+import {
+  createAutoImportController,
+  syncFolderWatchers,
+} from "../engine/utils/folderWatcher";
+import { copyTagsToFinder } from "../engine/utils/finderTags";
 
 // Helper: render a kind badge using centralized type identity
 
@@ -305,6 +314,8 @@ function App() {
   const [creatingAlbum, setCreatingAlbum] = useState(false);
   const albumInputRef = useRef<HTMLInputElement | null>(null);
   const albumDialogRef = useRef<HTMLFormElement | null>(null);
+  const updateDialogRef = useRef<HTMLDivElement | null>(null);
+  const aboutDialogRef = useRef<HTMLDivElement | null>(null);
   const deleteAlbumDialogRef = useRef<HTMLDivElement | null>(null);
   const deleteItemDialogRef = useRef<HTMLDivElement | null>(null);
   const removeFolderDialogRef = useRef<HTMLDivElement | null>(null);
@@ -315,7 +326,10 @@ function App() {
   const [itemPendingDeleteCount, setItemPendingDeleteCount] =
     useState<number>(0);
   const itemPendingDeleteRef = useRef<string[] | null>(null);
-  const folderChangedTimerRef = useRef<number | null>(null);
+  const watchedRootsRef = useRef<Set<string>>(new Set());
+  const autoImportControllerRef = useRef<ReturnType<
+    typeof createAutoImportController
+  > | null>(null);
   const [albumRemovePending, setAlbumRemovePending] = useState<{
     albumId: string;
     itemIds: string[];
@@ -370,6 +384,8 @@ function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [updateDialogOpen]);
+  useFocusTrap(updateDialogOpen, updateDialogRef);
+  useFocusTrap(aboutOpen, aboutDialogRef);
   useEffect(() => {
     let cancelled = false;
     tauri.app
@@ -772,11 +788,13 @@ function App() {
   const handlersRef = useRef<{
     importFolder: () => void;
     importFiles: () => void;
+    exportToBatch: () => void;
     showNotice: (text: string) => void;
     checkUpdates: (manual?: boolean) => void;
   }>({
     importFolder: () => {},
     importFiles: () => {},
+    exportToBatch: () => {},
     showNotice: () => {},
     checkUpdates: () => {},
   });
@@ -789,12 +807,6 @@ function App() {
     liveRef.current.library.loadLibrary();
     liveRef.current.settings.hydrate();
 
-    // Check for a new release once per launch. The backend caches the answer
-    // for 24 hours, so this stays well inside GitHub's unauthenticated limit.
-    const updateTimer = window.setTimeout(() => {
-      handlersRef.current.checkUpdates(false);
-    }, 4000);
-
     // Listen for native menu events (cleaned up on unmount / StrictMode remount).
     let cancelled = false;
     const unlisteners: Array<() => void> = [];
@@ -805,27 +817,32 @@ function App() {
         if (cancelled) unlisten();
         else unlisteners.push(unlisten);
       };
-      await register("menu-open-folder", () =>
-        handlersRef.current.importFolder(),
-      );
-      await register("menu-import-files", () =>
-        handlersRef.current.importFiles(),
-      );
-      await register("menu-export", () =>
-        handlersRef.current.showNotice("Export - coming soon"),
-      );
-      await register("menu-toggle-sidebar", () =>
-        liveRef.current.library.toggleSidebar(),
-      );
-      await register("menu-toggle-inspector", () =>
-        liveRef.current.library.toggleInspector(),
-      );
-      await register("menu-zoom-in", () => liveRef.current.viewer.zoomIn());
-      await register("menu-zoom-out", () => liveRef.current.viewer.zoomOut());
-      await register("menu-about", () => setAboutOpen(true));
-      await register("menu-check-updates", () =>
-        handlersRef.current.checkUpdates(true),
-      );
+      const menuHandlers = {
+        importFolder: () => handlersRef.current.importFolder(),
+        importFiles: () => handlersRef.current.importFiles(),
+        exportToBatch: () => handlersRef.current.exportToBatch(),
+        toggleSidebar: () => liveRef.current.library.toggleSidebar(),
+        toggleInspector: () => liveRef.current.library.toggleInspector(),
+        zoomIn: () => liveRef.current.viewer.zoomIn(),
+        zoomOut: () => liveRef.current.viewer.zoomOut(),
+        showAbout: () => setAboutOpen(true),
+        checkUpdates: () => handlersRef.current.checkUpdates(true),
+      };
+      for (const event of [
+        "menu-open-folder",
+        "menu-import-files",
+        "menu-export",
+        "menu-toggle-sidebar",
+        "menu-toggle-inspector",
+        "menu-zoom-in",
+        "menu-zoom-out",
+        "menu-about",
+        "menu-check-updates",
+      ]) {
+        await register(event, () =>
+          dispatchNativeMenuEvent(event, menuHandlers),
+        );
+      }
 
       // Listen for native import progress events from scan/import commands.
       const unlistenProgress = await events.onImportProgress((progress) => {
@@ -848,15 +865,30 @@ function App() {
           liveRef.current.library.setProgress(null);
         }
       });
-      const unlistenFolderChanged = await events.onFolderChanged((path) => {
-        // Debounce rapid filesystem events into a single catalog refresh.
-        if (folderChangedTimerRef.current)
-          window.clearTimeout(folderChangedTimerRef.current);
-        folderChangedTimerRef.current = window.setTimeout(() => {
-          liveRef.current.library.loadLibrary().catch(() => {});
-        }, 500);
+      autoImportControllerRef.current = createAutoImportController({
+        isEnabled: () => useSettingsStore.getState().autoImport,
+        scan: async (path) => {
+          await tauri.library.scan(path, false);
+          await liveRef.current.library.loadLibrary();
+          await liveRef.current.library.loadFolders();
+        },
+        onError: (path, error) => {
+          liveRef.current.library.showNotice(
+            `Could not auto-import changes from ${path}: ${describeError(error)}`,
+          );
+        },
       });
-      unlisteners.push(unlistenFolderChanged);
+      const unlistenFolderChanged = await events.onFolderChanged((path) => {
+        autoImportControllerRef.current?.changed(path);
+      });
+      const unlistenWatchError = await events.onFolderWatchError(
+        ({ path, message }) => {
+          liveRef.current.library.showNotice(
+            `Folder watching stopped for ${path}: ${message}. Check the folder's macOS access permissions and re-add the source if needed.`,
+          );
+        },
+      );
+      unlisteners.push(unlistenFolderChanged, unlistenWatchError);
     };
     listen();
 
@@ -904,9 +936,9 @@ function App() {
         handlersRef.current.importFiles();
         return;
       }
-      if (mod && key === "e") {
+      if (isExportShortcut(e)) {
         e.preventDefault();
-        handlersRef.current.showNotice("Export - coming soon");
+        handlersRef.current.exportToBatch();
         return;
       }
       if (mod && e.key === "\\") {
@@ -1036,7 +1068,7 @@ function App() {
 
     return () => {
       cancelled = true;
-      window.clearTimeout(updateTimer);
+      autoImportControllerRef.current?.cancel();
       window.removeEventListener("keydown", handleKeyDown);
       unlisteners.forEach((un) => un());
     };
@@ -1120,6 +1152,19 @@ function App() {
     [library],
   );
 
+  // File > Export… and Cmd/Ctrl+E share this action. Batch Export already
+  // renders a useful empty state, so an empty selection is a prompt, not an
+  // error, and a real selection is passed through unchanged.
+  const exportToBatch = useCallback(() => {
+    const state = useLibraryStore.getState();
+    navigateToBatchExport({
+      selectedIds: state.selectedIds,
+      setScreen,
+      setSelection: state.setSelectedIds,
+      showNotice,
+    });
+  }, [showNotice]);
+
   const checkForUpdates = useCallback(
     async (manual = false) => {
       if (manual) setUpdateChecking(true);
@@ -1146,6 +1191,98 @@ function App() {
         }
       } finally {
         if (manual) setUpdateChecking(false);
+      }
+    },
+    [showNotice],
+  );
+
+  // Automatic launch checks are opt-in and default off. The explicit Help menu
+  // action bypasses this gate and always works.
+  const checkForUpdatesOnLaunch = useSettingsStore(
+    (s) => s.checkForUpdatesOnLaunch,
+  );
+  const didScheduleLaunchUpdate = useRef(false);
+  useEffect(() => {
+    if (!settingsHydrated || didScheduleLaunchUpdate.current) return;
+    didScheduleLaunchUpdate.current = true;
+    if (!shouldCheckForUpdatesOnLaunch({ checkForUpdatesOnLaunch })) return;
+    // The backend caches the answer for 24 hours, so this stays well inside
+    // GitHub's unauthenticated limit.
+    const timer = window.setTimeout(() => {
+      void checkForUpdates(false);
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [settingsHydrated, checkForUpdatesOnLaunch, checkForUpdates]);
+
+  // Restore native watchers for explicitly registered roots after launch and
+  // whenever sources change. Turning auto-import off also stops watching, so
+  // the setting describes actual behavior rather than only future scans.
+  const autoImport = useSettingsStore((s) => s.autoImport);
+  const folderSignature = library.folders
+    .map((folder) => folder.path)
+    .sort()
+    .join("\n");
+  useEffect(() => {
+    const isTauri =
+      typeof window !== "undefined" &&
+      ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+    if (!settingsHydrated || !isTauri) return;
+    let cancelled = false;
+
+    const sync = async () => {
+      const roots = autoImport
+        ? await tauri.library.getRoots().catch((error) => {
+            if (!cancelled) {
+              showNotice(
+                `Could not read library sources for folder watching: ${describeError(error)}`,
+              );
+            }
+            return [] as string[];
+          })
+        : [];
+      if (cancelled) return;
+      const result = await syncFolderWatchers(roots, watchedRootsRef.current, {
+        watch: (path) => tauri.library.watchFolder(path),
+        unwatch: (path) => tauri.library.unwatchFolder(path),
+      });
+      if (cancelled) return;
+      watchedRootsRef.current = result.watched;
+      for (const failure of result.errors) {
+        showNotice(
+          `Could not ${roots.includes(failure.path) ? "watch" : "stop watching"} ${failure.path}: ${describeError(failure.error)}. Check macOS folder access permissions.`,
+        );
+      }
+    };
+
+    void sync();
+    return () => {
+      cancelled = true;
+    };
+  }, [settingsHydrated, autoImport, folderSignature, showNotice]);
+
+  const copyTagsToFinderForIds = useCallback(
+    async (ids: string[]) => {
+      const items = useLibraryStore
+        .getState()
+        .items.filter((item) => ids.includes(item.id));
+      if (items.length === 0) return;
+      const result = await copyTagsToFinder(items, (path, tags) =>
+        tauri.finder.mergeTags(path, tags),
+      );
+      if (result.failed.length > 0) {
+        const details = result.failed
+          .slice(0, 3)
+          .map((failure) => `${failure.path}: ${failure.error}`)
+          .join("; ");
+        showNotice(
+          `Copied tags to ${result.updated} of ${items.length} file(s). ${result.failed.length} failed: ${details}${result.failed.length > 3 ? "; …" : ""}`,
+        );
+      } else if (result.updated > 0) {
+        showNotice(
+          `Copied tags to Finder for ${result.updated} ${result.updated === 1 ? "file" : "files"}. Existing Finder tags were kept.`,
+        );
+      } else {
+        showNotice("No VistoGallery tags to copy for the selected items.");
       }
     },
     [showNotice],
@@ -1663,6 +1800,44 @@ function App() {
     );
   };
 
+  const openSmartAlbum = async (albumId: string) => {
+    await library.openSmartAlbum(albumId);
+    setScreen("Library");
+  };
+
+  const openSmartAlbumMenu = (album: any, e: React.MouseEvent) => {
+    openContextMenu(
+      [
+        {
+          label: "Open Smart Album",
+          onClick: () => void openSmartAlbum(album.id),
+        },
+        {
+          label: "Rename Smart Album…",
+          onClick: () => {
+            const name = window.prompt("Smart Album name", album.name);
+            if (name?.trim()) void library.renameSmartAlbum(album.id, name);
+          },
+        },
+        { divider: true },
+        {
+          label: "Delete Smart Album…",
+          danger: true,
+          onClick: () => {
+            if (
+              window.confirm(
+                `Delete the Smart Album "${album.name}"? The saved filter is removed; photos are not changed.`,
+              )
+            ) {
+              void library.deleteSmartAlbum(album.id);
+            }
+          },
+        },
+      ],
+      e,
+    );
+  };
+
   const openScreen = async (next: Screen) => {
     // Below tablet width the sidebar is an overlay drawer. Dismiss it after
     // navigation so it cannot cover the newly opened screen.
@@ -1937,6 +2112,7 @@ function App() {
   handlersRef.current = {
     importFolder,
     importFiles,
+    exportToBatch,
     showNotice,
     checkUpdates: checkForUpdates,
   };
@@ -2324,7 +2500,7 @@ function App() {
               onSetSelection={library.setSelectedIds}
               onToggleSelectAll={library.toggleSelectAll}
               onClearSelection={library.clearSelection}
-              onOpenBatch={() => openScreen("Batch")}
+              onOpenBatch={() => exportToBatch()}
               onChangeFilter={library.setFilter}
               onChangeQuery={library.setQuery}
               onChangeLayout={library.setLayout}
@@ -2351,8 +2527,15 @@ function App() {
               minRating={library.minRating}
               libraryStats={libraryStats}
               colorLabelFilter={library.colorLabelFilter}
+              dateFrom={library.dateFrom}
+              dateTo={library.dateTo}
               onSetMinRating={library.setMinRating}
               onSetColorLabelFilter={library.setColorLabelFilter}
+              onSetDateRange={library.setDateRange}
+              onCreateSmartAlbum={(name: string) =>
+                void library.createSmartAlbum(name)
+              }
+              onCopyTagsToFinder={copyTagsToFinderForIds}
               onUpdateTags={library.updateItemTags}
               onDeleteItems={library.deleteItems}
               onRequestDeleteItems={(ids: string[]) => {
@@ -2390,9 +2573,14 @@ function App() {
             <AlbumsScreen
               albums={library.albums}
               items={library.items}
+              smartAlbums={library.smartAlbums}
               assetUrl={assetUrl}
               onCreateAlbum={openAlbumDialog}
               onAlbumContextMenu={openAlbumMenu}
+              onSmartAlbumContextMenu={openSmartAlbumMenu}
+              onOpenSmartAlbum={(albumId: string) =>
+                void openSmartAlbum(albumId)
+              }
               onOpenAlbum={async (albumId: string) => {
                 library.setActiveAlbum(albumId);
                 library.setFilter("All");
@@ -2901,6 +3089,7 @@ function App() {
           }}
         >
           <div
+            ref={updateDialogRef}
             className="album-dialog update-dialog"
             role="dialog"
             aria-modal="true"
@@ -2976,6 +3165,7 @@ function App() {
           }}
         >
           <div
+            ref={aboutDialogRef}
             className="album-dialog"
             role="dialog"
             aria-modal="true"

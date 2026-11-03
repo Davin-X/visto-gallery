@@ -81,12 +81,31 @@ function ContextMenuContent({
         const current = Array.from(items || []).findIndex(
           (el) => el === document.activeElement,
         );
-        if (current === -1) return;
+        const last = (items?.length || 0) - 1;
+
+        if (current === -1) {
+          if (e.key === "ArrowDown" && last >= 0) {
+            (items as any)?.[0]?.focus();
+            e.preventDefault();
+          } else if (e.key === "ArrowUp" && last >= 0) {
+            (items as any)?.[last]?.focus();
+            e.preventDefault();
+          } else if (e.key === "Home" && last >= 0) {
+            (items as any)?.[0]?.focus();
+            e.preventDefault();
+          } else if (e.key === "End" && last >= 0) {
+            (items as any)?.[last]?.focus();
+            e.preventDefault();
+          }
+          return;
+        }
+        if (last < 0) return;
 
         let next = current;
-        if (e.key === "ArrowDown") next = (current + 1) % (items?.length || 1);
-        if (e.key === "ArrowUp")
-          next = (current - 1 + (items?.length || 1)) % (items?.length || 1);
+        if (e.key === "ArrowDown") next = current === last ? 0 : current + 1;
+        if (e.key === "ArrowUp") next = current === 0 ? last : current - 1;
+        if (e.key === "Home") next = 0;
+        if (e.key === "End") next = last;
 
         if (next !== current) {
           (items as any)?.[next]?.focus();

@@ -1,6 +1,9 @@
 import { LockIcon, ShieldIcon } from "../icons";
 
-export function PrivacyPanel() {
+export function PrivacyPanel(props: {
+  checkForUpdatesOnLaunch: boolean;
+  onChange: (key: "checkForUpdatesOnLaunch", value: boolean) => void;
+}) {
   return (
     <section className="settings-section privacy-section">
       <h2 className="settings-section-title">
@@ -13,11 +16,37 @@ export function PrivacyPanel() {
         <div>
           <b>Your library stays on this Mac</b>
           <p>
-            VistoGallery scans and processes media locally. This build does not
-            include analytics, crash reporting, or update checks.
+            VistoGallery scans and processes media locally. There is no
+            analytics, crash reporting, or media upload.
           </p>
         </div>
       </div>
+
+      <div className="settings-row">
+        <div className="settings-row-label">
+          <b>Check for updates on launch</b>
+          <span className="settings-row-desc">
+            When enabled, VistoGallery contacts GitHub for public release
+            metadata once after launch. No library data or media is sent. Use
+            Help → Check for Updates to check at any time, even when this is
+            off.
+          </span>
+        </div>
+        <div className="settings-row-control">
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              aria-label="Check for updates on launch"
+              checked={props.checkForUpdatesOnLaunch}
+              onChange={(e) =>
+                props.onChange("checkForUpdatesOnLaunch", e.target.checked)
+              }
+            />
+            <span className="toggle-track" />
+          </label>
+        </div>
+      </div>
+
       <div
         className="privacy-facts"
         aria-label="How VistoGallery handles your data"
@@ -39,10 +68,10 @@ export function PrivacyPanel() {
         </div>
         <div>
           <span>Network</span>
-          <b>No background reporting</b>
+          <b>Release checks only</b>
           <small>
-            There are no network or crash-report switches because those features
-            are not present.
+            The only network request is an optional GitHub release check. It
+            never includes your photos, paths, or library contents.
           </small>
         </div>
       </div>

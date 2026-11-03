@@ -9801,3 +9801,141 @@ body {
     display: none;
   }
 }
+
+/* Smart Albums overview */
+.smart-albums-section {
+  margin: 0 0 22px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-2) 64%, transparent);
+}
+
+.smart-albums-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.smart-albums-heading h2 {
+  margin: 3px 0 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.smart-albums-list {
+  display: grid;
+  gap: 6px;
+}
+
+.smart-album-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.smart-album-row:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+}
+
+.smart-album-row:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
+.smart-album-name {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.smart-album-count {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Date range + saved-filter controls inside the filter popover */
+.filter-date-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.filter-date-range label {
+  display: grid;
+  gap: 4px;
+  color: var(--faint);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.filter-date-range input,
+.filter-smart-album-row input {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.filter-date-range input:focus-visible,
+.filter-smart-album-row input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
+.filter-smart-album-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.filter-smart-album-row input {
+  flex: 1 1 auto;
+}
+
+.filter-refreshing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.filter-refreshing-spinner {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: filter-refresh-spin 0.7s linear infinite;
+}
+
+@keyframes filter-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

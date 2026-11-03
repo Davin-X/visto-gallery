@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { CpuIcon, TrashIcon } from "../icons";
+import { RootPathMapping } from "./RootPathMapping";
 
 export function AdvancedPanel(props: {
   maxCacheSize: number;
@@ -12,6 +13,13 @@ export function AdvancedPanel(props: {
   deleting: boolean;
   onRebuild: () => void;
   rebuilding: boolean;
+  onCreateBackup: () => void;
+  onChooseRestore: () => void;
+  backupBusy: boolean;
+  restoring: boolean;
+  suggestedOldRoot: string | null;
+  onRootMappingApplied: () => void;
+  showNotice: (text: string) => void;
 }) {
   return (
     <>
@@ -104,6 +112,60 @@ export function AdvancedPanel(props: {
           </div>
         </div>
       </section>
+
+      <section className="settings-section">
+        <h2 className="settings-section-title">
+          <CpuIcon size={14} /> Catalog Backup
+        </h2>
+        <p className="settings-section-desc">
+          Back up albums, tags, ratings, Smart Albums, and library settings in
+          one versioned SQLite snapshot. Original media files are never copied
+          or modified.
+        </p>
+        <div className="settings-row">
+          <div className="settings-row-label">
+            <b>Save Catalog Backup…</b>
+            <span className="settings-row-desc">
+              Writes a validated snapshot that can be restored later
+            </span>
+          </div>
+          <div className="settings-row-control">
+            <button
+              className="quiet-button"
+              type="button"
+              onClick={props.onCreateBackup}
+              disabled={props.backupBusy || props.restoring}
+            >
+              {props.backupBusy ? "Saving…" : "Save Backup…"}
+            </button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div className="settings-row-label">
+            <b>Restore Catalog Backup…</b>
+            <span className="settings-row-desc">
+              Validates first, creates a pre-restore snapshot, and reports files
+              that are no longer at their saved paths
+            </span>
+          </div>
+          <div className="settings-row-control">
+            <button
+              className="danger-button"
+              type="button"
+              onClick={props.onChooseRestore}
+              disabled={props.backupBusy || props.restoring}
+            >
+              {props.restoring ? "Restoring…" : "Restore Backup…"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <RootPathMapping
+        suggestedOldRoot={props.suggestedOldRoot}
+        onApplied={props.onRootMappingApplied}
+        showNotice={props.showNotice}
+      />
 
       <section className="settings-section">
         <h2 className="settings-section-title">

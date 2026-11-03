@@ -266,6 +266,32 @@
   box-shadow: inset 0 0 0 1px var(--field-line);
 }
 
+/* A control that is deliberately unavailable should not look interactive. */
+.settings-row-unavailable {
+  align-items: start;
+  opacity: 0.82;
+}
+
+.settings-row-unavailable:hover,
+.settings-row-unavailable:focus-within {
+  background: transparent;
+  box-shadow: none;
+}
+
+.settings-unavailable {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
 .settings-row-label {
   display: grid;
   gap: 4px;
@@ -1826,4 +1852,71 @@
   .settings-row-control {
     min-width: 0;
   }
+}
+
+.settings-text-input {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.settings-text-input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
+.root-mapping-new {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.root-mapping-new .settings-text-input {
+  flex: 1 1 auto;
+}
+
+.root-mapping-preview {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.root-mapping-preview code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.root-mapping-preview pre {
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 11px;
+}
+
+.root-mapping-conflict {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--danger, #dc2626);
+  font-weight: 600;
+}
+
+.settings-section-desc {
+  margin: -4px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }

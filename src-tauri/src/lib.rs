@@ -155,11 +155,13 @@ pub fn run() {
             import_files,
             get_library_items,
             get_albums,
+            get_album_overviews,
             get_album_items,
             get_tags,
             get_item_thumbnail,
             watch_folder,
             unwatch_folder,
+            get_library_roots,
             get_library_folders,
             get_library_stats,
             remove_library_folder,
@@ -182,6 +184,18 @@ pub fn run() {
             rename_album,
             add_to_album,
             remove_from_album,
+            // Smart Albums
+            get_smart_albums,
+            create_smart_album,
+            rename_smart_album,
+            delete_smart_album,
+            get_smart_album_items,
+            // Catalog backup / restore
+            preview_root_path_mapping,
+            apply_root_path_mapping,
+            create_catalog_backup,
+            validate_catalog_backup,
+            restore_catalog_backup,
             // Metadata
             read_exif,
             backfill_metadata,
@@ -207,6 +221,7 @@ pub fn run() {
             // Finder
             write_finder_tags,
             read_finder_tags,
+            merge_finder_tags,
             // Settings
             get_settings,
             save_settings,

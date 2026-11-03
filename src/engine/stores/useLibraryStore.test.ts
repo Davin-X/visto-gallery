@@ -17,13 +17,44 @@ vi.mock("../commands/tauri", () => ({
       delete: vi.fn().mockResolvedValue(undefined),
       rename: vi.fn().mockResolvedValue(undefined),
       addItems: vi.fn().mockResolvedValue(undefined),
+      getOverviews: vi.fn().mockResolvedValue([]),
+      get: vi.fn().mockResolvedValue([]),
+      getTags: vi.fn().mockResolvedValue([]),
+      getItems: vi.fn().mockResolvedValue([]),
     },
-    library: { getItems: vi.fn().mockResolvedValue([]) },
+    library: {
+      getItems: vi.fn().mockResolvedValue({
+        items: [],
+        hasMore: false,
+        totalCount: 0,
+      }),
+      getFolders: vi.fn().mockResolvedValue([]),
+      getRoots: vi.fn().mockResolvedValue([]),
+    },
+    smartAlbums: {
+      get: vi.fn().mockResolvedValue([]),
+      create: vi.fn().mockResolvedValue({
+        id: "smart-1",
+        name: "Spring",
+        filter: {},
+        itemCount: 0,
+        createdAt: 1,
+        updatedAt: 1,
+      }),
+      rename: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+      getItems: vi.fn().mockResolvedValue({
+        items: [],
+        hasMore: false,
+        totalCount: 0,
+      }),
+    },
   },
   formatBytes: (n: number) => `${n} B`,
 }));
 
 import { useLibraryStore } from "../../engine/stores/useLibraryStore";
+import { tauri } from "../commands/tauri";
 import type { MediaItem } from "../../engine/types/media";
 
 function makeItem(
@@ -54,6 +85,7 @@ function makeItem(
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   useLibraryStore.setState(useLibraryStore.getInitialState());
 });
 
@@ -141,4 +173,172 @@ test("renameAlbum updates album name", async () => {
   });
   await useLibraryStore.getState().renameAlbum("album-1", "Vacation");
   expect(useLibraryStore.getState().albums[0].name).toBe("Vacation");
+});
+
+test("loadLibrary applies date filters to the backend query and uses album overviews", async () => {
+  vi.mocked(tauri.albums.getOverviews).mockResolvedValueOnce([
+    {
+      id: "album-1",
+      name: "Trip",
+      colorIndex: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      itemCount: 2,
+      coverItems: [],
+    },
+  ]);
+  useLibraryStore.setState({
+    dateFrom: 100,
+    dateTo: 200,
+    query: "trip",
+    sortBy: "modifiedAt",
+    sortOrder: "asc",
+  });
+  (window as any).__TAURI_INTERNALS__ = {};
+
+  await useLibraryStore.getState().loadLibrary();
+  delete (window as any).__TAURI_INTERNALS__;
+
+  expect(tauri.library.getItems).toHaveBeenCalledWith(
+    expect.objectContaining({
+      dateFrom: 100,
+      dateTo: 200,
+      query: "trip",
+      sortBy: "modifiedAt",
+      sortOrder: "asc",
+      limit: 250,
+    }),
+  );
+  expect(tauri.albums.getOverviews).toHaveBeenCalledTimes(1);
+  expect(tauri.albums.get).not.toHaveBeenCalled();
+  expect(useLibraryStore.getState().albumOverviews).toHaveLength(1);
+  expect(useLibraryStore.getState().albumOverviews[0].itemCount).toBe(2);
+});
+
+test("createSmartAlbum persists the current whitelisted filter", async () => {
+  useLibraryStore.setState({
+    filter: "Videos",
+    query: "mountain",
+    minRating: 3,
+    colorLabelFilter: "blue",
+    dateFrom: 100,
+    dateTo: 200,
+  });
+
+  await useLibraryStore.getState().createSmartAlbum("Mountains");
+
+  expect(tauri.smartAlbums.create).toHaveBeenCalledWith(
+    "Mountains",
+    expect.objectContaining({
+      kind: "video",
+      query: "mountain",
+      rating: 3,
+      colorLabel: "blue",
+      dateFrom: 100,
+      dateTo: 200,
+    }),
+  );
+  expect(useLibraryStore.getState().smartAlbums[0].id).toBe("smart-1");
+});
+
+test("openSmartAlbum applies the saved filter definition without arbitrary SQL", async () => {
+  useLibraryStore.setState({
+    smartAlbums: [
+      {
+        id: "smart-1",
+        name: "Blue mountains",
+        filter: {
+          kind: "photo",
+          query: "mountain",
+          rating: 4,
+          colorLabel: "blue",
+          dateFrom: 100,
+          dateTo: 200,
+          sourcePath: "/Photos",
+        },
+        itemCount: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+  });
+
+  await useLibraryStore.getState().openSmartAlbum("smart-1");
+
+  const state = useLibraryStore.getState();
+  expect(state.activeSmartAlbum).toBe("smart-1");
+  expect(state.filter).toBe("Photos");
+  expect(state.query).toBe("mountain");
+  expect(state.minRating).toBe(4);
+  expect(state.colorLabelFilter).toBe("blue");
+  expect(state.dateFrom).toBe(100);
+  expect(state.dateTo).toBe(200);
+  expect(state.activeSource).toBe("/Photos");
+  expect(state.activeAlbum).toBeNull();
+});
+
+test("clearFilters resets every refinement and reloads the library", async () => {
+  (window as any).__TAURI_INTERNALS__ = {};
+  useLibraryStore.setState({
+    filter: "Videos",
+    query: "mountain",
+    activeSource: "/Photos",
+    activeSmartAlbum: "smart-1",
+    minRating: 4,
+    colorLabelFilter: "blue",
+    cameraFilter: "Nikon Z8",
+    lensFilter: "Nikkor",
+    dateFrom: 100,
+    dateTo: 200,
+  });
+
+  useLibraryStore.getState().clearFilters();
+  await Promise.resolve();
+  delete (window as any).__TAURI_INTERNALS__;
+
+  const state = useLibraryStore.getState();
+  expect(state.filter).toBe("All");
+  expect(state.query).toBe("");
+  expect(state.activeSource).toBeNull();
+  expect(state.activeSmartAlbum).toBeNull();
+  expect(state.minRating).toBeNull();
+  expect(state.colorLabelFilter).toBeNull();
+  expect(state.cameraFilter).toBeNull();
+  expect(state.lensFilter).toBeNull();
+  expect(state.dateFrom).toBeNull();
+  expect(state.dateTo).toBeNull();
+});
+
+test("clearHiddenFilters resets only hidden-view refinements", () => {
+  useLibraryStore.setState({ hiddenFilter: "Videos", hiddenQuery: "clip" });
+
+  useLibraryStore.getState().clearHiddenFilters();
+
+  const state = useLibraryStore.getState();
+  expect(state.hiddenFilter).toBe("All");
+  expect(state.hiddenQuery).toBe("");
+});
+
+test("loadLibrary is non-blocking and shows a quiet refresh state instead", async () => {
+  let refreshingDuringCall = false;
+  let busyDuringCall = true;
+  let progressDuringCall = "unexpected";
+  vi.mocked(tauri.library.getItems).mockImplementationOnce(async () => {
+    const state = useLibraryStore.getState();
+    refreshingDuringCall = state.refreshingLibrary;
+    busyDuringCall = state.busy;
+    progressDuringCall = state.progress?.phase ?? "none";
+    return { items: [], hasMore: false, totalCount: 0 };
+  });
+  (window as any).__TAURI_INTERNALS__ = {};
+
+  await useLibraryStore.getState().loadLibrary();
+  delete (window as any).__TAURI_INTERNALS__;
+
+  expect(refreshingDuringCall).toBe(true);
+  expect(busyDuringCall).toBe(false);
+  expect(progressDuringCall).toBe("none");
+  expect(useLibraryStore.getState().refreshingLibrary).toBe(false);
+  expect(useLibraryStore.getState().busy).toBe(false);
+  expect(useLibraryStore.getState().progress).toBeNull();
 });

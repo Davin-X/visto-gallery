@@ -336,7 +336,7 @@ pub struct LibraryItemsPage {
     items: Vec<MediaItem>,
     has_more: bool,
     next_cursor: Option<String>,
-    total_count: i64,
+    pub(crate) total_count: i64,
 }
 
 fn cursor_value(item: &MediaItem, sort_by: &str) -> Value {
@@ -446,7 +446,7 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
     }
 }
 
-async fn get_library_items_page(
+pub(crate) async fn get_library_items_page(
     db: &SqlitePool,
     f: super::LibraryFilterDTO,
 ) -> Result<LibraryItemsPage, String> {
@@ -1160,8 +1160,22 @@ pub async fn watch_folder(
     let watch_path = path.clone();
     let mut watcher =
         notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-            if res.is_ok() {
-                let _ = app_handle.emit("folder-changed", &watch_path);
+            match res {
+                Ok(_) => {
+                    let _ = app_handle.emit("folder-changed", &watch_path);
+                }
+                Err(error) => {
+                    // A watcher that cannot deliver events must not fail
+                    // silently: the UI shows an actionable notice instead of
+                    // pretending auto-import is still running.
+                    let _ = app_handle.emit(
+                        "folder-watch-error",
+                        json!({
+                            "path": watch_path,
+                            "message": error.to_string(),
+                        }),
+                    );
+                }
             }
         })
         .map_err(|e| e.to_string())?;
@@ -1181,6 +1195,19 @@ pub async fn unwatch_folder(path: String, state: State<'_, AppState>) -> Result<
     let mut guard = state.watchers.lock().map_err(|e| e.to_string())?;
     guard.remove(&path);
     Ok(())
+}
+
+/// The explicitly registered library roots (not the inferred sidebar buckets).
+///
+/// Only these are safe to watch: inferred buckets are display groupings and
+/// may point at directories the user never added.
+#[tauri::command]
+pub async fn get_library_roots(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let db = super::get_db(&state)?;
+    sqlx::query_scalar("SELECT path FROM library_folders ORDER BY path ASC")
+        .fetch_all(&db)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Group a path that was imported before folder tracking existed.
@@ -1909,5 +1936,190 @@ mod pagination_tests {
             ["b"]
         );
         assert!(!second.has_more);
+    }
+}
+
+#[cfg(test)]
+mod filter_and_scale_tests {
+    use super::get_library_items_page;
+    use crate::commands::{load_album_overviews, LibraryFilterDTO};
+    use sqlx::sqlite::SqlitePoolOptions;
+    use sqlx::SqlitePool;
+
+    async fn filter_db() -> SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory filter database");
+        sqlx::query(
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
+        )
+        .execute(&db)
+        .await
+        .expect("create media table");
+        sqlx::query("CREATE TABLE tags (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
+            .execute(&db)
+            .await
+            .expect("create tags table");
+        sqlx::query("CREATE TABLE media_tags (media_id TEXT NOT NULL, tag_id TEXT NOT NULL)")
+            .execute(&db)
+            .await
+            .expect("create media tags table");
+        sqlx::query("CREATE TABLE albums (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, color_index INTEGER DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)")
+            .execute(&db)
+            .await
+            .expect("create albums table");
+        sqlx::query("CREATE TABLE album_items (album_id TEXT NOT NULL, media_id TEXT NOT NULL, added_at INTEGER NOT NULL)")
+            .execute(&db)
+            .await
+            .expect("create album items table");
+        db
+    }
+
+    async fn insert_item(
+        db: &SqlitePool,
+        id: &str,
+        kind: &str,
+        captured_at: Option<i64>,
+        modified_at: i64,
+        rating: Option<i64>,
+    ) {
+        sqlx::query(
+            "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, created_at, updated_at, rating) VALUES (?, ?, ?, 'jpg', ?, 1, ?, ?, 1, 1, ?)",
+        )
+        .bind(id)
+        .bind(format!("/tmp/{id}.jpg"))
+        .bind(format!("{id}.jpg"))
+        .bind(kind)
+        .bind(modified_at)
+        .bind(captured_at)
+        .bind(rating)
+        .execute(db)
+        .await
+        .expect("insert media row");
+    }
+
+    #[tokio::test]
+    async fn date_range_is_inclusive_and_falls_back_to_modified_at() {
+        let db = filter_db().await;
+        insert_item(&db, "captured", "photo", Some(100), 1, None).await;
+        insert_item(&db, "fallback", "photo", None, 100, None).await;
+        insert_item(&db, "outside", "photo", Some(101), 1, None).await;
+
+        let page = get_library_items_page(
+            &db,
+            LibraryFilterDTO {
+                date_from: Some(100),
+                date_to: Some(100),
+                limit: Some(10),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("read date range");
+
+        let mut ids: Vec<&str> = page.items.iter().map(|item| item.id.as_str()).collect();
+        ids.sort();
+        assert_eq!(ids, ["captured", "fallback"]);
+        assert_eq!(page.total_count, 2);
+    }
+
+    #[tokio::test]
+    async fn date_range_composes_with_kind_and_rating() {
+        let db = filter_db().await;
+        insert_item(&db, "photo-5", "photo", Some(200), 1, Some(5)).await;
+        insert_item(&db, "photo-2", "photo", Some(200), 1, Some(2)).await;
+        insert_item(&db, "raw-5", "raw", Some(200), 1, Some(5)).await;
+        insert_item(&db, "photo-old", "photo", Some(100), 1, Some(5)).await;
+
+        let page = get_library_items_page(
+            &db,
+            LibraryFilterDTO {
+                kind: Some("photo".to_string()),
+                rating: Some(3),
+                date_from: Some(150),
+                date_to: Some(250),
+                limit: Some(10),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("read composed filter");
+
+        assert_eq!(
+            page.items
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            ["photo-5"]
+        );
+    }
+
+    /// Not part of the default suite; run with:
+    /// `cargo test ten_thousand_item_page_and_album_overview -- --ignored --nocapture`
+    #[tokio::test]
+    #[ignore = "10k-item benchmark; run explicitly and record the output"]
+    async fn ten_thousand_item_page_and_album_overview_are_bounded() {
+        let db = filter_db().await;
+        sqlx::query("INSERT INTO albums (id, name, created_at, updated_at) VALUES ('album', 'Everything', 1, 1)")
+            .execute(&db)
+            .await
+            .expect("insert album");
+        let mut tx = db.begin().await.expect("begin seed transaction");
+        for index in 0..10_000_i64 {
+            sqlx::query(
+                "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, created_at, updated_at, rating) VALUES (?, ?, ?, 'jpg', 'photo', ?, ?, ?, 1, 1, ?)",
+            )
+            .bind(format!("m{index}"))
+            .bind(format!("/tmp/m{index}.jpg"))
+            .bind(format!("m{index}.jpg"))
+            .bind(index)
+            .bind(1_700_000_000_000_i64 + index)
+            .bind(1_700_000_000_000_i64 + index)
+            .bind(index % 6)
+            .execute(&mut *tx)
+            .await
+            .expect("seed media row");
+            sqlx::query(
+                "INSERT INTO album_items (album_id, media_id, added_at) VALUES ('album', ?, 1)",
+            )
+            .bind(format!("m{index}"))
+            .execute(&mut *tx)
+            .await
+            .expect("seed album row");
+        }
+        tx.commit().await.expect("commit seed transaction");
+
+        let first_page_started = std::time::Instant::now();
+        let first = get_library_items_page(
+            &db,
+            LibraryFilterDTO {
+                limit: Some(250),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("first page");
+        let first_page_ms = first_page_started.elapsed().as_millis();
+
+        let overview_started = std::time::Instant::now();
+        let overview = load_album_overviews(&db).await.expect("album overview");
+        let overview_ms = overview_started.elapsed().as_millis();
+
+        eprintln!(
+            "10k benchmark: first-page items={} total={} page={}ms; album-overviews={} covers={} total={}ms",
+            first.items.len(),
+            first.total_count,
+            first_page_ms,
+            overview.len(),
+            overview.first().map(|album| album.cover_items.len()).unwrap_or(0),
+            overview_ms,
+        );
+        assert_eq!(first.items.len(), 250);
+        assert_eq!(first.total_count, 10_000);
+        assert_eq!(overview.len(), 1);
+        assert_eq!(overview[0].item_count, 10_000);
+        assert!(overview[0].cover_items.len() <= 4);
     }
 }
