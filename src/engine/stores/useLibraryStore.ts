@@ -253,10 +253,6 @@ function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
   };
 }
 
-export function resetSortedItemsCache(): void {
-  // No-op: sort cache is now per-store-instance in state.
-}
-
 function getSortedItems(
   state: LibraryState,
   items: MediaItem[],

@@ -109,19 +109,6 @@ pub struct ExifData {
 }
 
 #[allow(dead_code)]
-#[derive(Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct PartialExifData {
-    pub captured_at: Option<i64>,
-    pub camera: Option<String>,
-    pub lens: Option<String>,
-    pub exposure: Option<String>,
-    pub iso: Option<i32>,
-    pub latitude: Option<f64>,
-    pub longitude: Option<f64>,
-}
-
-#[allow(dead_code)]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderRequest {
