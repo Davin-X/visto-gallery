@@ -103,6 +103,9 @@ pub async fn save_settings(
     if let Some(v) = patch.stack_live_photos {
         settings.stack_live_photos = v;
     }
+    if let Some(v) = patch.check_for_updates_on_launch {
+        settings.check_for_updates_on_launch = v;
+    }
     if let Some(v) = patch.max_cache_size_gb {
         settings.max_cache_size_gb = v;
     }
@@ -153,6 +156,10 @@ pub async fn save_settings(
         ("pair_raw_jpeg", settings.pair_raw_jpeg.to_string()),
         ("stack_bursts", settings.stack_bursts.to_string()),
         ("stack_live_photos", settings.stack_live_photos.to_string()),
+        (
+            "check_for_updates_on_launch",
+            settings.check_for_updates_on_launch.to_string(),
+        ),
         ("max_cache_size_gb", settings.max_cache_size_gb.to_string()),
         ("thumbnail_quality", settings.thumbnail_quality.to_string()),
         (
