@@ -19,13 +19,7 @@ interface ContextMenuProps {
   onClose: () => void;
 }
 
-function ContextMenuContent({
-  items,
-  onClose,
-}: {
-  items: ContextMenuItem[];
-  onClose: () => void;
-}) {
+function ContextMenuContent({ items, onClose }: { items: ContextMenuItem[]; onClose: () => void }) {
   const [submenuOpen, setSubmenuOpen] = useState<{
     index: number;
     items: ContextMenuItem[];
@@ -49,9 +43,7 @@ function ContextMenuContent({
       if (e.key === "ArrowLeft" && submenuOpen) {
         setSubmenuOpen(null);
         (
-          menuRef.current?.querySelector(
-            `[data-index="${submenuOpen.index}"]`,
-          ) as HTMLElement
+          menuRef.current?.querySelector(`[data-index="${submenuOpen.index}"]`) as HTMLElement
         )?.focus();
       }
     };
@@ -75,12 +67,8 @@ function ContextMenuContent({
       role="menu"
       tabIndex={-1}
       onKeyDown={(e) => {
-        const items = menuRef.current?.querySelectorAll(
-          '[role="menuitem"]:not([disabled])',
-        );
-        const current = Array.from(items || []).findIndex(
-          (el) => el === document.activeElement,
-        );
+        const items = menuRef.current?.querySelectorAll('[role="menuitem"]:not([disabled])');
+        const current = Array.from(items || []).findIndex((el) => el === document.activeElement);
         const last = (items?.length || 0) - 1;
 
         if (current === -1) {
@@ -115,13 +103,7 @@ function ContextMenuContent({
     >
       {(items || []).map((item, index) => {
         if (item.divider) {
-          return (
-            <div
-              key={index}
-              className="context-menu-separator"
-              role="separator"
-            />
-          );
+          return <div key={index} className="context-menu-separator" role="separator" />;
         }
 
         if (item.submenu) {
@@ -135,10 +117,7 @@ function ContextMenuContent({
                 data-index={index}
                 className={`context-menu-item ${item.disabled ? "disabled" : ""}`}
                 disabled={item.disabled}
-                onClick={() =>
-                  !item.disabled &&
-                  setSubmenuOpen({ index, items: item.submenu! })
-                }
+                onClick={() => !item.disabled && setSubmenuOpen({ index, items: item.submenu! })}
                 onMouseEnter={() => {
                   if (!item.disabled) setSubmenuOpen({ index, items: item.submenu! });
                 }}
@@ -151,9 +130,7 @@ function ContextMenuContent({
               >
                 <span className="context-menu-icon">{item.icon || ""}</span>
                 <span>{item.label}</span>
-                {item.shortcut && (
-                  <span className="context-menu-shortcut">{item.shortcut}</span>
-                )}
+                {item.shortcut && <span className="context-menu-shortcut">{item.shortcut}</span>}
                 <span className="context-menu-submenu-indicator">›</span>
               </button>
               {submenuOpen?.index === index && (
@@ -178,13 +155,9 @@ function ContextMenuContent({
             disabled={item.disabled}
             onClick={() => handleItemClick(item)}
           >
-            {item.icon && (
-              <span className="context-menu-icon">{item.icon}</span>
-            )}
+            {item.icon && <span className="context-menu-icon">{item.icon}</span>}
             <span>{item.label}</span>
-            {item.shortcut && (
-              <span className="context-menu-shortcut">{item.shortcut}</span>
-            )}
+            {item.shortcut && <span className="context-menu-shortcut">{item.shortcut}</span>}
           </button>
         );
       })}
@@ -214,9 +187,27 @@ function getPortalRoot(): HTMLElement {
 }
 
 export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
-  if (typeof window === "undefined") return null;
+  const root = typeof window !== "undefined" ? getPortalRoot() : null;
 
-  const root = getPortalRoot();
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!root!.contains(e.target as Node)) onClose();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose, root]);
+
+  if (typeof window === "undefined") return null;
 
   // Compute adjusted position BEFORE render to avoid clipping
   const vw = window.innerWidth;
@@ -236,23 +227,6 @@ export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
   if (adjustedX < padding) adjustedX = padding;
   if (adjustedY < padding) adjustedY = padding;
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (!root.contains(e.target as Node)) onClose();
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onClose, root]);
-
   const content = <ContextMenuContent items={items} onClose={onClose} />;
 
   return createPortal(
@@ -267,7 +241,7 @@ export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
     >
       <div style={{ pointerEvents: "auto" }}>{content}</div>
     </div>,
-    root,
+    root!,
   );
 }
 
@@ -291,8 +265,6 @@ export function useContextMenu() {
     menu,
     open,
     close,
-    ContextMenu: menu && (
-      <ContextMenu items={menu.items} x={menu.x} y={menu.y} onClose={close} />
-    ),
+    ContextMenu: menu && <ContextMenu items={menu.items} x={menu.x} y={menu.y} onClose={close} />,
   };
 }

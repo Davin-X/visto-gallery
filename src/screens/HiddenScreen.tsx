@@ -49,8 +49,7 @@ function HiddenScreen(props: HiddenScreenProps) {
       setPendingReveal({ kind: "viewer", id });
     };
     window.addEventListener("mac-gallery:open-hidden", onOpenHidden);
-    return () =>
-      window.removeEventListener("mac-gallery:open-hidden", onOpenHidden);
+    return () => window.removeEventListener("mac-gallery:open-hidden", onOpenHidden);
   }, []);
 
   useEffect(() => {
@@ -66,16 +65,12 @@ function HiddenScreen(props: HiddenScreenProps) {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [pendingReveal]);
 
-  const requestViewer = (id?: string) =>
-    setPendingReveal({ kind: "viewer", id });
-  const requestEdit = (item: MediaItem) =>
-    setPendingReveal({ kind: "edit", item });
+  const requestViewer = (id?: string) => setPendingReveal({ kind: "viewer", id });
+  const requestEdit = (item: MediaItem) => setPendingReveal({ kind: "edit", item });
 
   const requestSlideshow = (ids?: string[]) => {
     const selection = ids && ids.length ? new Set(ids) : null;
-    const scope = selection
-      ? items.filter((item) => selection.has(item.id))
-      : items;
+    const scope = selection ? items.filter((item) => selection.has(item.id)) : items;
     if (scope.length === 0) {
       library.showNotice("Add photos or videos to start a slideshow.");
       return;
@@ -90,8 +85,7 @@ function HiddenScreen(props: HiddenScreenProps) {
     if (request.kind === "slideshow") {
       const ids = new Set(request.ids);
       const scope = library.hiddenItems.filter((item) => ids.has(item.id));
-      if (scope.length)
-        props.onPlaySlideshow?.(scope.map((item: any) => item.id));
+      if (scope.length) props.onPlaySlideshow?.(scope.map((item: any) => item.id));
       return;
     }
     if (request.kind === "edit") {
@@ -127,18 +121,12 @@ function HiddenScreen(props: HiddenScreenProps) {
 
   const toggleSelectAll = () => {
     const allSelected =
-      items.length > 0 &&
-      items.every((item) => library.selectedIds.includes(item.id));
+      items.length > 0 && items.every((item) => library.selectedIds.includes(item.id));
     if (allSelected) {
       const visible = new Set(items.map((item) => item.id));
-      library.setSelectedIds(
-        library.selectedIds.filter((id) => !visible.has(id)),
-      );
+      library.setSelectedIds(library.selectedIds.filter((id) => !visible.has(id)));
     } else {
-      library.setSelectedIds([
-        ...library.selectedIds,
-        ...items.map((item) => item.id),
-      ]);
+      library.setSelectedIds([...library.selectedIds, ...items.map((item) => item.id)]);
     }
   };
 
@@ -234,19 +222,10 @@ function HiddenScreen(props: HiddenScreenProps) {
             </div>
             <p className="dialog-body">{revealCopy.body}</p>
             <div className="dialog-actions">
-              <button
-                className="quiet-button"
-                type="button"
-                onClick={() => setPendingReveal(null)}
-              >
+              <button className="quiet-button" type="button" onClick={() => setPendingReveal(null)}>
                 Cancel
               </button>
-              <button
-                className="primary-button"
-                type="button"
-                autoFocus
-                onClick={confirmReveal}
-              >
+              <button className="primary-button" type="button" autoFocus onClick={confirmReveal}>
                 {revealCopy.action}
               </button>
             </div>

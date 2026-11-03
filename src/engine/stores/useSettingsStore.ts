@@ -69,10 +69,7 @@ interface SettingsState extends AppSettings {
 
   // Actions
   hydrate: () => Promise<void>;
-  update: <K extends keyof AppSettings>(
-    key: K,
-    value: AppSettings[K],
-  ) => Promise<void>;
+  update: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>;
   updateMany: (partial: Partial<AppSettings>) => Promise<void>;
   reset: () => Promise<void>;
 }
@@ -90,9 +87,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       // supports. Keep persisted preferences safe when upgrading.
       const savedLayout = (saved as Partial<AppSettings>)?.defaultLayout;
       const defaultLayout =
-        savedLayout === "details" || savedLayout === "timeline"
-          ? savedLayout
-          : "grid";
+        savedLayout === "details" || savedLayout === "timeline" ? savedLayout : "grid";
       set({ ...saved, defaultLayout, _hydrated: true, _loading: false });
     } catch {
       // Tauri not available (web preview) - use persisted or defaults
@@ -100,17 +95,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     }
   },
 
-  update: async (
-    key: keyof AppSettings,
-    value: AppSettings[keyof AppSettings],
-  ) => {
+  update: async (key: keyof AppSettings, value: AppSettings[keyof AppSettings]) => {
     if (key === "sidebarWidth") {
       // Hard clamp so the layout stays within the bounds the CSS was authored
       // for (180px - 360px).
-      value = Math.min(
-        360,
-        Math.max(180, Number(value) || 220),
-      ) as AppSettings["sidebarWidth"];
+      value = Math.min(360, Math.max(180, Number(value) || 220)) as AppSettings["sidebarWidth"];
     }
     const patch: Partial<AppSettings> = {
       [key]: value,
@@ -125,10 +114,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if ("sidebarWidth" in partial) {
       // Hard clamp so the layout stays within the bounds the CSS was
       // authored for (180px - 360px).
-      next.sidebarWidth = Math.min(
-        360,
-        Math.max(180, Number(partial.sidebarWidth) || 220),
-      );
+      next.sidebarWidth = Math.min(360, Math.max(180, Number(partial.sidebarWidth) || 220));
     }
     // Optimistic update with the fully-clamped merged state.
     set(next);
@@ -170,15 +156,12 @@ const applyThemeCache = new Map<
 >();
 
 // Apply theme to the native app frame.
-export function applyTheme(
-  settings: Pick<AppSettings, "appearance" | "accentColor">,
-) {
+export function applyTheme(settings: Pick<AppSettings, "appearance" | "accentColor">) {
   const frame = document.querySelector<HTMLElement>(".app-frame");
   if (!frame) return;
   const isDark =
     settings.appearance === "dark" ||
-    (settings.appearance === "system" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches);
+    (settings.appearance === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   frame.classList.toggle("dark", isDark);
   const base = resolveAccent(settings.accentColor, isDark);
@@ -191,12 +174,7 @@ export function applyTheme(
   if (!tokens) {
     const toward = isDark ? "#ffffff" : "#000000";
     const soft = mixColors(base, surface, 0.88);
-    const text = accentTextFor(
-      base,
-      soft,
-      isDark ? "#ffffff" : "#000000",
-      surface,
-    );
+    const text = accentTextFor(base, soft, isDark ? "#ffffff" : "#000000", surface);
 
     tokens = {
       accent: base,
@@ -245,12 +223,13 @@ export const ACCENT_PALETTE: {
 
 // Resolve a single accent into its light / dark surface palette value.
 function resolveAccent(accent: string, isDark: boolean): string {
-  const palette = ACCENT_PALETTE.reduce<
-    Record<string, { light: string; dark: string }>
-  >((acc, entry) => {
-    acc[entry.id] = { light: entry.light, dark: entry.dark };
-    return acc;
-  }, {});
+  const palette = ACCENT_PALETTE.reduce<Record<string, { light: string; dark: string }>>(
+    (acc, entry) => {
+      acc[entry.id] = { light: entry.light, dark: entry.dark };
+      return acc;
+    },
+    {},
+  );
   const entry = palette[accent] ?? palette.blue;
   return isDark ? entry.dark : entry.light;
 }
@@ -305,12 +284,7 @@ function parseColor(value: string): [number, number, number] {
 // A binary search is used because contrast is monotonic in the blend ratio, so
 // the smallest ratio that satisfies both bounds is the one that keeps the
 // accent hue as visible as possible.
-function accentTextFor(
-  base: string,
-  soft: string,
-  toward: string,
-  surface: string,
-): string {
+function accentTextFor(base: string, soft: string, toward: string, surface: string): string {
   const target = 4.5;
   const baseRgb = parseColor(base);
   const softRgb = parseColor(soft);
@@ -318,8 +292,7 @@ function accentTextFor(
   const towardRgb = parseColor(toward);
 
   const ok = (c: [number, number, number]) =>
-    contrastRatio(c, surfaceRgb) >= target &&
-    contrastRatio(c, softRgb) >= target;
+    contrastRatio(c, surfaceRgb) >= target && contrastRatio(c, softRgb) >= target;
 
   // Already good as-is (common in dark mode, where the palette is pastel).
   if (ok(baseRgb)) return formatRgb(baseRgb);
@@ -356,17 +329,10 @@ function relativeLuminance(rgb: [number, number, number]): number {
     const c = v / 255;
     return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
   };
-  return (
-    0.2126 * channel(rgb[0]) +
-    0.7152 * channel(rgb[1]) +
-    0.0722 * channel(rgb[2])
-  );
+  return 0.2126 * channel(rgb[0]) + 0.7152 * channel(rgb[1]) + 0.0722 * channel(rgb[2]);
 }
 
-function contrastRatio(
-  a: [number, number, number],
-  b: [number, number, number],
-): number {
+function contrastRatio(a: [number, number, number], b: [number, number, number]): number {
   const la = relativeLuminance(a);
   const lb = relativeLuminance(b);
   const hi = Math.max(la, lb);

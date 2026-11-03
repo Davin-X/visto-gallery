@@ -11,9 +11,7 @@ vi.mock("../commands/tauri", () => ({
   tauri: {
     items: { toggleFavorite: vi.fn().mockResolvedValue(undefined) },
     albums: {
-      create: vi
-        .fn()
-        .mockResolvedValue({ id: "album-1", name: "Trip", itemCount: 0 }),
+      create: vi.fn().mockResolvedValue({ id: "album-1", name: "Trip", itemCount: 0 }),
       delete: vi.fn().mockResolvedValue(undefined),
       rename: vi.fn().mockResolvedValue(undefined),
       addItems: vi.fn().mockResolvedValue(undefined),
@@ -94,15 +92,10 @@ test("setFilter narrows visible items", () => {
   const b = makeItem("b", "clip.mp4", false, "video");
   useLibraryStore.setState({ items: [a, b] });
   useLibraryStore.getState().refreshDerived();
-  expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual([
-    "a",
-    "b",
-  ]);
+  expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual(["a", "b"]);
 
   useLibraryStore.getState().setFilter("Videos");
-  expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual([
-    "b",
-  ]);
+  expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual(["b"]);
 });
 
 test("setQuery narrows visible items", () => {
@@ -112,9 +105,7 @@ test("setQuery narrows visible items", () => {
   useLibraryStore.getState().refreshDerived();
 
   useLibraryStore.getState().setQuery("sunset");
-  expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual([
-    "a",
-  ]);
+  expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual(["a"]);
 });
 
 test("viewer filmstrip follows media category and the active browsing scope", () => {
@@ -139,9 +130,7 @@ test("viewer filmstrip follows media category and the active browsing scope", ()
 
   useLibraryStore.setState({ filter: "Videos" });
   useLibraryStore.getState().refreshDerived();
-  expect(useLibraryStore.getState().viewerItems.map((item) => item.id)).toEqual([
-    "video",
-  ]);
+  expect(useLibraryStore.getState().viewerItems.map((item) => item.id)).toEqual(["video"]);
 
   useLibraryStore.setState({
     filter: "All",
@@ -149,9 +138,7 @@ test("viewer filmstrip follows media category and the active browsing scope", ()
     query: "trip",
   });
   useLibraryStore.getState().refreshDerived();
-  expect(useLibraryStore.getState().viewerItems.map((item) => item.id)).toEqual([
-    "album-photo",
-  ]);
+  expect(useLibraryStore.getState().viewerItems.map((item) => item.id)).toEqual(["album-photo"]);
 });
 
 test("photo viewer navigation loads more pages and skips videos before wrapping", async () => {
@@ -202,9 +189,7 @@ test("setQuery searches camera and lens metadata", () => {
   useLibraryStore.getState().refreshDerived();
 
   useLibraryStore.getState().setQuery("Nikkor");
-  expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual([
-    "b",
-  ]);
+  expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual(["b"]);
 });
 
 test("toggleFavorite updates item and derived state", async () => {

@@ -10,10 +10,7 @@ test("keyboard focus enters the menu and moves with arrows, Home and End", () =>
         x={20}
         y={20}
         onClose={vi.fn()}
-        items={[
-          { label: "Open" },
-          { label: "Delete", danger: true },
-        ]}
+        items={[{ label: "Open" }, { label: "Delete", danger: true }]}
       />
     </div>,
   );

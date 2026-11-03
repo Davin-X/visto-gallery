@@ -4,9 +4,10 @@ import { copyTagsToFinder, dedupeTagNames } from "./finderTags";
 
 describe("Finder tag merge", () => {
   test("deduplicates case-insensitively while keeping the first spelling", () => {
-    expect(
-      dedupeTagNames(["Travel", "travel", "  Family ", "", "FAMILY"]),
-    ).toEqual(["Travel", "Family"]);
+    expect(dedupeTagNames(["Travel", "travel", "  Family ", "", "FAMILY"])).toEqual([
+      "Travel",
+      "Family",
+    ]);
   });
 
   test("merges app tags for every file and reports per-file failures", async () => {
@@ -28,13 +29,8 @@ describe("Finder tag merge", () => {
     expect(merge).toHaveBeenCalledWith("/a.jpg", ["Travel"]);
     expect(result.updated).toBe(1);
     expect(result.skipped).toBe(1);
-    expect(result.failed).toEqual([
-      { path: "/bad.jpg", error: "Operation not permitted" },
-    ]);
-    expect(result.tagsByPath["/a.jpg"]).toEqual([
-      "Travel",
-      "Existing Finder Tag",
-    ]);
+    expect(result.failed).toEqual([{ path: "/bad.jpg", error: "Operation not permitted" }]);
+    expect(result.tagsByPath["/a.jpg"]).toEqual(["Travel", "Existing Finder Tag"]);
   });
 
   test("bounds concurrent Finder writes", async () => {

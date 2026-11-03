@@ -42,8 +42,7 @@ function clearTimer() {
 // slideshow can never stack intervals that outlive the overlay.
 function schedule() {
   clearTimer();
-  const { isOpen, playing, items, index, interval } =
-    useSlideshowStore.getState();
+  const { isOpen, playing, items, index, interval } = useSlideshowStore.getState();
   // Videos advance when playback ends; a fixed slide timer would cut off long
   // clips and skip short ones.
   if (items[index]?.kind === "video") return;
@@ -73,9 +72,7 @@ export const useSlideshowStore = create<SlideshowState>()(
 
       open: (items, startId) => {
         if (items.length === 0) return;
-        const start = startId
-          ? items.findIndex((item) => item.id === startId)
-          : -1;
+        const start = startId ? items.findIndex((item) => item.id === startId) : -1;
         set({
           isOpen: true,
           items,
@@ -107,8 +104,7 @@ export const useSlideshowStore = create<SlideshowState>()(
         }
         let nextIndex = index;
         if (shuffle) {
-          while (nextIndex === index)
-            nextIndex = Math.floor(Math.random() * items.length);
+          while (nextIndex === index) nextIndex = Math.floor(Math.random() * items.length);
         } else {
           nextIndex = (index + 1) % items.length;
         }

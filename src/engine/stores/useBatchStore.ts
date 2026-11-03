@@ -61,8 +61,7 @@ export const useBatchStore = create<BatchState>()(
       setOutputFolder: (outputFolder) => set({ outputFolder, error: null }),
       setPattern: (pattern) => set({ pattern }),
       setFormat: (format) => set({ format }),
-      setQuality: (quality) =>
-        set({ quality: Math.max(1, Math.min(100, quality)) }),
+      setQuality: (quality) => set({ quality: Math.max(1, Math.min(100, quality)) }),
       setStripMetadata: (stripMetadata) => set({ stripMetadata }),
       setMaxDimension: (maxDimension) => set({ maxDimension }),
       setStep: (step) => set({ step }),
@@ -71,14 +70,7 @@ export const useBatchStore = create<BatchState>()(
         const library = useLibraryStore.getState();
         const selected = new Set(library.selectedIds);
         const items = library.items.filter((item) => selected.has(item.id));
-        const {
-          outputFolder,
-          pattern,
-          format,
-          quality,
-          stripMetadata,
-          maxDimension,
-        } = get();
+        const { outputFolder, pattern, format, quality, stripMetadata, maxDimension } = get();
 
         if (items.length === 0) {
           set({

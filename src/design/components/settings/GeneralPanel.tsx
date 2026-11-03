@@ -51,14 +51,9 @@ export function GeneralPanel(props: {
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Sidebar Width</b>
-            <span className="settings-row-desc">
-              Adjust the navigation sidebar size
-            </span>
+            <span className="settings-row-desc">Adjust the navigation sidebar size</span>
           </div>
-          <div
-            className="settings-row-control"
-            style={{ alignItems: "center" }}
-          >
+          <div className="settings-row-control" style={{ alignItems: "center" }}>
             <input
               type="range"
               className="settings-slider"
@@ -71,14 +66,10 @@ export function GeneralPanel(props: {
               max={360}
               step={4}
               value={props.sidebarWidth}
-              onChange={(e) =>
-                props.onSidebarWidthChange(Number(e.target.value))
-              }
+              onChange={(e) => props.onSidebarWidthChange(Number(e.target.value))}
               aria-label="Sidebar width"
             />
-            <span className="settings-slider-value">
-              {props.sidebarWidth}px
-            </span>
+            <span className="settings-slider-value">{props.sidebarWidth}px</span>
           </div>
         </div>
         <div className="settings-row">
@@ -91,9 +82,7 @@ export function GeneralPanel(props: {
                 type="checkbox"
                 aria-label="Show file extensions"
                 checked={props.showExtensions}
-                onChange={(e) =>
-                  props.onChange("showExtensions", e.target.checked)
-                }
+                onChange={(e) => props.onChange("showExtensions", e.target.checked)}
               />
               <span className="toggle-track" />
             </label>
@@ -102,9 +91,7 @@ export function GeneralPanel(props: {
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Animate Transitions</b>
-            <span className="settings-row-desc">
-              Smooth animations for navigation and zoom
-            </span>
+            <span className="settings-row-desc">Smooth animations for navigation and zoom</span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
@@ -112,9 +99,7 @@ export function GeneralPanel(props: {
                 type="checkbox"
                 aria-label="Animate transitions"
                 checked={props.animateTransitions}
-                onChange={(e) =>
-                  props.onChange("animateTransitions", e.target.checked)
-                }
+                onChange={(e) => props.onChange("animateTransitions", e.target.checked)}
               />
               <span className="toggle-track" />
             </label>
@@ -148,9 +133,7 @@ export function GeneralPanel(props: {
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Open Last Library Folder</b>
-            <span className="settings-row-desc">
-              Automatically load the last opened folder
-            </span>
+            <span className="settings-row-desc">Automatically load the last opened folder</span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
@@ -158,9 +141,7 @@ export function GeneralPanel(props: {
                 type="checkbox"
                 aria-label="Open last library folder"
                 checked={props.openLastFolder}
-                onChange={(e) =>
-                  props.onChange("openLastFolder", e.target.checked)
-                }
+                onChange={(e) => props.onChange("openLastFolder", e.target.checked)}
               />
               <span className="toggle-track" />
             </label>
@@ -179,9 +160,7 @@ export function GeneralPanel(props: {
                 type="checkbox"
                 aria-label="Restore window state"
                 checked={props.restoreWindow}
-                onChange={(e) =>
-                  props.onChange("restoreWindowState", e.target.checked)
-                }
+                onChange={(e) => props.onChange("restoreWindowState", e.target.checked)}
               />
               <span className="toggle-track" />
             </label>

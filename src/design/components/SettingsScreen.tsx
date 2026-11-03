@@ -64,8 +64,7 @@ export function SettingsScreen(props: {
   // Which accent variant (light/dark) is live, so the swatches preview the
   // color that will actually be applied.
   const systemDark = useSystemDark();
-  const isDark =
-    appearance === "dark" || (appearance === "system" && systemDark);
+  const isDark = appearance === "dark" || (appearance === "system" && systemDark);
   const defaultLayout = useDefaultLayout();
   const autoImport = useSettingsStore((s) => s.autoImport);
   const pairRawJpeg = useSettingsStore((s) => s.pairRawJpeg);
@@ -85,9 +84,7 @@ export function SettingsScreen(props: {
   const thumbnailQuality = useSettingsStore((s) => s.thumbnailQuality);
   const debugLogging = useSettingsStore((s) => s.enableDebugLogging);
   const showNativeWarnings = useSettingsStore((s) => s.showNativeLimitWarnings);
-  const checkForUpdatesOnLaunch = useSettingsStore(
-    (s) => s.checkForUpdatesOnLaunch,
-  );
+  const checkForUpdatesOnLaunch = useSettingsStore((s) => s.checkForUpdatesOnLaunch);
 
   const update = useSettingsStore((s) => s.update);
   const updateMany = useSettingsStore((s) => s.updateMany);
@@ -113,9 +110,7 @@ export function SettingsScreen(props: {
     try {
       await tauri.library.deleteDatabase();
       await loadLibrary();
-      showNotice(
-        "Library database deleted. Original files were left untouched.",
-      );
+      showNotice("Library database deleted. Original files were left untouched.");
     } catch (e) {
       showNotice(
         `Could not delete the library database: ${e instanceof Error ? e.message : String(e)}`,
@@ -139,13 +134,9 @@ export function SettingsScreen(props: {
         await tauri.library.scan(folder.path, true);
       }
       await loadLibrary();
-      showNotice(
-        `Rebuilt ${folders.length} folder${folders.length === 1 ? "" : "s"}.`,
-      );
+      showNotice(`Rebuilt ${folders.length} folder${folders.length === 1 ? "" : "s"}.`);
     } catch (e) {
-      showNotice(
-        `Rebuild failed: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      showNotice(`Rebuild failed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setRebuilding(false);
     }
@@ -302,18 +293,12 @@ export function SettingsScreen(props: {
         <div>
           <p className="eyebrow">PREFERENCES</p>
           <h1>Settings</h1>
-          <p className="page-subtitle">
-            Customize VistoGallery to match your workflow.
-          </p>
+          <p className="page-subtitle">Customize VistoGallery to match your workflow.</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div
-        className="settings-tabs"
-        role="tablist"
-        aria-label="Settings categories"
-      >
+      <div className="settings-tabs" role="tablist" aria-label="Settings categories">
         {TABS.map((tab, index) => (
           <button
             key={tab.id}
@@ -385,10 +370,7 @@ export function SettingsScreen(props: {
           />
         )}
         {activeTab === "privacy" && (
-          <PrivacyPanel
-            checkForUpdatesOnLaunch={checkForUpdatesOnLaunch}
-            onChange={update}
-          />
+          <PrivacyPanel checkForUpdatesOnLaunch={checkForUpdatesOnLaunch} onChange={update} />
         )}
         {activeTab === "advanced" && (
           <AdvancedPanel
@@ -415,10 +397,7 @@ export function SettingsScreen(props: {
 
       {/* Confirmation Dialogs */}
       {showResetConfirm && (
-        <div
-          className="dialog-backdrop"
-          onClick={() => setShowResetConfirm(false)}
-        >
+        <div className="dialog-backdrop" onClick={() => setShowResetConfirm(false)}>
           <div
             ref={resetDialogRef}
             className="album-dialog confirm-dialog"
@@ -431,8 +410,8 @@ export function SettingsScreen(props: {
               </div>
             </div>
             <p className="dialog-body">
-              This will restore all preferences to their defaults. Your library,
-              albums, and tags will not be affected.
+              This will restore all preferences to their defaults. Your library, albums, and tags
+              will not be affected.
             </p>
             <div className="dialog-actions">
               <button
@@ -442,11 +421,7 @@ export function SettingsScreen(props: {
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                className="danger-button"
-                onClick={handleResetSettings}
-              >
+              <button type="button" className="danger-button" onClick={handleResetSettings}>
                 Reset
               </button>
             </div>
@@ -472,14 +447,12 @@ export function SettingsScreen(props: {
               </div>
             </div>
             <p className="dialog-body">
-              This backup contains{" "}
-              <b>{pendingRestore.info.itemCount.toLocaleString()} items</b>,{" "}
+              This backup contains <b>{pendingRestore.info.itemCount.toLocaleString()} items</b>,{" "}
               {pendingRestore.info.albumCount.toLocaleString()} albums, and{" "}
-              {pendingRestore.info.tagCount.toLocaleString()} tags, created with
-              app version {pendingRestore.info.appVersion}. Restoring replaces
-              the current catalog organization. A pre-restore snapshot is
-              written automatically, and <b>original media files are never
-              modified</b>.
+              {pendingRestore.info.tagCount.toLocaleString()} tags, created with app version{" "}
+              {pendingRestore.info.appVersion}. Restoring replaces the current catalog organization.
+              A pre-restore snapshot is written automatically, and{" "}
+              <b>original media files are never modified</b>.
             </p>
             <div className="dialog-actions">
               <button
@@ -503,10 +476,7 @@ export function SettingsScreen(props: {
         </div>
       )}
       {showDeleteConfirm && (
-        <div
-          className="dialog-backdrop"
-          onClick={() => setShowDeleteConfirm(false)}
-        >
+        <div className="dialog-backdrop" onClick={() => setShowDeleteConfirm(false)}>
           <div
             ref={deleteDialogRef}
             className="album-dialog delete-album-dialog confirm-dialog"
@@ -520,8 +490,7 @@ export function SettingsScreen(props: {
             </div>
             <p className="dialog-body">
               This removes the catalog, albums, tags, and all metadata.{" "}
-              <b>Original files on disk are not affected.</b> You can re-import
-              folders to rebuild.
+              <b>Original files on disk are not affected.</b> You can re-import folders to rebuild.
             </p>
             <div className="dialog-actions">
               <button
@@ -531,11 +500,7 @@ export function SettingsScreen(props: {
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                className="danger-button"
-                onClick={handleDeleteLibrary}
-              >
+              <button type="button" className="danger-button" onClick={handleDeleteLibrary}>
                 Delete
               </button>
             </div>

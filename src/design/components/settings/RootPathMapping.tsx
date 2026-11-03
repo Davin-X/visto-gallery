@@ -1,9 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import {
-  FolderIcon,
-  ShieldIcon,
-} from "../icons";
+import { FolderIcon, ShieldIcon } from "../icons";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { tauri } from "../../../engine/commands/tauri";
 import type { RootPathMappingPreview } from "../../../engine/types/commands";
@@ -73,9 +70,7 @@ export function RootPathMapping(props: {
     } catch (error) {
       setPreview(null);
       props.showNotice(
-        `Could not preview the mapping: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Could not preview the mapping: ${error instanceof Error ? error.message : String(error)}`,
       );
     } finally {
       setBusy(false);
@@ -95,9 +90,7 @@ export function RootPathMapping(props: {
       );
     } catch (error) {
       props.showNotice(
-        `Could not apply the mapping: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Could not apply the mapping: ${error instanceof Error ? error.message : String(error)}`,
       );
     } finally {
       setBusy(false);
@@ -110,16 +103,14 @@ export function RootPathMapping(props: {
         <FolderIcon size={14} /> Moved source folder
       </h2>
       <p className="settings-section-desc">
-        If a source moved after a backup or drive reconnect, map the registered
-        root to its new location. This only rewrites paths under that exact
-        root; it never touches media files or unrelated library paths.
+        If a source moved after a backup or drive reconnect, map the registered root to its new
+        location. This only rewrites paths under that exact root; it never touches media files or
+        unrelated library paths.
       </p>
       <div className="settings-row">
         <div className="settings-row-label">
           <b>Missing source root</b>
-          <span className="settings-row-desc">
-            The registered path exactly as shown in Sources
-          </span>
+          <span className="settings-row-desc">The registered path exactly as shown in Sources</span>
         </div>
         <div className="settings-row-control">
           <input
@@ -138,9 +129,7 @@ export function RootPathMapping(props: {
       <div className="settings-row">
         <div className="settings-row-label">
           <b>New source root</b>
-          <span className="settings-row-desc">
-            The folder that now contains the same library
-          </span>
+          <span className="settings-row-desc">The folder that now contains the same library</span>
         </div>
         <div className="settings-row-control root-mapping-new">
           <input
@@ -154,12 +143,7 @@ export function RootPathMapping(props: {
               resetPreview();
             }}
           />
-          <button
-            type="button"
-            className="quiet-button"
-            onClick={browse}
-            disabled={busy}
-          >
+          <button type="button" className="quiet-button" onClick={browse} disabled={busy}>
             Choose…
           </button>
         </div>
@@ -185,12 +169,12 @@ export function RootPathMapping(props: {
       {preview && (
         <div className="root-mapping-preview" role="status">
           <div>
-            <b>{preview.itemCount.toLocaleString()} catalog item(s)</b> would move
-            from <code>{preview.oldRoot}</code> to <code>{preview.newRoot}</code>.
+            <b>{preview.itemCount.toLocaleString()} catalog item(s)</b> would move from{" "}
+            <code>{preview.oldRoot}</code> to <code>{preview.newRoot}</code>.
           </div>
           <div>
-            {preview.existingNewPathCount.toLocaleString()} of the mapped files
-            currently exist at the new location.
+            {preview.existingNewPathCount.toLocaleString()} of the mapped files currently exist at
+            the new location.
           </div>
           {preview.samplePaths.length > 0 && (
             <details>
@@ -235,10 +219,10 @@ export function RootPathMapping(props: {
               </div>
             </div>
             <p className="dialog-body">
-              Only paths under <code>{preview.oldRoot}</code> will be rewritten
-              to <code>{preview.newRoot}</code>. A catalog snapshot should be
-              taken before applying this if you have not already backed up.
-              Original media files are not moved or modified.
+              Only paths under <code>{preview.oldRoot}</code> will be rewritten to{" "}
+              <code>{preview.newRoot}</code>. A catalog snapshot should be taken before applying
+              this if you have not already backed up. Original media files are not moved or
+              modified.
             </p>
             <div className="dialog-actions">
               <button
@@ -249,12 +233,7 @@ export function RootPathMapping(props: {
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                className="danger-button"
-                onClick={apply}
-                disabled={busy}
-              >
+              <button type="button" className="danger-button" onClick={apply} disabled={busy}>
                 {busy ? "Remapping…" : "Apply Mapping"}
               </button>
             </div>

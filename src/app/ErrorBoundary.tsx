@@ -9,10 +9,7 @@ interface ErrorBoundaryProps {
   children: ReactNode;
 }
 
-export class ErrorBoundary extends Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
-> {
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, errorMessage: null };
@@ -50,8 +47,7 @@ export class ErrorBoundary extends Component<
         >
           <h2 style={{ marginBottom: 12 }}>VistoGallery encountered an error</h2>
           <p style={{ marginBottom: 20, maxWidth: 420, opacity: 0.85 }}>
-            {this.state.errorMessage ||
-              "An unexpected error occurred while rendering the UI."}
+            {this.state.errorMessage || "An unexpected error occurred while rendering the UI."}
           </p>
           <button
             type="button"

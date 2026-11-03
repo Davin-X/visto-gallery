@@ -86,11 +86,10 @@ describe("watcher sync", () => {
     const watch = vi.fn().mockResolvedValue(undefined);
     const unwatch = vi.fn().mockResolvedValue(undefined);
 
-    const result = await syncFolderWatchers(
-      ["/Keep", "/New"],
-      ["/Keep", "/Removed"],
-      { watch, unwatch },
-    );
+    const result = await syncFolderWatchers(["/Keep", "/New"], ["/Keep", "/Removed"], {
+      watch,
+      unwatch,
+    });
 
     expect(unwatch).toHaveBeenCalledWith("/Removed");
     expect(watch).toHaveBeenCalledWith("/New");

@@ -20,11 +20,7 @@ const item = (id: string, kind: MediaItem["kind"]): MediaItem => ({
 });
 
 describe("video queue navigation", () => {
-  const queue = [
-    item("video-a", "video"),
-    item("video-b", "video"),
-    item("video-c", "video"),
-  ];
+  const queue = [item("video-a", "video"), item("video-b", "video"), item("video-c", "video")];
 
   test("advances from the active video even if the viewer selection is a photo", () => {
     expect(getAdjacentVideo(queue, "video-b", 1)).toBe(queue[2]);

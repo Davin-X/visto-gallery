@@ -38,13 +38,9 @@ export function SourcesManager(props: {
   const totalSize = folders.reduce((sum, folder) => sum + folder.totalSize, 0);
 
   const isViewing = (folder: LibraryFolder) =>
-    activeSource === folder.path ||
-    Boolean(activeSource?.startsWith(`${folder.path}/`));
+    activeSource === folder.path || Boolean(activeSource?.startsWith(`${folder.path}/`));
 
-  const openMenu = (
-    folder: LibraryFolder,
-    event: React.MouseEvent<HTMLButtonElement>,
-  ) => {
+  const openMenu = (folder: LibraryFolder, event: React.MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     setMenu({ folder, x: rect.right - 4, y: rect.bottom + 4 });
   };
@@ -86,10 +82,7 @@ export function SourcesManager(props: {
 
   const q = query.trim().toLowerCase();
   const filteredFolders = q
-    ? folders.filter(
-        (f) =>
-          f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q),
-      )
+    ? folders.filter((f) => f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q))
     : folders;
 
   const body = (
@@ -109,8 +102,7 @@ export function SourcesManager(props: {
             {formatBytes(totalSize)}
           </span>
           <span className="sources-summary-hint">
-            Files stay in place. Select multiple folders with ⌘-click or ⌘A;
-            they scan together.
+            Files stay in place. Select multiple folders with ⌘-click or ⌘A; they scan together.
           </span>
         </div>
         <div className="sources-summary-actions">
@@ -130,11 +122,7 @@ export function SourcesManager(props: {
               type="button"
               onClick={() => onRescan()}
               disabled={libraryBusy || folders.length === 0}
-              title={
-                folders.length === 0
-                  ? "Add a source before rescanning"
-                  : undefined
-              }
+              title={folders.length === 0 ? "Add a source before rescanning" : undefined}
             >
               {libraryBusy ? "Working…" : "Rescan Sources"}
             </button>
@@ -217,15 +205,10 @@ export function SourcesManager(props: {
                         </span>
                         <span className="sources-name-body">
                           <span className="sources-name-line">
-                            <span
-                              className="sources-name-text"
-                              title={folder.name}
-                            >
+                            <span className="sources-name-text" title={folder.name}>
                               {folder.name}
                             </span>
-                            {viewing && (
-                              <span className="sources-active">Viewing</span>
-                            )}
+                            {viewing && <span className="sources-active">Viewing</span>}
                           </span>
                           <button
                             type="button"
@@ -239,12 +222,8 @@ export function SourcesManager(props: {
                         </span>
                       </span>
                     </td>
-                    <td className="sources-num">
-                      {folder.itemCount.toLocaleString()}
-                    </td>
-                    <td className="sources-num">
-                      {formatBytes(folder.totalSize)}
-                    </td>
+                    <td className="sources-num">{folder.itemCount.toLocaleString()}</td>
+                    <td className="sources-num">{formatBytes(folder.totalSize)}</td>
                     <td className="sources-actions">
                       <div className="sources-row-actions">
                         {!viewing && (
@@ -291,9 +270,8 @@ export function SourcesManager(props: {
         <p className="sources-note">
           <InfoIcon size={14} />
           <span>
-            Removing a source only clears it from VistoGallery. Your files stay
-            exactly where they are on disk, and adding the folder again brings
-            everything back.
+            Removing a source only clears it from VistoGallery. Your files stay exactly where they
+            are on disk, and adding the folder again brings everything back.
           </span>
         </p>
       )}
@@ -308,8 +286,7 @@ export function SourcesManager(props: {
     <section className="settings-section">
       <h2 className="settings-section-title">Sources</h2>
       <p className="settings-section-desc">
-        Folders VistoGallery indexes. Your files are read in place and never
-        moved.
+        Folders VistoGallery indexes. Your files are read in place and never moved.
       </p>
       {body}
     </section>

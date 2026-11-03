@@ -97,10 +97,7 @@ test("adds capture dates and saves the current filters as a Smart Album", () => 
   fireEvent.change(within(panel).getByLabelText("From"), {
     target: { value: "2024-03-15" },
   });
-  expect(onSetDateRange).toHaveBeenCalledWith(
-    new Date(2024, 2, 15, 0, 0, 0, 0).getTime(),
-    null,
-  );
+  expect(onSetDateRange).toHaveBeenCalledWith(new Date(2024, 2, 15, 0, 0, 0, 0).getTime(), null);
 
   fireEvent.change(within(panel).getByLabelText("Smart Album name"), {
     target: { value: "Spring 2024" },

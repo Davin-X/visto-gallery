@@ -1,19 +1,14 @@
 type WebKitPresentationVideo = HTMLVideoElement & {
   webkitPresentationMode?: "inline" | "picture-in-picture";
-  webkitSetPresentationMode?: (
-    mode: "inline" | "picture-in-picture",
-  ) => void;
-  webkitSupportsPresentationMode?: (
-    mode: "inline" | "picture-in-picture",
-  ) => boolean;
+  webkitSetPresentationMode?: (mode: "inline" | "picture-in-picture") => void;
+  webkitSupportsPresentationMode?: (mode: "inline" | "picture-in-picture") => boolean;
 };
 
 export function supportsPictureInPicture(video: HTMLVideoElement): boolean {
   const webkitVideo = video as WebKitPresentationVideo;
   return (
     (typeof webkitVideo.webkitSetPresentationMode === "function" &&
-      webkitVideo.webkitSupportsPresentationMode?.("picture-in-picture") ===
-        true) ||
+      webkitVideo.webkitSupportsPresentationMode?.("picture-in-picture") === true) ||
     (video.ownerDocument.pictureInPictureEnabled === true &&
       typeof video.requestPictureInPicture === "function")
   );
@@ -45,16 +40,11 @@ export function observePictureInPicture(
   return () => {
     video.removeEventListener("enterpictureinpicture", onEnter);
     video.removeEventListener("leavepictureinpicture", onLeave);
-    video.removeEventListener(
-      "webkitpresentationmodechanged",
-      onWebKitModeChange,
-    );
+    video.removeEventListener("webkitpresentationmodechanged", onWebKitModeChange);
   };
 }
 
-export async function enterPictureInPicture(
-  video: HTMLVideoElement,
-): Promise<void> {
+export async function enterPictureInPicture(video: HTMLVideoElement): Promise<void> {
   const webkitVideo = video as WebKitPresentationVideo;
   if (isPictureInPicture(video)) return;
   if (
@@ -74,9 +64,7 @@ export async function enterPictureInPicture(
   throw new Error("Picture in Picture is not supported for this video.");
 }
 
-export async function exitPictureInPicture(
-  video: HTMLVideoElement,
-): Promise<void> {
+export async function exitPictureInPicture(video: HTMLVideoElement): Promise<void> {
   const webkitVideo = video as WebKitPresentationVideo;
   if (!isPictureInPicture(video)) return;
   if (
@@ -93,9 +81,7 @@ export async function exitPictureInPicture(
   throw new Error("Unable to exit Picture in Picture for this video.");
 }
 
-export async function togglePictureInPicture(
-  video: HTMLVideoElement,
-): Promise<void> {
+export async function togglePictureInPicture(video: HTMLVideoElement): Promise<void> {
   if (isPictureInPicture(video)) {
     await exitPictureInPicture(video);
   } else {

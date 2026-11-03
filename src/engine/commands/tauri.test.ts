@@ -5,11 +5,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn() }));
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: vi.fn() }));
 
-import {
-  formatBytes,
-  formatDimensions,
-  formatDateShort,
-} from "../../engine/commands/tauri";
+import { formatBytes, formatDimensions, formatDateShort } from "../../engine/commands/tauri";
 
 test("formatBytes", () => {
   expect(formatBytes(0)).toBe("0 B");

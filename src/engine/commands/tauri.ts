@@ -48,8 +48,7 @@ export const tauri = {
 
     cancelScan: (): Promise<void> => invoke("cancel_scan"),
 
-    importFiles: (paths: string[]): Promise<ScanResult> =>
-      invoke("import_files", { paths }),
+    importFiles: (paths: string[]): Promise<ScanResult> => invoke("import_files", { paths }),
 
     getItems: (filter: LibraryFilterDTO): Promise<LibraryItemsPage> =>
       invoke("get_library_items", { filter }),
@@ -57,11 +56,9 @@ export const tauri = {
     getThumbnail: (request: ThumbnailRequest): Promise<ThumbnailResponse> =>
       invoke("get_item_thumbnail", { request }),
 
-    watchFolder: (path: string): Promise<void> =>
-      invoke("watch_folder", { path }),
+    watchFolder: (path: string): Promise<void> => invoke("watch_folder", { path }),
 
-    unwatchFolder: (path: string): Promise<void> =>
-      invoke("unwatch_folder", { path }),
+    unwatchFolder: (path: string): Promise<void> => invoke("unwatch_folder", { path }),
 
     getFolders: (): Promise<LibraryFolder[]> => invoke("get_library_folders"),
 
@@ -91,43 +88,35 @@ export const tauri = {
     updateTags: (itemId: string, tags: string[]): Promise<void> =>
       invoke("update_item_tags", { itemId, tags }),
 
-    moveToTrash: (paths: string[]): Promise<TrashResult> =>
-      invoke("move_to_trash", { paths }),
+    moveToTrash: (paths: string[]): Promise<TrashResult> => invoke("move_to_trash", { paths }),
 
     cancelMoveToTrash: (): Promise<void> => invoke("cancel_move_to_trash"),
 
-    revealInFinder: (path: string): Promise<void> =>
-      invoke("reveal_in_finder", { path }),
+    revealInFinder: (path: string): Promise<void> => invoke("reveal_in_finder", { path }),
 
-    openFile: (path: string): Promise<void> =>
-      invoke("open_file", { path }),
+    openFile: (path: string): Promise<void> => invoke("open_file", { path }),
 
     openWithPlayer: (path: string, player: string): Promise<void> =>
       invoke("open_with_player", { path, player }),
 
-    externalVideoPlayers: (): Promise<ExternalPlayer[]> =>
-      invoke("external_video_players"),
+    externalVideoPlayers: (): Promise<ExternalPlayer[]> => invoke("external_video_players"),
 
-    openFolder: (path: string): Promise<void> =>
-      invoke("open_folder", { path }),
+    openFolder: (path: string): Promise<void> => invoke("open_folder", { path }),
   },
 
   albums: {
     get: (): Promise<Album[]> => invoke("get_albums"),
 
-    getOverviews: (): Promise<AlbumOverview[]> =>
-      invoke("get_album_overviews"),
+    getOverviews: (): Promise<AlbumOverview[]> => invoke("get_album_overviews"),
 
-    getItems: (albumId: string): Promise<MediaItem[]> =>
-      invoke("get_album_items", { albumId }),
+    getItems: (albumId: string): Promise<MediaItem[]> => invoke("get_album_items", { albumId }),
 
     getTags: (): Promise<Tag[]> => invoke("get_tags"),
 
     create: (name: string, colorIndex?: number): Promise<Album> =>
       invoke("create_album", { name, colorIndex }),
 
-    delete: (albumId: string): Promise<void> =>
-      invoke("delete_album", { albumId }),
+    delete: (albumId: string): Promise<void> => invoke("delete_album", { albumId }),
 
     rename: (albumId: string, name: string): Promise<void> =>
       invoke("rename_album", { albumId, name }),
@@ -148,28 +137,17 @@ export const tauri = {
     rename: (albumId: string, name: string): Promise<void> =>
       invoke("rename_smart_album", { albumId, name }),
 
-    delete: (albumId: string): Promise<void> =>
-      invoke("delete_smart_album", { albumId }),
+    delete: (albumId: string): Promise<void> => invoke("delete_smart_album", { albumId }),
 
-    getItems: (
-      albumId: string,
-      limit?: number,
-      cursor?: string,
-    ): Promise<LibraryItemsPage> =>
+    getItems: (albumId: string, limit?: number, cursor?: string): Promise<LibraryItemsPage> =>
       invoke("get_smart_album_items", { albumId, limit, cursor }),
   },
 
   rootMap: {
-    preview: (
-      oldRoot: string,
-      newRoot: string,
-    ): Promise<RootPathMappingPreview> =>
+    preview: (oldRoot: string, newRoot: string): Promise<RootPathMappingPreview> =>
       invoke("preview_root_path_mapping", { oldRoot, newRoot }),
 
-    apply: (
-      oldRoot: string,
-      newRoot: string,
-    ): Promise<RootPathMappingResult> =>
+    apply: (oldRoot: string, newRoot: string): Promise<RootPathMappingResult> =>
       invoke("apply_root_path_mapping", { oldRoot, newRoot }),
   },
 
@@ -177,29 +155,21 @@ export const tauri = {
     create: (destinationPath: string): Promise<BackupInfo> =>
       invoke("create_catalog_backup", { destinationPath }),
 
-    validate: (path: string): Promise<BackupInfo> =>
-      invoke("validate_catalog_backup", { path }),
+    validate: (path: string): Promise<BackupInfo> => invoke("validate_catalog_backup", { path }),
 
-    restore: (path: string): Promise<RestoreResult> =>
-      invoke("restore_catalog_backup", { path }),
+    restore: (path: string): Promise<RestoreResult> => invoke("restore_catalog_backup", { path }),
   },
 
   metadata: {
-    readExif: (path: string): Promise<ExifData> =>
-      invoke("read_exif", { path }),
+    readExif: (path: string): Promise<ExifData> => invoke("read_exif", { path }),
 
-    backfillMetadata: (): Promise<number> =>
-      invoke("backfill_metadata"),
+    backfillMetadata: (): Promise<number> => invoke("backfill_metadata"),
   },
 
   editing: {
-    render: (request: RenderRequest): Promise<ExportResult> =>
-      invoke("render_edited", { request }),
+    render: (request: RenderRequest): Promise<ExportResult> => invoke("render_edited", { request }),
 
-    moveExportedFile: (
-      sourcePath: string,
-      destinationPath: string,
-    ): Promise<void> =>
+    moveExportedFile: (sourcePath: string, destinationPath: string): Promise<void> =>
       invoke("move_exported_file", { sourcePath, destinationPath }),
   },
 
@@ -220,8 +190,7 @@ export const tauri = {
     writeTags: (path: string, tags: string[]): Promise<void> =>
       invoke("write_finder_tags", { path, tags }),
 
-    readTags: (path: string): Promise<string[]> =>
-      invoke("read_finder_tags", { path }),
+    readTags: (path: string): Promise<string[]> => invoke("read_finder_tags", { path }),
 
     /** Merge app tags into existing Finder tags without deleting any. */
     mergeTags: (path: string, tags: string[]): Promise<string[]> =>
@@ -244,57 +213,37 @@ export const tauri = {
       historyIndex: number;
     }) => invoke<EditRecipe>("save_edit_recipe", req),
 
-    getRecipe: (mediaId: string) =>
-      invoke<EditRecipe | null>("get_edit_recipe", { mediaId }),
+    getRecipe: (mediaId: string) => invoke<EditRecipe | null>("get_edit_recipe", { mediaId }),
 
     listRecipes: () => invoke<EditRecipe[]>("list_edit_recipes"),
 
-    deleteRecipe: (mediaId: string) =>
-      invoke<boolean>("delete_edit_recipe", { mediaId }),
+    deleteRecipe: (mediaId: string) => invoke<boolean>("delete_edit_recipe", { mediaId }),
 
-    copyRecipe: (req: {
-      fromMediaId: string;
-      toMediaId: string;
-    }) => invoke<EditRecipe>("copy_edit_recipe", req),
+    copyRecipe: (req: { fromMediaId: string; toMediaId: string }) =>
+      invoke<EditRecipe>("copy_edit_recipe", req),
 
-    batchApply: (req: {
-      mediaIds: string[];
-      edits: EditValues;
-      crop?: CropState;
-    }) => invoke<number>("batch_apply_edit", req),
+    batchApply: (req: { mediaIds: string[]; edits: EditValues; crop?: CropState }) =>
+      invoke<number>("batch_apply_edit", req),
 
-    savePreset: (req: {
-      id?: string;
-      name: string;
-      edits: EditValues;
-      crop?: CropState;
-    }) => invoke<EditPreset>("save_edit_preset", req),
+    savePreset: (req: { id?: string; name: string; edits: EditValues; crop?: CropState }) =>
+      invoke<EditPreset>("save_edit_preset", req),
 
     listPresets: () => invoke<EditPreset[]>("list_edit_presets"),
 
-    deletePreset: (id: string) =>
-      invoke<boolean>("delete_edit_preset", { id }),
+    deletePreset: (id: string) => invoke<boolean>("delete_edit_preset", { id }),
 
-    applyPreset: (req: {
-      presetId: string;
-      mediaId: string;
-    }) => invoke<EditRecipe>("apply_edit_preset", req),
+    applyPreset: (req: { presetId: string; mediaId: string }) =>
+      invoke<EditRecipe>("apply_edit_preset", req),
   },
 
   app: {
     getVersion: (): Promise<string> => invoke("get_version"),
 
-    checkUpdates: (force = false): Promise<UpdateCheckResult> =>
-      invoke("check_updates", { force }),
+    checkUpdates: (force = false): Promise<UpdateCheckResult> => invoke("check_updates", { force }),
 
-    openExternal: (url: string): Promise<void> =>
-      invoke("open_external", { url }),
+    openExternal: (url: string): Promise<void> => invoke("open_external", { url }),
 
-    exportBytes: (
-      suggestedName: string,
-      bytes: Uint8Array,
-      backup?: boolean,
-    ): Promise<string> =>
+    exportBytes: (suggestedName: string, bytes: Uint8Array, backup?: boolean): Promise<string> =>
       invoke("export_bytes", {
         suggestedName,
         bytes: Array.from(bytes),
@@ -322,9 +271,8 @@ export const events = {
   onFolderChanged: (callback: (path: string) => void) =>
     listen("folder-changed", (e: any) => callback(e.payload)),
 
-  onFolderWatchError: (
-    callback: (event: { path: string; message: string }) => void,
-  ) => listen("folder-watch-error", (e: any) => callback(e.payload)),
+  onFolderWatchError: (callback: (event: { path: string; message: string }) => void) =>
+    listen("folder-watch-error", (e: any) => callback(e.payload)),
 };
 
 // Helper: Build thumbnail data URL from response
@@ -359,9 +307,7 @@ export function formatBytes(bytes: number): string {
 }
 
 // Helper: Format dimensions
-export function formatDimensions(
-  item: Pick<MediaItem, "width" | "height">,
-): string {
+export function formatDimensions(item: Pick<MediaItem, "width" | "height">): string {
   return item.width && item.height
     ? `${item.width.toLocaleString()} × ${item.height.toLocaleString()}`
     : "Unavailable";

@@ -30,9 +30,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
       const overview = byId.get(album.id);
       const coverItems: MediaItem[] = overview?.coverItems ?? [];
       const photos = coverItems
-        .filter(
-          (item: any) => item.kind === "photo" || item.kind === "video",
-        )
+        .filter((item: any) => item.kind === "photo" || item.kind === "video")
         .slice(0, 3);
       return {
         ...album,
@@ -52,9 +50,8 @@ function AlbumsScreen(props: AlbumsScreenProps) {
           <p className="eyebrow">COLLECTIONS</p>
           <h1>Albums</h1>
           <p className="page-subtitle">
-            {albums.length.toLocaleString()}{" "}
-            {albums.length === 1 ? "album" : "albums"} · Choose an album to see
-            its photos.
+            {albums.length.toLocaleString()} {albums.length === 1 ? "album" : "albums"} · Choose an
+            album to see its photos.
           </p>
         </div>
       </div>
@@ -80,9 +77,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
               else if (filter.query) badge = "🔍";
               else if (filter.tags?.length) badge = "🏷️";
               const coverPhotos = (album.coverItems ?? [])
-                .filter(
-                  (item: any) => item.kind === "photo" || item.kind === "video",
-                )
+                .filter((item: any) => item.kind === "photo" || item.kind === "video")
                 .slice(0, 3);
               return (
                 <button
@@ -90,9 +85,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   type="button"
                   className="smart-album-tile"
                   onClick={() => props.onOpenSmartAlbum?.(album.id)}
-                  onContextMenu={(e) =>
-                    props.onSmartAlbumContextMenu?.(album, e)
-                  }
+                  onContextMenu={(e) => props.onSmartAlbumContextMenu?.(album, e)}
                   title={`Open ${album.name}`}
                 >
                   <span className="smart-album-tile-cover">
@@ -103,15 +96,12 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                         albumItems={album.coverItems ?? []}
                       />
                     ) : (
-                      <span className="smart-album-tile-cover-empty">
-                        {badge}
-                      </span>
+                      <span className="smart-album-tile-cover-empty">{badge}</span>
                     )}
                   </span>
                   <span className="smart-album-tile-name">{album.name}</span>
                   <span className="smart-album-tile-count">
-                    {album.itemCount.toLocaleString()}{" "}
-                    {album.itemCount === 1 ? "item" : "items"}
+                    {album.itemCount.toLocaleString()} {album.itemCount === 1 ? "item" : "items"}
                   </span>
                 </button>
               );
@@ -126,15 +116,8 @@ function AlbumsScreen(props: AlbumsScreenProps) {
             <AlbumsIcon size={30} />
           </span>
           <b>No albums yet</b>
-          <p>
-            Create an album, then select photos in Library and choose Add to
-            album.
-          </p>
-          <button
-            className="primary-button"
-            type="button"
-            onClick={() => props.onCreateAlbum?.()}
-          >
+          <p>Create an album, then select photos in Library and choose Add to album.</p>
+          <button className="primary-button" type="button" onClick={() => props.onCreateAlbum?.()}>
             <PlusIcon size={14} /> Create album
           </button>
         </div>
@@ -149,9 +132,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
               onContextMenu={(e) => props.onAlbumContextMenu?.(album, e)}
               title={`Open ${album.name}`}
             >
-              <span
-                className={`album-cover ${album.photos.length ? "" : "is-empty"}`}
-              >
+              <span className={`album-cover ${album.photos.length ? "" : "is-empty"}`}>
                 {album.photos.length ? (
                   <AlbumPhotoStack
                     photos={album.photos}
@@ -197,27 +178,15 @@ function AlbumsScreen(props: AlbumsScreenProps) {
   );
 }
 
-async function createMediaItemsBrowser(
-  files: FileList | File[],
-): Promise<MediaItem[]> {
+async function createMediaItemsBrowser(files: FileList | File[]): Promise<MediaItem[]> {
   const items: MediaItem[] = [];
   for (const file of Array.from(files)) {
     if (!file.name || file.name.startsWith(".")) continue;
     const relativePath =
-      (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
-      file.name;
+      (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
     const ext = relativePath.split(".").pop()?.toLowerCase() ?? "";
     const videoExts = new Set(["m4v", "mov", "mp4", "mpeg", "mpg", "webm"]);
-    const rawExts = new Set([
-      "arw",
-      "cr2",
-      "cr3",
-      "dng",
-      "nef",
-      "raf",
-      "raw",
-      "rw2",
-    ]);
+    const rawExts = new Set(["arw", "cr2", "cr3", "dng", "nef", "raf", "raw", "rw2"]);
     const imageExts = new Set([
       "avif",
       "bmp",

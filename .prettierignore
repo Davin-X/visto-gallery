@@ -1,0 +1,7 @@
+dist/
+node_modules/
+.kilo/
+untracked/
+src-tauri/target/
+*.config.js
+*.config.mjs

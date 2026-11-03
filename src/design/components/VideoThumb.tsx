@@ -1,13 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
-function VideoThumb({
-  src,
-  name,
-  className,
-}: {
-  src: string;
-  name?: string;
-  className?: string;
-}) {
+function VideoThumb({ src, name, className }: { src: string; name?: string; className?: string }) {
   const ref = useRef<HTMLVideoElement | null>(null);
   const [nearViewport, setNearViewport] = useState(false);
 

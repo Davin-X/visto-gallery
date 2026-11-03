@@ -28,29 +28,17 @@ describe("native menu dispatch", () => {
 
   test("unknown events are ignored for forward compatibility", () => {
     const actions = handlers();
-    expect(dispatchNativeMenuEvent("menu-from-the-future", actions)).toBe(
-      false,
-    );
-    expect(Object.values(actions).every((fn) => fn.mock.calls.length === 0)).toBe(
-      true,
-    );
+    expect(dispatchNativeMenuEvent("menu-from-the-future", actions)).toBe(false);
+    expect(Object.values(actions).every((fn) => fn.mock.calls.length === 0)).toBe(true);
   });
 
   test("Cmd/Ctrl+E is the same export shortcut", () => {
-    expect(
-      isExportShortcut({ metaKey: true, ctrlKey: false, key: "e" }),
-    ).toBe(true);
-    expect(
-      isExportShortcut({ metaKey: false, ctrlKey: true, key: "E" }),
-    ).toBe(true);
-    expect(
-      isExportShortcut({ metaKey: true, ctrlKey: false, key: "e", shiftKey: true }),
-    ).toBe(false);
-    expect(
-      isExportShortcut({ metaKey: true, ctrlKey: false, key: "e", altKey: true }),
-    ).toBe(false);
-    expect(
-      isExportShortcut({ metaKey: false, ctrlKey: false, key: "e" }),
-    ).toBe(false);
+    expect(isExportShortcut({ metaKey: true, ctrlKey: false, key: "e" })).toBe(true);
+    expect(isExportShortcut({ metaKey: false, ctrlKey: true, key: "E" })).toBe(true);
+    expect(isExportShortcut({ metaKey: true, ctrlKey: false, key: "e", shiftKey: true })).toBe(
+      false,
+    );
+    expect(isExportShortcut({ metaKey: true, ctrlKey: false, key: "e", altKey: true })).toBe(false);
+    expect(isExportShortcut({ metaKey: false, ctrlKey: false, key: "e" })).toBe(false);
   });
 });

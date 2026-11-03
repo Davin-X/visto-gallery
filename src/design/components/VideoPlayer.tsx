@@ -12,10 +12,7 @@ import {
 import { tauri } from "../../engine/commands/tauri";
 import type { ExternalPlayer } from "../../engine/types/commands";
 import { formatDuration } from "../../engine/utils/time";
-import {
-  canPlayVideoInApp,
-  fileExtension,
-} from "../../engine/utils/mediaTypes";
+import { canPlayVideoInApp, fileExtension } from "../../engine/utils/mediaTypes";
 import {
   observePictureInPicture,
   supportsPictureInPicture,
@@ -65,19 +62,15 @@ function VideoPlayer({
   const controlsFocusedRef = useRef(false);
   const [playing, setPlaying] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
-  const [keyboardFocusWithinControls, setKeyboardFocusWithinControls] =
-    useState(false);
+  const [keyboardFocusWithinControls, setKeyboardFocusWithinControls] = useState(false);
   const [hintsVisible, setHintsVisible] = useState(true);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(() => usePlaybackStore.getState().lastVolume);
   const [muted, setMuted] = useState(false);
   const [pictureInPicture, setPictureInPicture] = useState(false);
-  const [pictureInPictureSupported, setPictureInPictureSupported] =
-    useState(false);
-  const [pictureInPictureError, setPictureInPictureError] = useState<
-    string | null
-  >(null);
+  const [pictureInPictureSupported, setPictureInPictureSupported] = useState(false);
+  const [pictureInPictureError, setPictureInPictureError] = useState<string | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [autoAdvance, setAutoAdvance] = useState(false);
   const [failed, setFailed] = useState(() => !canPlayVideoInApp(path, name));
@@ -87,10 +80,7 @@ function VideoPlayer({
   const scheduleControlsHide = useCallback(() => {
     if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
     if (!playing || controlsFocusedRef.current) return;
-    controlsTimerRef.current = window.setTimeout(
-      () => setControlsVisible(false),
-      3500,
-    );
+    controlsTimerRef.current = window.setTimeout(() => setControlsVisible(false), 3500);
   }, [playing]);
 
   const showPlayerActivity = useCallback(() => {
@@ -98,10 +88,7 @@ function VideoPlayer({
     setHintsVisible(true);
     scheduleControlsHide();
     if (hintsTimerRef.current) window.clearTimeout(hintsTimerRef.current);
-    hintsTimerRef.current = window.setTimeout(
-      () => setHintsVisible(false),
-      3500,
-    );
+    hintsTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
   }, [scheduleControlsHide]);
 
   useEffect(() => {
@@ -376,21 +363,14 @@ function VideoPlayer({
     const play = () => void video.play().catch(() => {});
     const pause = () => video.pause();
     const seekBy = (delta: number) => {
-      const next = Math.min(
-        Math.max(0, video.currentTime + delta),
-        video.duration || 0,
-      );
+      const next = Math.min(Math.max(0, video.currentTime + delta), video.duration || 0);
       video.currentTime = next;
       setTime(next);
     };
     session.setActionHandler("play", play);
     session.setActionHandler("pause", pause);
-    session.setActionHandler("seekbackward", (details) =>
-      seekBy(-(details?.seekOffset || 10)),
-    );
-    session.setActionHandler("seekforward", (details) =>
-      seekBy(details?.seekOffset || 10),
-    );
+    session.setActionHandler("seekbackward", (details) => seekBy(-(details?.seekOffset || 10)));
+    session.setActionHandler("seekforward", (details) => seekBy(details?.seekOffset || 10));
     const onPlay = () => {
       session.playbackState = "playing";
     };
@@ -431,11 +411,7 @@ function VideoPlayer({
     const video = ref.current;
     if (!video) return;
     const target = Math.max(0, video.currentTime + delta);
-    seek(
-      Number.isFinite(video.duration)
-        ? Math.min(target, video.duration)
-        : target,
-    );
+    seek(Number.isFinite(video.duration) ? Math.min(target, video.duration) : target);
   };
 
   const togglePip = async () => {
@@ -445,9 +421,7 @@ function VideoPlayer({
     try {
       await togglePictureInPicture(video);
     } catch (error) {
-      setPictureInPictureError(
-        error instanceof Error ? error.message : String(error),
-      );
+      setPictureInPictureError(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -488,9 +462,8 @@ function VideoPlayer({
         </div>
         <h3 className="viewer-video-fallback-title">{name || "This video"}</h3>
         <p className="viewer-video-fallback-copy">
-          {ext ? `.${ext} files` : "This file"} can't be decoded by macOS's
-          built-in web player. Open it in a desktop player that supports this
-          format.
+          {ext ? `.${ext} files` : "This file"} can't be decoded by macOS's built-in web player.
+          Open it in a desktop player that supports this format.
         </p>
         <div className="viewer-video-fallback-actions">
           {player ? (
@@ -505,10 +478,7 @@ function VideoPlayer({
           <button type="button" onClick={() => void openExternally()}>
             Open in default app
           </button>
-          <button
-            type="button"
-            onClick={() => path && void tauri.items.revealInFinder(path)}
-          >
+          <button type="button" onClick={() => path && void tauri.items.revealInFinder(path)}>
             Reveal in Finder
           </button>
         </div>
@@ -517,9 +487,7 @@ function VideoPlayer({
             Tip: IINA, VLC, or Elmedia Video Player all play MKV natively.
           </p>
         )}
-        {openError && (
-          <p className="viewer-video-feedback error">{openError}</p>
-        )}
+        {openError && <p className="viewer-video-feedback error">{openError}</p>}
       </div>
     );
   }
@@ -537,8 +505,7 @@ function VideoPlayer({
         width={width}
         height={height}
         style={{
-          aspectRatio:
-            width && height ? `auto ${width} / ${height}` : "auto",
+          aspectRatio: width && height ? `auto ${width} / ${height}` : "auto",
         }}
         autoPlay={videoAutoPlay || forceAutoPlay}
         loop={videoLoop && !autoAdvance && !compact}
@@ -567,13 +534,11 @@ function VideoPlayer({
             }}
             onFocusCapture={(event) => {
               const keyboardFocused =
-                event.target instanceof HTMLElement &&
-                event.target.matches(":focus-visible");
+                event.target instanceof HTMLElement && event.target.matches(":focus-visible");
               controlsFocusedRef.current = keyboardFocused;
               setKeyboardFocusWithinControls(keyboardFocused);
               if (keyboardFocused) {
-                if (controlsTimerRef.current)
-                  window.clearTimeout(controlsTimerRef.current);
+                if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
                 setControlsVisible(true);
               } else {
                 scheduleControlsHide();
@@ -701,11 +666,7 @@ function VideoPlayer({
               type="button"
               onClick={() => void togglePip()}
               disabled={!pictureInPictureSupported}
-              aria-label={
-                pictureInPicture
-                  ? "Exit picture in picture"
-                  : "Enter picture in picture"
-              }
+              aria-label={pictureInPicture ? "Exit picture in picture" : "Enter picture in picture"}
               aria-pressed={pictureInPicture}
               title={
                 pictureInPictureSupported

@@ -23,10 +23,7 @@ interface PlaybackSnapshot {
 interface PlaybackState extends PlaybackSnapshot {
   element: HTMLVideoElement | null;
 
-  register: (
-    element: HTMLVideoElement,
-    meta: { itemId: string; name: string },
-  ) => void;
+  register: (element: HTMLVideoElement, meta: { itemId: string; name: string }) => void;
   unregister: (element: HTMLVideoElement) => void;
   sync: (patch: Partial<PlaybackSnapshot>) => void;
   setLastVolume: (volume: number) => void;
@@ -56,9 +53,7 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
       // Re-registering the same item is a handoff between two mounted players
       // (foreground ↔ background); the snapshot must survive so playback
       // resumes where it left off. A different item starts a fresh snapshot.
-      ...(state.itemId === meta.itemId
-        ? {}
-        : { playing: false, time: 0, duration: 0 }),
+      ...(state.itemId === meta.itemId ? {} : { playing: false, time: 0, duration: 0 }),
     })),
 
   unregister: (element) => {

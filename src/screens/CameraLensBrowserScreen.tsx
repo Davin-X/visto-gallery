@@ -24,8 +24,7 @@ interface LensGroup {
 
 function CameraLensBrowserScreen(props: CameraLensBrowserScreenProps) {
   const library = useLibraryStore();
-  const { setMinRating, setColorLabelFilter, setActiveAlbum, setQuery } =
-    library;
+  const { setMinRating, setColorLabelFilter, setActiveAlbum, setQuery } = library;
 
   const cameraGroups = useMemo<CameraGroup[]>(() => {
     const byCamera = new Map<string, MediaItem[]>();
@@ -143,10 +142,7 @@ function CameraLensBrowserScreen(props: CameraLensBrowserScreenProps) {
         <div className="empty-state">
           <span>📷</span>
           <b>No camera/lens data</b>
-          <p>
-            EXIF camera and lens information isn’t available for any items in
-            this view.
-          </p>
+          <p>EXIF camera and lens information isn’t available for any items in this view.</p>
         </div>
       )}
     </div>
