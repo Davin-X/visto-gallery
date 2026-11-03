@@ -322,6 +322,19 @@ export function PictureInPictureIcon({
   );
 }
 
+export function DragIcon({ size = 14, className = "" }: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={0} fill="currentColor">
+      <circle cx="8" cy="5" r="1" />
+      <circle cx="16" cy="5" r="1" />
+      <circle cx="8" cy="12" r="1" />
+      <circle cx="16" cy="12" r="1" />
+      <circle cx="8" cy="19" r="1" />
+      <circle cx="16" cy="19" r="1" />
+    </Svg>
+  );
+}
+
 export function VolumeIcon({
   size = 15,
   className = "",

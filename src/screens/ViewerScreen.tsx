@@ -6,6 +6,7 @@ import React, {
   useRef,
 } from "react";
 import {
+  DragIcon,
   EditIcon,
   FlipIcon,
   FullscreenIcon,
@@ -114,20 +115,7 @@ function FloatingVideoControls({
         aria-label="Move floating video"
         title="Drag to move video"
       >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="currentColor"
-          aria-hidden="true"
-        >
-          <circle cx="4" cy="3" r="1" />
-          <circle cx="8" cy="3" r="1" />
-          <circle cx="4" cy="6" r="1" />
-          <circle cx="8" cy="6" r="1" />
-          <circle cx="4" cy="9" r="1" />
-          <circle cx="8" cy="9" r="1" />
-        </svg>
+        <DragIcon size={12} />
       </button>
       <button
         type="button"
