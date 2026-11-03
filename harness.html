@@ -4,15 +4,153 @@
     <meta charset="UTF-8" />
     <title>VistoGallery harness</title>
     <script>
-      const noop = async (cmd) => {
-        if (cmd === "get_settings") return {};
-        if (cmd === "get_vault_status") return { configured: false, locked: true, itemCount: 0 };
+      const params = new URLSearchParams(window.location.search);
+      const benchmarkItems = Number(params.get("benchmark") || 0);
+      const isBenchmark = Number.isFinite(benchmarkItems) && benchmarkItems > 0;
+      const totalItems = Math.max(0, Math.floor(benchmarkItems || 0));
+      const PAGE_SIZE = 250;
+      const now = Date.UTC(2026, 10, 3, 12, 0, 0);
+      const tinyImage =
+        "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
+      const makeItems = () =>
+        Array.from({ length: totalItems }, (_, index) => {
+          const capturedAt = now - index * 60_000;
+          return {
+            id: `benchmark-${index}`,
+            path: `/synthetic/benchmark-${index}.jpg`,
+            name: `benchmark-${index}.jpg`,
+            extension: "jpg",
+            kind: "photo",
+            size: 1024 * 1024,
+            modifiedAt: capturedAt,
+            capturedAt,
+            width: 1,
+            height: 1,
+            favorite: index % 11 === 0,
+            hidden: false,
+            rating: index % 6,
+            colorLabel: ["red", "yellow", "green", "blue", "purple"][index % 5],
+            tags: index % 17 === 0 ? ["benchmark"] : [],
+            albumIds: index < 4 ? ["benchmark-album-0"] : [],
+            createdAt: capturedAt,
+            updatedAt: capturedAt,
+          };
+        });
+      const items = makeItems();
+      const benchmark = {
+        calls: Object.create(null),
+        activeThumbnails: 0,
+        maxActiveThumbnails: 0,
+      };
+      window.__benchmark = benchmark;
+
+      const count = (command) => {
+        benchmark.calls[command] = (benchmark.calls[command] || 0) + 1;
+      };
+      const tinyThumbnail = {
+        itemId: "",
+        dataUrl: tinyImage,
+        width: 1,
+        height: 1,
+      };
+
+      const syntheticInvoke = async (command, args) => {
+        count(command);
+        if (command === "get_settings") return {};
+        if (command === "get_version") return "0.2.2";
+        if (command === "get_vault_status") {
+          return { configured: false, locked: true, itemCount: 0 };
+        }
+        if (command === "get_library_stats") {
+          return {
+            photos: totalItems,
+            videos: 0,
+            raws: 0,
+            uncategorized: 0,
+            favorites: Math.floor(totalItems / 11),
+            hidden: 0,
+            photoSize: totalItems * 1024 * 1024,
+            videoSize: 0,
+            rawSize: 0,
+            uncategorizedSize: 0,
+            favoriteSize: Math.floor(totalItems / 11) * 1024 * 1024,
+            hiddenSize: 0,
+            totalSize: totalItems * 1024 * 1024,
+          };
+        }
+        if (command === "get_library_roots") return ["/synthetic"];
+        if (command === "get_library_folders") {
+          return [
+            {
+              path: "/synthetic",
+              name: "synthetic",
+              itemCount: totalItems,
+              totalSize: totalItems * 1024 * 1024,
+            },
+          ];
+        }
+        if (command === "watch_folder" || command === "unwatch_folder") return null;
+        if (command === "get_smart_albums") return [];
+        if (command === "get_albums") return [];
+        if (command === "get_tags") return [];
+        if (command === "get_album_overviews") {
+          return Array.from({ length: 100 }, (_, index) => ({
+            id: `benchmark-album-${index}`,
+            name: `Benchmark Album ${index}`,
+            colorIndex: index % 4,
+            createdAt: now - index * 60_000,
+            updatedAt: now - index * 60_000,
+            itemCount: Math.min(100, totalItems - index * 100),
+            coverItems: items.slice(index * 4, index * 4 + 4),
+          }));
+        }
+        if (command === "get_album_items") {
+          const albumId = args?.albumId || "benchmark-album-0";
+          const index = Number(albumId.replace("benchmark-album-", "")) || 0;
+          return items.slice(index * 4, index * 4 + 4);
+        }
+        if (command === "get_library_items") {
+          const filter = args?.filter || {};
+          const cursor = filter.cursor || "items-0";
+          const offset = Math.max(0, Number(cursor.replace("items-", "")) || 0);
+          const limit = Math.max(1, Number(filter.limit || PAGE_SIZE));
+          const pageItems = items.slice(offset, offset + limit);
+          const nextOffset = offset + pageItems.length;
+          return {
+            items: pageItems,
+            hasMore: nextOffset < totalItems,
+            nextCursor: nextOffset < totalItems ? `items-${nextOffset}` : undefined,
+            totalCount: totalItems,
+          };
+        }
+        if (command === "get_item_thumbnail") {
+          benchmark.activeThumbnails += 1;
+          benchmark.maxActiveThumbnails = Math.max(
+            benchmark.maxActiveThumbnails,
+            benchmark.activeThumbnails,
+          );
+          // Resolve in a microtask so the counter accurately reflects the
+          // app's bounded request window without I/O noise.
+          await Promise.resolve();
+          benchmark.activeThumbnails -= 1;
+          return { ...tinyThumbnail, itemId: args?.request?.itemId || "" };
+        }
         return [];
       };
+
+      const noop = async (cmd) => {
+        if (cmd === "get_settings") return {};
+        if (cmd === "get_vault_status") {
+          return { configured: false, locked: true, itemCount: 0 };
+        }
+        return [];
+      };
+
       window.__TAURI_INTERNALS__ = {
         convertFileSrc: (p) => p,
         transformCallback: () => 1,
-        invoke: noop,
+        invoke: isBenchmark ? syntheticInvoke : noop,
         metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
         plugins: {},
       };
