@@ -154,6 +154,47 @@ test("viewer filmstrip follows media category and the active browsing scope", ()
   ]);
 });
 
+test("photo viewer navigation loads more pages and skips videos before wrapping", async () => {
+  const firstPhoto = {
+    ...makeItem("first-photo", "first.jpg"),
+    modifiedAt: 1_700_000_000_000,
+  };
+  const queuedVideo = {
+    ...makeItem("queued-video", "clip.mp4", false, "video"),
+    modifiedAt: 1_600_000_000_000,
+  };
+  const nextPhoto = {
+    ...makeItem("next-photo", "next.jpg"),
+    modifiedAt: 1_500_000_000_000,
+  };
+  useLibraryStore.setState({
+    items: [firstPhoto],
+    inspectedId: firstPhoto.id,
+    hasMore: true,
+    nextCursor: "page-2",
+    pageSize: 2,
+  });
+  useLibraryStore.getState().refreshDerived();
+  vi.mocked(tauri.library.getItems)
+    .mockResolvedValueOnce({
+      items: [queuedVideo],
+      hasMore: true,
+      nextCursor: "page-3",
+      totalCount: 3,
+    })
+    .mockResolvedValueOnce({
+      items: [nextPhoto],
+      hasMore: false,
+      totalCount: 3,
+    });
+
+  const navigated = await useLibraryStore.getState().navigateViewerPhoto(1);
+
+  expect(navigated).toBe(true);
+  expect(useLibraryStore.getState().viewerSelected?.id).toBe("next-photo");
+  expect(tauri.library.getItems).toHaveBeenCalledTimes(2);
+});
+
 test("setQuery searches camera and lens metadata", () => {
   const a = { ...makeItem("a", "sunset.jpg"), camera: "Nikon Z8" };
   const b = { ...makeItem("b", "mountain.jpg"), lens: "Nikkor 24-70mm" };

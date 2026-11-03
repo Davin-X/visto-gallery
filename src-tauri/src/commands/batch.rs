@@ -62,12 +62,22 @@ mod thumbnail_cache_tests {
 
     #[test]
     fn requested_size_changes_cache_identity() {
-        let small = thumbnail_cache_key("photo-1", 100, 2_000, 64);
-        let large = thumbnail_cache_key("photo-1", 100, 2_000, 1024);
+        let small = thumbnail_cache_key("photo-1", 100, 2_000, 64, "photo");
+        let large = thumbnail_cache_key("photo-1", 100, 2_000, 1024, "photo");
 
         assert_ne!(small, large);
         assert!(small.contains(":64:"));
         assert!(large.contains(":1024:"));
+    }
+
+    #[test]
+    fn video_thumbnail_cache_is_invalidated_for_frame_extraction() {
+        let photo = thumbnail_cache_key("item-1", 100, 2_000, 128, "photo");
+        let video = thumbnail_cache_key("item-1", 100, 2_000, 128, "video");
+
+        assert_ne!(photo, video);
+        assert!(photo.ends_with(":v1"));
+        assert!(video.ends_with(":v2"));
     }
 
     #[cfg(target_os = "macos")]

@@ -21,6 +21,11 @@ import {
 } from "./icons";
 import { CachedThumbnail } from "./CachedThumbnail";
 import { canPlayVideoInApp } from "../../engine/utils/mediaTypes";
+import {
+  isPictureInPicture,
+  supportsPictureInPicture,
+  togglePictureInPicture,
+} from "../../engine/utils/pictureInPicture";
 
 interface SlideshowOverlayProps {
   assetUrl: (path: string) => string;
@@ -124,16 +129,10 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
       setPip(false);
       return;
     }
-    setPipSupported(
-      Boolean(
-        (document as any).pictureInPictureEnabled ||
-        (video as any).webkitSupportsPresentationMode?.("picture-in-picture"),
-      ),
-    );
+    setPipSupported(supportsPictureInPicture(video));
     const onEnter = () => setPip(true);
     const onLeave = () => setPip(false);
-    const onWebKit = () =>
-      setPip((video as any).webkitPresentationMode === "picture-in-picture");
+    const onWebKit = () => setPip(isPictureInPicture(video));
     video.addEventListener("enterpictureinpicture", onEnter);
     video.addEventListener("leavepictureinpicture", onLeave);
     video.addEventListener("webkitpresentationmodechanged", onWebKit);
@@ -144,22 +143,11 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
     };
   }, [item?.id, item?.kind]);
 
-  const togglePip = () => {
+  const togglePip = async () => {
     const video = videoRef.current;
     if (!video) return;
-    const v = video as any;
     try {
-      if (v.webkitSupportsPresentationMode?.("picture-in-picture")) {
-        v.webkitSetPresentationMode(
-          v.webkitPresentationMode === "picture-in-picture"
-            ? "inline"
-            : "picture-in-picture",
-        );
-      } else if (document.pictureInPictureElement === video) {
-        void document.exitPictureInPicture();
-      } else if (typeof video.requestPictureInPicture === "function") {
-        void video.requestPictureInPicture();
-      }
+      await togglePictureInPicture(video);
     } catch (err) {
       if (import.meta.env.DEV)
         console.warn("Picture-in-picture unavailable", err);

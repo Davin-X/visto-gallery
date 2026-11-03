@@ -1,14 +1,13 @@
 import { create } from "zustand";
 
 /**
- * Mirrors the state of the video element that is currently mounted in the
- * viewer so a compact player can keep controlling it after the user leaves the
- * Viewer screen.
+ * Mirrors the state of the single video element so the audio-only Now Playing
+ * card can control it while the dedicated player screen is in the background.
  *
  * The element itself is owned by `VideoPlayer`; this store only keeps a
  * reference plus the handful of fields the mini-player needs. Playback
- * continues because the video element stays mounted (the Viewer screen is
- * rendered off-screen instead of being unmounted when switching tabs).
+ * continues because the dedicated player host stays mounted while playback is
+ * active, including when a photo viewer is open.
  */
 interface PlaybackSnapshot {
   itemId: string | null;

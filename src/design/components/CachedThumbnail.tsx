@@ -82,6 +82,7 @@ function CachedThumbnail({
   showStatus = false,
   placeholderClassName,
   fallbackSrc,
+  eager = false,
 }: {
   itemId: string;
   name: string;
@@ -90,6 +91,7 @@ function CachedThumbnail({
   showStatus?: boolean;
   placeholderClassName?: string;
   fallbackSrc?: string;
+  eager?: boolean;
 }) {
   const placeholderRef = useRef<HTMLSpanElement | null>(null);
   const [loaded, setLoaded] = useState<{ key: string; src: string } | null>(
@@ -104,6 +106,10 @@ function CachedThumbnail({
   const failed = failedKey === requestKey;
 
   useEffect(() => {
+    if (eager) {
+      setNearViewport(true);
+      return;
+    }
     const placeholder = placeholderRef.current;
     if (!placeholder) return;
     if (typeof IntersectionObserver === "undefined") {
@@ -126,10 +132,10 @@ function CachedThumbnail({
     );
     observer.observe(placeholder);
     return () => observer.disconnect();
-  }, [itemId, size]);
+  }, [itemId, size, eager]);
 
   useEffect(() => {
-    if (!nearViewport) return;
+    if (!nearViewport && !eager) return;
     let current = true;
     loadThumbnail(itemId, size)
       .then((value) => {
@@ -141,14 +147,14 @@ function CachedThumbnail({
     return () => {
       current = false;
     };
-  }, [itemId, size, nearViewport, requestKey]);
+  }, [itemId, size, nearViewport, requestKey, eager]);
 
   if (failed && fallbackSrc) {
     return (
       <img
         src={fallbackSrc}
         alt={name}
-        loading="lazy"
+        loading={eager ? "eager" : "lazy"}
         decoding="async"
         style={style}
       />
@@ -159,9 +165,8 @@ function CachedThumbnail({
       <img
         src={src}
         alt={name}
-        loading="lazy"
+        loading={eager ? "eager" : "lazy"}
         decoding="async"
-        fetchPriority="low"
         style={style}
       />
     );

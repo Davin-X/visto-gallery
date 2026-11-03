@@ -12,7 +12,7 @@ import LibraryScreen from "../screens/LibraryScreen";
 import { useFocusTrap } from "../design/hooks/useFocusTrap";
 import EditScreen from "../screens/EditScreen";
 import ViewerScreen from "../screens/ViewerScreen";
-import VideoPlayer from "../design/components/VideoPlayer";
+import VideoPlayerScreen from "../screens/VideoPlayerScreen";
 import CameraLensBrowserScreen from "../screens/CameraLensBrowserScreen";
 import BatchScreen from "../screens/BatchScreen";
 import AlbumsScreen from "../screens/AlbumsScreen";
@@ -60,7 +60,7 @@ import { dispatchNativeMenuEvent } from "./nativeMenu";
 import { isExportShortcut } from "./shortcuts";
 import { shouldCheckForUpdatesOnLaunch } from "./startup";
 import { navigateToBatchExport } from "./exportFlow";
-import { getAdjacentVideo, planBackgroundVideo } from "./backgroundVideo";
+import { getAdjacentVideo } from "./backgroundVideo";
 import {
   createAutoImportController,
   syncFolderWatchers,
@@ -130,6 +130,7 @@ import type {
 } from "../engine/types/media";
 import type {
   LibraryFolder,
+  LibraryFilterDTO,
   LibraryStats,
   UpdateCheckResult,
 } from "../engine/types/commands";
@@ -179,6 +180,7 @@ type Screen =
   | "Library"
   | "Albums"
   | "Viewer"
+  | "Video"
   | "Duplicates"
   | "Edit"
   | "Batch"
@@ -492,9 +494,8 @@ function App() {
   const batch = useBatchStore();
   const settings = useSettingsStore();
 
-  // Keep the viewer-owned video element mounted while photos or another
-  // screen are shown; its presentation changes without mounting a second
-  // player.
+  // The player keeps its own selection while the photo viewer has an
+  // independent cursor.
   const [backgroundVideo, setBackgroundVideo] = useState<MediaItem | null>(
     null,
   );
@@ -502,32 +503,90 @@ function App() {
   // mid-playback never changes what plays next.
   const [videoQueue, setVideoQueue] = useState<MediaItem[]>([]);
   const [queueAutoPlayId, setQueueAutoPlayId] = useState<string | null>(null);
-  const lastViewerItemRef = useRef<MediaItem | null>(null);
-  const viewerHostRef = useRef<HTMLDivElement | null>(null);
-  const wasViewerOpenRef = useRef(false);
+  const videoQueuePagingRef = useRef<{
+    filter: LibraryFilterDTO;
+    cursor: string | null;
+    hasMore: boolean;
+    pageSize: number;
+    loading: boolean;
+  } | null>(null);
   const playbackItemId = usePlaybackStore((s) => s.itemId);
   const fhPlaying = usePlaybackStore((s) => s.playing);
   const storedPlaybackItem = useMemo(
     () => library.items.find((item) => item.id === playbackItemId) ?? null,
     [library.items, playbackItemId],
   );
-  const playbackItem =
-    (screen === "Viewer" && library.viewerSelected?.kind === "video"
-      ? library.viewerSelected
-      : null) ??
-    backgroundVideo ??
-    storedPlaybackItem;
+  const playbackItem = backgroundVideo ?? storedPlaybackItem;
+  const photoViewerItems = useMemo(
+    () => library.viewerItems.filter((item) => item.kind !== "video"),
+    [library.viewerItems],
+  );
   // Video queue: built from the current browsing scope when playback starts,
   // skipping photos and RAW. Locked during playback so switching filters
   // never changes what plays next.
-  const playNextVideo = useCallback((): boolean => {
+  const loadNextVideoPage = useCallback(async () => {
+    const paging = videoQueuePagingRef.current;
+    if (!paging || !paging.hasMore || !paging.cursor || paging.loading)
+      return [];
+
+    paging.loading = true;
+    try {
+      const page = await tauri.library.getItems({
+        ...paging.filter,
+        limit: paging.pageSize,
+        cursor: paging.cursor,
+      });
+      videoQueuePagingRef.current = {
+        ...paging,
+        cursor: page.nextCursor ?? null,
+        hasMore: page.hasMore,
+        loading: false,
+      };
+      const knownIds = new Set(videoQueue.map((item) => item.id));
+      const videos = page.items.filter(
+        (item) =>
+          item.kind === "video" &&
+          canPlayVideoInApp(item.path, item.name) &&
+          !knownIds.has(item.id),
+      );
+      if (videos.length > 0) {
+        setVideoQueue((current) => {
+          const currentIds = new Set(current.map((item) => item.id));
+          return [...current, ...videos.filter((item) => !currentIds.has(item.id))];
+        });
+      }
+      return videos;
+    } catch (error) {
+      videoQueuePagingRef.current = { ...paging, loading: false };
+      useLibraryStore
+        .getState()
+        .showNotice(`Failed to load more videos: ${String(error)}`);
+      return [];
+    }
+  }, [videoQueue]);
+
+  const playNextVideo = useCallback(async (): Promise<boolean> => {
     if (videoQueue.length === 0) return false;
     const currentId =
       usePlaybackStore.getState().itemId ??
       backgroundVideo?.id ??
-      library.viewerSelected?.id ??
       null;
-    const next = getAdjacentVideo(videoQueue, currentId, 1);
+    const currentIndex = videoQueue.findIndex((item) => item.id === currentId);
+    let next: MediaItem | null = null;
+    if (currentIndex === videoQueue.length - 1) {
+      while (
+        videoQueuePagingRef.current?.hasMore &&
+        videoQueuePagingRef.current.cursor
+      ) {
+        const pageVideos = await loadNextVideoPage();
+        if (pageVideos.length > 0) {
+          next = pageVideos[0];
+          break;
+        }
+        if (videoQueuePagingRef.current?.loading) return false;
+      }
+    }
+    next ??= getAdjacentVideo(videoQueue, currentId, 1);
     if (!next) return false;
     if (next.id === currentId) {
       usePlaybackStore.getState().toggle();
@@ -535,20 +594,15 @@ function App() {
     }
 
     setQueueAutoPlayId(next.id);
-    if (screen === "Viewer" && library.viewerSelected?.kind === "video") {
-      library.inspectItem(next.id);
-    } else {
-      setBackgroundVideo(next);
-    }
+    setBackgroundVideo(next);
     return true;
-  }, [videoQueue, backgroundVideo, library, screen]);
+  }, [videoQueue, backgroundVideo, loadNextVideoPage]);
 
   const playPreviousVideo = useCallback((): boolean => {
     if (videoQueue.length === 0) return false;
     const currentId =
       usePlaybackStore.getState().itemId ??
       backgroundVideo?.id ??
-      library.viewerSelected?.id ??
       null;
     const previous = getAdjacentVideo(videoQueue, currentId, -1);
     if (!previous) return false;
@@ -562,76 +616,48 @@ function App() {
     }
 
     setQueueAutoPlayId(previous.id);
-    if (screen === "Viewer" && library.viewerSelected?.kind === "video") {
-      library.inspectItem(previous.id);
-    } else {
-      setBackgroundVideo(previous);
-    }
+    setBackgroundVideo(previous);
     return true;
-  }, [videoQueue, backgroundVideo, library, screen]);
-
-  useEffect(() => {
-    const wasOpen = wasViewerOpenRef.current;
-    wasViewerOpenRef.current = viewer.isOpen;
-    const plan = planBackgroundVideo({
-      isOpen: viewer.isOpen,
-      screen,
-      selected: library.viewerSelected,
-      previous: lastViewerItemRef.current,
-      current: backgroundVideo,
-    });
-    lastViewerItemRef.current = plan.previous;
-    if (!Object.is(plan.background, backgroundVideo))
-      setBackgroundVideo(plan.background);
-    if (plan.close && viewer.isOpen) viewer.close();
-    // Closing the viewer is an explicit stop: the element is gone and a later
-    // reopen must start fresh instead of resuming a stale snapshot.
-    if (wasOpen && !viewer.isOpen) usePlaybackStore.getState().stop();
-  }, [
-    screen,
-    viewer.isOpen,
-    viewer.close,
-    library.viewerSelected,
-    backgroundVideo,
-  ]);
+  }, [videoQueue, backgroundVideo]);
 
   // Capture the video-only queue once for a playback session. If the user
   // explicitly selects a video outside that queue, start a queue in the new
   // browsing scope; changing filters alone leaves the current queue intact.
   useEffect(() => {
     if (!playbackItemId) {
-      if (videoQueue.length > 0) setVideoQueue([]);
-      if (queueAutoPlayId !== null) setQueueAutoPlayId(null);
+      if (!backgroundVideo) {
+        if (videoQueue.length > 0) setVideoQueue([]);
+        videoQueuePagingRef.current = null;
+        if (queueAutoPlayId !== null) setQueueAutoPlayId(null);
+      }
       return;
     }
 
-    const selectedVideo =
-      library.viewerSelected?.kind === "video" &&
-      canPlayVideoInApp(
-        library.viewerSelected.path,
-        library.viewerSelected.name,
-      )
-        ? library.viewerSelected
-        : null;
-    const needsQueue =
-      videoQueue.length === 0 ||
-      (selectedVideo &&
-        !videoQueue.some((item) => item.id === selectedVideo.id));
-    if (needsQueue) {
-      setVideoQueue(
-        library.viewerItems.filter(
-          (item) =>
-            item.kind === "video" &&
-            canPlayVideoInApp(item.path, item.name),
-        ),
+    if (videoQueue.length === 0) {
+      const state = useLibraryStore.getState();
+      const nextQueue = library.viewerItems.filter(
+        (item) =>
+          item.kind === "video" &&
+          canPlayVideoInApp(item.path, item.name),
       );
+      if (backgroundVideo && !nextQueue.some((item) => item.id === backgroundVideo.id))
+        nextQueue.unshift(backgroundVideo);
+      setVideoQueue(nextQueue);
+      if (!videoQueuePagingRef.current && state.viewerScope === "library") {
+        videoQueuePagingRef.current = {
+          filter: state.getCurrentLibraryFilter(),
+          cursor: state.nextCursor,
+          hasMore: state.hasMore,
+          pageSize: state.pageSize,
+          loading: false,
+        };
+      }
     }
   }, [
     playbackItemId,
-    library.viewerSelected,
     library.viewerItems,
     videoQueue,
-    queueAutoPlayId,
+    backgroundVideo,
   ]);
 
   useEffect(() => {
@@ -643,13 +669,6 @@ function App() {
       setQueueAutoPlayId(null);
     }
   }, [queueAutoPlayId, playbackItemId, fhPlaying]);
-
-  // The hidden player must not be reachable with Tab or a screen reader.
-  useEffect(() => {
-    const host = viewerHostRef.current;
-    if (host)
-      (host as HTMLElement & { inert: boolean }).inert = screen !== "Viewer";
-  }, [screen, viewer.isOpen]);
 
   // Ensure screen state matches viewer state on mount/hydration.
   useEffect(() => {
@@ -911,12 +930,18 @@ function App() {
     exportToBatch: () => void;
     showNotice: (text: string) => void;
     checkUpdates: (manual?: boolean) => void;
+    navigateViewer: (delta: number) => void;
+    navigateVideo: (delta: -1 | 1) => void;
+    openViewer: (id: string) => void;
   }>({
     importFolder: () => {},
     importFiles: () => {},
     exportToBatch: () => {},
     showNotice: () => {},
     checkUpdates: () => {},
+    navigateViewer: () => {},
+    navigateVideo: () => {},
+    openViewer: () => {},
   });
 
   useEffect(() => {
@@ -1115,7 +1140,7 @@ function App() {
           };
           // Both the Library and Hidden screens own a search field. Jump to
           // Library only when neither is on screen, then focus once mounted.
-          if (screen !== "Library" && screen !== "Hidden") {
+          if (screen !== "Library" && screen !== "Hidden" && screen !== "Video") {
             setScreen("Library");
             let attempts = 0;
             const tryFocus = () => {
@@ -1138,19 +1163,27 @@ function App() {
         }
         return;
       }
-      if (screen === "Viewer" && !e.defaultPrevented) {
+      if ((screen === "Viewer" || screen === "Video") && !e.defaultPrevented) {
         const target = e.target as HTMLElement;
         const isEditable =
           target.isContentEditable ||
           target.tagName === "INPUT" ||
           target.tagName === "TEXTAREA" ||
           target.tagName === "SELECT";
-        if (!isEditable && e.key === "ArrowRight") viewer.navigate(1);
-        if (!isEditable && e.key === "ArrowLeft") viewer.navigate(-1);
+        if (!isEditable && e.key === "ArrowRight") {
+          if (screen === "Video") handlersRef.current.navigateVideo(1);
+          else handlersRef.current.navigateViewer(1);
+        }
+        if (!isEditable && e.key === "ArrowLeft") {
+          if (screen === "Video") handlersRef.current.navigateVideo(-1);
+          else handlersRef.current.navigateViewer(-1);
+        }
       }
       if (e.key === "Escape") {
         if (screen === "Viewer") {
           viewer.close();
+          setScreen(viewerOrigin || "Library");
+        } else if (screen === "Video") {
           setScreen(viewerOrigin || "Library");
         } else if (library.showInspector) {
           library.toggleInspector();
@@ -1178,10 +1211,7 @@ function App() {
         screen === "Library" &&
         library.inspectedId
       ) {
-        setViewerOrigin("Library");
-        library.setViewerScope("library");
-        viewer.open();
-        setScreen("Viewer");
+        handlersRef.current.openViewer(library.inspectedId);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -1422,18 +1452,93 @@ function App() {
     }
   }, [showNativeWarnings, libraryStats.photos, libraryStats.videos, libraryStats.raws, libraryStats.uncategorized, showNotice]);
 
-  // Single entry point for "open this item in the player". Used by tiles, the
-  // inspector and by Play on a video-only selection.
+  const navigateViewer = useCallback(
+    async (delta: number) => {
+      const navigated =
+        await useLibraryStore.getState().navigateViewerPhoto(delta);
+      if (navigated) viewer.resetTransform();
+    },
+    [viewer.resetTransform],
+  );
+
+  const selectViewerItem = useCallback(
+    (id: string) => {
+      const libraryState = useLibraryStore.getState();
+      const item = libraryState.viewerItems.find((candidate) => candidate.id === id);
+      if (!item || item.kind === "video") return;
+      libraryState.inspectItem(id);
+    },
+    [],
+  );
+
+  const selectVideoItem = useCallback(
+    (id: string) => {
+      const item = videoQueue.find((candidate) => candidate.id === id);
+      if (!item) return;
+      setBackgroundVideo(item);
+      setQueueAutoPlayId(id);
+    },
+    [videoQueue],
+  );
+
+  const navigateVideoQueue = useCallback(
+    (delta: -1 | 1) => {
+      if (delta > 0) {
+        void playNextVideo();
+        return;
+      }
+      const currentId =
+        usePlaybackStore.getState().itemId ?? backgroundVideo?.id ?? null;
+      const next = getAdjacentVideo(videoQueue, currentId, delta);
+      if (!next) return;
+      setBackgroundVideo(next);
+      setQueueAutoPlayId(next.id);
+    },
+    [backgroundVideo, videoQueue, playNextVideo],
+  );
+
+  // Route photos to the photo viewer and videos to the independent player.
   const openViewer = useCallback(
     (
       id?: string,
       origin: Screen = "Library",
       scope: "library" | "hidden" = "library",
     ) => {
+      const targetId = id ?? library.inspectedId;
+      const item =
+        library.items.find((candidate) => candidate.id === targetId) ??
+        library.hiddenItems.find((candidate) => candidate.id === targetId) ??
+        null;
+      if (!item) return;
       setViewerOrigin(origin);
       library.setViewerScope(scope);
-      viewer.open(id);
-      setScreen("Viewer");
+      if (item.kind === "video") {
+        const libraryState = useLibraryStore.getState();
+        const scopedVideos = libraryState.viewerItems.filter(
+            (candidate) =>
+              candidate.kind === "video" &&
+              canPlayVideoInApp(candidate.path, candidate.name),
+          );
+        if (!scopedVideos.some((candidate) => candidate.id === item.id))
+          scopedVideos.unshift(item);
+        setVideoQueue(scopedVideos);
+        videoQueuePagingRef.current =
+          scope === "library"
+            ? {
+                filter: libraryState.getCurrentLibraryFilter(),
+                cursor: libraryState.nextCursor,
+                hasMore: libraryState.hasMore,
+                pageSize: libraryState.pageSize,
+                loading: false,
+              }
+            : null;
+        setBackgroundVideo(item);
+        viewer.close();
+        setScreen("Video");
+      } else {
+        viewer.open(item.id);
+        setScreen("Viewer");
+      }
     },
     [library, viewer],
   );
@@ -1975,20 +2080,23 @@ function App() {
     if (next === "Albums" && library.activeAlbum) {
       library.setActiveAlbum(null);
     }
-    // Navigating away from the Viewer does not close it here: a playing video
-    // keeps the viewer mounted off-screen so audio survives the tab switch (see
-    // the freeze effect above). That effect still closes it for photos and for
-    // an idle viewer.
     if (next === "Viewer") {
-      // The sidebar Viewer is the library viewer. Ensure it cannot resume on a
-      // hidden item the library grid does not contain.
       setViewerOrigin("Library");
       library.setViewerScope("library");
-      const inspected = library.items.find(
+      let inspected = library.items.find(
         (i: MediaItem) => i.id === library.inspectedId,
       );
-      if (inspected?.hidden) library.inspectItem(null);
-      viewer.open();
+      if (inspected?.hidden) {
+        library.inspectItem(null);
+        inspected = undefined;
+      }
+      const target = inspected ?? library.viewerSelected ??
+        library.viewerItems.find((item) => item.kind !== "video") ?? null;
+      if (target?.kind === "video") {
+        openViewer(target.id, "Library");
+        return;
+      }
+      viewer.open(target?.id);
     }
     if (next === "Hidden") {
       // Hidden is its own collection; do not carry a Library selection or an
@@ -2235,6 +2343,9 @@ function App() {
     exportToBatch,
     showNotice,
     checkUpdates: checkForUpdates,
+    navigateViewer,
+    navigateVideo: navigateVideoQueue,
+    openViewer: (id: string) => openViewer(id),
   };
 
   return (
@@ -2269,6 +2380,7 @@ function App() {
               return <span className="muted">Library</span>;
             }
             if (screen === "Albums") return <span>Albums</span>;
+            if (screen === "Video") return <span>Video Player</span>;
             return <span>{screen}</span>;
           })()}
           {library.busy && (
@@ -2711,65 +2823,54 @@ function App() {
             />
           )}
 
-          {(screen === "Viewer" || viewer.isOpen) && (
-            <div
-              ref={viewerHostRef}
-              className={`viewer-host${screen === "Viewer" ? "" : " viewer-host-hidden"}`}
-              aria-hidden={screen !== "Viewer"}
-            >
-              <ViewerScreen
-                active={screen === "Viewer"}
-                items={library.viewerItems}
-                selected={
-                  screen === "Viewer"
-                    ? library.viewerSelected
-                    : (backgroundVideo ?? lastViewerItemRef.current)
-                }
-                playbackItem={playbackItem}
-                queueAutoPlayItemId={queueAutoPlayId}
-                zoom={viewer.zoom}
-                fitMode={viewer.fitMode}
-                rotation={viewer.rotation}
-                flipX={viewer.flipX}
-                onNavigate={viewer.navigate}
-                onNextVideo={playNextVideo}
-                onPreviousVideo={playPreviousVideo}
-                onExpandBackgroundVideo={(itemId) => {
-                  if (
-                    !library.viewerItems.some((item) => item.id === itemId)
-                  ) {
-                    library.setFilter("All");
-                  }
-                  library.inspectItem(itemId);
-                }}
-                onStopBackgroundVideo={() => {
-                  usePlaybackStore.getState().stop();
-                  setBackgroundVideo(null);
-                }}
-                onSetPhoto={(id: string) => library.inspectItem(id)}
-                onSetZoom={viewer.setZoom}
-                onZoomIn={viewer.zoomIn}
-                onZoomOut={viewer.zoomOut}
-                onResetZoom={viewer.resetZoom}
-                onToggleFitMode={viewer.toggleFitMode}
-                onRotate={viewer.rotate}
-                onToggleFlip={viewer.toggleFlip}
-                onResetTransform={viewer.resetTransform}
-                onToggleFullscreen={viewer.toggleFullscreen}
-                onClose={viewer.close}
-                onToggleFavorite={library.toggleFavorite}
-                onToggleHidden={library.toggleHidden}
-                onOpenEdit={async (item: any) => {
-                  if (item?.kind === "video") return;
-                  await edit.saveDraft();
-                  await edit.open(item);
-                  setScreen("Edit");
-                }}
-                onContextMenu={openContextMenu}
-                assetUrl={assetUrl}
-              />
-            </div>
+          {screen === "Viewer" && (
+            <ViewerScreen
+              active
+              items={photoViewerItems}
+              selected={
+                library.viewerSelected?.kind === "video"
+                  ? null
+                  : library.viewerSelected
+              }
+              zoom={viewer.zoom}
+              fitMode={viewer.fitMode}
+              rotation={viewer.rotation}
+              flipX={viewer.flipX}
+              onNavigate={navigateViewer}
+              onSetPhoto={selectViewerItem}
+              onSetZoom={viewer.setZoom}
+              onZoomIn={viewer.zoomIn}
+              onZoomOut={viewer.zoomOut}
+              onResetZoom={viewer.resetZoom}
+              onToggleFitMode={viewer.toggleFitMode}
+              onRotate={viewer.rotate}
+              onToggleFlip={viewer.toggleFlip}
+              onResetTransform={viewer.resetTransform}
+              onToggleFullscreen={viewer.toggleFullscreen}
+              onClose={viewer.close}
+              onToggleFavorite={library.toggleFavorite}
+              onToggleHidden={library.toggleHidden}
+              onOpenEdit={async (item: MediaItem) => {
+                await edit.saveDraft();
+                await edit.open(item);
+                setScreen("Edit");
+              }}
+              onContextMenu={openContextMenu}
+              assetUrl={assetUrl}
+            />
           )}
+
+          <VideoPlayerScreen
+            active={screen === "Video"}
+            item={playbackItem}
+            queue={videoQueue}
+            queueAutoPlayItemId={queueAutoPlayId}
+            assetUrl={assetUrl}
+            onBack={() => setScreen(viewerOrigin || "Library")}
+            onSelect={selectVideoItem}
+            onPrevious={playPreviousVideo}
+            onNext={playNextVideo}
+          />
 
           {screen === "Edit" && (
             <EditScreen
@@ -3923,25 +4024,21 @@ function App() {
         </div>
       )}
 
-      {backgroundVideo && screen !== "Viewer" && (
+      {playbackItem && playbackItemId && screen !== "Video" && (
         <MiniPlayer
           onPrevious={playPreviousVideo}
           onNext={playNextVideo}
           onExpand={() => {
-            if (
-              !library.viewerItems.some(
-                (item) => item.id === backgroundVideo.id,
-              )
-            ) {
-              library.setFilter("All");
-            }
-            library.inspectItem(backgroundVideo.id);
-            setScreen("Viewer");
+            setViewerOrigin(screen);
+            setBackgroundVideo(playbackItem);
+            setScreen("Video");
           }}
           onClose={() => {
             usePlaybackStore.getState().stop();
-            viewer.close();
             setBackgroundVideo(null);
+            setVideoQueue([]);
+            videoQueuePagingRef.current = null;
+            setQueueAutoPlayId(null);
           }}
         />
       )}
