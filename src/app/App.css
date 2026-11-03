@@ -3458,7 +3458,8 @@ body {
 
 /* Video playback gets our own always-visible controls: WebKit's native bar
    fades out, and on short or letterboxed videos it is clipped by the frame. */
-.viewer-stage > video.viewer-video {
+.viewer-stage > video.viewer-video,
+.viewer-stage > .viewer-video-frame-focused > video.viewer-video {
   max-width: 100%;
   max-height: 100%;
   cursor: pointer;
@@ -3617,7 +3618,8 @@ body {
 }
 
 .viewer-stage > img,
-.viewer-stage > video.viewer-video {
+.viewer-stage > video.viewer-video,
+.viewer-stage > .viewer-video-frame-focused > video.viewer-video {
   display: block;
   width: auto;
   height: auto;
@@ -3627,7 +3629,8 @@ body {
   object-position: center;
 }
 
-.viewer-stage > video.viewer-video {
+.viewer-stage > video.viewer-video,
+.viewer-stage > .viewer-video-frame-focused > video.viewer-video {
   width: auto;
   height: auto;
 }
@@ -8726,6 +8729,8 @@ body {
   display: contents;
 }
 
+/* Off-screen viewer host: keeps the video element mounted (audio continues)
+   while another surface is in front. Invisible and inert. */
 .viewer-host-hidden {
   display: block;
   position: fixed;
@@ -8733,6 +8738,146 @@ body {
   z-index: 0;
   opacity: 0;
   pointer-events: none;
+}
+
+/* The same viewer-owned video element floats over photos while retaining
+   full-stage layout when the selected item is a video. */
+.viewer-stage > .viewer-video-frame-focused {
+  display: contents;
+}
+
+.viewer-stage > .viewer-video-frame-focused > .viewer-video {
+  max-width: 100%;
+  max-height: 100%;
+  cursor: pointer;
+}
+
+.viewer-video-frame-floating {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 50;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: min(420px, calc(100% - 32px));
+  aspect-ratio: 16 / 9;
+  max-height: 50%;
+  opacity: 1;
+  pointer-events: auto;
+  background: #000;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.viewer-video-frame-floating .viewer-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+  background: #000;
+}
+
+.viewer-video-frame-floating-minimized {
+  grid-template-rows: auto;
+  width: min(320px, calc(100% - 32px));
+  aspect-ratio: auto;
+  max-height: none;
+}
+
+.viewer-video-frame-floating-minimized .viewer-video {
+  display: none;
+}
+
+.floating-overlay-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.floating-overlay-bar button {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 6px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.floating-overlay-bar .floating-overlay-drag {
+  width: 18px;
+  min-width: 18px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.floating-overlay-bar .floating-overlay-drag:active {
+  cursor: grabbing;
+}
+
+.floating-overlay-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.floating-overlay-bar button:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.floating-overlay-bar button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.floating-overlay-seek {
+  flex: 0 0 110px;
+  min-width: 60px;
+  height: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+
+.floating-overlay-time {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.9);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.floating-overlay-expand {
+  margin-left: auto;
+}
+
+.floating-overlay-close {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .mini-player {
@@ -8828,6 +8973,25 @@ body {
   }
 
   .mini-player-seek {
+    display: none;
+  }
+
+  .viewer-video-frame-floating {
+    right: 12px;
+    bottom: 12px;
+    width: min(380px, calc(100% - 24px));
+  }
+
+  .floating-overlay-bar {
+    gap: 4px;
+  }
+
+  .floating-overlay-seek {
+    flex: 1 1 auto;
+    min-width: 24px;
+  }
+
+  .floating-overlay-time {
     display: none;
   }
 }

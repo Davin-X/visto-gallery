@@ -309,6 +309,32 @@ export function FullscreenIcon({
   );
 }
 
+export function PictureInPictureIcon({
+  size = 15,
+  className = "",
+  strokeWidth = 1.8,
+}: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <rect x="12" y="12" width="8" height="6" />
+    </Svg>
+  );
+}
+
+export function DragIcon({ size = 14, className = "" }: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={0} fill="currentColor">
+      <circle cx="8" cy="5" r="1" />
+      <circle cx="16" cy="5" r="1" />
+      <circle cx="8" cy="12" r="1" />
+      <circle cx="16" cy="12" r="1" />
+      <circle cx="8" cy="19" r="1" />
+      <circle cx="16" cy="19" r="1" />
+    </Svg>
+  );
+}
+
 export function VolumeIcon({
   size = 15,
   className = "",

@@ -50,13 +50,17 @@ import {
   usePlaybackStore,
 } from "../engine/stores";
 import { draftImageStyle } from "../engine/utils/draftImage";
-import { formatDuration } from "../engine/utils/time";
 import { MiniPlayer } from "../design/components/MiniPlayer";
-import { getTypeIdentity, formatBytesSimple } from "../engine/utils/mediaTypes";
+import {
+  canPlayVideoInApp,
+  getTypeIdentity,
+  formatBytesSimple,
+} from "../engine/utils/mediaTypes";
 import { dispatchNativeMenuEvent } from "./nativeMenu";
 import { isExportShortcut } from "./shortcuts";
 import { shouldCheckForUpdatesOnLaunch } from "./startup";
 import { navigateToBatchExport } from "./exportFlow";
+import { getAdjacentVideo, planBackgroundVideo } from "./backgroundVideo";
 import {
   createAutoImportController,
   syncFolderWatchers,
@@ -161,8 +165,6 @@ import {
   RotateIcon,
   CropIcon,
   FlipIcon,
-  PlayIcon,
-  PauseIcon,
   SparkleIcon,
   UsersIcon,
   TagIcon,
@@ -171,7 +173,6 @@ import {
   CheckIcon,
   StopIcon,
   TrashIcon,
-  VolumeIcon,
 } from "../design/components/icons";
 
 type Screen =
@@ -491,38 +492,157 @@ function App() {
   const batch = useBatchStore();
   const settings = useSettingsStore();
 
-  // A video keeps playing when the user switches tabs. To do that the viewer
-  // must stay mounted (off-screen) and keep showing the item it was playing,
-  // even if the library inspection moves to another photo in the meantime.
-  const [frozenViewerItem, setFrozenViewerItem] = useState<MediaItem | null>(
+  // Keep the viewer-owned video element mounted while photos or another
+  // screen are shown; its presentation changes without mounting a second
+  // player.
+  const [backgroundVideo, setBackgroundVideo] = useState<MediaItem | null>(
     null,
   );
+  // Locked video queue: captured when playback starts so switching filters
+  // mid-playback never changes what plays next.
+  const [videoQueue, setVideoQueue] = useState<MediaItem[]>([]);
+  const [queueAutoPlayId, setQueueAutoPlayId] = useState<string | null>(null);
   const lastViewerItemRef = useRef<MediaItem | null>(null);
   const viewerHostRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (screen === "Viewer") lastViewerItemRef.current = library.viewerSelected;
-  }, [screen, library.viewerSelected]);
-
-  // Only videos are allowed to outlive the Viewer screen. Photos (and a viewer
-  // with nothing playing) close on navigation exactly as before.
-  useEffect(() => {
-    if (screen === "Viewer") {
-      setFrozenViewerItem(null);
-      return;
+  const wasViewerOpenRef = useRef(false);
+  const playbackItemId = usePlaybackStore((s) => s.itemId);
+  const fhPlaying = usePlaybackStore((s) => s.playing);
+  const storedPlaybackItem = useMemo(
+    () => library.items.find((item) => item.id === playbackItemId) ?? null,
+    [library.items, playbackItemId],
+  );
+  const playbackItem =
+    (screen === "Viewer" && library.viewerSelected?.kind === "video"
+      ? library.viewerSelected
+      : null) ??
+    backgroundVideo ??
+    storedPlaybackItem;
+  // Video queue: built from the current browsing scope when playback starts,
+  // skipping photos and RAW. Locked during playback so switching filters
+  // never changes what plays next.
+  const playNextVideo = useCallback((): boolean => {
+    if (videoQueue.length === 0) return false;
+    const currentId =
+      usePlaybackStore.getState().itemId ??
+      backgroundVideo?.id ??
+      library.viewerSelected?.id ??
+      null;
+    const next = getAdjacentVideo(videoQueue, currentId, 1);
+    if (!next) return false;
+    if (next.id === currentId) {
+      usePlaybackStore.getState().toggle();
+      return true;
     }
-    if (!viewer.isOpen) {
-      setFrozenViewerItem(null);
-      return;
-    }
-    const last = lastViewerItemRef.current;
-    if (last?.kind === "video") {
-      setFrozenViewerItem(last);
+
+    setQueueAutoPlayId(next.id);
+    if (screen === "Viewer" && library.viewerSelected?.kind === "video") {
+      library.inspectItem(next.id);
     } else {
-      viewer.close();
-      setFrozenViewerItem(null);
+      setBackgroundVideo(next);
     }
-  }, [screen, viewer.isOpen, viewer.close]);
+    return true;
+  }, [videoQueue, backgroundVideo, library, screen]);
+
+  const playPreviousVideo = useCallback((): boolean => {
+    if (videoQueue.length === 0) return false;
+    const currentId =
+      usePlaybackStore.getState().itemId ??
+      backgroundVideo?.id ??
+      library.viewerSelected?.id ??
+      null;
+    const previous = getAdjacentVideo(videoQueue, currentId, -1);
+    if (!previous) return false;
+    if (previous.id === currentId) {
+      const video = usePlaybackStore.getState().element;
+      if (video) {
+        video.currentTime = 0;
+        void video.play().catch(() => {});
+      }
+      return true;
+    }
+
+    setQueueAutoPlayId(previous.id);
+    if (screen === "Viewer" && library.viewerSelected?.kind === "video") {
+      library.inspectItem(previous.id);
+    } else {
+      setBackgroundVideo(previous);
+    }
+    return true;
+  }, [videoQueue, backgroundVideo, library, screen]);
+
+  useEffect(() => {
+    const wasOpen = wasViewerOpenRef.current;
+    wasViewerOpenRef.current = viewer.isOpen;
+    const plan = planBackgroundVideo({
+      isOpen: viewer.isOpen,
+      screen,
+      selected: library.viewerSelected,
+      previous: lastViewerItemRef.current,
+      current: backgroundVideo,
+    });
+    lastViewerItemRef.current = plan.previous;
+    if (!Object.is(plan.background, backgroundVideo))
+      setBackgroundVideo(plan.background);
+    if (plan.close && viewer.isOpen) viewer.close();
+    // Closing the viewer is an explicit stop: the element is gone and a later
+    // reopen must start fresh instead of resuming a stale snapshot.
+    if (wasOpen && !viewer.isOpen) usePlaybackStore.getState().stop();
+  }, [
+    screen,
+    viewer.isOpen,
+    viewer.close,
+    library.viewerSelected,
+    backgroundVideo,
+  ]);
+
+  // Capture the video-only queue once for a playback session. If the user
+  // explicitly selects a video outside that queue, start a queue in the new
+  // browsing scope; changing filters alone leaves the current queue intact.
+  useEffect(() => {
+    if (!playbackItemId) {
+      if (videoQueue.length > 0) setVideoQueue([]);
+      if (queueAutoPlayId !== null) setQueueAutoPlayId(null);
+      return;
+    }
+
+    const selectedVideo =
+      library.viewerSelected?.kind === "video" &&
+      canPlayVideoInApp(
+        library.viewerSelected.path,
+        library.viewerSelected.name,
+      )
+        ? library.viewerSelected
+        : null;
+    const needsQueue =
+      videoQueue.length === 0 ||
+      (selectedVideo &&
+        !videoQueue.some((item) => item.id === selectedVideo.id));
+    if (needsQueue) {
+      setVideoQueue(
+        library.viewerItems.filter(
+          (item) =>
+            item.kind === "video" &&
+            canPlayVideoInApp(item.path, item.name),
+        ),
+      );
+    }
+  }, [
+    playbackItemId,
+    library.viewerSelected,
+    library.viewerItems,
+    videoQueue,
+    queueAutoPlayId,
+  ]);
+
+  useEffect(() => {
+    if (
+      queueAutoPlayId &&
+      playbackItemId === queueAutoPlayId &&
+      fhPlaying
+    ) {
+      setQueueAutoPlayId(null);
+    }
+  }, [queueAutoPlayId, playbackItemId, fhPlaying]);
 
   // The hidden player must not be reachable with Tab or a screen reader.
   useEffect(() => {
@@ -2603,13 +2723,29 @@ function App() {
                 selected={
                   screen === "Viewer"
                     ? library.viewerSelected
-                    : (frozenViewerItem ?? lastViewerItemRef.current)
+                    : (backgroundVideo ?? lastViewerItemRef.current)
                 }
+                playbackItem={playbackItem}
+                queueAutoPlayItemId={queueAutoPlayId}
                 zoom={viewer.zoom}
                 fitMode={viewer.fitMode}
                 rotation={viewer.rotation}
                 flipX={viewer.flipX}
                 onNavigate={viewer.navigate}
+                onNextVideo={playNextVideo}
+                onPreviousVideo={playPreviousVideo}
+                onExpandBackgroundVideo={(itemId) => {
+                  if (
+                    !library.viewerItems.some((item) => item.id === itemId)
+                  ) {
+                    library.setFilter("All");
+                  }
+                  library.inspectItem(itemId);
+                }}
+                onStopBackgroundVideo={() => {
+                  usePlaybackStore.getState().stop();
+                  setBackgroundVideo(null);
+                }}
                 onSetPhoto={(id: string) => library.inspectItem(id)}
                 onSetZoom={viewer.setZoom}
                 onZoomIn={viewer.zoomIn}
@@ -3787,16 +3923,25 @@ function App() {
         </div>
       )}
 
-      {screen !== "Viewer" && frozenViewerItem?.kind === "video" && (
+      {backgroundVideo && screen !== "Viewer" && (
         <MiniPlayer
+          onPrevious={playPreviousVideo}
+          onNext={playNextVideo}
           onExpand={() => {
-            library.inspectItem(frozenViewerItem.id);
+            if (
+              !library.viewerItems.some(
+                (item) => item.id === backgroundVideo.id,
+              )
+            ) {
+              library.setFilter("All");
+            }
+            library.inspectItem(backgroundVideo.id);
             setScreen("Viewer");
           }}
           onClose={() => {
             usePlaybackStore.getState().stop();
             viewer.close();
-            setFrozenViewerItem(null);
+            setBackgroundVideo(null);
           }}
         />
       )}
