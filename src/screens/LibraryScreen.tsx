@@ -136,6 +136,17 @@ interface LibraryScreenProps {
 
 function LibraryScreen(props: LibraryScreenProps) {
   const library = useLibraryStore();
+  const [showRefreshHint, setShowRefreshHint] = useState(false);
+  useEffect(() => {
+    if (!library.refreshingLibrary) {
+      setShowRefreshHint(false);
+      return;
+    }
+    // Do not flash a spinner for cheap local queries. Only very large or
+    // uncached refreshes earn a subtle indication.
+    const timer = window.setTimeout(() => setShowRefreshHint(true), 180);
+    return () => window.clearTimeout(timer);
+  }, [library.refreshingLibrary]);
   const draftTransforms = useDraftTransforms();
   const thumbnailSize = useThumbnailSize();
   const settingsStore = useSettingsStore();
@@ -1318,6 +1329,12 @@ function LibraryScreen(props: LibraryScreenProps) {
               >
                 Clear all
               </button>
+            )}
+            {!props.hiddenView && showRefreshHint && (
+              <span className="filter-refreshing" role="status">
+                <span className="filter-refreshing-spinner" aria-hidden="true" />
+                Refreshing…
+              </span>
             )}
           </div>
 

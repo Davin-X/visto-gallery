@@ -318,3 +318,27 @@ test("clearHiddenFilters resets only hidden-view refinements", () => {
   expect(state.hiddenFilter).toBe("All");
   expect(state.hiddenQuery).toBe("");
 });
+
+test("loadLibrary is non-blocking and shows a quiet refresh state instead", async () => {
+  let refreshingDuringCall = false;
+  let busyDuringCall = true;
+  let progressDuringCall = "unexpected";
+  vi.mocked(tauri.library.getItems).mockImplementationOnce(async () => {
+    const state = useLibraryStore.getState();
+    refreshingDuringCall = state.refreshingLibrary;
+    busyDuringCall = state.busy;
+    progressDuringCall = state.progress?.phase ?? "none";
+    return { items: [], hasMore: false, totalCount: 0 };
+  });
+  (window as any).__TAURI_INTERNALS__ = {};
+
+  await useLibraryStore.getState().loadLibrary();
+  delete (window as any).__TAURI_INTERNALS__;
+
+  expect(refreshingDuringCall).toBe(true);
+  expect(busyDuringCall).toBe(false);
+  expect(progressDuringCall).toBe("none");
+  expect(useLibraryStore.getState().refreshingLibrary).toBe(false);
+  expect(useLibraryStore.getState().busy).toBe(false);
+  expect(useLibraryStore.getState().progress).toBeNull();
+});

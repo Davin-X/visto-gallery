@@ -103,6 +103,7 @@ interface LibraryState {
   // Status
   busy: boolean;
   canceling: boolean;
+  refreshingLibrary: boolean;
   progress: {
     phase: string;
     processed: number;
@@ -450,6 +451,7 @@ export const useLibraryStore = create<LibraryState>()(
       lensFilter: null,
       busy: false,
       canceling: false,
+      refreshingLibrary: false,
       progress: null,
       notice: null,
 
@@ -484,8 +486,10 @@ export const useLibraryStore = create<LibraryState>()(
       loadLibrary: async (filter) => {
         const generation = ++libraryLoadGeneration;
         set({
-          busy: true,
-          progress: { phase: "reading", processed: 0, total: 0 },
+          // A paged catalog query is not a scan. Keeping it out of the
+          // blocking busy/progress state lets filter clicks stay cheap and
+          // avoids flashing the full importer UI for ordinary refinements.
+          refreshingLibrary: true,
           page: 0,
           hasMore: false,
           nextCursor: null,
@@ -508,7 +512,7 @@ export const useLibraryStore = create<LibraryState>()(
               console.warn(
                 "Tauri IPC is not available in browser preview mode.",
               );
-            set({ busy: false, progress: null });
+            set({ refreshingLibrary: false });
             get().refreshDerived();
             return;
           }
@@ -546,8 +550,7 @@ export const useLibraryStore = create<LibraryState>()(
             smartAlbums,
             tags,
             folders,
-            busy: false,
-            progress: null,
+            refreshingLibrary: false,
             page: 0,
             hasMore: page.hasMore,
             nextCursor: page.nextCursor ?? null,
@@ -555,10 +558,12 @@ export const useLibraryStore = create<LibraryState>()(
           });
           get().refreshDerived();
         } catch (e) {
+          // A superseded request must not end the newer request's spinner or
+          // report a stale failure to the user.
+          if (generation !== libraryLoadGeneration) return;
           if (import.meta.env.DEV) console.error("loadLibrary failed:", e);
           set({
-            busy: false,
-            progress: null,
+            refreshingLibrary: false,
             notice: "Failed to load library: " + String(e),
           });
         }
@@ -594,8 +599,6 @@ export const useLibraryStore = create<LibraryState>()(
             const additions = page.items.filter((item) => !known.has(item.id));
             return {
               items: [...current.items, ...additions],
-              busy: false,
-              progress: null,
               page: current.page + 1,
               hasMore: page.hasMore,
               nextCursor: page.nextCursor ?? null,
@@ -1606,5 +1609,7 @@ export const useActiveSmartAlbum = () =>
   useLibraryStore((s) => s.activeSmartAlbum);
 export const useDuplicates = () => useLibraryStore((s) => s.duplicates);
 export const useBusy = () => useLibraryStore((s) => s.busy);
+export const useLibraryRefreshing = () =>
+  useLibraryStore((s) => s.refreshingLibrary);
 export const useProgress = () => useLibraryStore((s) => s.progress);
 export const useNotice = () => useLibraryStore((s) => s.notice);
