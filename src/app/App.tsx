@@ -10,6 +10,7 @@ import React, {
 import HiddenScreen from "../screens/HiddenScreen";
 import LibraryScreen from "../screens/LibraryScreen";
 import { useFocusTrap } from "../design/hooks/useFocusTrap";
+import { useKeyboard } from "../engine/hooks/useKeyboard";
 import EditScreen from "../screens/EditScreen";
 import ViewerScreen from "../screens/ViewerScreen";
 import VideoPlayerScreen from "../screens/VideoPlayerScreen";
@@ -813,6 +814,167 @@ function App() {
     openViewer: () => {},
   });
 
+  // Unified keyboard shortcuts: a single window listener chains all handlers.
+  // Handlers read fresh state through liveRef / handlersRef so this stays
+  // correct across StrictMode remounts without re-subscribing.
+  useKeyboard([handleKeyDown]);
+
+  function handleKeyDown(e: KeyboardEvent) {
+    const {
+      library,
+      viewer,
+      screen,
+      viewerOrigin,
+      albumDialogOpen,
+      albumPickerOpen,
+      albumPendingDelete,
+      itemPendingDeleteCount,
+      folderPendingRemove,
+      sourcesSheetOpen,
+    } = liveRef.current;
+    const mod = e.metaKey || e.ctrlKey;
+    const key = e.key.toLowerCase();
+
+    // A slideshow owns the keyboard while it is open: its overlay handles
+    // Escape/arrows/Space itself, and nothing underneath should react.
+    if (useSlideshowStore.getState().isOpen) return;
+
+    // While a modal is open, every key belongs to it (the dialogs own Enter
+    // and Escape) instead of the global shortcut map.
+    if (
+      albumDialogOpen ||
+      albumPickerOpen ||
+      albumPendingDelete ||
+      itemPendingDeleteCount > 0 ||
+      folderPendingRemove ||
+      sourcesSheetOpen ||
+      updateDialogOpenRef.current
+    )
+      return;
+
+    if (mod && key === "o") {
+      e.preventDefault();
+      handlersRef.current.importFolder();
+      return;
+    }
+    if (mod && key === "i") {
+      e.preventDefault();
+      handlersRef.current.importFiles();
+      return;
+    }
+    if (isExportShortcut(e)) {
+      e.preventDefault();
+      handlersRef.current.exportToBatch();
+      return;
+    }
+    if (mod && e.key === "\\") {
+      e.preventDefault();
+      library.toggleSidebar();
+      return;
+    }
+    if (mod && e.altKey && key === "i") {
+      e.preventDefault();
+      library.toggleInspector();
+      return;
+    }
+    if (mod && key === "a") {
+      const target = e.target as HTMLElement;
+      const isEditable =
+        target.isContentEditable ||
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT";
+      if (!isEditable && (screen === "Library" || screen === "Hidden" || screen === "Albums")) {
+        e.preventDefault();
+        const items = screen === "Hidden" ? library.hiddenItems : library.visibleItems;
+        const selectedSet = new Set(library.selectedIds);
+        const allSelected =
+          items.length > 0 && items.every((item: any) => selectedSet.has(item.id));
+        library.setSelectedIds(allSelected ? [] : items.map((item: any) => item.id));
+        return;
+      }
+    }
+    if (mod && key === "f") {
+      const target = e.target as HTMLElement;
+      const isEditable =
+        target.isContentEditable ||
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT";
+      if (!isEditable) {
+        e.preventDefault();
+        const focusSearch = () => {
+          const input =
+            searchInputRef.current ||
+            (document.querySelector(".search-field input") as HTMLInputElement | null);
+          input?.focus();
+          input?.select();
+        };
+        // Both the Library and Hidden screens own a search field. Jump to
+        // Library only when neither is on screen, then focus once mounted.
+        if (screen !== "Library" && screen !== "Hidden" && screen !== "Video") {
+          setScreen("Library");
+          let attempts = 0;
+          const tryFocus = () => {
+            const input =
+              searchInputRef.current ||
+              (document.querySelector(".search-field input") as HTMLInputElement | null);
+            if (input) {
+              input.focus();
+              input.select();
+              return;
+            }
+            if (attempts++ < 10) requestAnimationFrame(tryFocus);
+          };
+          requestAnimationFrame(tryFocus);
+        } else {
+          focusSearch();
+        }
+      }
+      return;
+    }
+    if ((screen === "Viewer" || screen === "Video") && !e.defaultPrevented) {
+      const target = e.target as HTMLElement;
+      const isEditable =
+        target.isContentEditable ||
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT";
+      if (!isEditable && e.key === "ArrowRight") {
+        if (screen === "Video") handlersRef.current.navigateVideo(1);
+        else handlersRef.current.navigateViewer(1);
+      }
+      if (!isEditable && e.key === "ArrowLeft") {
+        if (screen === "Video") handlersRef.current.navigateVideo(-1);
+        else handlersRef.current.navigateViewer(-1);
+      }
+    }
+    if (e.key === "Escape") {
+      if (screen === "Viewer") {
+        viewer.close();
+        setScreen(viewerOrigin || "Library");
+      } else if (screen === "Video") {
+        setScreen(viewerOrigin || "Library");
+      } else if (library.showInspector) {
+        library.toggleInspector();
+      }
+    }
+    if (e.key === "Enter" && mod && screen === "Hidden" && library.inspectedId) {
+      // HiddenScreen owns the reveal confirmation, so route the shortcut
+      // through it instead of opening the viewer directly.
+      e.preventDefault();
+      window.dispatchEvent(
+        new CustomEvent("mac-gallery:open-hidden", {
+          detail: { id: library.inspectedId },
+        }),
+      );
+      return;
+    }
+    if (e.key === "Enter" && mod && screen === "Library" && library.inspectedId) {
+      handlersRef.current.openViewer(library.inspectedId);
+    }
+  }
+
   useEffect(() => {
     folderInputRef.current?.setAttribute("webkitdirectory", "");
     folderInputRef.current?.setAttribute("directory", "");
@@ -910,168 +1072,9 @@ function App() {
     };
     listen();
 
-    // Keyboard shortcuts
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const {
-        library,
-        viewer,
-        screen,
-        viewerOrigin,
-        albumDialogOpen,
-        albumPickerOpen,
-        albumPendingDelete,
-        itemPendingDeleteCount,
-        folderPendingRemove,
-        sourcesSheetOpen,
-      } = liveRef.current;
-      const mod = e.metaKey || e.ctrlKey;
-      const key = e.key.toLowerCase();
-
-      // A slideshow owns the keyboard while it is open: its overlay handles
-      // Escape/arrows/Space itself, and nothing underneath should react.
-      if (useSlideshowStore.getState().isOpen) return;
-
-      // While a modal is open, every key belongs to it (the dialogs own Enter
-      // and Escape) instead of the global shortcut map.
-      if (
-        albumDialogOpen ||
-        albumPickerOpen ||
-        albumPendingDelete ||
-        itemPendingDeleteCount > 0 ||
-        folderPendingRemove ||
-        sourcesSheetOpen ||
-        updateDialogOpenRef.current
-      )
-        return;
-
-      if (mod && key === "o") {
-        e.preventDefault();
-        handlersRef.current.importFolder();
-        return;
-      }
-      if (mod && key === "i") {
-        e.preventDefault();
-        handlersRef.current.importFiles();
-        return;
-      }
-      if (isExportShortcut(e)) {
-        e.preventDefault();
-        handlersRef.current.exportToBatch();
-        return;
-      }
-      if (mod && e.key === "\\") {
-        e.preventDefault();
-        library.toggleSidebar();
-        return;
-      }
-      if (mod && e.altKey && key === "i") {
-        e.preventDefault();
-        library.toggleInspector();
-        return;
-      }
-      if (mod && key === "a") {
-        const target = e.target as HTMLElement;
-        const isEditable =
-          target.isContentEditable ||
-          target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT";
-        if (!isEditable && (screen === "Library" || screen === "Hidden" || screen === "Albums")) {
-          e.preventDefault();
-          const items = screen === "Hidden" ? library.hiddenItems : library.visibleItems;
-          const selectedSet = new Set(library.selectedIds);
-          const allSelected =
-            items.length > 0 && items.every((item: any) => selectedSet.has(item.id));
-          library.setSelectedIds(allSelected ? [] : items.map((item: any) => item.id));
-          return;
-        }
-      }
-      if (mod && key === "f") {
-        const target = e.target as HTMLElement;
-        const isEditable =
-          target.isContentEditable ||
-          target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT";
-        if (!isEditable) {
-          e.preventDefault();
-          const focusSearch = () => {
-            const input =
-              searchInputRef.current ||
-              (document.querySelector(".search-field input") as HTMLInputElement | null);
-            input?.focus();
-            input?.select();
-          };
-          // Both the Library and Hidden screens own a search field. Jump to
-          // Library only when neither is on screen, then focus once mounted.
-          if (screen !== "Library" && screen !== "Hidden" && screen !== "Video") {
-            setScreen("Library");
-            let attempts = 0;
-            const tryFocus = () => {
-              const input =
-                searchInputRef.current ||
-                (document.querySelector(".search-field input") as HTMLInputElement | null);
-              if (input) {
-                input.focus();
-                input.select();
-                return;
-              }
-              if (attempts++ < 10) requestAnimationFrame(tryFocus);
-            };
-            requestAnimationFrame(tryFocus);
-          } else {
-            focusSearch();
-          }
-        }
-        return;
-      }
-      if ((screen === "Viewer" || screen === "Video") && !e.defaultPrevented) {
-        const target = e.target as HTMLElement;
-        const isEditable =
-          target.isContentEditable ||
-          target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT";
-        if (!isEditable && e.key === "ArrowRight") {
-          if (screen === "Video") handlersRef.current.navigateVideo(1);
-          else handlersRef.current.navigateViewer(1);
-        }
-        if (!isEditable && e.key === "ArrowLeft") {
-          if (screen === "Video") handlersRef.current.navigateVideo(-1);
-          else handlersRef.current.navigateViewer(-1);
-        }
-      }
-      if (e.key === "Escape") {
-        if (screen === "Viewer") {
-          viewer.close();
-          setScreen(viewerOrigin || "Library");
-        } else if (screen === "Video") {
-          setScreen(viewerOrigin || "Library");
-        } else if (library.showInspector) {
-          library.toggleInspector();
-        }
-      }
-      if (e.key === "Enter" && mod && screen === "Hidden" && library.inspectedId) {
-        // HiddenScreen owns the reveal confirmation, so route the shortcut
-        // through it instead of opening the viewer directly.
-        e.preventDefault();
-        window.dispatchEvent(
-          new CustomEvent("mac-gallery:open-hidden", {
-            detail: { id: library.inspectedId },
-          }),
-        );
-        return;
-      }
-      if (e.key === "Enter" && mod && screen === "Library" && library.inspectedId) {
-        handlersRef.current.openViewer(library.inspectedId);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-
     return () => {
       cancelled = true;
       autoImportControllerRef.current?.cancel();
-      window.removeEventListener("keydown", handleKeyDown);
       unlisteners.forEach((un) => un());
     };
     // Mount-only. Handlers read fresh state through liveRef / handlersRef.
