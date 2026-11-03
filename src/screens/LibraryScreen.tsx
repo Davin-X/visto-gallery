@@ -293,10 +293,26 @@ function LibraryScreen(props: LibraryScreenProps) {
     }
     return counts;
   }, [filterSource, props.hiddenView]);
-  const clearEmptyView = () => {
-    props.onChangeQuery("");
-    props.onChangeFilter("All");
-    if (!props.hiddenView) library.setActiveSource(null);
+  const hasActiveRefinements = props.hiddenView
+    ? Boolean(
+        (props.query || "").trim() ||
+          props.filter !== "All",
+      )
+    : Boolean(
+        (props.query || "").trim() ||
+          props.filter !== "All" ||
+          library.activeSource ||
+          library.activeSmartAlbum ||
+          library.cameraFilter ||
+          library.lensFilter ||
+          props.minRating !== null ||
+          props.colorLabelFilter ||
+          props.dateFrom != null ||
+          props.dateTo != null,
+      );
+  const clearRefinements = () => {
+    if (props.hiddenView) library.clearHiddenFilters();
+    else library.clearFilters();
   };
 
   const emptyView = () => {
@@ -326,7 +342,7 @@ function LibraryScreen(props: LibraryScreenProps) {
               Browse Library
             </button>
           ) : (
-            <button type="button" onClick={clearEmptyView}>
+            <button type="button" onClick={clearRefinements}>
               Clear filters
             </button>
           )}
@@ -389,7 +405,7 @@ function LibraryScreen(props: LibraryScreenProps) {
             <PlusIcon size={14} /> Add a folder
           </button>
         ) : (
-          <button type="button" onClick={clearEmptyView}>
+          <button type="button" onClick={clearRefinements}>
             Clear filters
           </button>
         )}
@@ -1292,6 +1308,17 @@ function LibraryScreen(props: LibraryScreenProps) {
               onSetDateRange={props.onSetDateRange}
               onCreateSmartAlbum={props.onCreateSmartAlbum}
             />
+            {hasActiveRefinements && (
+              <button
+                type="button"
+                className="quick-filter clear-refinements-button"
+                onClick={clearRefinements}
+                aria-label="Clear all filters"
+                title="Clear search and all filter refinements"
+              >
+                Clear all
+              </button>
+            )}
           </div>
 
           {props.selectedIds.length > 0 && (

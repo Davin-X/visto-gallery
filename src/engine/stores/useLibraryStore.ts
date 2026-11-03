@@ -159,6 +159,8 @@ interface LibraryState {
   // Actions - Filters & View
   setFilter: (filter: Filter) => void;
   setHiddenFilter: (filter: Filter) => void;
+  clearFilters: () => void;
+  clearHiddenFilters: () => void;
   setActiveSource: (path: string | null) => void;
   setQuery: (query: string) => void;
   setHiddenQuery: (query: string) => void;
@@ -782,6 +784,25 @@ export const useLibraryStore = create<LibraryState>()(
         get().refreshDerived();
         void get().loadLibrary();
       },
+
+      clearFilters: () => {
+        set({
+          filter: "All",
+          query: "",
+          activeSource: null,
+          minRating: null,
+          colorLabelFilter: null,
+          cameraFilter: null,
+          lensFilter: null,
+          dateFrom: null,
+          dateTo: null,
+          activeSmartAlbum: null,
+        });
+        get().refreshDerived();
+        void get().loadLibrary();
+      },
+
+      clearHiddenFilters: () => set({ hiddenFilter: "All", hiddenQuery: "" }),
 
       setHiddenFilter: (hiddenFilter) => set({ hiddenFilter }),
 

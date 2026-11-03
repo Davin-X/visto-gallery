@@ -276,3 +276,45 @@ test("openSmartAlbum applies the saved filter definition without arbitrary SQL",
   expect(state.activeSource).toBe("/Photos");
   expect(state.activeAlbum).toBeNull();
 });
+
+test("clearFilters resets every refinement and reloads the library", async () => {
+  (window as any).__TAURI_INTERNALS__ = {};
+  useLibraryStore.setState({
+    filter: "Videos",
+    query: "mountain",
+    activeSource: "/Photos",
+    activeSmartAlbum: "smart-1",
+    minRating: 4,
+    colorLabelFilter: "blue",
+    cameraFilter: "Nikon Z8",
+    lensFilter: "Nikkor",
+    dateFrom: 100,
+    dateTo: 200,
+  });
+
+  useLibraryStore.getState().clearFilters();
+  await Promise.resolve();
+  delete (window as any).__TAURI_INTERNALS__;
+
+  const state = useLibraryStore.getState();
+  expect(state.filter).toBe("All");
+  expect(state.query).toBe("");
+  expect(state.activeSource).toBeNull();
+  expect(state.activeSmartAlbum).toBeNull();
+  expect(state.minRating).toBeNull();
+  expect(state.colorLabelFilter).toBeNull();
+  expect(state.cameraFilter).toBeNull();
+  expect(state.lensFilter).toBeNull();
+  expect(state.dateFrom).toBeNull();
+  expect(state.dateTo).toBeNull();
+});
+
+test("clearHiddenFilters resets only hidden-view refinements", () => {
+  useLibraryStore.setState({ hiddenFilter: "Videos", hiddenQuery: "clip" });
+
+  useLibraryStore.getState().clearHiddenFilters();
+
+  const state = useLibraryStore.getState();
+  expect(state.hiddenFilter).toBe("All");
+  expect(state.hiddenQuery).toBe("");
+});
