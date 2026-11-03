@@ -8782,6 +8782,17 @@ body {
   background: #000;
 }
 
+.viewer-video-frame-floating-minimized {
+  grid-template-rows: auto;
+  width: min(320px, calc(100% - 32px));
+  aspect-ratio: auto;
+  max-height: none;
+}
+
+.viewer-video-frame-floating-minimized .viewer-video {
+  display: none;
+}
+
 .floating-overlay-bar {
   display: flex;
   align-items: center;
@@ -8820,6 +8831,16 @@ body {
 
 .floating-overlay-bar .floating-overlay-drag:active {
   cursor: grabbing;
+}
+
+.floating-overlay-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .floating-overlay-bar button:hover {

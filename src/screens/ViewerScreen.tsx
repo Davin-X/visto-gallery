@@ -13,6 +13,7 @@ import {
   HeartIcon,
   MinusIcon,
   PauseIcon,
+  PictureInPictureIcon,
   PlusIcon,
   PlayIcon,
   RotateIcon,
@@ -76,6 +77,9 @@ function FloatingVideoControls({
   onNext,
   onExpand,
   onStop,
+  minimized,
+  onToggleMinimized,
+  videoName,
   onMovePointerDown,
   onMovePointerMove,
   onMovePointerEnd,
@@ -85,6 +89,9 @@ function FloatingVideoControls({
   onNext: () => boolean;
   onExpand: () => void;
   onStop: () => void;
+  minimized: boolean;
+  onToggleMinimized: () => void;
+  videoName: string;
   onMovePointerDown: React.PointerEventHandler<HTMLButtonElement>;
   onMovePointerMove: React.PointerEventHandler<HTMLButtonElement>;
   onMovePointerEnd: React.PointerEventHandler<HTMLButtonElement>;
@@ -117,72 +124,124 @@ function FloatingVideoControls({
       >
         <DragIcon size={12} />
       </button>
-      <button
-        type="button"
-        className="floating-overlay-prev"
-        onClick={onPrevious}
-        aria-label="Previous video"
-        title="Previous video"
-      >
-        ⟨
-      </button>
-      <button
-        type="button"
-        onClick={toggle}
-        aria-label={playing ? "Pause" : "Play"}
-        title={playing ? "Pause" : "Play"}
-      >
-        {playing ? <PauseIcon size={11} /> : <PlayIcon size={11} />}
-      </button>
-      <input
-        type="range"
-        className="floating-overlay-seek"
-        min={0}
-        max={duration || 0}
-        step={0.05}
-        value={Math.min(time, duration || 0)}
-        onChange={(e) => seek(Number(e.target.value))}
-        aria-label="Seek"
-      />
-      <span className="floating-overlay-time">
-        {formatDuration(time)} / {formatDuration(duration)}
-      </span>
-      <button
-        type="button"
-        className="floating-overlay-next"
-        onClick={onNext}
-        aria-label="Next video"
-        title="Next video"
-      >
-        ⟩
-      </button>
-      <button
-        type="button"
-        className="floating-overlay-mute"
-        onClick={toggleMute}
-        aria-label={muted ? "Unmute" : "Mute"}
-        title={muted ? "Unmute" : "Mute"}
-      >
-        <VolumeIcon size={11} muted={muted} />
-      </button>
-      <button
-        type="button"
-        className="floating-overlay-expand"
-        onClick={onExpand}
-        aria-label="Return to full video"
-        title="Return to full video"
-      >
-        ↥
-      </button>
-      <button
-        type="button"
-        className="floating-overlay-close"
-        onClick={onStop}
-        aria-label="Stop background video"
-        title="Stop background video"
-      >
-        ×
-      </button>
+      {minimized ? (
+        <>
+          <span className="floating-overlay-title" title={videoName}>
+            {videoName}
+          </span>
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={playing ? "Pause" : "Play"}
+            title={playing ? "Pause" : "Play"}
+          >
+            {playing ? <PauseIcon size={11} /> : <PlayIcon size={11} />}
+          </button>
+          <button
+            type="button"
+            onClick={onToggleMinimized}
+            aria-label="Restore floating video"
+            title="Restore floating video"
+          >
+            <PictureInPictureIcon size={13} />
+          </button>
+          <button
+            type="button"
+            className="floating-overlay-expand"
+            onClick={onExpand}
+            aria-label="Return to full video"
+            title="Return to full video"
+          >
+            ↥
+          </button>
+          <button
+            type="button"
+            className="floating-overlay-close"
+            onClick={onStop}
+            aria-label="Stop background video"
+            title="Stop background video"
+          >
+            ×
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="floating-overlay-prev"
+            onClick={onPrevious}
+            aria-label="Previous video"
+            title="Previous video"
+          >
+            ⟨
+          </button>
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={playing ? "Pause" : "Play"}
+            title={playing ? "Pause" : "Play"}
+          >
+            {playing ? <PauseIcon size={11} /> : <PlayIcon size={11} />}
+          </button>
+          <input
+            type="range"
+            className="floating-overlay-seek"
+            min={0}
+            max={duration || 0}
+            step={0.05}
+            value={Math.min(time, duration || 0)}
+            onChange={(e) => seek(Number(e.target.value))}
+            aria-label="Seek"
+          />
+          <span className="floating-overlay-time">
+            {formatDuration(time)} / {formatDuration(duration)}
+          </span>
+          <button
+            type="button"
+            className="floating-overlay-next"
+            onClick={onNext}
+            aria-label="Next video"
+            title="Next video"
+          >
+            ⟩
+          </button>
+          <button
+            type="button"
+            className="floating-overlay-mute"
+            onClick={toggleMute}
+            aria-label={muted ? "Unmute" : "Mute"}
+            title={muted ? "Unmute" : "Mute"}
+          >
+            <VolumeIcon size={11} muted={muted} />
+          </button>
+          <button
+            type="button"
+            onClick={onToggleMinimized}
+            aria-label="Minimize floating video"
+            title="Minimize floating video"
+          >
+            <MinusIcon size={11} />
+          </button>
+          <button
+            type="button"
+            className="floating-overlay-expand"
+            onClick={onExpand}
+            aria-label="Return to full video"
+            title="Return to full video"
+          >
+            ↥
+          </button>
+          <button
+            type="button"
+            className="floating-overlay-close"
+            onClick={onStop}
+            aria-label="Stop background video"
+            title="Stop background video"
+          >
+            ×
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -225,6 +284,7 @@ function ViewerScreen(props: ViewerScreenProps) {
     left: number;
     top: number;
   } | null>(null);
+  const [floatingMinimized, setFloatingMinimized] = useState(false);
   const programmaticScrollRef = useRef(false);
   const stripWindowSize = 50;
   const selectedIndex = props.items.findIndex(
@@ -697,7 +757,7 @@ function ViewerScreen(props: ViewerScreenProps) {
             className={`viewer-video-frame ${
               selected.kind === "video"
                 ? "viewer-video-frame-focused"
-                : "viewer-video-frame-floating"
+                : `viewer-video-frame-floating${floatingMinimized ? " viewer-video-frame-floating-minimized" : ""}`
             }`}
             style={
               floatingPosition
@@ -733,6 +793,11 @@ function ViewerScreen(props: ViewerScreenProps) {
               <FloatingVideoControls
                 onPrevious={props.onPreviousVideo}
                 onNext={props.onNextVideo}
+                minimized={floatingMinimized}
+                onToggleMinimized={() =>
+                  setFloatingMinimized((minimized) => !minimized)
+                }
+                videoName={playbackItem.name}
                 onExpand={() =>
                   props.onExpandBackgroundVideo(playbackItem.id)
                 }
