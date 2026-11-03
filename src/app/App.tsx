@@ -60,52 +60,15 @@ import { navigateToBatchExport } from "./exportFlow";
 import { getAdjacentVideo } from "./backgroundVideo";
 import { createAutoImportController, syncFolderWatchers } from "../engine/utils/folderWatcher";
 import { copyTagsToFinder } from "../engine/utils/finderTags";
-
-// Helper: render a kind badge using centralized type identity
-
-// Helper: get icon for kind
-function KindIcon({ kind, size = 14 }: { kind: "photo" | "video" | "raw"; size?: number }) {
-  const common = {
-    width: size,
-    height: size,
-    viewBox: "0 0 16 16",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.8,
-  };
-  if (kind === "photo") {
-    return (
-      <span>
-        <svg {...common}>
-          <rect x="2" y="2" width="12" height="12" rx="2" />
-          <path d="M6 2v12M10 2v12M2 6h12M2 10h12" />
-        </svg>
-      </span>
-    );
-  }
-  return (
-    <span>
-      <svg {...common}>
-        <path d="M4 4h8v8H4z" />
-        <path d="M4 8h8" />
-      </svg>
-    </span>
-  );
-}
+import { describeError } from "./utils/describeError";
+import { isWarningNotice } from "./utils/isWarningNotice";
+import { startConfiguredSlideshow } from "./utils/startConfiguredSlideshow";
 
 /**
  * Apply the item's saved edit draft to a preview image. Passing the shared map
  * keeps this synchronous and avoids a localStorage read per tile.
  */
 
-function startConfiguredSlideshow(items: MediaItem[], startId?: string | null) {
-  const preferences = useSettingsStore.getState();
-  const slideshow = useSlideshowStore.getState();
-  slideshow.setInterval(preferences.slideshowInterval);
-  slideshow.setShuffle(preferences.slideshowShuffle);
-  slideshow.setLoop(preferences.slideshowLoop);
-  slideshow.open(items, startId);
-}
 import type {
   MediaItem,
   MediaKind,
@@ -186,23 +149,6 @@ const initialEdits = {
   rotation: 0,
   flip: false,
 };
-
-/** Tauri rejects with a plain string, but anything else can surface too. */
-function describeError(error: unknown): string {
-  if (typeof error === "string") return error;
-  if (error instanceof Error) return error.message;
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-}
-
-function isWarningNotice(text: string): boolean {
-  return /failed|could not|cannot access|not a folder|could not read|no media files found|no supported media/i.test(
-    text,
-  );
-}
 
 /** Modifier glyph for the "focus search" hint - Command on macOS, Ctrl elsewhere. */
 function App() {
@@ -3810,37 +3756,6 @@ function App() {
     </ErrorBoundary>
   );
 }
-
-// ===== SCREEN COMPONENTS =====
-
-// A <video> on its own only paints a poster once playback starts, so every video
-// tile used to render solid black. Seeking a fraction of a second after the
-// metadata arrives makes the webview decode and paint a real frame.
-
-function PickerThumbnail({
-  itemId,
-  name,
-  style,
-}: {
-  itemId: string;
-  name: string;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <CachedThumbnail
-      itemId={itemId}
-      name={name}
-      size={256}
-      style={style}
-      showStatus
-      placeholderClassName="edit-picker-thumb"
-    />
-  );
-}
-
-// How many tiles to mount before the user scrolls further. Small enough to
-// keep filtering/typing snappy, large enough to fill a tall window.
-const GALLERY_PAGE_SIZE = 180;
 
 /**
  * Hidden is the same gallery as Library, but scoped to items with `hidden`.
