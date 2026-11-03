@@ -1410,6 +1410,34 @@ function App() {
     };
   }, [settingsHydrated, autoImport, folderSignature, showNotice]);
 
+  // Startup deletion scan: detect files removed from Finder while the app was
+  // closed, so they never linger as stale catalog rows. This runs once per
+  // launch regardless of the autoImport setting. Unchanged files are skipped
+  // quickly via the size/modified_at fast path, so this is a lightweight
+  // cleanup pass rather than a full re-import.
+  useEffect(() => {
+    if (!settingsHydrated) return;
+    const isTauri =
+      typeof window !== "undefined" &&
+      ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+    if (!isTauri) return;
+    let cancelled = false;
+    void (async () => {
+      const roots = await tauri.library.getRoots().catch(() => [] as string[]);
+      if (cancelled || roots.length === 0) return;
+      for (const root of roots) {
+        if (cancelled) break;
+        await tauri.library.scan(root, false).catch(() => {});
+      }
+      if (cancelled) return;
+      await liveRef.current.library.loadLibrary();
+      await liveRef.current.library.loadFolders();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [settingsHydrated]);
+
   const copyTagsToFinderForIds = useCallback(
     async (ids: string[]) => {
       const items = useLibraryStore
