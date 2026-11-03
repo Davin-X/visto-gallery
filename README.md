@@ -27,7 +27,10 @@
 
 - **Private by default** — Everything stays local. No cloud, no tracking.
 - **Browse effortlessly** — Grid, Details, Timeline, Filmstrip, and Overview views
-- **Organize** — Albums, tags, favorites, and hidden items
+- **Organize** — Albums, Smart Albums, tags, favorites, and hidden items
+- **Filter precisely** — Capture-date range, rating, color label, camera, lens, and source filters
+- **Portable catalog** — Versioned catalog backup and restore without modifying original media
+- **Moved libraries** — Explicit root-path mapping with preview and conflict checks
 - **Edit & export** — Non-destructive edits with JPEG, PNG, HEIC, and AVIF export
 - **Find duplicates** — SHA-256 powered detection with live progress & cancellation
 - **Native feel** — Finder tags, Reveal in Finder, dark/light/system themes
