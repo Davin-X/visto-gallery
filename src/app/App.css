@@ -8760,8 +8760,9 @@ body {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   width: min(420px, calc(100% - 32px));
-  aspect-ratio: 16 / 9;
-  max-height: 50%;
+  height: min(50cqh, 276px, calc((100cqw - 32px) * 9 / 16 + 40px));
+  min-height: 140px;
+  box-sizing: border-box;
   opacity: 1;
   pointer-events: auto;
   background: #000;
@@ -8783,14 +8784,12 @@ body {
 }
 
 .viewer-video-frame-floating-minimized {
-  grid-template-rows: auto;
-  width: min(320px, calc(100% - 32px));
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: min(280px, calc(100% - 32px));
+  height: min(50cqh, 196px, calc((100cqw - 32px) * 9 / 16 + 40px));
+  min-height: 120px;
   aspect-ratio: auto;
   max-height: none;
-}
-
-.viewer-video-frame-floating-minimized .viewer-video {
-  display: none;
 }
 
 .floating-overlay-bar {
@@ -8980,6 +8979,10 @@ body {
     right: 12px;
     bottom: 12px;
     width: min(380px, calc(100% - 24px));
+  }
+
+  .viewer-video-frame-floating-minimized {
+    width: min(280px, calc(100% - 24px));
   }
 
   .floating-overlay-bar {
