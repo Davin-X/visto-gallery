@@ -217,7 +217,6 @@ pub fn run() {
             cancel_batch_export,
             // Duplicates
             find_duplicates,
-            // (removed compute_hash stub)
             // Finder
             write_finder_tags,
             read_finder_tags,
