@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePlaybackStore } from "../../engine/stores/usePlaybackStore";
 import { formatDuration } from "../../engine/utils/time";
 import { PauseIcon, PlayIcon, PictureInPictureIcon, VolumeIcon } from "./icons";
@@ -33,6 +33,15 @@ export function MiniPlayer({
   const [pictureInPicture, setPictureInPicture] = useState(false);
   const [pictureInPictureSupported, setPictureInPictureSupported] = useState(false);
   const [pictureInPictureError, setPictureInPictureError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const playerRef = useRef<HTMLDivElement | null>(null);
+  const dragStartRef = useRef<{
+    clientX: number;
+    clientY: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!element) {
@@ -56,10 +65,64 @@ export function MiniPlayer({
     }
   };
 
+  const onMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    dragStartRef.current = {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      startX: position.x,
+      startY: position.y,
+    };
+  };
+
+  const onMouseMove = (e: MouseEvent) => {
+    if (!isDragging || !dragStartRef.current) return;
+    const dx = e.clientX - dragStartRef.current.clientX;
+    const dy = e.clientY - dragStartRef.current.clientY;
+    setPosition({ x: dragStartRef.current.startX + dx, y: dragStartRef.current.startY + dy });
+  };
+
+  const onMouseUp = () => {
+    setIsDragging(false);
+    dragStartRef.current = null;
+  };
+
+  useEffect(() => {
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [isDragging, position, onMouseMove, onMouseUp]);
+
+  // Capture the rendered position on mount so the player stays where CSS
+  // placed it (bottom-right) until the user drags it.
+  useLayoutEffect(() => {
+    if (playerRef.current) {
+      const rect = playerRef.current.getBoundingClientRect();
+      setPosition({ x: rect.left, y: rect.top });
+    }
+  }, []);
+
   if (!itemId) return null;
 
   return (
-    <div className="mini-player" role="region" aria-label="Now playing">
+    <div
+      ref={playerRef}
+      className={`mini-player${isDragging ? " is-dragging" : ""}`}
+      role="region"
+      aria-label="Now playing"
+      style={{
+        position: "fixed",
+        left: position.x,
+        top: position.y,
+        right: "auto",
+        bottom: "auto",
+      }}
+      onMouseDown={onMouseDown}
+    >
       <div className="mini-player-heading">
         <span className="mini-player-status">
           <span className={playing ? "mini-player-pulse playing" : "mini-player-pulse"} />
