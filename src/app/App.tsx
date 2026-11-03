@@ -51,7 +51,6 @@ import {
 } from "../engine/stores";
 import { draftImageStyle } from "../engine/utils/draftImage";
 import { MiniPlayer } from "../design/components/MiniPlayer";
-import FloatingVideoPlayer from "../design/components/FloatingVideoPlayer";
 import {
   canPlayVideoInApp,
   getTypeIdentity,
@@ -4053,30 +4052,7 @@ function App() {
         </div>
       )}
 
-      {/* When viewing a photo with a background video, show a visible
-          picture-in-picture-style floating overlay so playback continues
-          visibly over the photo. Elsewhere (Library, Albums, etc.) show the
-          compact Now Playing bar instead. */}
-      {screen === "Viewer" && backgroundVideo ? (
-        <FloatingVideoPlayer
-          item={backgroundVideo}
-          assetUrl={assetUrl}
-          onExpand={() => {
-            setViewerOrigin(screen);
-            setBackgroundVideo(backgroundVideo);
-            setScreen("Video");
-          }}
-          onClose={() => {
-            usePlaybackStore.getState().stop();
-            setBackgroundVideo(null);
-            setVideoQueue([]);
-            videoQueuePagingRef.current = null;
-            setQueueAutoPlayId(null);
-          }}
-          onPrevious={playPreviousVideo}
-          onNext={playNextVideo}
-        />
-      ) : playbackItem && playbackItemId && screen !== "Video" && (
+      {playbackItem && playbackItemId && screen !== "Video" && (
         <MiniPlayer
           onPrevious={playPreviousVideo}
           onNext={playNextVideo}
