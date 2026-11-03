@@ -1,17 +1,6 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  CropIcon,
-  FlipIcon,
-  RotateIcon,
-  SparkleIcon,
-} from "../design/components/icons";
+import { CropIcon, FlipIcon, RotateIcon, SparkleIcon } from "../design/components/icons";
 import { BrandMark } from "../design/components/BrandMark";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import { tauri } from "../engine/commands/tauri";
@@ -141,10 +130,7 @@ function EditScreen(props: EditScreenProps) {
     height: 1,
   };
   const savedDraftItems = useMemo(
-    () =>
-      (props.items || []).filter(
-        (item: any) => draftIds.has(item.id) && !item.hidden,
-      ),
+    () => (props.items || []).filter((item: any) => draftIds.has(item.id) && !item.hidden),
     [props.items, draftIds],
   );
   const previewValues = showOriginalPreview ? initialEdits : values;
@@ -175,38 +161,23 @@ function EditScreen(props: EditScreenProps) {
       const dy = (e.clientY - drag.startY) / drag.rect.height;
       if (drag.type === "move") {
         const nx = Math.min(Math.max(drag.crop.x + dx, 0), 1 - drag.crop.width);
-        const ny = Math.min(
-          Math.max(drag.crop.y + dy, 0),
-          1 - drag.crop.height,
-        );
+        const ny = Math.min(Math.max(drag.crop.y + dy, 0), 1 - drag.crop.height);
         props.onSetCrop({ x: nx, y: ny });
       } else if (typeof drag.crop.aspectRatio === "number") {
         const ratio = drag.crop.aspectRatio;
-        const widthDeltaFromHeight =
-          (dy * ratio) / (drag.rect.width / drag.rect.height);
+        const widthDeltaFromHeight = (dy * ratio) / (drag.rect.width / drag.rect.height);
         const widthDelta =
-          Math.abs(dx) >= Math.abs(widthDeltaFromHeight)
-            ? dx
-            : widthDeltaFromHeight;
+          Math.abs(dx) >= Math.abs(widthDeltaFromHeight) ? dx : widthDeltaFromHeight;
         const maxWidth = Math.min(
           1 - drag.crop.x,
           ((1 - drag.crop.y) * ratio) / (drag.rect.width / drag.rect.height),
         );
-        const width = Math.min(
-          maxWidth,
-          Math.max(0.04, drag.crop.width + widthDelta),
-        );
+        const width = Math.min(maxWidth, Math.max(0.04, drag.crop.width + widthDelta));
         const height = (width * (drag.rect.width / drag.rect.height)) / ratio;
         props.onSetCrop({ width, height });
       } else {
-        const nw = Math.min(
-          Math.max(drag.crop.width + dx, 0.05),
-          1 - drag.crop.x,
-        );
-        const nh = Math.min(
-          Math.max(drag.crop.height + dy, 0.05),
-          1 - drag.crop.y,
-        );
+        const nw = Math.min(Math.max(drag.crop.width + dx, 0.05), 1 - drag.crop.x);
+        const nh = Math.min(Math.max(drag.crop.height + dy, 0.05), 1 - drag.crop.y);
         props.onSetCrop({ width: nw, height: nh });
       }
     };
@@ -291,25 +262,17 @@ function EditScreen(props: EditScreenProps) {
           <div>
             <p className="eyebrow">NON-DESTRUCTIVE EDITING</p>
             <h1>Select a photo to edit</h1>
-            <p className="page-subtitle">
-              Open a photo from the Library to begin editing.
-            </p>
+            <p className="page-subtitle">Open a photo from the Library to begin editing.</p>
           </div>
           <div style={{ marginTop: 20 }}>
-            <button
-              className="primary-button"
-              type="button"
-              onClick={() => props.onBack?.()}
-            >
+            <button className="primary-button" type="button" onClick={() => props.onBack?.()}>
               Back to Library
             </button>
           </div>
         </div>
         {savedDraftItems.length > 0 && (
           <div style={{ marginTop: 24, marginLeft: 16 }}>
-            <h3 style={{ margin: "0 0 12px", color: "var(--text)" }}>
-              Saved drafts
-            </h3>
+            <h3 style={{ margin: "0 0 12px", color: "var(--text)" }}>Saved drafts</h3>
             <div
               style={{
                 display: "flex",
@@ -338,16 +301,12 @@ function EditScreen(props: EditScreenProps) {
             <p className="eyebrow">NON-DESTRUCTIVE EDITING</p>
             <h1>{props.item.name}</h1>
             <p className="page-subtitle">
-              Videos aren't edited here. Play it from the Library, or use a
-              desktop video editor for cuts and colour work.
+              Videos aren't edited here. Play it from the Library, or use a desktop video editor for
+              cuts and colour work.
             </p>
           </div>
           <div style={{ marginTop: 20 }}>
-            <button
-              className="primary-button"
-              type="button"
-              onClick={() => props.onBack?.()}
-            >
+            <button className="primary-button" type="button" onClick={() => props.onBack?.()}>
               Back to Library
             </button>
           </div>
@@ -362,9 +321,7 @@ function EditScreen(props: EditScreenProps) {
         <div>
           <p className="eyebrow">NON-DESTRUCTIVE EDITING</p>
           <h1>{props.item.name}</h1>
-          <p className="page-subtitle">
-            Adjustments are applied only when you export a new copy.
-          </p>
+          <p className="page-subtitle">Adjustments are applied only when you export a new copy.</p>
         </div>
         <div className="edit-heading-actions">
           {savedDraftItems.length > 0 && (
@@ -395,8 +352,7 @@ function EditScreen(props: EditScreenProps) {
                     <div className="edit-drafts-popover-head">
                       <b>Saved drafts</b>
                       <small>
-                        {savedDraftItems.length}{" "}
-                        {savedDraftItems.length === 1 ? "photo" : "photos"}
+                        {savedDraftItems.length} {savedDraftItems.length === 1 ? "photo" : "photos"}
                       </small>
                     </div>
                     <div className="edit-drafts-list">
@@ -493,10 +449,7 @@ function EditScreen(props: EditScreenProps) {
               {showOriginalPreview ? "Show edits" : "Compare"}
             </button>
           </div>
-          <div
-            ref={stageRef}
-            className={`crop-stage${showOriginalPreview ? " is-original" : ""}`}
-          >
+          <div ref={stageRef} className={`crop-stage${showOriginalPreview ? " is-original" : ""}`}>
             <img
               src={props.assetUrl(props.item.path)}
               alt={props.item.name}
@@ -610,13 +563,10 @@ function EditScreen(props: EditScreenProps) {
               aria-pressed={!!props.crop.enabled}
               onClick={() => {
                 setShowOriginalPreview(false);
-                props.crop.enabled
-                  ? props.onResetCrop?.()
-                  : props.onSetCrop({ enabled: true });
+                props.crop.enabled ? props.onResetCrop?.() : props.onSetCrop({ enabled: true });
               }}
             >
-              <CropIcon size={14} />{" "}
-              {props.crop.enabled ? "Reset crop" : "Crop"}
+              <CropIcon size={14} /> {props.crop.enabled ? "Reset crop" : "Crop"}
             </button>
           </div>
         </div>
@@ -651,11 +601,7 @@ function EditScreen(props: EditScreenProps) {
                 </button>
               </div>
               <span className="edit-option-label">Aspect ratio</span>
-              <div
-                className="crop-ratio-options"
-                role="group"
-                aria-label="Crop aspect ratio"
-              >
+              <div className="crop-ratio-options" role="group" aria-label="Crop aspect ratio">
                 {[
                   { label: "Free", value: "free" as const },
                   { label: "1:1", value: 1 },
@@ -675,8 +621,7 @@ function EditScreen(props: EditScreenProps) {
                 ))}
               </div>
               <p className="edit-crop-help">
-                Resize from the lower-right handle. The crop stays inside the
-                photo.
+                Resize from the lower-right handle. The crop stays inside the photo.
               </p>
             </div>
           ) : (
@@ -800,9 +745,7 @@ function EditScreen(props: EditScreenProps) {
               disabled={
                 !["jpg", "jpeg", "png", "webp"].includes(
                   String(
-                    props.item.extension ||
-                      props.item.name.split(".").pop() ||
-                      "",
+                    props.item.extension || props.item.name.split(".").pop() || "",
                   ).toLowerCase(),
                 )
               }
@@ -811,20 +754,16 @@ function EditScreen(props: EditScreenProps) {
             >
               Replace original
             </button>
-            <button
-              className="primary-button"
-              type="button"
-              onClick={() => props.onExport(false)}
-            >
+            <button className="primary-button" type="button" onClick={() => props.onExport(false)}>
               Save copy
             </button>
           </div>
         </aside>
       </div>
       <p className="browser-capability-warning">
-        Browser canvas export supports JPEG, PNG, and WebP input when the
-        browser can decode it. HEIC and RAW need native macOS image frameworks.
-        Metadata is removed from re-encoded exports.
+        Browser canvas export supports JPEG, PNG, and WebP input when the browser can decode it.
+        HEIC and RAW need native macOS image frameworks. Metadata is removed from re-encoded
+        exports.
       </p>
       {confirmReplace && (
         <div
@@ -847,16 +786,11 @@ function EditScreen(props: EditScreenProps) {
               width: "90%",
             }}
           >
-            <h3 style={{ margin: "0 0 8px", color: "var(--text)" }}>
-              Replace original file?
-            </h3>
+            <h3 style={{ margin: "0 0 8px", color: "var(--text)" }}>Replace original file?</h3>
             <p style={{ margin: "0 0 16px", color: "var(--muted)" }}>
-              This will overwrite the original image with the edited version.
-              This cannot be undone.
+              This will overwrite the original image with the edited version. This cannot be undone.
             </p>
-            <div
-              style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}
-            >
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button
                 className="quiet-button"
                 type="button"

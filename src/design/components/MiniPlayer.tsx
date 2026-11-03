@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
 import { usePlaybackStore } from "../../engine/stores/usePlaybackStore";
 import { formatDuration } from "../../engine/utils/time";
-import {
-  PauseIcon,
-  PlayIcon,
-  PictureInPictureIcon,
-  VolumeIcon,
-} from "./icons";
+import { PauseIcon, PlayIcon, PictureInPictureIcon, VolumeIcon } from "./icons";
 import {
   observePictureInPicture,
   supportsPictureInPicture,
@@ -36,11 +31,8 @@ export function MiniPlayer({
   const seek = usePlaybackStore((s) => s.seek);
   const toggleMute = usePlaybackStore((s) => s.toggleMute);
   const [pictureInPicture, setPictureInPicture] = useState(false);
-  const [pictureInPictureSupported, setPictureInPictureSupported] =
-    useState(false);
-  const [pictureInPictureError, setPictureInPictureError] = useState<
-    string | null
-  >(null);
+  const [pictureInPictureSupported, setPictureInPictureSupported] = useState(false);
+  const [pictureInPictureError, setPictureInPictureError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!element) {
@@ -60,9 +52,7 @@ export function MiniPlayer({
     try {
       await togglePictureInPicture(element);
     } catch (error) {
-      setPictureInPictureError(
-        error instanceof Error ? error.message : String(error),
-      );
+      setPictureInPictureError(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -72,11 +62,7 @@ export function MiniPlayer({
     <div className="mini-player" role="region" aria-label="Now playing">
       <div className="mini-player-heading">
         <span className="mini-player-status">
-          <span
-            className={
-              playing ? "mini-player-pulse playing" : "mini-player-pulse"
-            }
-          />
+          <span className={playing ? "mini-player-pulse playing" : "mini-player-pulse"} />
           {playing ? "NOW PLAYING" : "PAUSED"}
         </span>
         <button
@@ -90,12 +76,7 @@ export function MiniPlayer({
         </button>
       </div>
 
-      <button
-        type="button"
-        className="mini-player-info"
-        onClick={onExpand}
-        title="Return to video"
-      >
+      <button type="button" className="mini-player-info" onClick={onExpand} title="Return to video">
         <span className="mini-player-name">{name || "Video"}</span>
         <span className="mini-player-mode">
           {pictureInPicture
@@ -160,11 +141,7 @@ export function MiniPlayer({
           className="mini-player-button mini-player-pip"
           onClick={() => void togglePip()}
           disabled={!pictureInPictureSupported}
-          aria-label={
-            pictureInPicture
-              ? "Exit picture in picture"
-              : "Enter picture in picture"
-          }
+          aria-label={pictureInPicture ? "Exit picture in picture" : "Enter picture in picture"}
           aria-pressed={pictureInPicture}
           title={
             pictureInPictureSupported

@@ -51,32 +51,19 @@ import {
 } from "../engine/stores";
 import { draftImageStyle } from "../engine/utils/draftImage";
 import { MiniPlayer } from "../design/components/MiniPlayer";
-import {
-  canPlayVideoInApp,
-  getTypeIdentity,
-  formatBytesSimple,
-} from "../engine/utils/mediaTypes";
+import { canPlayVideoInApp, getTypeIdentity, formatBytesSimple } from "../engine/utils/mediaTypes";
 import { dispatchNativeMenuEvent } from "./nativeMenu";
 import { isExportShortcut } from "./shortcuts";
 import { shouldCheckForUpdatesOnLaunch } from "./startup";
 import { navigateToBatchExport } from "./exportFlow";
 import { getAdjacentVideo } from "./backgroundVideo";
-import {
-  createAutoImportController,
-  syncFolderWatchers,
-} from "../engine/utils/folderWatcher";
+import { createAutoImportController, syncFolderWatchers } from "../engine/utils/folderWatcher";
 import { copyTagsToFinder } from "../engine/utils/finderTags";
 
 // Helper: render a kind badge using centralized type identity
 
 // Helper: get icon for kind
-function KindIcon({
-  kind,
-  size = 14,
-}: {
-  kind: "photo" | "video" | "raw";
-  size?: number;
-}) {
+function KindIcon({ kind, size = 14 }: { kind: "photo" | "video" | "raw"; size?: number }) {
   const common = {
     width: size,
     height: size,
@@ -308,9 +295,7 @@ function App() {
   // Resolved appearance: the user's choice, or the OS setting when "system".
   const dark = appearance === "dark" || (appearance === "system" && systemDark);
   const [albumDialogOpen, setAlbumDialogOpen] = useState(false);
-  const [albumDialogMode, setAlbumDialogMode] = useState<"create" | "rename">(
-    "create",
-  );
+  const [albumDialogMode, setAlbumDialogMode] = useState<"create" | "rename">("create");
   const [albumName, setAlbumName] = useState("");
   const [albumSeedIds, setAlbumSeedIds] = useState<string[] | null>(null);
   const [renamingAlbumId, setRenamingAlbumId] = useState<string | null>(null);
@@ -323,16 +308,13 @@ function App() {
   const deleteItemDialogRef = useRef<HTMLDivElement | null>(null);
   const removeFolderDialogRef = useRef<HTMLDivElement | null>(null);
 
-  const [albumPendingDelete, setAlbumPendingDelete] = useState<any | null>(
-    null,
-  );
-  const [itemPendingDeleteCount, setItemPendingDeleteCount] =
-    useState<number>(0);
+  const [albumPendingDelete, setAlbumPendingDelete] = useState<any | null>(null);
+  const [itemPendingDeleteCount, setItemPendingDeleteCount] = useState<number>(0);
   const itemPendingDeleteRef = useRef<string[] | null>(null);
   const watchedRootsRef = useRef<Set<string>>(new Set());
-  const autoImportControllerRef = useRef<ReturnType<
-    typeof createAutoImportController
-  > | null>(null);
+  const autoImportControllerRef = useRef<ReturnType<typeof createAutoImportController> | null>(
+    null,
+  );
   const [albumRemovePending, setAlbumRemovePending] = useState<{
     albumId: string;
     itemIds: string[];
@@ -341,8 +323,7 @@ function App() {
 
   // Removing a folder is confirmed through its own dialog so a stray click in
   // the sidebar can never drop a chunk of the library.
-  const [folderPendingRemove, setFolderPendingRemove] =
-    useState<LibraryFolder | null>(null);
+  const [folderPendingRemove, setFolderPendingRemove] = useState<LibraryFolder | null>(null);
   const [removingFolder, setRemovingFolder] = useState(false);
   const [sourcesSheetOpen, setSourcesSheetOpen] = useState(false);
   const [removeAllSourcesDialogOpen, setRemoveAllSourcesDialogOpen] = useState(false);
@@ -401,9 +382,9 @@ function App() {
       cancelled = true;
     };
   }, []);
-  const importPathsIntoAlbumRef = useRef<
-    (paths: string[], albumId: string) => Promise<void>
-  >(async () => {});
+  const importPathsIntoAlbumRef = useRef<(paths: string[], albumId: string) => Promise<void>>(
+    async () => {},
+  );
 
   // Opening our own menu has to cancel the event, otherwise the webview shows
   // its default menu (Reload / Copy / Open in new tab) on top of it.
@@ -421,8 +402,7 @@ function App() {
       if (!el) return;
       const editable =
         el.isContentEditable ||
-        ((el.tagName === "INPUT" || el.tagName === "TEXTAREA") &&
-          !el.hasAttribute("disabled"));
+        ((el.tagName === "INPUT" || el.tagName === "TEXTAREA") && !el.hasAttribute("disabled"));
       if (!editable) e.preventDefault();
     };
     document.addEventListener("contextmenu", suppress);
@@ -440,13 +420,7 @@ function App() {
     if (settingsHydrated && screen === "Library" && !library.activeAlbum) {
       library.setLayout(defaultLayout);
     }
-  }, [
-    settingsHydrated,
-    screen,
-    defaultLayout,
-    library.activeAlbum,
-    library.setLayout,
-  ]);
+  }, [settingsHydrated, screen, defaultLayout, library.activeAlbum, library.setLayout]);
 
   // Sidebar summary from the catalog (exact counts, not loaded-page counts).
   const [libraryStats, setLibraryStats] = useState<LibraryStats>({
@@ -478,11 +452,16 @@ function App() {
       });
 
     let unlisten: (() => void) | null = null;
-    events.onLibraryChanged(() => {
-      tauri.library.getStats().then(setLibraryStats).catch(() => {});
-    }).then((u) => {
-      unlisten = u;
-    });
+    events
+      .onLibraryChanged(() => {
+        tauri.library
+          .getStats()
+          .then(setLibraryStats)
+          .catch(() => {});
+      })
+      .then((u) => {
+        unlisten = u;
+      });
     return () => {
       cancelled = true;
       if (unlisten) unlisten();
@@ -496,9 +475,7 @@ function App() {
 
   // The player keeps its own selection while the photo viewer has an
   // independent cursor.
-  const [backgroundVideo, setBackgroundVideo] = useState<MediaItem | null>(
-    null,
-  );
+  const [backgroundVideo, setBackgroundVideo] = useState<MediaItem | null>(null);
   // Locked video queue: captured when playback starts so switching filters
   // mid-playback never changes what plays next.
   const [videoQueue, setVideoQueue] = useState<MediaItem[]>([]);
@@ -526,8 +503,7 @@ function App() {
   // never changes what plays next.
   const loadNextVideoPage = useCallback(async () => {
     const paging = videoQueuePagingRef.current;
-    if (!paging || !paging.hasMore || !paging.cursor || paging.loading)
-      return [];
+    if (!paging || !paging.hasMore || !paging.cursor || paging.loading) return [];
 
     paging.loading = true;
     try {
@@ -558,26 +534,18 @@ function App() {
       return videos;
     } catch (error) {
       videoQueuePagingRef.current = { ...paging, loading: false };
-      useLibraryStore
-        .getState()
-        .showNotice(`Failed to load more videos: ${String(error)}`);
+      useLibraryStore.getState().showNotice(`Failed to load more videos: ${String(error)}`);
       return [];
     }
   }, [videoQueue]);
 
   const playNextVideo = useCallback(async (): Promise<boolean> => {
     if (videoQueue.length === 0) return false;
-    const currentId =
-      usePlaybackStore.getState().itemId ??
-      backgroundVideo?.id ??
-      null;
+    const currentId = usePlaybackStore.getState().itemId ?? backgroundVideo?.id ?? null;
     const currentIndex = videoQueue.findIndex((item) => item.id === currentId);
     let next: MediaItem | null = null;
     if (currentIndex === videoQueue.length - 1) {
-      while (
-        videoQueuePagingRef.current?.hasMore &&
-        videoQueuePagingRef.current.cursor
-      ) {
+      while (videoQueuePagingRef.current?.hasMore && videoQueuePagingRef.current.cursor) {
         const pageVideos = await loadNextVideoPage();
         if (pageVideos.length > 0) {
           next = pageVideos[0];
@@ -600,10 +568,7 @@ function App() {
 
   const playPreviousVideo = useCallback((): boolean => {
     if (videoQueue.length === 0) return false;
-    const currentId =
-      usePlaybackStore.getState().itemId ??
-      backgroundVideo?.id ??
-      null;
+    const currentId = usePlaybackStore.getState().itemId ?? backgroundVideo?.id ?? null;
     const previous = getAdjacentVideo(videoQueue, currentId, -1);
     if (!previous) return false;
     if (previous.id === currentId) {
@@ -636,9 +601,7 @@ function App() {
     if (videoQueue.length === 0) {
       const state = useLibraryStore.getState();
       const nextQueue = library.viewerItems.filter(
-        (item) =>
-          item.kind === "video" &&
-          canPlayVideoInApp(item.path, item.name),
+        (item) => item.kind === "video" && canPlayVideoInApp(item.path, item.name),
       );
       if (backgroundVideo && !nextQueue.some((item) => item.id === backgroundVideo.id))
         nextQueue.unshift(backgroundVideo);
@@ -653,19 +616,10 @@ function App() {
         };
       }
     }
-  }, [
-    playbackItemId,
-    library.viewerItems,
-    videoQueue,
-    backgroundVideo,
-  ]);
+  }, [playbackItemId, library.viewerItems, videoQueue, backgroundVideo]);
 
   useEffect(() => {
-    if (
-      queueAutoPlayId &&
-      playbackItemId === queueAutoPlayId &&
-      fhPlaying
-    ) {
+    if (queueAutoPlayId && playbackItemId === queueAutoPlayId && fhPlaying) {
       setQueueAutoPlayId(null);
     }
   }, [queueAutoPlayId, playbackItemId, fhPlaying]);
@@ -697,11 +651,7 @@ function App() {
   const beginTopbarDrag = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement | null;
-    if (
-      target?.closest(
-        "button, a, input, select, textarea, [role='button'], [data-no-drag]",
-      )
-    )
+    if (target?.closest("button, a, input, select, textarea, [role='button'], [data-no-drag]"))
       return;
     e.preventDefault();
     if (e.detail > 1) return;
@@ -735,8 +685,7 @@ function App() {
   // The next one restores the saved inner size and centers it.
   const handleTopbarDoubleClick = useCallback(async (e: React.MouseEvent) => {
     const target = e.target as HTMLElement | null;
-    if (target?.closest("button, a, input, select, textarea, [role='button']"))
-      return;
+    if (target?.closest("button, a, input, select, textarea, [role='button']")) return;
     e.preventDefault();
     e.stopPropagation();
     try {
@@ -751,9 +700,7 @@ function App() {
       const workWidth = work.size.width / scale;
       const workHeight = work.size.height / scale;
       const outer = await win.outerSize();
-      const filled =
-        outer.width >= work.size.width - 8 &&
-        outer.height >= work.size.height - 8;
+      const filled = outer.width >= work.size.width - 8 && outer.height >= work.size.height - 8;
 
       if (filled) {
         const saved = preFillSizeRef.current;
@@ -771,22 +718,14 @@ function App() {
       } else {
         const inner = await win.innerSize();
         const outerBefore = await win.outerSize();
-        const chromeHeight = Math.max(
-          0,
-          (outerBefore.height - inner.height) / scale,
-        );
+        const chromeHeight = Math.max(0, (outerBefore.height - inner.height) / scale);
         preFillSizeRef.current = {
           width: inner.width / scale,
           height: inner.height / scale,
         };
-        await win.setPosition(
-          new PhysicalPosition(work.position.x, work.position.y),
-        );
+        await win.setPosition(new PhysicalPosition(work.position.x, work.position.y));
         await win.setSize(
-          new LogicalSize(
-            Math.max(1, workWidth - 2),
-            Math.max(1, workHeight - chromeHeight - 2),
-          ),
+          new LogicalSize(Math.max(1, workWidth - 2), Math.max(1, workHeight - chromeHeight - 2)),
         );
       }
     } catch {
@@ -822,20 +761,12 @@ function App() {
         };
         const outer = await win.outerSize();
         const pos = await win.outerPosition();
-        const filled =
-          outer.width >= work.size.width - 8 &&
-          outer.height >= work.size.height - 8;
+        const filled = outer.width >= work.size.width - 8 && outer.height >= work.size.height - 8;
 
         if (filled) {
           wasFilled = true;
-          const maxX = Math.max(
-            work.position.x,
-            work.position.x + work.size.width - outer.width,
-          );
-          const maxY = Math.max(
-            work.position.y,
-            work.position.y + work.size.height - outer.height,
-          );
+          const maxX = Math.max(work.position.x, work.position.x + work.size.width - outer.width);
+          const maxY = Math.max(work.position.y, work.position.y + work.size.height - outer.height);
           const x = Math.min(Math.max(pos.x, work.position.x), maxX);
           const y = Math.min(Math.max(pos.y, work.position.y), maxY);
           if (x !== pos.x || y !== pos.y) {
@@ -880,11 +811,7 @@ function App() {
   // Convert local file path to Tauri asset URL
   const assetUrl = useCallback((path: string) => {
     if (!path) return "";
-    if (
-      path.startsWith("blob:") ||
-      path.startsWith("data:") ||
-      path.startsWith("http")
-    )
+    if (path.startsWith("blob:") || path.startsWith("data:") || path.startsWith("http"))
       return path;
     try {
       return convertFileSrc(path);
@@ -984,9 +911,7 @@ function App() {
         "menu-about",
         "menu-check-updates",
       ]) {
-        await register(event, () =>
-          dispatchNativeMenuEvent(event, menuHandlers),
-        );
+        await register(event, () => dispatchNativeMenuEvent(event, menuHandlers));
       }
 
       // Listen for native import progress events from scan/import commands.
@@ -1026,13 +951,11 @@ function App() {
       const unlistenFolderChanged = await events.onFolderChanged((path) => {
         autoImportControllerRef.current?.changed(path);
       });
-      const unlistenWatchError = await events.onFolderWatchError(
-        ({ path, message }) => {
-          liveRef.current.library.showNotice(
-            `Folder watching stopped for ${path}: ${message}. Check the folder's macOS access permissions and re-add the source if needed.`,
-          );
-        },
-      );
+      const unlistenWatchError = await events.onFolderWatchError(({ path, message }) => {
+        liveRef.current.library.showNotice(
+          `Folder watching stopped for ${path}: ${message}. Check the folder's macOS access permissions and re-add the source if needed.`,
+        );
+      });
       unlisteners.push(unlistenFolderChanged, unlistenWatchError);
     };
     listen();
@@ -1103,20 +1026,13 @@ function App() {
           target.tagName === "INPUT" ||
           target.tagName === "TEXTAREA" ||
           target.tagName === "SELECT";
-        if (
-          !isEditable &&
-          (screen === "Library" || screen === "Hidden" || screen === "Albums")
-        ) {
+        if (!isEditable && (screen === "Library" || screen === "Hidden" || screen === "Albums")) {
           e.preventDefault();
-          const items =
-            screen === "Hidden" ? library.hiddenItems : library.visibleItems;
+          const items = screen === "Hidden" ? library.hiddenItems : library.visibleItems;
           const selectedSet = new Set(library.selectedIds);
           const allSelected =
-            items.length > 0 &&
-            items.every((item: any) => selectedSet.has(item.id));
-          library.setSelectedIds(
-            allSelected ? [] : items.map((item: any) => item.id),
-          );
+            items.length > 0 && items.every((item: any) => selectedSet.has(item.id));
+          library.setSelectedIds(allSelected ? [] : items.map((item: any) => item.id));
           return;
         }
       }
@@ -1132,9 +1048,7 @@ function App() {
           const focusSearch = () => {
             const input =
               searchInputRef.current ||
-              (document.querySelector(
-                ".search-field input",
-              ) as HTMLInputElement | null);
+              (document.querySelector(".search-field input") as HTMLInputElement | null);
             input?.focus();
             input?.select();
           };
@@ -1146,9 +1060,7 @@ function App() {
             const tryFocus = () => {
               const input =
                 searchInputRef.current ||
-                (document.querySelector(
-                  ".search-field input",
-                ) as HTMLInputElement | null);
+                (document.querySelector(".search-field input") as HTMLInputElement | null);
               if (input) {
                 input.focus();
                 input.select();
@@ -1189,12 +1101,7 @@ function App() {
           library.toggleInspector();
         }
       }
-      if (
-        e.key === "Enter" &&
-        mod &&
-        screen === "Hidden" &&
-        library.inspectedId
-      ) {
+      if (e.key === "Enter" && mod && screen === "Hidden" && library.inspectedId) {
         // HiddenScreen owns the reveal confirmation, so route the shortcut
         // through it instead of opening the viewer directly.
         e.preventDefault();
@@ -1205,12 +1112,7 @@ function App() {
         );
         return;
       }
-      if (
-        e.key === "Enter" &&
-        mod &&
-        screen === "Library" &&
-        library.inspectedId
-      ) {
+      if (e.key === "Enter" && mod && screen === "Library" && library.inspectedId) {
         handlersRef.current.openViewer(library.inspectedId);
       }
     };
@@ -1223,7 +1125,6 @@ function App() {
       unlisteners.forEach((un) => un());
     };
     // Mount-only. Handlers read fresh state through liveRef / handlersRef.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Pull the authoritative settings from SQLite once at startup so the app
@@ -1328,9 +1229,7 @@ function App() {
         }
         // Skipping a version silences the launch prompt only; an explicit
         // menu check should always surface it again.
-        const skipped = localStorage.getItem(
-          `update:skip:${result.latestVersion}`,
-        );
+        const skipped = localStorage.getItem(`update:skip:${result.latestVersion}`);
         if (!manual && skipped === "1") return;
         setUpdateInfo(result);
         setAboutOpen(false);
@@ -1348,9 +1247,7 @@ function App() {
 
   // Automatic launch checks are opt-in and default off. The explicit Help menu
   // action bypasses this gate and always works.
-  const checkForUpdatesOnLaunch = useSettingsStore(
-    (s) => s.checkForUpdatesOnLaunch,
-  );
+  const checkForUpdatesOnLaunch = useSettingsStore((s) => s.checkForUpdatesOnLaunch);
   const didScheduleLaunchUpdate = useRef(false);
   useEffect(() => {
     if (!settingsHydrated || didScheduleLaunchUpdate.current) return;
@@ -1374,8 +1271,7 @@ function App() {
     .join("\n");
   useEffect(() => {
     const isTauri =
-      typeof window !== "undefined" &&
-      ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+      typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
     if (!settingsHydrated || !isTauri) return;
     let cancelled = false;
 
@@ -1418,8 +1314,7 @@ function App() {
   useEffect(() => {
     if (!settingsHydrated) return;
     const isTauri =
-      typeof window !== "undefined" &&
-      ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+      typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
     if (!isTauri) return;
     let cancelled = false;
     void (async () => {
@@ -1440,9 +1335,7 @@ function App() {
 
   const copyTagsToFinderForIds = useCallback(
     async (ids: string[]) => {
-      const items = useLibraryStore
-        .getState()
-        .items.filter((item) => ids.includes(item.id));
+      const items = useLibraryStore.getState().items.filter((item) => ids.includes(item.id));
       if (items.length === 0) return;
       const result = await copyTagsToFinder(items, (path, tags) =>
         tauri.finder.mergeTags(path, tags),
@@ -1471,33 +1364,35 @@ function App() {
   useEffect(() => {
     if (!showNativeWarnings) return;
     const total =
-      libraryStats.photos + libraryStats.videos + libraryStats.raws +
-      libraryStats.uncategorized;
+      libraryStats.photos + libraryStats.videos + libraryStats.raws + libraryStats.uncategorized;
     if (total > 10000) {
       showNotice(
         `Large library (${total.toLocaleString()} items) — thumbnail generation and scrolling may be slower on this system.`,
       );
     }
-  }, [showNativeWarnings, libraryStats.photos, libraryStats.videos, libraryStats.raws, libraryStats.uncategorized, showNotice]);
+  }, [
+    showNativeWarnings,
+    libraryStats.photos,
+    libraryStats.videos,
+    libraryStats.raws,
+    libraryStats.uncategorized,
+    showNotice,
+  ]);
 
   const navigateViewer = useCallback(
     async (delta: number) => {
-      const navigated =
-        await useLibraryStore.getState().navigateViewerPhoto(delta);
+      const navigated = await useLibraryStore.getState().navigateViewerPhoto(delta);
       if (navigated) viewer.resetTransform();
     },
     [viewer.resetTransform],
   );
 
-  const selectViewerItem = useCallback(
-    (id: string) => {
-      const libraryState = useLibraryStore.getState();
-      const item = libraryState.viewerItems.find((candidate) => candidate.id === id);
-      if (!item || item.kind === "video") return;
-      libraryState.inspectItem(id);
-    },
-    [],
-  );
+  const selectViewerItem = useCallback((id: string) => {
+    const libraryState = useLibraryStore.getState();
+    const item = libraryState.viewerItems.find((candidate) => candidate.id === id);
+    if (!item || item.kind === "video") return;
+    libraryState.inspectItem(id);
+  }, []);
 
   const selectVideoItem = useCallback(
     (id: string) => {
@@ -1515,8 +1410,7 @@ function App() {
         void playNextVideo();
         return;
       }
-      const currentId =
-        usePlaybackStore.getState().itemId ?? backgroundVideo?.id ?? null;
+      const currentId = usePlaybackStore.getState().itemId ?? backgroundVideo?.id ?? null;
       const next = getAdjacentVideo(videoQueue, currentId, delta);
       if (!next) return;
       setBackgroundVideo(next);
@@ -1527,11 +1421,7 @@ function App() {
 
   // Route photos to the photo viewer and videos to the independent player.
   const openViewer = useCallback(
-    (
-      id?: string,
-      origin: Screen = "Library",
-      scope: "library" | "hidden" = "library",
-    ) => {
+    (id?: string, origin: Screen = "Library", scope: "library" | "hidden" = "library") => {
       const targetId = id ?? library.inspectedId;
       const item =
         library.items.find((candidate) => candidate.id === targetId) ??
@@ -1543,12 +1433,10 @@ function App() {
       if (item.kind === "video") {
         const libraryState = useLibraryStore.getState();
         const scopedVideos = libraryState.viewerItems.filter(
-            (candidate) =>
-              candidate.kind === "video" &&
-              canPlayVideoInApp(candidate.path, candidate.name),
-          );
-        if (!scopedVideos.some((candidate) => candidate.id === item.id))
-          scopedVideos.unshift(item);
+          (candidate) =>
+            candidate.kind === "video" && canPlayVideoInApp(candidate.path, candidate.name),
+        );
+        if (!scopedVideos.some((candidate) => candidate.id === item.id)) scopedVideos.unshift(item);
         setVideoQueue(scopedVideos);
         videoQueuePagingRef.current =
           scope === "library"
@@ -1581,22 +1469,15 @@ function App() {
       // current filter/album is not showing. Ordering follows the grid for the
       // items on screen, then appends the rest so nothing selected is dropped.
       const visibleSelection = selection
-        ? library.visibleItems.filter((item: MediaItem) =>
-            selection.has(item.id),
-          )
+        ? library.visibleItems.filter((item: MediaItem) => selection.has(item.id))
         : [];
-      const visibleSelectionIds = new Set(
-        visibleSelection.map((item) => item.id),
-      );
+      const visibleSelectionIds = new Set(visibleSelection.map((item) => item.id));
       const offscreenSelection = selection
         ? library.items.filter(
-            (item: MediaItem) =>
-              selection.has(item.id) && !visibleSelectionIds.has(item.id),
+            (item: MediaItem) => selection.has(item.id) && !visibleSelectionIds.has(item.id),
           )
         : [];
-      const scope = selection
-        ? [...visibleSelection, ...offscreenSelection]
-        : library.visibleItems;
+      const scope = selection ? [...visibleSelection, ...offscreenSelection] : library.visibleItems;
       if (scope.length === 0) {
         showNotice("Add photos or videos to start a slideshow.");
         return;
@@ -1716,9 +1597,7 @@ function App() {
 
   const openAlbumPicker = useCallback(
     (itemIds?: string[]) => {
-      const ids = (
-        itemIds && itemIds.length ? itemIds : library.selectedIds
-      ).filter(Boolean);
+      const ids = (itemIds && itemIds.length ? itemIds : library.selectedIds).filter(Boolean);
       if (!ids.length) {
         showNotice("Select photos first, then add them to an album.");
         return;
@@ -1767,10 +1646,7 @@ function App() {
   const confirmRemoveFromAlbum = async () => {
     if (!albumRemovePending) return;
     try {
-      await library.removeFromAlbum(
-        albumRemovePending.albumId,
-        albumRemovePending.itemIds,
-      );
+      await library.removeFromAlbum(albumRemovePending.albumId, albumRemovePending.itemIds);
       showNotice(
         `Removed ${albumRemovePending.itemIds.length} item${albumRemovePending.itemIds.length === 1 ? "" : "s"} from album.`,
       );
@@ -1819,9 +1695,7 @@ function App() {
     try {
       await library.deleteAlbum(albumPendingDelete.id);
       if (wasActiveAlbum) setScreen("Albums");
-      showNotice(
-        `Deleted album "${albumPendingDelete.name}". Your photos remain in the library.`,
-      );
+      showNotice(`Deleted album "${albumPendingDelete.name}". Your photos remain in the library.`);
       setAlbumPendingDelete(null);
     } catch (error) {
       showNotice(`Could not delete album: ${describeError(error)}`);
@@ -1892,9 +1766,7 @@ function App() {
     if (!paths.length) return;
 
     try {
-      showNotice(
-        `Importing ${paths.length.toLocaleString()} file(s) into "${album.name}"…`,
-      );
+      showNotice(`Importing ${paths.length.toLocaleString()} file(s) into "${album.name}"…`);
       library.setBusy(true);
       library.setProgress({
         phase: "importing",
@@ -2111,15 +1983,16 @@ function App() {
     if (next === "Viewer") {
       setViewerOrigin("Library");
       library.setViewerScope("library");
-      let inspected = library.items.find(
-        (i: MediaItem) => i.id === library.inspectedId,
-      );
+      let inspected = library.items.find((i: MediaItem) => i.id === library.inspectedId);
       if (inspected?.hidden) {
         library.inspectItem(null);
         inspected = undefined;
       }
-      const target = inspected ?? library.viewerSelected ??
-        library.viewerItems.find((item) => item.kind !== "video") ?? null;
+      const target =
+        inspected ??
+        library.viewerSelected ??
+        library.viewerItems.find((item) => item.kind !== "video") ??
+        null;
       if (target?.kind === "video") {
         openViewer(target.id, "Library");
         return;
@@ -2136,15 +2009,11 @@ function App() {
       // Leaving Hidden drops the hidden selection and any hidden inspector
       // focus, so the next screen cannot show an item it cannot display.
       library.clearSelection();
-      const inspected = library.items.find(
-        (i: MediaItem) => i.id === library.inspectedId,
-      );
+      const inspected = library.items.find((i: MediaItem) => i.id === library.inspectedId);
       if (inspected?.hidden) library.inspectItem(null);
     }
     if (next === "Edit") {
-      const selectedItem = library.items.find(
-        (i) => i.id === library.inspectedId,
-      );
+      const selectedItem = library.items.find((i) => i.id === library.inspectedId);
       if (selectedItem && selectedItem.kind === "photo") {
         await edit.saveDraft();
         await edit.open(selectedItem);
@@ -2159,8 +2028,7 @@ function App() {
   const navigatePhoto = (delta: number) => {
     if (library.playableItems.length === 0) return;
     const nextIndex =
-      (library.currentIndex + delta + library.playableItems.length) %
-      library.playableItems.length;
+      (library.currentIndex + delta + library.playableItems.length) % library.playableItems.length;
     // Arrow keys move inspection only - the multi-selection survives.
     library.inspectItem(library.playableItems[nextIndex].id);
   };
@@ -2229,16 +2097,12 @@ function App() {
       .filter(
         (path, _index, all) =>
           !all.some(
-            (parent) =>
-              parent !== path &&
-              path.startsWith(`${parent.replace(/\/$/, "")}/`),
+            (parent) => parent !== path && path.startsWith(`${parent.replace(/\/$/, "")}/`),
           ),
       );
 
     try {
-      showNotice(
-        `Scanning ${rootPaths.length.toLocaleString()} source folder(s)…`,
-      );
+      showNotice(`Scanning ${rootPaths.length.toLocaleString()} source folder(s)…`);
       library.setBusy(true);
       library.setProgress({ phase: "scanning", processed: 0, total: 0 });
       let discoveredCount = 0;
@@ -2287,9 +2151,7 @@ function App() {
       library.setProgress(null);
       library.setBusy(false);
       showNotice(
-        result?.cancelled
-          ? `Rescan cancelled for ${folder.name}.`
-          : `Rescanned ${folder.name}.`,
+        result?.cancelled ? `Rescan cancelled for ${folder.name}.` : `Rescanned ${folder.name}.`,
       );
     } catch (e) {
       showNotice(`Rescan failed: ${describeError(e)}`);
@@ -2382,1706 +2244,1616 @@ function App() {
         className={`app-frame ${dark ? "dark" : ""}${!animateTransitions ? " no-transitions" : ""}`}
         style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
       >
-      <a className="skip-to-content" href="#main-content">
-        Skip to main content
-      </a>
-      <header
-        className="topbar"
-        onMouseDown={beginTopbarDrag}
-        onDoubleClick={handleTopbarDoubleClick}
-      >
-        <div className="topbar-brand">
-          <BrandMark size={26} />
-          <b>VistoGallery</b>
-        </div>
-        <div className="topbar-context">
-          {(() => {
-            const activeAlbumRecord = library.activeAlbum
-              ? library.albums.find((a: any) => a.id === library.activeAlbum)
-              : null;
-            const activeAlbumName = library.activeAlbum
-              ? activeAlbumRecord?.name
-              : null;
-            const inAlbum = Boolean(library.activeAlbum);
-            if (screen === "Library") {
-              if (inAlbum) return <span>{activeAlbumName ?? "Album"}</span>;
-              return <span className="muted">Library</span>;
-            }
-            if (screen === "Albums") return <span>Albums</span>;
-            if (screen === "Video") return <span>Video Player</span>;
-            return <span>{screen}</span>;
-          })()}
-          {library.busy && (
-            <span className="topbar-busy">
-              {library.progress?.phase === "hashing"
-                ? "Checking duplicates…"
-                : library.progress?.phase === "reading"
-                  ? "Loading library…"
-                  : "Indexing…"}
-            </span>
-          )}
-        </div>
-        <div className="topbar-actions">
-          <button
-            className="icon-button"
-            type="button"
-            aria-label={library.sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-            aria-pressed={library.sidebarOpen}
-            title={
-              library.sidebarOpen ? "Hide sidebar (⌥⌘S)" : "Show sidebar (⌥⌘S)"
-            }
-            onClick={() => library.toggleSidebar()}
-          >
-            <LibraryIcon size={18} />
-          </button>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label={
-              screen !== "Library" && screen !== "Hidden"
-                ? "Inspector available in Library and Hidden"
-                : library.showInspector
-                  ? "Hide inspector"
-                  : "Show inspector"
-            }
-            aria-pressed={
-              (screen === "Library" || screen === "Hidden") &&
-              library.showInspector
-            }
-            disabled={screen !== "Library" && screen !== "Hidden"}
-            title={
-              screen === "Library" || screen === "Hidden"
-                ? library.showInspector
-                  ? "Hide inspector (⌥⌘I)"
-                  : "Show inspector (⌥⌘I)"
-                : "Inspector is available in Library and Hidden"
-            }
-            onClick={() => library.toggleInspector()}
-          >
-            <InspectorIcon size={18} />
-          </button>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label={
-              dark ? "Switch to light appearance" : "Switch to dark appearance"
-            }
-            title={
-              dark ? "Switch to light appearance" : "Switch to dark appearance"
-            }
-            onClick={() =>
-              settings.update("appearance", dark ? "light" : "dark")
-            }
-          >
-            {dark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
-          </button>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Accent color"
-            title="Cycle accent color"
-            onClick={() => {
-              const i = ACCENT_PALETTE.findIndex(
-                (c: any) => c.id === accentColor,
-              );
-              const next = ACCENT_PALETTE[(i + 1) % ACCENT_PALETTE.length].id;
-              settings.update("accentColor", next as any);
-            }}
-          >
-            <span
-              style={{
-                width: 14,
-                height: 14,
-                borderRadius: "50%",
-                background: (ACCENT_PALETTE.find(
-                  (c: any) => c.id === accentColor,
-                ) || ACCENT_PALETTE[0])[dark ? "dark" : "light"],
-                display: "inline-block",
-                border: "1px solid rgba(0,0,0,0.2)",
-              }}
-            />
-          </button>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Settings"
-            title="Settings"
-            onClick={() => openScreen("Settings")}
-          >
-            <GearIcon size={18} />
-          </button>
-        </div>
-      </header>
-
-      <div
-        className={`app-body ${library.sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}
-      >
-        <aside className="sidebar">
-          <div className="sidebar-scroll">
-            <div className="sidebar-header">
-              <div className="sidebar-label">WORKSPACE</div>
-              <nav className="primary-nav" aria-label="Main navigation">
-                {[
-                  {
-                    label: "Library",
-                    Icon: LibraryIcon,
-                    screen: "Library" as Screen,
-                  },
-                  {
-                    label: "Albums",
-                    Icon: AlbumsIcon,
-                    screen: "Albums" as Screen,
-                  },
-                  {
-                    label: "Viewer",
-                    Icon: ViewerIcon,
-                    screen: "Viewer" as Screen,
-                  },
-                  {
-                    label: "Duplicates",
-                    Icon: DuplicatesIcon,
-                    screen: "Duplicates" as Screen,
-                  },
-                  { label: "Edit", Icon: EditIcon, screen: "Edit" as Screen },
-                  {
-                    label: "Batch",
-                    Icon: BatchIcon,
-                    screen: "Batch" as Screen,
-                  },
-                  {
-                    label: "Hidden",
-                    Icon: EyeOffIcon,
-                    screen: "Hidden" as Screen,
-                  },
-                ].map(({ label, Icon, screen: target }) => (
-                  <button
-                    key={label}
-                    type="button"
-                    className={`nav-item ${screen === target ? "active" : ""}`}
-                    aria-label={label}
-                    title={label}
-                    aria-current={screen === target ? "page" : undefined}
-                    onClick={() => openScreen(target)}
-                  >
-                    <span className="nav-icon">
-                      <Icon size={18} />
-                    </span>
-                    <span>{label}</span>
-                    {(label === "Library" &&
-                      library.items.length - library.hiddenCount > 0) ||
-                    (label === "Albums" && library.albums.length > 0) ||
-                    (label === "Hidden" && library.hiddenCount > 0) ? (
-                      <span className="nav-badge">
-                        {label === "Library"
-                          ? library.items.length - library.hiddenCount
-                          : label === "Albums"
-                            ? library.albums.length
-                            : library.hiddenCount}
-                      </span>
-                    ) : null}
-                  </button>
-                ))}
-              </nav>
-            </div>
-
-            <div className="sidebar-divider" aria-hidden="true" />
-
-            <div className="sidebar-section sources-entry-section">
-              <button
-                type="button"
-                className={`sources-entry${sourcesSheetOpen ? " open" : ""}`}
-                onClick={() => setSourcesSheetOpen(true)}
-                title="Manage library sources"
-                aria-haspopup="dialog"
-                aria-expanded={sourcesSheetOpen}
-              >
-                <span className="sources-entry-icon">
-                  <FolderIcon size={16} />
-                </span>
-                <span className="sources-entry-text">
-                  <span className="sources-entry-name">Sources</span>
-                  <span className="sources-entry-count">
-                    {library.folders.length === 0
-                      ? "No sources yet"
-                      : `${library.folders.length.toLocaleString()} folder${library.folders.length === 1 ? "" : "s"} · ${library.folders.reduce((total: number, folder: LibraryFolder) => total + folder.itemCount, 0).toLocaleString()} items`}
-                  </span>
-                </span>
-                <span className="sources-entry-action">
-                  <span className="sources-entry-chevron" aria-hidden="true">
-                    ›
-                  </span>
-                </span>
-              </button>
-            </div>
-
-            <div className="sidebar-divider" aria-hidden="true" />
-
-            <div className="sidebar-section">
-              <div className="sidebar-section-label">LIBRARY</div>
-              <div className="library-stats">
-                <div className="stat-row">
-                  <KindDot kind="photo" />
-                  <span className="stat-label">Photos</span>
-                  <span className="stat-value">
-                    {libraryStats.photos.toLocaleString()}
-                    <span className="stat-size">
-                      · {formatBytesSimple(libraryStats.photoSize)}
-                    </span>
-                  </span>
-                </div>
-                <div className="stat-row">
-                  <KindDot kind="video" />
-                  <span className="stat-label">Videos</span>
-                  <span className="stat-value">
-                    {libraryStats.videos.toLocaleString()}
-                    <span className="stat-size">
-                      · {formatBytesSimple(libraryStats.videoSize)}
-                    </span>
-                  </span>
-                </div>
-                <div className="stat-row">
-                  <KindDot kind="raw" />
-                  <span className="stat-label">RAW</span>
-                  <span className="stat-value">
-                    {libraryStats.raws.toLocaleString()}
-                    <span className="stat-size">
-                      · {formatBytesSimple(libraryStats.rawSize)}
-                    </span>
-                  </span>
-                </div>
-                <div className="stat-row">
-                  <KindDot kind="photo" />
-                  <span className="stat-label">Favorites</span>
-                  <span className="stat-value">
-                    {libraryStats.favorites.toLocaleString()}
-                    <span className="stat-size">
-                      · {formatBytesSimple(libraryStats.favoriteSize)}
-                    </span>
-                  </span>
-                </div>
-                <div className="stat-row">
-                  <KindDot kind="photo" />
-                  <span className="stat-label">Uncategorized</span>
-                  <span className="stat-value">
-                    {libraryStats.uncategorized.toLocaleString()}
-                    <span className="stat-size">
-                      · {formatBytesSimple(libraryStats.uncategorizedSize)}
-                    </span>
-                  </span>
-                </div>
-                <div className="stat-row hidden">
-                  <KindDot kind="photo" />
-                  <span className="stat-label">Hidden</span>
-                  <span className="stat-value">
-                    {libraryStats.hidden.toLocaleString()}
-                    <span className="stat-size">
-                      · {formatBytesSimple(libraryStats.hiddenSize)}
-                    </span>
-                  </span>
-                </div>
-                <div className="stat-row size">
-                  <span className="stat-label">Total</span>
-                  <span className="stat-value">
-                    {(libraryStats.photos +
-                      libraryStats.videos +
-                      libraryStats.raws +
-                      libraryStats.uncategorized).toLocaleString()}{" "}
-                    · {formatBytesSimple(libraryStats.totalSize)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="sidebar-footer">
-            <span className="sidebar-health">
-              <span className="health-dot" aria-hidden="true" />
-              Storage Healthy
-            </span>
-            <div className="sidebar-version-group">
-              {updateInfo?.available && (
-                <button
-                  type="button"
-                  className="update-badge"
-                  onClick={() => setUpdateDialogOpen(true)}
-                  title={`VistoGallery ${updateInfo.latestVersion} is available`}
-                >
-                  <span className="update-dot" aria-hidden="true" />
-                  Update
-                </button>
-              )}
-              <span className="sidebar-version">v{appVersion || "dev"}</span>
-            </div>
-          </div>
-        </aside>
-
-        <main
-          id="main-content"
-          className="main-content"
-          tabIndex={-1}
-          style={{ position: "relative" }}
+        <a className="skip-to-content" href="#main-content">
+          Skip to main content
+        </a>
+        <header
+          className="topbar"
+          onMouseDown={beginTopbarDrag}
+          onDoubleClick={handleTopbarDoubleClick}
         >
-          {screenHistory.length > 0 && (
+          <div className="topbar-brand">
+            <BrandMark size={26} />
+            <b>VistoGallery</b>
+          </div>
+          <div className="topbar-context">
+            {(() => {
+              const activeAlbumRecord = library.activeAlbum
+                ? library.albums.find((a: any) => a.id === library.activeAlbum)
+                : null;
+              const activeAlbumName = library.activeAlbum ? activeAlbumRecord?.name : null;
+              const inAlbum = Boolean(library.activeAlbum);
+              if (screen === "Library") {
+                if (inAlbum) return <span>{activeAlbumName ?? "Album"}</span>;
+                return <span className="muted">Library</span>;
+              }
+              if (screen === "Albums") return <span>Albums</span>;
+              if (screen === "Video") return <span>Video Player</span>;
+              return <span>{screen}</span>;
+            })()}
+            {library.busy && (
+              <span className="topbar-busy">
+                {library.progress?.phase === "hashing"
+                  ? "Checking duplicates…"
+                  : library.progress?.phase === "reading"
+                    ? "Loading library…"
+                    : "Indexing…"}
+              </span>
+            )}
+          </div>
+          <div className="topbar-actions">
             <button
               className="icon-button"
               type="button"
-              aria-label="Go back"
-              title="Go back"
-              onClick={goBack}
-              style={{
-                position: "absolute",
-                top: 10,
-                right: 10,
-                zIndex: 5,
-                width: 32,
-                height: 32,
-                padding: 0,
-                borderRadius: 8,
-                opacity: 0.8,
+              aria-label={library.sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+              aria-pressed={library.sidebarOpen}
+              title={library.sidebarOpen ? "Hide sidebar (⌥⌘S)" : "Show sidebar (⌥⌘S)"}
+              onClick={() => library.toggleSidebar()}
+            >
+              <LibraryIcon size={18} />
+            </button>
+            <button
+              className="icon-button"
+              type="button"
+              aria-label={
+                screen !== "Library" && screen !== "Hidden"
+                  ? "Inspector available in Library and Hidden"
+                  : library.showInspector
+                    ? "Hide inspector"
+                    : "Show inspector"
+              }
+              aria-pressed={(screen === "Library" || screen === "Hidden") && library.showInspector}
+              disabled={screen !== "Library" && screen !== "Hidden"}
+              title={
+                screen === "Library" || screen === "Hidden"
+                  ? library.showInspector
+                    ? "Hide inspector (⌥⌘I)"
+                    : "Show inspector (⌥⌘I)"
+                  : "Inspector is available in Library and Hidden"
+              }
+              onClick={() => library.toggleInspector()}
+            >
+              <InspectorIcon size={18} />
+            </button>
+            <button
+              className="icon-button"
+              type="button"
+              aria-label={dark ? "Switch to light appearance" : "Switch to dark appearance"}
+              title={dark ? "Switch to light appearance" : "Switch to dark appearance"}
+              onClick={() => settings.update("appearance", dark ? "light" : "dark")}
+            >
+              {dark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
+            </button>
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Accent color"
+              title="Cycle accent color"
+              onClick={() => {
+                const i = ACCENT_PALETTE.findIndex((c: any) => c.id === accentColor);
+                const next = ACCENT_PALETTE[(i + 1) % ACCENT_PALETTE.length].id;
+                settings.update("accentColor", next as any);
               }}
             >
-              ←
+              <span
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: "50%",
+                  background: (ACCENT_PALETTE.find((c: any) => c.id === accentColor) ||
+                    ACCENT_PALETTE[0])[dark ? "dark" : "light"],
+                  display: "inline-block",
+                  border: "1px solid rgba(0,0,0,0.2)",
+                }}
+              />
             </button>
-          )}
-          {screen === "Library" && (
-            <LibraryScreen
-              items={library.visibleItems}
-              hasItems={library.items.length > 0}
-              inspectedId={library.inspectedId}
-              selectedIds={library.selectedIds}
-              filter={library.filter}
-              query={library.query}
-              layout={library.layout}
-              showInspector={library.showInspector}
-              activeAlbum={library.activeAlbum}
-              albums={library.albums}
-              onInspectItem={library.inspectItem}
-              onToggleSelect={library.toggleSelection}
-              onSelectRange={library.selectRange}
-              onSetSelection={library.setSelectedIds}
-              onToggleSelectAll={library.toggleSelectAll}
-              onClearSelection={library.clearSelection}
-              onOpenBatch={() => exportToBatch()}
-              onChangeFilter={library.setFilter}
-              onChangeQuery={library.setQuery}
-              onChangeLayout={library.setLayout}
-              onToggleInspector={library.toggleInspector}
-              onSetActiveAlbum={library.setActiveAlbum}
-              onOpenAlbums={() => openScreen("Albums")}
-              onAddItems={(albumId: string) => addItemsToAlbum(albumId)}
-              onOpenAlbumPicker={(itemIds?: string[]) =>
-                openAlbumPicker(itemIds)
-              }
-              onAlbumMenu={(e: React.MouseEvent) => {
-                const album = library.albums.find(
-                  (a: any) => a.id === library.activeAlbum,
-                );
-                if (album) openAlbumMenu(album, e);
-              }}
-              albumDragOver={albumDragOver}
-              onToggleFavorite={library.toggleFavorite}
-              onToggleHidden={library.toggleHidden}
-              onSetFavoriteForIds={library.setFavoriteForIds}
-              onSetHiddenForIds={library.setHiddenForIds}
-              onSetRatingForIds={library.setRatingForIds}
-              onSetColorLabelForIds={library.setColorLabelForIds}
-              minRating={library.minRating}
-              libraryStats={libraryStats}
-              colorLabelFilter={library.colorLabelFilter}
-              dateFrom={library.dateFrom}
-              dateTo={library.dateTo}
-              onSetMinRating={library.setMinRating}
-              onSetColorLabelFilter={library.setColorLabelFilter}
-              onSetDateRange={library.setDateRange}
-              onCreateSmartAlbum={(name: string) =>
-                void library.createSmartAlbum(name)
-              }
-              onCopyTagsToFinder={copyTagsToFinderForIds}
-              onUpdateTags={library.updateItemTags}
-              onDeleteItems={library.deleteItems}
-              onRequestDeleteItems={(ids: string[]) => {
-                itemPendingDeleteRef.current = ids;
-                setItemPendingDeleteCount(ids.length);
-              }}
-              onRequestRemoveFromAlbum={(albumId: string, itemIds: string[]) =>
-                setAlbumRemovePending({ albumId, itemIds })
-              }
-              onOpenViewer={(id?: string) => openViewer(id, "Library")}
-              onOpenEdit={async (item: any) => {
-                if (item?.kind === "video") {
-                  openViewer(item.id, "Library");
-                  return;
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Settings"
+              title="Settings"
+              onClick={() => openScreen("Settings")}
+            >
+              <GearIcon size={18} />
+            </button>
+          </div>
+        </header>
+
+        <div className={`app-body ${library.sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
+          <aside className="sidebar">
+            <div className="sidebar-scroll">
+              <div className="sidebar-header">
+                <div className="sidebar-label">WORKSPACE</div>
+                <nav className="primary-nav" aria-label="Main navigation">
+                  {[
+                    {
+                      label: "Library",
+                      Icon: LibraryIcon,
+                      screen: "Library" as Screen,
+                    },
+                    {
+                      label: "Albums",
+                      Icon: AlbumsIcon,
+                      screen: "Albums" as Screen,
+                    },
+                    {
+                      label: "Viewer",
+                      Icon: ViewerIcon,
+                      screen: "Viewer" as Screen,
+                    },
+                    {
+                      label: "Duplicates",
+                      Icon: DuplicatesIcon,
+                      screen: "Duplicates" as Screen,
+                    },
+                    { label: "Edit", Icon: EditIcon, screen: "Edit" as Screen },
+                    {
+                      label: "Batch",
+                      Icon: BatchIcon,
+                      screen: "Batch" as Screen,
+                    },
+                    {
+                      label: "Hidden",
+                      Icon: EyeOffIcon,
+                      screen: "Hidden" as Screen,
+                    },
+                  ].map(({ label, Icon, screen: target }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      className={`nav-item ${screen === target ? "active" : ""}`}
+                      aria-label={label}
+                      title={label}
+                      aria-current={screen === target ? "page" : undefined}
+                      onClick={() => openScreen(target)}
+                    >
+                      <span className="nav-icon">
+                        <Icon size={18} />
+                      </span>
+                      <span>{label}</span>
+                      {(label === "Library" && library.items.length - library.hiddenCount > 0) ||
+                      (label === "Albums" && library.albums.length > 0) ||
+                      (label === "Hidden" && library.hiddenCount > 0) ? (
+                        <span className="nav-badge">
+                          {label === "Library"
+                            ? library.items.length - library.hiddenCount
+                            : label === "Albums"
+                              ? library.albums.length
+                              : library.hiddenCount}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+
+              <div className="sidebar-divider" aria-hidden="true" />
+
+              <div className="sidebar-section sources-entry-section">
+                <button
+                  type="button"
+                  className={`sources-entry${sourcesSheetOpen ? " open" : ""}`}
+                  onClick={() => setSourcesSheetOpen(true)}
+                  title="Manage library sources"
+                  aria-haspopup="dialog"
+                  aria-expanded={sourcesSheetOpen}
+                >
+                  <span className="sources-entry-icon">
+                    <FolderIcon size={16} />
+                  </span>
+                  <span className="sources-entry-text">
+                    <span className="sources-entry-name">Sources</span>
+                    <span className="sources-entry-count">
+                      {library.folders.length === 0
+                        ? "No sources yet"
+                        : `${library.folders.length.toLocaleString()} folder${library.folders.length === 1 ? "" : "s"} · ${library.folders.reduce((total: number, folder: LibraryFolder) => total + folder.itemCount, 0).toLocaleString()} items`}
+                    </span>
+                  </span>
+                  <span className="sources-entry-action">
+                    <span className="sources-entry-chevron" aria-hidden="true">
+                      ›
+                    </span>
+                  </span>
+                </button>
+              </div>
+
+              <div className="sidebar-divider" aria-hidden="true" />
+
+              <div className="sidebar-section">
+                <div className="sidebar-section-label">LIBRARY</div>
+                <div className="library-stats">
+                  <div className="stat-row">
+                    <KindDot kind="photo" />
+                    <span className="stat-label">Photos</span>
+                    <span className="stat-value">
+                      {libraryStats.photos.toLocaleString()}
+                      <span className="stat-size">
+                        · {formatBytesSimple(libraryStats.photoSize)}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="stat-row">
+                    <KindDot kind="video" />
+                    <span className="stat-label">Videos</span>
+                    <span className="stat-value">
+                      {libraryStats.videos.toLocaleString()}
+                      <span className="stat-size">
+                        · {formatBytesSimple(libraryStats.videoSize)}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="stat-row">
+                    <KindDot kind="raw" />
+                    <span className="stat-label">RAW</span>
+                    <span className="stat-value">
+                      {libraryStats.raws.toLocaleString()}
+                      <span className="stat-size">· {formatBytesSimple(libraryStats.rawSize)}</span>
+                    </span>
+                  </div>
+                  <div className="stat-row">
+                    <KindDot kind="photo" />
+                    <span className="stat-label">Favorites</span>
+                    <span className="stat-value">
+                      {libraryStats.favorites.toLocaleString()}
+                      <span className="stat-size">
+                        · {formatBytesSimple(libraryStats.favoriteSize)}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="stat-row">
+                    <KindDot kind="photo" />
+                    <span className="stat-label">Uncategorized</span>
+                    <span className="stat-value">
+                      {libraryStats.uncategorized.toLocaleString()}
+                      <span className="stat-size">
+                        · {formatBytesSimple(libraryStats.uncategorizedSize)}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="stat-row hidden">
+                    <KindDot kind="photo" />
+                    <span className="stat-label">Hidden</span>
+                    <span className="stat-value">
+                      {libraryStats.hidden.toLocaleString()}
+                      <span className="stat-size">
+                        · {formatBytesSimple(libraryStats.hiddenSize)}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="stat-row size">
+                    <span className="stat-label">Total</span>
+                    <span className="stat-value">
+                      {(
+                        libraryStats.photos +
+                        libraryStats.videos +
+                        libraryStats.raws +
+                        libraryStats.uncategorized
+                      ).toLocaleString()}{" "}
+                      · {formatBytesSimple(libraryStats.totalSize)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="sidebar-footer">
+              <span className="sidebar-health">
+                <span className="health-dot" aria-hidden="true" />
+                Storage Healthy
+              </span>
+              <div className="sidebar-version-group">
+                {updateInfo?.available && (
+                  <button
+                    type="button"
+                    className="update-badge"
+                    onClick={() => setUpdateDialogOpen(true)}
+                    title={`VistoGallery ${updateInfo.latestVersion} is available`}
+                  >
+                    <span className="update-dot" aria-hidden="true" />
+                    Update
+                  </button>
+                )}
+                <span className="sidebar-version">v{appVersion || "dev"}</span>
+              </div>
+            </div>
+          </aside>
+
+          <main
+            id="main-content"
+            className="main-content"
+            tabIndex={-1}
+            style={{ position: "relative" }}
+          >
+            {screenHistory.length > 0 && (
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Go back"
+                title="Go back"
+                onClick={goBack}
+                style={{
+                  position: "absolute",
+                  top: 10,
+                  right: 10,
+                  zIndex: 5,
+                  width: 32,
+                  height: 32,
+                  padding: 0,
+                  borderRadius: 8,
+                  opacity: 0.8,
+                }}
+              >
+                ←
+              </button>
+            )}
+            {screen === "Library" && (
+              <LibraryScreen
+                items={library.visibleItems}
+                hasItems={library.items.length > 0}
+                inspectedId={library.inspectedId}
+                selectedIds={library.selectedIds}
+                filter={library.filter}
+                query={library.query}
+                layout={library.layout}
+                showInspector={library.showInspector}
+                activeAlbum={library.activeAlbum}
+                albums={library.albums}
+                onInspectItem={library.inspectItem}
+                onToggleSelect={library.toggleSelection}
+                onSelectRange={library.selectRange}
+                onSetSelection={library.setSelectedIds}
+                onToggleSelectAll={library.toggleSelectAll}
+                onClearSelection={library.clearSelection}
+                onOpenBatch={() => exportToBatch()}
+                onChangeFilter={library.setFilter}
+                onChangeQuery={library.setQuery}
+                onChangeLayout={library.setLayout}
+                onToggleInspector={library.toggleInspector}
+                onSetActiveAlbum={library.setActiveAlbum}
+                onOpenAlbums={() => openScreen("Albums")}
+                onAddItems={(albumId: string) => addItemsToAlbum(albumId)}
+                onOpenAlbumPicker={(itemIds?: string[]) => openAlbumPicker(itemIds)}
+                onAlbumMenu={(e: React.MouseEvent) => {
+                  const album = library.albums.find((a: any) => a.id === library.activeAlbum);
+                  if (album) openAlbumMenu(album, e);
+                }}
+                albumDragOver={albumDragOver}
+                onToggleFavorite={library.toggleFavorite}
+                onToggleHidden={library.toggleHidden}
+                onSetFavoriteForIds={library.setFavoriteForIds}
+                onSetHiddenForIds={library.setHiddenForIds}
+                onSetRatingForIds={library.setRatingForIds}
+                onSetColorLabelForIds={library.setColorLabelForIds}
+                minRating={library.minRating}
+                libraryStats={libraryStats}
+                colorLabelFilter={library.colorLabelFilter}
+                dateFrom={library.dateFrom}
+                dateTo={library.dateTo}
+                onSetMinRating={library.setMinRating}
+                onSetColorLabelFilter={library.setColorLabelFilter}
+                onSetDateRange={library.setDateRange}
+                onCreateSmartAlbum={(name: string) => void library.createSmartAlbum(name)}
+                onCopyTagsToFinder={copyTagsToFinderForIds}
+                onUpdateTags={library.updateItemTags}
+                onDeleteItems={library.deleteItems}
+                onRequestDeleteItems={(ids: string[]) => {
+                  itemPendingDeleteRef.current = ids;
+                  setItemPendingDeleteCount(ids.length);
+                }}
+                onRequestRemoveFromAlbum={(albumId: string, itemIds: string[]) =>
+                  setAlbumRemovePending({ albumId, itemIds })
                 }
-                await edit.saveDraft();
-                await edit.open(item);
-                setScreen("Edit");
-              }}
-              onImportFolder={() => importFolder()}
-              onImportFiles={() => importFiles()}
-              onPlaySlideshow={playSlideshow}
-              onCreateAlbum={openAlbumDialog}
-              searchInputRef={searchInputRef}
-              onContextMenu={openContextMenu}
-              busy={library.busy}
-              progress={library.progress}
-              notice={showNotice}
-              assetUrl={assetUrl}
-              hiddenCount={library.hiddenCount}
-            />
-          )}
-
-          {screen === "Albums" && (
-            <AlbumsScreen
-              albums={library.albums}
-              items={library.items}
-              smartAlbums={library.smartAlbums}
-              assetUrl={assetUrl}
-              onCreateAlbum={openAlbumDialog}
-              onAlbumContextMenu={openAlbumMenu}
-              onSmartAlbumContextMenu={openSmartAlbumMenu}
-              onOpenSmartAlbum={(albumId: string) =>
-                void openSmartAlbum(albumId)
-              }
-              onOpenAlbum={async (albumId: string) => {
-                library.setActiveAlbum(albumId);
-                library.setFilter("All");
-                library.setQuery("");
-                await library.loadAlbumItems(albumId);
-                setScreen("Library");
-              }}
-            />
-          )}
-
-          {screen === "Viewer" && (
-            <ViewerScreen
-              active
-              items={photoViewerItems}
-              selected={
-                library.viewerSelected?.kind === "video"
-                  ? null
-                  : library.viewerSelected
-              }
-              zoom={viewer.zoom}
-              fitMode={viewer.fitMode}
-              rotation={viewer.rotation}
-              flipX={viewer.flipX}
-              onNavigate={navigateViewer}
-              onSetPhoto={selectViewerItem}
-              onSetZoom={viewer.setZoom}
-              onZoomIn={viewer.zoomIn}
-              onZoomOut={viewer.zoomOut}
-              onResetZoom={viewer.resetZoom}
-              onToggleFitMode={viewer.toggleFitMode}
-              onRotate={viewer.rotate}
-              onToggleFlip={viewer.toggleFlip}
-              onResetTransform={viewer.resetTransform}
-              onToggleFullscreen={viewer.toggleFullscreen}
-              onClose={viewer.close}
-              onToggleFavorite={library.toggleFavorite}
-              onToggleHidden={library.toggleHidden}
-              onOpenEdit={async (item: MediaItem) => {
-                await edit.saveDraft();
-                await edit.open(item);
-                setScreen("Edit");
-              }}
-              onContextMenu={openContextMenu}
-              assetUrl={assetUrl}
-            />
-          )}
-
-          <VideoPlayerScreen
-            active={screen === "Video"}
-            item={playbackItem}
-            queue={videoQueue}
-            queueAutoPlayItemId={queueAutoPlayId}
-            assetUrl={assetUrl}
-            onBack={() => setScreen(viewerOrigin || "Library")}
-            onSelect={selectVideoItem}
-            onPrevious={playPreviousVideo}
-            onNext={playNextVideo}
-          />
-
-          {screen === "Edit" && (
-            <EditScreen
-              item={edit.item}
-              values={edit.values}
-              crop={edit.crop}
-              history={edit.history}
-              historyIndex={edit.historyIndex}
-              onSetValue={edit.setValue}
-              onSetValues={edit.setValues}
-              onReset={edit.reset}
-              onAuto={edit.auto}
-              onRotate={edit.rotate}
-              onFlip={edit.flip}
-              onSetCrop={edit.setCrop}
-              onResetCrop={edit.resetCrop}
-              onUndo={edit.undo}
-              onRedo={edit.redo}
-              canUndo={edit.canUndo}
-              canRedo={edit.canRedo}
-              onClose={edit.close}
-              onSaveDraft={edit.saveDraft}
-              onBack={() => setScreen("Library")}
-              onExport={async (inPlace = false) => {
-                const item = edit.item;
-                if (!item) return;
-                const sourceExtension = String(
-                  item.extension || item.name.split(".").pop() || "",
-                ).toLowerCase();
-                if (inPlace) {
-                  if (
-                    !["jpg", "jpeg", "png", "webp"].includes(sourceExtension)
-                  ) {
-                    showNotice(
-                      "Replace original supports JPEG, PNG, and WebP. Save a copy instead.",
-                    );
+                onOpenViewer={(id?: string) => openViewer(id, "Library")}
+                onOpenEdit={async (item: any) => {
+                  if (item?.kind === "video") {
+                    openViewer(item.id, "Library");
                     return;
                   }
-                }
-                try {
-                  const v = edit.values || {};
-                  const crop = edit.crop || {
-                    enabled: false,
-                    x: 0,
-                    y: 0,
-                    width: 1,
-                    height: 1,
-                  };
+                  await edit.saveDraft();
+                  await edit.open(item);
+                  setScreen("Edit");
+                }}
+                onImportFolder={() => importFolder()}
+                onImportFiles={() => importFiles()}
+                onPlaySlideshow={playSlideshow}
+                onCreateAlbum={openAlbumDialog}
+                searchInputRef={searchInputRef}
+                onContextMenu={openContextMenu}
+                busy={library.busy}
+                progress={library.progress}
+                notice={showNotice}
+                assetUrl={assetUrl}
+                hiddenCount={library.hiddenCount}
+              />
+            )}
 
-                  // Build render request for native backend
-                  const request = {
-                    sourcePath: item.path,
-                    edits: v,
-                    outputFormat: (inPlace ? "in_place" : "image/jpeg") as
-                      | "jpeg"
-                      | "png"
-                      | "webp"
-                      | "heic"
-                      | "avif"
-                      | "in_place",
-                    quality: 0.92,
-                    stripMetadata: false,
-                    crop: crop.enabled ? crop : undefined,
-                  };
+            {screen === "Albums" && (
+              <AlbumsScreen
+                albums={library.albums}
+                items={library.items}
+                smartAlbums={library.smartAlbums}
+                assetUrl={assetUrl}
+                onCreateAlbum={openAlbumDialog}
+                onAlbumContextMenu={openAlbumMenu}
+                onSmartAlbumContextMenu={openSmartAlbumMenu}
+                onOpenSmartAlbum={(albumId: string) => void openSmartAlbum(albumId)}
+                onOpenAlbum={async (albumId: string) => {
+                  library.setActiveAlbum(albumId);
+                  library.setFilter("All");
+                  library.setQuery("");
+                  await library.loadAlbumItems(albumId);
+                  setScreen("Library");
+                }}
+              />
+            )}
 
-                  const result = await tauri.editing.render(request);
+            {screen === "Viewer" && (
+              <ViewerScreen
+                active
+                items={photoViewerItems}
+                selected={library.viewerSelected?.kind === "video" ? null : library.viewerSelected}
+                zoom={viewer.zoom}
+                fitMode={viewer.fitMode}
+                rotation={viewer.rotation}
+                flipX={viewer.flipX}
+                onNavigate={navigateViewer}
+                onSetPhoto={selectViewerItem}
+                onSetZoom={viewer.setZoom}
+                onZoomIn={viewer.zoomIn}
+                onZoomOut={viewer.zoomOut}
+                onResetZoom={viewer.resetZoom}
+                onToggleFitMode={viewer.toggleFitMode}
+                onRotate={viewer.rotate}
+                onToggleFlip={viewer.toggleFlip}
+                onResetTransform={viewer.resetTransform}
+                onToggleFullscreen={viewer.toggleFullscreen}
+                onClose={viewer.close}
+                onToggleFavorite={library.toggleFavorite}
+                onToggleHidden={library.toggleHidden}
+                onOpenEdit={async (item: MediaItem) => {
+                  await edit.saveDraft();
+                  await edit.open(item);
+                  setScreen("Edit");
+                }}
+                onContextMenu={openContextMenu}
+                assetUrl={assetUrl}
+              />
+            )}
 
-                  if (!inPlace) {
-                    // For save-copy, backend wrote to temp; now show save dialog
-                    const suggestedName =
-                      String(item.name).replace(/\.[^.]+$/, "") + "_edited.jpg";
-                    const finalPath = await save({
-                      defaultPath: suggestedName,
-                      filters: [
-                        { name: "JPEG image", extensions: ["jpg", "jpeg"] },
-                      ],
-                    });
-                    if (!finalPath) {
-                      showNotice("Export cancelled");
+            <VideoPlayerScreen
+              active={screen === "Video"}
+              item={playbackItem}
+              queue={videoQueue}
+              queueAutoPlayItemId={queueAutoPlayId}
+              assetUrl={assetUrl}
+              onBack={() => setScreen(viewerOrigin || "Library")}
+              onSelect={selectVideoItem}
+              onPrevious={playPreviousVideo}
+              onNext={playNextVideo}
+            />
+
+            {screen === "Edit" && (
+              <EditScreen
+                item={edit.item}
+                values={edit.values}
+                crop={edit.crop}
+                history={edit.history}
+                historyIndex={edit.historyIndex}
+                onSetValue={edit.setValue}
+                onSetValues={edit.setValues}
+                onReset={edit.reset}
+                onAuto={edit.auto}
+                onRotate={edit.rotate}
+                onFlip={edit.flip}
+                onSetCrop={edit.setCrop}
+                onResetCrop={edit.resetCrop}
+                onUndo={edit.undo}
+                onRedo={edit.redo}
+                canUndo={edit.canUndo}
+                canRedo={edit.canRedo}
+                onClose={edit.close}
+                onSaveDraft={edit.saveDraft}
+                onBack={() => setScreen("Library")}
+                onExport={async (inPlace = false) => {
+                  const item = edit.item;
+                  if (!item) return;
+                  const sourceExtension = String(
+                    item.extension || item.name.split(".").pop() || "",
+                  ).toLowerCase();
+                  if (inPlace) {
+                    if (!["jpg", "jpeg", "png", "webp"].includes(sourceExtension)) {
+                      showNotice(
+                        "Replace original supports JPEG, PNG, and WebP. Save a copy instead.",
+                      );
                       return;
                     }
-                    // Move temp file to final destination
-                    await tauri.editing.moveExportedFile(
-                      result.outputPath,
-                      finalPath,
-                    );
                   }
+                  try {
+                    const v = edit.values || {};
+                    const crop = edit.crop || {
+                      enabled: false,
+                      x: 0,
+                      y: 0,
+                      width: 1,
+                      height: 1,
+                    };
 
-                  clearEditDraft(item.id);
-                  if (inPlace) await library.loadLibrary();
-                  showNotice(
-                    inPlace ? "Replaced original" : "Exported edited copy",
-                  );
-                } catch (e) {
-                  if (String(e).includes("cancelled")) {
-                    showNotice("Export cancelled");
-                  } else {
-                    showNotice("Export failed: " + String(e));
+                    // Build render request for native backend
+                    const request = {
+                      sourcePath: item.path,
+                      edits: v,
+                      outputFormat: (inPlace ? "in_place" : "image/jpeg") as
+                        "jpeg" | "png" | "webp" | "heic" | "avif" | "in_place",
+                      quality: 0.92,
+                      stripMetadata: false,
+                      crop: crop.enabled ? crop : undefined,
+                    };
+
+                    const result = await tauri.editing.render(request);
+
+                    if (!inPlace) {
+                      // For save-copy, backend wrote to temp; now show save dialog
+                      const suggestedName =
+                        String(item.name).replace(/\.[^.]+$/, "") + "_edited.jpg";
+                      const finalPath = await save({
+                        defaultPath: suggestedName,
+                        filters: [{ name: "JPEG image", extensions: ["jpg", "jpeg"] }],
+                      });
+                      if (!finalPath) {
+                        showNotice("Export cancelled");
+                        return;
+                      }
+                      // Move temp file to final destination
+                      await tauri.editing.moveExportedFile(result.outputPath, finalPath);
+                    }
+
+                    clearEditDraft(item.id);
+                    if (inPlace) await library.loadLibrary();
+                    showNotice(inPlace ? "Replaced original" : "Exported edited copy");
+                  } catch (e) {
+                    if (String(e).includes("cancelled")) {
+                      showNotice("Export cancelled");
+                    } else {
+                      showNotice("Export failed: " + String(e));
+                    }
                   }
-                }
-              }}
-              onClearDraft={edit.clearDraft}
-              onNotice={showNotice}
-              assetUrl={assetUrl}
-              items={library.items.filter(
-                (i: any) => i.kind === "photo" && !i.hidden,
-              )}
-              onOpenEdit={async (item: any) => {
-                await edit.saveDraft();
-                await edit.open(item);
-              }}
-            />
-          )}
+                }}
+                onClearDraft={edit.clearDraft}
+                onNotice={showNotice}
+                assetUrl={assetUrl}
+                items={library.items.filter((i: any) => i.kind === "photo" && !i.hidden)}
+                onOpenEdit={async (item: any) => {
+                  await edit.saveDraft();
+                  await edit.open(item);
+                }}
+              />
+            )}
 
-          {screen === "Batch" && (
-            <BatchScreen
-              items={library.items.filter((i: any) =>
-                library.selectedIds.includes(i.id),
-              )}
-              selectedIds={library.selectedIds}
-              config={batch}
-              state={batch}
-              onSetPattern={batch.setPattern}
-              onSetFormat={batch.setFormat}
-              onSetQuality={batch.setQuality}
-              onSetStripMetadata={batch.setStripMetadata}
-              onSetMaxDimension={batch.setMaxDimension}
-              onSetStep={batch.setStep}
-              onChooseFolder={async () => {
-                const folder = await openFileDialog({
-                  directory: true,
-                  multiple: false,
-                  title: "Choose export folder",
-                });
-                if (typeof folder === "string") batch.setOutputFolder(folder);
-              }}
-              onOpenFolder={() => {
-                if (batch.outputFolder)
-                  tauri.items.openFolder(batch.outputFolder);
-              }}
-              onExportBatch={batch.exportBatch}
-              onCancelBatch={batch.cancelBatch}
-              onReset={batch.reset}
-              onOpenLibrary={() => setScreen("Library")}
-              onClearSelection={library.clearSelection}
-              onSelectAll={library.selectAll}
-              onSetSelection={library.setSelectedIds}
-              onRemoveItem={library.toggleSelection}
-              busy={batch.busy}
-              cancelRequested={batch.cancelRequested}
-              progress={batch.progress}
-              result={batch.result}
-              error={batch.error}
-              assetUrl={assetUrl}
-            />
-          )}
+            {screen === "Batch" && (
+              <BatchScreen
+                items={library.items.filter((i: any) => library.selectedIds.includes(i.id))}
+                selectedIds={library.selectedIds}
+                config={batch}
+                state={batch}
+                onSetPattern={batch.setPattern}
+                onSetFormat={batch.setFormat}
+                onSetQuality={batch.setQuality}
+                onSetStripMetadata={batch.setStripMetadata}
+                onSetMaxDimension={batch.setMaxDimension}
+                onSetStep={batch.setStep}
+                onChooseFolder={async () => {
+                  const folder = await openFileDialog({
+                    directory: true,
+                    multiple: false,
+                    title: "Choose export folder",
+                  });
+                  if (typeof folder === "string") batch.setOutputFolder(folder);
+                }}
+                onOpenFolder={() => {
+                  if (batch.outputFolder) tauri.items.openFolder(batch.outputFolder);
+                }}
+                onExportBatch={batch.exportBatch}
+                onCancelBatch={batch.cancelBatch}
+                onReset={batch.reset}
+                onOpenLibrary={() => setScreen("Library")}
+                onClearSelection={library.clearSelection}
+                onSelectAll={library.selectAll}
+                onSetSelection={library.setSelectedIds}
+                onRemoveItem={library.toggleSelection}
+                busy={batch.busy}
+                cancelRequested={batch.cancelRequested}
+                progress={batch.progress}
+                result={batch.result}
+                error={batch.error}
+                assetUrl={assetUrl}
+              />
+            )}
 
-          {screen === "CameraLens" && (
-            <CameraLensBrowserScreen
-              items={library.items}
-              assetUrl={assetUrl}
-              onBack={() => setScreen("Library")}
-              onOpenViewer={(id?: string) => openViewer(id, "Library")}
-            />
-          )}
+            {screen === "CameraLens" && (
+              <CameraLensBrowserScreen
+                items={library.items}
+                assetUrl={assetUrl}
+                onBack={() => setScreen("Library")}
+                onOpenViewer={(id?: string) => openViewer(id, "Library")}
+              />
+            )}
 
-          {screen === "Hidden" && (
-            <HiddenScreen
-              assetUrl={assetUrl}
-              searchInputRef={searchInputRef}
-              onContextMenu={openContextMenu}
-              onNavigate={openScreen}
-              onCreateAlbum={openAlbumDialog}
-              onOpenAlbumPicker={(itemIds?: string[]) =>
-                openAlbumPicker(itemIds)
-              }
-              onRequestDeleteItems={(ids: string[]) => {
-                itemPendingDeleteRef.current = ids;
-                setItemPendingDeleteCount(ids.length);
-              }}
-              onOpenEdit={async (item: any) => {
-                if (item?.kind === "video") {
-                  openViewer(item.id, "Hidden", "hidden");
-                  return;
-                }
-                await edit.saveDraft();
-                await edit.open(item);
-                setScreen("Edit");
-              }}
-              onOpenViewer={(id?: string) => openViewer(id, "Hidden", "hidden")}
-            />
-          )}
+            {screen === "Hidden" && (
+              <HiddenScreen
+                assetUrl={assetUrl}
+                searchInputRef={searchInputRef}
+                onContextMenu={openContextMenu}
+                onNavigate={openScreen}
+                onCreateAlbum={openAlbumDialog}
+                onOpenAlbumPicker={(itemIds?: string[]) => openAlbumPicker(itemIds)}
+                onRequestDeleteItems={(ids: string[]) => {
+                  itemPendingDeleteRef.current = ids;
+                  setItemPendingDeleteCount(ids.length);
+                }}
+                onOpenEdit={async (item: any) => {
+                  if (item?.kind === "video") {
+                    openViewer(item.id, "Hidden", "hidden");
+                    return;
+                  }
+                  await edit.saveDraft();
+                  await edit.open(item);
+                  setScreen("Edit");
+                }}
+                onOpenViewer={(id?: string) => openViewer(id, "Hidden", "hidden")}
+              />
+            )}
 
-          {screen === "Duplicates" && (
-            <DuplicatesScreen
-              groups={library.duplicates}
-              items={library.items}
-              onScan={library.scanDuplicates}
-              onClear={library.clearDuplicates}
-              busy={library.busy}
-              assetUrl={assetUrl}
-              onRequestDeleteItems={(ids: string[]) => {
-                itemPendingDeleteRef.current = ids;
-                setItemPendingDeleteCount(ids.length);
-              }}
-              onHideIds={async (ids: string[]) => {
-                if (!ids.length) return;
-                library.showNotice(
-                  `Hiding ${ids.length.toLocaleString()} item(s)…`,
-                );
-                await library.setHiddenForIds(ids, true);
-                library.showNotice(
-                  `Hidden ${ids.length.toLocaleString()} item(s).`,
-                );
-                await library.scanDuplicates();
-              }}
-            />
-          )}
+            {screen === "Duplicates" && (
+              <DuplicatesScreen
+                groups={library.duplicates}
+                items={library.items}
+                onScan={library.scanDuplicates}
+                onClear={library.clearDuplicates}
+                busy={library.busy}
+                assetUrl={assetUrl}
+                onRequestDeleteItems={(ids: string[]) => {
+                  itemPendingDeleteRef.current = ids;
+                  setItemPendingDeleteCount(ids.length);
+                }}
+                onHideIds={async (ids: string[]) => {
+                  if (!ids.length) return;
+                  library.showNotice(`Hiding ${ids.length.toLocaleString()} item(s)…`);
+                  await library.setHiddenForIds(ids, true);
+                  library.showNotice(`Hidden ${ids.length.toLocaleString()} item(s).`);
+                  await library.scanDuplicates();
+                }}
+              />
+            )}
 
-          {screen === "Settings" && (
-            <SettingsScreen
-              onAddFolder={() => importFolder()}
-              onRemoveFolder={(folder: LibraryFolder) =>
-                setFolderPendingRemove(folder)
-              }
-              onRescan={() => {
-                void rescanSources();
-              }}
-              onRescanFolder={(folder) => {
-                void rescanSource(folder);
-              }}
-              onRemoveAllSources={() => setRemoveAllSourcesDialogOpen(true)}
-            />
-          )}
-        </main>
-      </div>
+            {screen === "Settings" && (
+              <SettingsScreen
+                onAddFolder={() => importFolder()}
+                onRemoveFolder={(folder: LibraryFolder) => setFolderPendingRemove(folder)}
+                onRescan={() => {
+                  void rescanSources();
+                }}
+                onRescanFolder={(folder) => {
+                  void rescanSource(folder);
+                }}
+                onRemoveAllSources={() => setRemoveAllSourcesDialogOpen(true)}
+              />
+            )}
+          </main>
+        </div>
 
-      {library.busy && library.progress && (
-        <div
-          className={`busy-indicator ${library.progress.phase === "hashing" ? "busy-indicator-hashing" : ""}`}
-          role="status"
-        >
-          <span className="spinner" />
-          {library.progress.phase === "hashing"
-            ? (() => {
-                const bytesProcessed = library.progress.bytesProcessed ?? 0;
-                const bytesTotal = library.progress.bytesTotal ?? 0;
-                const filesProcessed =
-                  library.progress.filesProcessed ?? library.progress.processed;
-                const filesTotal =
-                  library.progress.filesTotal ?? library.progress.total;
-                const percent =
-                  bytesTotal > 0
-                    ? Math.min(
-                        100,
-                        Math.round((bytesProcessed / bytesTotal) * 100),
-                      )
-                    : 0;
-                return (
-                  <div className="busy-indicator-progress-copy">
-                    <b>
-                      {bytesTotal > 0
-                        ? `Checking duplicates · ${percent}%`
-                        : filesTotal > 0
-                          ? "Hashing candidates…"
-                          : "Finding duplicate candidates…"}
-                    </b>
-                    <small>
-                      {filesProcessed.toLocaleString()} of{" "}
-                      {filesTotal.toLocaleString()} candidate files
-                      {bytesTotal > 0 &&
-                        ` · ${formatBytesSimple(bytesProcessed)} of ${formatBytesSimple(bytesTotal)}`}
-                    </small>
-                    <div
-                      className="busy-indicator-progress-track"
-                      role="progressbar"
-                      aria-label="Duplicate scan progress"
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={percent}
-                    >
-                      <span style={{ width: `${percent}%` }} />
-                    </div>
-                    {library.progress.currentFile && (
-                      <small
-                        className="busy-indicator-current-file"
-                        title={library.progress.currentFile}
-                      >
-                        {library.progress.currentFile}
-                      </small>
-                    )}
-                  </div>
-                );
-              })()
-            : library.progress.phase === "trashing"
+        {library.busy && library.progress && (
+          <div
+            className={`busy-indicator ${library.progress.phase === "hashing" ? "busy-indicator-hashing" : ""}`}
+            role="status"
+          >
+            <span className="spinner" />
+            {library.progress.phase === "hashing"
               ? (() => {
-                  const processed = library.progress.processed ?? 0;
-                  const total = library.progress.total ?? 0;
+                  const bytesProcessed = library.progress.bytesProcessed ?? 0;
+                  const bytesTotal = library.progress.bytesTotal ?? 0;
+                  const filesProcessed =
+                    library.progress.filesProcessed ?? library.progress.processed;
+                  const filesTotal = library.progress.filesTotal ?? library.progress.total;
                   const percent =
-                    total > 0
-                      ? Math.min(100, Math.round((processed / total) * 100))
+                    bytesTotal > 0
+                      ? Math.min(100, Math.round((bytesProcessed / bytesTotal) * 100))
                       : 0;
                   return (
                     <div className="busy-indicator-progress-copy">
-                      <b>Moving to Trash · {percent}%</b>
+                      <b>
+                        {bytesTotal > 0
+                          ? `Checking duplicates · ${percent}%`
+                          : filesTotal > 0
+                            ? "Hashing candidates…"
+                            : "Finding duplicate candidates…"}
+                      </b>
                       <small>
-                        {processed.toLocaleString()} of {total.toLocaleString()}{" "}
+                        {filesProcessed.toLocaleString()} of {filesTotal.toLocaleString()} candidate
                         files
+                        {bytesTotal > 0 &&
+                          ` · ${formatBytesSimple(bytesProcessed)} of ${formatBytesSimple(bytesTotal)}`}
                       </small>
                       <div
                         className="busy-indicator-progress-track"
                         role="progressbar"
-                        aria-label="Trash progress"
+                        aria-label="Duplicate scan progress"
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-valuenow={percent}
                       >
                         <span style={{ width: `${percent}%` }} />
                       </div>
+                      {library.progress.currentFile && (
+                        <small
+                          className="busy-indicator-current-file"
+                          title={library.progress.currentFile}
+                        >
+                          {library.progress.currentFile}
+                        </small>
+                      )}
                     </div>
                   );
                 })()
-              : library.progress.phase === "reading"
-                ? (() => (
-                    <div className="busy-indicator-progress-copy">
-                      <b>Loading library…</b>
-                      <small>Reading database</small>
-                      <div
-                        className="busy-indicator-progress-track"
-                        role="progressbar"
-                        aria-label="Loading library"
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={0}
-                      >
-                        <span style={{ width: "0%" }} />
+              : library.progress.phase === "trashing"
+                ? (() => {
+                    const processed = library.progress.processed ?? 0;
+                    const total = library.progress.total ?? 0;
+                    const percent =
+                      total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+                    return (
+                      <div className="busy-indicator-progress-copy">
+                        <b>Moving to Trash · {percent}%</b>
+                        <small>
+                          {processed.toLocaleString()} of {total.toLocaleString()} files
+                        </small>
+                        <div
+                          className="busy-indicator-progress-track"
+                          role="progressbar"
+                          aria-label="Trash progress"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={percent}
+                        >
+                          <span style={{ width: `${percent}%` }} />
+                        </div>
                       </div>
-                    </div>
-                  ))()
-                : library.progress.phase === "scanning"
-                  ? (() => {
-                      // Distinguish source-level vs file-level progress:
-                      // - source-level: total <= number of folders (frontend sets it)
-                      // - file-level: total = files in current folder (backend sets it)
-                      // Heuristic: if currentFile is a directory path, it's source-level.
-                      const isSourceLevel = library.progress.currentFile
-                        ? library.progress.currentFile.endsWith("/") ||
-                          !library.progress.currentFile.includes(".")
-                        : true;
-                      const processed = library.progress.processed ?? 0;
-                      const total = library.progress.total ?? 0;
-                      const percent =
-                        total > 0
-                          ? Math.min(100, Math.round((processed / total) * 100))
-                          : 0;
+                    );
+                  })()
+                : library.progress.phase === "reading"
+                  ? (() => (
+                      <div className="busy-indicator-progress-copy">
+                        <b>Loading library…</b>
+                        <small>Reading database</small>
+                        <div
+                          className="busy-indicator-progress-track"
+                          role="progressbar"
+                          aria-label="Loading library"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={0}
+                        >
+                          <span style={{ width: "0%" }} />
+                        </div>
+                      </div>
+                    ))()
+                  : library.progress.phase === "scanning"
+                    ? (() => {
+                        // Distinguish source-level vs file-level progress:
+                        // - source-level: total <= number of folders (frontend sets it)
+                        // - file-level: total = files in current folder (backend sets it)
+                        // Heuristic: if currentFile is a directory path, it's source-level.
+                        const isSourceLevel = library.progress.currentFile
+                          ? library.progress.currentFile.endsWith("/") ||
+                            !library.progress.currentFile.includes(".")
+                          : true;
+                        const processed = library.progress.processed ?? 0;
+                        const total = library.progress.total ?? 0;
+                        const percent =
+                          total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
 
-                      // Extract just the folder/file name from path
-                      const getName = (path: string) =>
-                        path.split("/").pop() || path;
+                        // Extract just the folder/file name from path
+                        const getName = (path: string) => path.split("/").pop() || path;
 
-                      if (isSourceLevel) {
-                        return (
-                          <div className="busy-indicator-progress-copy">
-                            <b>
-                              Scanning source {processed + 1} of {total} ·{" "}
-                              {percent}%
-                            </b>
-                            <small>
-                              {library.progress.currentFile
-                                ? getName(library.progress.currentFile)
-                                : "Preparing…"}
-                            </small>
-                            <div
-                              className="busy-indicator-progress-track"
-                              role="progressbar"
-                              aria-label="Scan progress"
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                              aria-valuenow={percent}
-                            >
-                              <span style={{ width: `${percent}%` }} />
+                        if (isSourceLevel) {
+                          return (
+                            <div className="busy-indicator-progress-copy">
+                              <b>
+                                Scanning source {processed + 1} of {total} · {percent}%
+                              </b>
+                              <small>
+                                {library.progress.currentFile
+                                  ? getName(library.progress.currentFile)
+                                  : "Preparing…"}
+                              </small>
+                              <div
+                                className="busy-indicator-progress-track"
+                                role="progressbar"
+                                aria-label="Scan progress"
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-valuenow={percent}
+                              >
+                                <span style={{ width: `${percent}%` }} />
+                              </div>
                             </div>
-                          </div>
-                        );
-                      } else {
-                        // Show source folder + file progress in two lines
-                        const currentFileName = library.progress.currentFile
-                          ? library.progress.currentFile.split("/").pop() ||
-                            library.progress.currentFile
-                          : "files";
-                        // Extract source folder from current file path
-                        let sourceFolder = "files";
-                        if (library.progress.currentFile) {
-                          const parts = library.progress.currentFile.split("/");
-                          if (parts.length >= 2) {
-                            sourceFolder = parts[parts.length - 2]; // parent folder name
+                          );
+                        } else {
+                          // Show source folder + file progress in two lines
+                          const currentFileName = library.progress.currentFile
+                            ? library.progress.currentFile.split("/").pop() ||
+                              library.progress.currentFile
+                            : "files";
+                          // Extract source folder from current file path
+                          let sourceFolder = "files";
+                          if (library.progress.currentFile) {
+                            const parts = library.progress.currentFile.split("/");
+                            if (parts.length >= 2) {
+                              sourceFolder = parts[parts.length - 2]; // parent folder name
+                            }
                           }
-                        }
-                        return (
-                          <div className="busy-indicator-progress-copy">
-                            <b>
-                              Scanning {sourceFolder} ·{" "}
-                              {processed.toLocaleString()} of{" "}
-                              {total.toLocaleString()} · {percent}%
-                            </b>
-                            <small>{currentFileName}</small>
-                            <div
-                              className="busy-indicator-progress-track"
-                              role="progressbar"
-                              aria-label="File scan progress"
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                              aria-valuenow={percent}
-                            >
-                              <span style={{ width: `${percent}%` }} />
+                          return (
+                            <div className="busy-indicator-progress-copy">
+                              <b>
+                                Scanning {sourceFolder} · {processed.toLocaleString()} of{" "}
+                                {total.toLocaleString()} · {percent}%
+                              </b>
+                              <small>{currentFileName}</small>
+                              <div
+                                className="busy-indicator-progress-track"
+                                role="progressbar"
+                                aria-label="File scan progress"
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-valuenow={percent}
+                              >
+                                <span style={{ width: `${percent}%` }} />
+                              </div>
                             </div>
-                          </div>
-                        );
-                      }
-                    })()
-                  : `${library.progress.phase} ${library.progress.processed}/${library.progress.total}`}
-          <button
-            className="busy-indicator-cancel"
-            type="button"
-            onClick={() => void library.cancelScan()}
-            disabled={library.canceling}
-          >
-            {library.canceling ? "Cancelling…" : "Cancel"}
-          </button>
-        </div>
-      )}
-
-      {library.notice && (
-        <div
-          className={`toast ${isWarningNotice(library.notice) ? "toast-warning" : ""}`}
-          role={isWarningNotice(library.notice) ? "alert" : "status"}
-          aria-live={isWarningNotice(library.notice) ? "assertive" : "polite"}
-          onClick={() => library.showNotice("")}
-        >
-          <span aria-hidden="true">
-            {isWarningNotice(library.notice) ? "!" : "✓"}
-          </span>
-          {library.notice}
-        </div>
-      )}
-
-      {updateDialogOpen && updateInfo && (
-        <div
-          className="dialog-backdrop"
-          role="presentation"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setUpdateDialogOpen(false);
-          }}
-        >
-          <div
-            ref={updateDialogRef}
-            className="album-dialog update-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="update-dialog-title"
-          >
-            <div className="dialog-heading">
-              <div>
-                <p className="eyebrow">UPDATE</p>
-                <h2 id="update-dialog-title">
-                  VistoGallery {updateInfo.latestVersion} is available
-                </h2>
-              </div>
-              <button
-                type="button"
-                className="dialog-close"
-                aria-label="Close"
-                onClick={() => setUpdateDialogOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-            <p className="dialog-hint">
-              You're running v{updateInfo.currentVersion}. Download the latest
-              build, then drag VistoGallery.app into Applications to replace the
-              old copy.
-            </p>
-            {updateInfo.notes && (
-              <pre className="update-notes">{updateInfo.notes}</pre>
-            )}
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() => {
-                  localStorage.setItem(
-                    `update:skip:${updateInfo.latestVersion}`,
-                    "1",
-                  );
-                  setUpdateDialogOpen(false);
-                }}
-              >
-                Skip this version
-              </button>
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() => setUpdateDialogOpen(false)}
-              >
-                Later
-              </button>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => {
-                  void tauri.app.openExternal(
-                    updateInfo.downloadUrl || updateInfo.releaseUrl,
-                  );
-                }}
-              >
-                Download
-              </button>
-            </div>
+                          );
+                        }
+                      })()
+                    : `${library.progress.phase} ${library.progress.processed}/${library.progress.total}`}
+            <button
+              className="busy-indicator-cancel"
+              type="button"
+              onClick={() => void library.cancelScan()}
+              disabled={library.canceling}
+            >
+              {library.canceling ? "Cancelling…" : "Cancel"}
+            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {aboutOpen && (
-        <div
-          className="dialog-backdrop"
-          role="presentation"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setAboutOpen(false);
-          }}
-        >
+        {library.notice && (
           <div
-            ref={aboutDialogRef}
-            className="album-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="about-dialog-title"
+            className={`toast ${isWarningNotice(library.notice) ? "toast-warning" : ""}`}
+            role={isWarningNotice(library.notice) ? "alert" : "status"}
+            aria-live={isWarningNotice(library.notice) ? "assertive" : "polite"}
+            onClick={() => library.showNotice("")}
           >
-            <div className="dialog-heading">
-              <div>
-                <p className="eyebrow">ABOUT</p>
-                <h2 id="about-dialog-title">VistoGallery</h2>
-              </div>
-              <button
-                type="button"
-                className="dialog-close"
-                aria-label="Close"
-                onClick={() => setAboutOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-            <p className="dialog-hint">Native macOS photo gallery.</p>
-            <p className="dialog-hint">Version {appVersion || "dev"}</p>
-            {updateInfo?.available && (
-              <p className="dialog-hint">
-                Version {updateInfo.latestVersion} is available to download.
-              </p>
-            )}
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() => void checkForUpdates(true)}
-                disabled={updateChecking}
-              >
-                {updateChecking ? "Checking…" : "Check for Updates"}
-              </button>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => setAboutOpen(false)}
-              >
-                Close
-              </button>
-            </div>
+            <span aria-hidden="true">{isWarningNotice(library.notice) ? "!" : "✓"}</span>
+            {library.notice}
           </div>
-        </div>
-      )}
+        )}
 
-      {albumDialogOpen && (
-        <div
-          className="dialog-backdrop"
-          role="presentation"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) closeAlbumDialog();
-          }}
-        >
-          <form
-            ref={albumDialogRef}
-            className="album-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="album-dialog-title"
-            onSubmit={submitAlbum}
-          >
-            <div className="dialog-heading">
-              <div>
-                <p className="eyebrow">ORGANISE</p>
-                <h2 id="album-dialog-title">
-                  {albumDialogMode === "rename" ? "Rename album" : "New album"}
-                </h2>
-              </div>
-              <button
-                type="button"
-                className="dialog-close"
-                aria-label="Close"
-                onClick={closeAlbumDialog}
-                disabled={creatingAlbum}
-              >
-                ×
-              </button>
-            </div>
-            <div className="dialog-field">
-              <label htmlFor="album-name">Album name</label>
-              <input
-                id="album-name"
-                ref={albumInputRef}
-                value={albumName}
-                onChange={(e) => setAlbumName(e.target.value)}
-                placeholder="e.g. Summer 2026"
-                maxLength={80}
-                autoComplete="off"
-                disabled={creatingAlbum}
-              />
-            </div>
-            <p className="dialog-hint">
-              {albumDialogMode === "rename"
-                ? "This only changes the album name. Photos stay in this album."
-                : (() => {
-                    const count =
-                      albumSeedIds?.length ??
-                      (library.selectedIds.length ||
-                        (library.inspectedId ? 1 : 0));
-                    return count
-                      ? `Adds ${count.toLocaleString()} item${count === 1 ? "" : "s"} to the new album.`
-                      : "You can add photos to it from the library or an album at any time.";
-                  })()}
-            </p>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={closeAlbumDialog}
-                disabled={creatingAlbum}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="primary-button"
-                disabled={!albumName.trim() || creatingAlbum}
-              >
-                {creatingAlbum
-                  ? albumDialogMode === "rename"
-                    ? "Saving…"
-                    : "Creating…"
-                  : albumDialogMode === "rename"
-                    ? "Save name"
-                    : "Create album"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {albumPickerOpen && (
-        <div
-          className="dialog-backdrop"
-          role="presentation"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget && !addingToAlbumId)
-              setAlbumPickerOpen(false);
-          }}
-        >
+        {updateDialogOpen && updateInfo && (
           <div
-            className="album-dialog album-picker-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="album-picker-title"
+            className="dialog-backdrop"
+            role="presentation"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setUpdateDialogOpen(false);
+            }}
           >
-            <div className="dialog-heading">
-              <div>
-                <p className="eyebrow">ORGANISE</p>
-                <h2 id="album-picker-title">Add to album</h2>
-              </div>
-              <button
-                type="button"
-                className="dialog-close"
-                aria-label="Close"
-                onClick={() => setAlbumPickerOpen(false)}
-                disabled={Boolean(addingToAlbumId)}
-              >
-                ×
-              </button>
-            </div>
-            <p className="album-picker-subtitle">
-              {albumPickerItemIds.length.toLocaleString()} selected item
-              {albumPickerItemIds.length === 1 ? "" : "s"}
-            </p>
-
-            <div className="album-picker-search">
-              <SearchIcon size={15} />
-              <input
-                ref={albumSearchRef}
-                value={albumSearch}
-                onChange={(e) => setAlbumSearch(e.target.value)}
-                placeholder="Search albums"
-                aria-label="Search albums"
-                disabled={Boolean(addingToAlbumId)}
-              />
-              {albumSearch && (
+            <div
+              ref={updateDialogRef}
+              className="album-dialog update-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="update-dialog-title"
+            >
+              <div className="dialog-heading">
+                <div>
+                  <p className="eyebrow">UPDATE</p>
+                  <h2 id="update-dialog-title">
+                    VistoGallery {updateInfo.latestVersion} is available
+                  </h2>
+                </div>
                 <button
                   type="button"
-                  className="album-picker-search-clear"
-                  aria-label="Clear album search"
+                  className="dialog-close"
+                  aria-label="Close"
+                  onClick={() => setUpdateDialogOpen(false)}
+                >
+                  ×
+                </button>
+              </div>
+              <p className="dialog-hint">
+                You're running v{updateInfo.currentVersion}. Download the latest build, then drag
+                VistoGallery.app into Applications to replace the old copy.
+              </p>
+              {updateInfo.notes && <pre className="update-notes">{updateInfo.notes}</pre>}
+              <div className="dialog-actions">
+                <button
+                  type="button"
+                  className="quiet-button"
                   onClick={() => {
-                    setAlbumSearch("");
-                    albumSearchRef.current?.focus();
+                    localStorage.setItem(`update:skip:${updateInfo.latestVersion}`, "1");
+                    setUpdateDialogOpen(false);
+                  }}
+                >
+                  Skip this version
+                </button>
+                <button
+                  type="button"
+                  className="quiet-button"
+                  onClick={() => setUpdateDialogOpen(false)}
+                >
+                  Later
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => {
+                    void tauri.app.openExternal(updateInfo.downloadUrl || updateInfo.releaseUrl);
+                  }}
+                >
+                  Download
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {aboutOpen && (
+          <div
+            className="dialog-backdrop"
+            role="presentation"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setAboutOpen(false);
+            }}
+          >
+            <div
+              ref={aboutDialogRef}
+              className="album-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="about-dialog-title"
+            >
+              <div className="dialog-heading">
+                <div>
+                  <p className="eyebrow">ABOUT</p>
+                  <h2 id="about-dialog-title">VistoGallery</h2>
+                </div>
+                <button
+                  type="button"
+                  className="dialog-close"
+                  aria-label="Close"
+                  onClick={() => setAboutOpen(false)}
+                >
+                  ×
+                </button>
+              </div>
+              <p className="dialog-hint">Native macOS photo gallery.</p>
+              <p className="dialog-hint">Version {appVersion || "dev"}</p>
+              {updateInfo?.available && (
+                <p className="dialog-hint">
+                  Version {updateInfo.latestVersion} is available to download.
+                </p>
+              )}
+              <div className="dialog-actions">
+                <button
+                  type="button"
+                  className="quiet-button"
+                  onClick={() => void checkForUpdates(true)}
+                  disabled={updateChecking}
+                >
+                  {updateChecking ? "Checking…" : "Check for Updates"}
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => setAboutOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {albumDialogOpen && (
+          <div
+            className="dialog-backdrop"
+            role="presentation"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) closeAlbumDialog();
+            }}
+          >
+            <form
+              ref={albumDialogRef}
+              className="album-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="album-dialog-title"
+              onSubmit={submitAlbum}
+            >
+              <div className="dialog-heading">
+                <div>
+                  <p className="eyebrow">ORGANISE</p>
+                  <h2 id="album-dialog-title">
+                    {albumDialogMode === "rename" ? "Rename album" : "New album"}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  className="dialog-close"
+                  aria-label="Close"
+                  onClick={closeAlbumDialog}
+                  disabled={creatingAlbum}
+                >
+                  ×
+                </button>
+              </div>
+              <div className="dialog-field">
+                <label htmlFor="album-name">Album name</label>
+                <input
+                  id="album-name"
+                  ref={albumInputRef}
+                  value={albumName}
+                  onChange={(e) => setAlbumName(e.target.value)}
+                  placeholder="e.g. Summer 2026"
+                  maxLength={80}
+                  autoComplete="off"
+                  disabled={creatingAlbum}
+                />
+              </div>
+              <p className="dialog-hint">
+                {albumDialogMode === "rename"
+                  ? "This only changes the album name. Photos stay in this album."
+                  : (() => {
+                      const count =
+                        albumSeedIds?.length ??
+                        (library.selectedIds.length || (library.inspectedId ? 1 : 0));
+                      return count
+                        ? `Adds ${count.toLocaleString()} item${count === 1 ? "" : "s"} to the new album.`
+                        : "You can add photos to it from the library or an album at any time.";
+                    })()}
+              </p>
+              <div className="dialog-actions">
+                <button
+                  type="button"
+                  className="quiet-button"
+                  onClick={closeAlbumDialog}
+                  disabled={creatingAlbum}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={!albumName.trim() || creatingAlbum}
+                >
+                  {creatingAlbum
+                    ? albumDialogMode === "rename"
+                      ? "Saving…"
+                      : "Creating…"
+                    : albumDialogMode === "rename"
+                      ? "Save name"
+                      : "Create album"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {albumPickerOpen && (
+          <div
+            className="dialog-backdrop"
+            role="presentation"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget && !addingToAlbumId) setAlbumPickerOpen(false);
+            }}
+          >
+            <div
+              className="album-dialog album-picker-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="album-picker-title"
+            >
+              <div className="dialog-heading">
+                <div>
+                  <p className="eyebrow">ORGANISE</p>
+                  <h2 id="album-picker-title">Add to album</h2>
+                </div>
+                <button
+                  type="button"
+                  className="dialog-close"
+                  aria-label="Close"
+                  onClick={() => setAlbumPickerOpen(false)}
+                  disabled={Boolean(addingToAlbumId)}
+                >
+                  ×
+                </button>
+              </div>
+              <p className="album-picker-subtitle">
+                {albumPickerItemIds.length.toLocaleString()} selected item
+                {albumPickerItemIds.length === 1 ? "" : "s"}
+              </p>
+
+              <div className="album-picker-search">
+                <SearchIcon size={15} />
+                <input
+                  ref={albumSearchRef}
+                  value={albumSearch}
+                  onChange={(e) => setAlbumSearch(e.target.value)}
+                  placeholder="Search albums"
+                  aria-label="Search albums"
+                  disabled={Boolean(addingToAlbumId)}
+                />
+                {albumSearch && (
+                  <button
+                    type="button"
+                    className="album-picker-search-clear"
+                    aria-label="Clear album search"
+                    onClick={() => {
+                      setAlbumSearch("");
+                      albumSearchRef.current?.focus();
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              <div className="album-picker-list" role="listbox" aria-label="Albums">
+                {(() => {
+                  const selectedItems = library.items.filter((item: any) =>
+                    albumPickerItemIds.includes(item.id),
+                  );
+                  const query = albumSearch.trim().toLowerCase();
+                  const matching = library.albums.filter(
+                    (album: any) => !query || album.name.toLowerCase().includes(query),
+                  );
+                  if (!matching.length) {
+                    return (
+                      <div className="album-picker-empty">
+                        <AlbumsIcon size={24} />
+                        <b>{library.albums.length ? "No matching albums" : "No albums yet"}</b>
+                        <p>
+                          {library.albums.length
+                            ? "Try a different search."
+                            : "Create an album and these photos will be added to it."}
+                        </p>
+                      </div>
+                    );
+                  }
+                  return matching.map((album: any, index: number) => {
+                    const alreadyAdded =
+                      selectedItems.length > 0 &&
+                      selectedItems.every((item: any) => item.albumIds?.includes(album.id));
+                    const busy = addingToAlbumId === album.id;
+                    return (
+                      <button
+                        key={album.id}
+                        type="button"
+                        className="album-picker-row"
+                        onClick={() => addPickedItemsToAlbum(album)}
+                        disabled={Boolean(addingToAlbumId) || alreadyAdded}
+                        role="option"
+                        aria-selected="false"
+                      >
+                        <i
+                          className={`album-dot ${["coral", "violet", "blue", "green"][index % 4]}`}
+                        />
+                        <span className="album-picker-name">{album.name}</span>
+                        <span className="album-picker-count">
+                          {alreadyAdded
+                            ? "Already added"
+                            : (() => {
+                                const count = album.itemCount || 0;
+                                return `${count.toLocaleString()} ${count === 1 ? "item" : "items"}`;
+                              })()}
+                        </span>
+                        {busy && <span className="spinner album-picker-spinner" />}
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
+
+              <div className="dialog-actions">
+                <button
+                  type="button"
+                  className="quiet-button"
+                  onClick={() => setAlbumPickerOpen(false)}
+                  disabled={Boolean(addingToAlbumId)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={createAlbumFromPicker}
+                  disabled={Boolean(addingToAlbumId)}
+                >
+                  <PlusIcon size={14} /> New album
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {albumPendingDelete && (
+          <div
+            className="dialog-backdrop"
+            role="presentation"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget && !deletingAlbum) setAlbumPendingDelete(null);
+            }}
+          >
+            <div
+              ref={deleteAlbumDialogRef}
+              className="album-dialog delete-album-dialog"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="delete-album-title"
+              aria-describedby="delete-album-description"
+            >
+              <div className="dialog-heading">
+                <div>
+                  <p className="eyebrow">ALBUM</p>
+                  <h2 id="delete-album-title">Delete Album?</h2>
+                </div>
+                <button
+                  type="button"
+                  className="dialog-close"
+                  aria-label="Close"
+                  onClick={() => setAlbumPendingDelete(null)}
+                  disabled={deletingAlbum}
+                >
+                  ×
+                </button>
+              </div>
+              <p className="delete-album-copy">
+                Are you sure you want to delete <b>“{albumPendingDelete.name}”</b>?
+              </p>
+              <div className="delete-album-safety" id="delete-album-description">
+                <span>
+                  <AlbumsIcon size={19} />
+                </span>
+                <p>
+                  <b>Your photos are safe.</b> This only removes the album and its grouping.{" "}
+                  {albumPendingDelete.itemCount
+                    ? `${albumPendingDelete.itemCount.toLocaleString()} item${albumPendingDelete.itemCount === 1 ? "" : "s"} will remain in your library.`
+                    : "The items remain in your library."}
+                </p>
+              </div>
+              <div className="dialog-actions">
+                <button
+                  type="button"
+                  className="quiet-button"
+                  onClick={() => setAlbumPendingDelete(null)}
+                  disabled={deletingAlbum}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={confirmDeleteAlbum}
+                  disabled={deletingAlbum}
+                >
+                  {deletingAlbum ? "Deleting…" : "Delete Album"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {itemPendingDeleteCount > 0 && (
+          <div
+            className="dialog-backdrop"
+            role="presentation"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) {
+                setItemPendingDeleteCount(0);
+                itemPendingDeleteRef.current = null;
+              }
+            }}
+          >
+            <div
+              ref={deleteItemDialogRef}
+              className="album-dialog delete-album-dialog"
+              role="alertdialog"
+              aria-modal="true"
+            >
+              <div className="dialog-heading">
+                <div>
+                  <p className="eyebrow">PHOTO</p>
+                  <h2>Delete Item?</h2>
+                </div>
+                <button
+                  type="button"
+                  className="dialog-close"
+                  aria-label="Close"
+                  onClick={() => {
+                    setItemPendingDeleteCount(0);
+                    itemPendingDeleteRef.current = null;
                   }}
                 >
                   ×
                 </button>
-              )}
+              </div>
+              <p className="delete-album-copy">
+                Are you sure you want to delete{" "}
+                <b>
+                  {itemPendingDeleteCount} item
+                  {itemPendingDeleteCount === 1 ? "" : "s"}
+                </b>
+                ? They will be moved to Trash.
+              </p>
+              <div className="dialog-actions">
+                <button
+                  type="button"
+                  className="quiet-button"
+                  onClick={() => {
+                    setItemPendingDeleteCount(0);
+                    itemPendingDeleteRef.current = null;
+                  }}
+                >
+                  Cancel
+                </button>
+                <button type="button" className="danger-button" onClick={confirmDeleteItem}>
+                  Delete
+                </button>
+              </div>
             </div>
+          </div>
+        )}
 
+        {albumRemovePending && (
+          <div
+            className="dialog-backdrop"
+            role="presentation"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setAlbumRemovePending(null);
+            }}
+          >
+            <div className="album-dialog delete-album-dialog" role="alertdialog" aria-modal="true">
+              <div className="dialog-heading">
+                <div>
+                  <p className="eyebrow">ALBUM</p>
+                  <h2>Remove from Album?</h2>
+                </div>
+                <button
+                  type="button"
+                  className="dialog-close"
+                  aria-label="Close"
+                  onClick={() => setAlbumRemovePending(null)}
+                >
+                  ×
+                </button>
+              </div>
+              <p className="delete-album-copy">
+                Remove {albumRemovePending.itemIds.length} item
+                {albumRemovePending.itemIds.length === 1 ? "" : "s"} from this album?
+              </p>
+              <div className="dialog-actions">
+                <button
+                  type="button"
+                  className="quiet-button"
+                  onClick={() => setAlbumRemovePending(null)}
+                >
+                  Cancel
+                </button>
+                <button type="button" className="danger-button" onClick={confirmRemoveFromAlbum}>
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {sourcesSheetOpen && (
+          <div
+            className="dialog-backdrop"
+            role="presentation"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setSourcesSheetOpen(false);
+            }}
+          >
             <div
-              className="album-picker-list"
-              role="listbox"
-              aria-label="Albums"
+              className="album-dialog sources-sheet"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="sources-sheet-title"
             >
-              {(() => {
-                const selectedItems = library.items.filter((item: any) =>
-                  albumPickerItemIds.includes(item.id),
-                );
-                const query = albumSearch.trim().toLowerCase();
-                const matching = library.albums.filter(
-                  (album: any) =>
-                    !query || album.name.toLowerCase().includes(query),
-                );
-                if (!matching.length) {
-                  return (
-                    <div className="album-picker-empty">
-                      <AlbumsIcon size={24} />
-                      <b>
-                        {library.albums.length
-                          ? "No matching albums"
-                          : "No albums yet"}
-                      </b>
-                      <p>
-                        {library.albums.length
-                          ? "Try a different search."
-                          : "Create an album and these photos will be added to it."}
-                      </p>
-                    </div>
-                  );
-                }
-                return matching.map((album: any, index: number) => {
-                  const alreadyAdded =
-                    selectedItems.length > 0 &&
-                    selectedItems.every((item: any) =>
-                      item.albumIds?.includes(album.id),
-                    );
-                  const busy = addingToAlbumId === album.id;
-                  return (
-                    <button
-                      key={album.id}
-                      type="button"
-                      className="album-picker-row"
-                      onClick={() => addPickedItemsToAlbum(album)}
-                      disabled={Boolean(addingToAlbumId) || alreadyAdded}
-                      role="option"
-                      aria-selected="false"
-                    >
-                      <i
-                        className={`album-dot ${["coral", "violet", "blue", "green"][index % 4]}`}
-                      />
-                      <span className="album-picker-name">{album.name}</span>
-                      <span className="album-picker-count">
-                        {alreadyAdded
-                          ? "Already added"
-                          : (() => {
-                              const count = album.itemCount || 0;
-                              return `${count.toLocaleString()} ${count === 1 ? "item" : "items"}`;
-                            })()}
-                      </span>
-                      {busy && (
-                        <span className="spinner album-picker-spinner" />
-                      )}
-                    </button>
-                  );
-                });
-              })()}
-            </div>
-
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() => setAlbumPickerOpen(false)}
-                disabled={Boolean(addingToAlbumId)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={createAlbumFromPicker}
-                disabled={Boolean(addingToAlbumId)}
-              >
-                <PlusIcon size={14} /> New album
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {albumPendingDelete && (
-        <div
-          className="dialog-backdrop"
-          role="presentation"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget && !deletingAlbum)
-              setAlbumPendingDelete(null);
-          }}
-        >
-          <div
-            ref={deleteAlbumDialogRef}
-            className="album-dialog delete-album-dialog"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="delete-album-title"
-            aria-describedby="delete-album-description"
-          >
-            <div className="dialog-heading">
-              <div>
-                <p className="eyebrow">ALBUM</p>
-                <h2 id="delete-album-title">Delete Album?</h2>
+              <div className="dialog-heading">
+                <div>
+                  <p className="eyebrow">LIBRARY</p>
+                  <h2 id="sources-sheet-title">Sources</h2>
+                </div>
+                <button
+                  type="button"
+                  className="dialog-close"
+                  aria-label="Close"
+                  onClick={() => setSourcesSheetOpen(false)}
+                >
+                  ×
+                </button>
               </div>
-              <button
-                type="button"
-                className="dialog-close"
-                aria-label="Close"
-                onClick={() => setAlbumPendingDelete(null)}
-                disabled={deletingAlbum}
-              >
-                ×
-              </button>
-            </div>
-            <p className="delete-album-copy">
-              Are you sure you want to delete <b>“{albumPendingDelete.name}”</b>
-              ?
-            </p>
-            <div className="delete-album-safety" id="delete-album-description">
-              <span>
-                <AlbumsIcon size={19} />
-              </span>
-              <p>
-                <b>Your photos are safe.</b> This only removes the album and its
-                grouping.{" "}
-                {albumPendingDelete.itemCount
-                  ? `${albumPendingDelete.itemCount.toLocaleString()} item${albumPendingDelete.itemCount === 1 ? "" : "s"} will remain in your library.`
-                  : "The items remain in your library."}
-              </p>
-            </div>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() => setAlbumPendingDelete(null)}
-                disabled={deletingAlbum}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="danger-button"
-                onClick={confirmDeleteAlbum}
-                disabled={deletingAlbum}
-              >
-                {deletingAlbum ? "Deleting…" : "Delete Album"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {itemPendingDeleteCount > 0 && (
-        <div
-          className="dialog-backdrop"
-          role="presentation"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) {
-              setItemPendingDeleteCount(0);
-              itemPendingDeleteRef.current = null;
-            }
-          }}
-        >
-          <div
-            ref={deleteItemDialogRef}
-            className="album-dialog delete-album-dialog"
-            role="alertdialog"
-            aria-modal="true"
-          >
-            <div className="dialog-heading">
-              <div>
-                <p className="eyebrow">PHOTO</p>
-                <h2>Delete Item?</h2>
-              </div>
-              <button
-                type="button"
-                className="dialog-close"
-                aria-label="Close"
-                onClick={() => {
-                  setItemPendingDeleteCount(0);
-                  itemPendingDeleteRef.current = null;
+              <SourcesManager
+                variant="sheet"
+                onAddFolder={() => importFolder()}
+                onRemoveFolder={(folder: LibraryFolder) => setFolderPendingRemove(folder)}
+                onFilterSource={() => {
+                  setScreen("Library");
+                  setSourcesSheetOpen(false);
                 }}
-              >
-                ×
-              </button>
-            </div>
-            <p className="delete-album-copy">
-              Are you sure you want to delete{" "}
-              <b>
-                {itemPendingDeleteCount} item
-                {itemPendingDeleteCount === 1 ? "" : "s"}
-              </b>
-              ? They will be moved to Trash.
-            </p>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() => {
-                  setItemPendingDeleteCount(0);
-                  itemPendingDeleteRef.current = null;
+                onRescan={() => {
+                  void rescanSources();
                 }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="danger-button"
-                onClick={confirmDeleteItem}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {albumRemovePending && (
-        <div
-          className="dialog-backdrop"
-          role="presentation"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setAlbumRemovePending(null);
-          }}
-        >
-          <div
-            className="album-dialog delete-album-dialog"
-            role="alertdialog"
-            aria-modal="true"
-          >
-            <div className="dialog-heading">
-              <div>
-                <p className="eyebrow">ALBUM</p>
-                <h2>Remove from Album?</h2>
+                onRescanFolder={(folder) => {
+                  void rescanSource(folder);
+                }}
+              />
+              <div className="dialog-actions">
+                <button
+                  type="button"
+                  className="danger-button"
+                  disabled={library.busy || library.folders.length === 0}
+                  onClick={() => setRemoveAllSourcesDialogOpen(true)}
+                >
+                  Remove all sources
+                </button>
+                <div style={{ flex: 1 }} />
+                <button
+                  type="button"
+                  className="quiet-button"
+                  onClick={() => setSourcesSheetOpen(false)}
+                >
+                  Done
+                </button>
               </div>
-              <button
-                type="button"
-                className="dialog-close"
-                aria-label="Close"
-                onClick={() => setAlbumRemovePending(null)}
-              >
-                ×
-              </button>
-            </div>
-            <p className="delete-album-copy">
-              Remove {albumRemovePending.itemIds.length} item
-              {albumRemovePending.itemIds.length === 1 ? "" : "s"} from this
-              album?
-            </p>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() => setAlbumRemovePending(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="danger-button"
-                onClick={confirmRemoveFromAlbum}
-              >
-                Remove
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {sourcesSheetOpen && (
-        <div
-          className="dialog-backdrop"
-          role="presentation"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setSourcesSheetOpen(false);
-          }}
-        >
+        {removeAllSourcesDialogOpen && (
           <div
-            className="album-dialog sources-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="sources-sheet-title"
+            className="dialog-backdrop"
+            role="presentation"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setRemoveAllSourcesDialogOpen(false);
+            }}
           >
-            <div className="dialog-heading">
-              <div>
-                <p className="eyebrow">LIBRARY</p>
-                <h2 id="sources-sheet-title">Sources</h2>
+            <div className="album-dialog" role="dialog" aria-modal="true">
+              <div className="dialog-heading">
+                <h2>Remove all sources?</h2>
               </div>
-              <button
-                type="button"
-                className="dialog-close"
-                aria-label="Close"
-                onClick={() => setSourcesSheetOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-            <SourcesManager
-              variant="sheet"
-              onAddFolder={() => importFolder()}
-              onRemoveFolder={(folder: LibraryFolder) =>
-                setFolderPendingRemove(folder)
-              }
-              onFilterSource={() => {
-                setScreen("Library");
-                setSourcesSheetOpen(false);
-              }}
-              onRescan={() => {
-                void rescanSources();
-              }}
-              onRescanFolder={(folder) => {
-                void rescanSource(folder);
-              }}
-            />
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="danger-button"
-                disabled={library.busy || library.folders.length === 0}
-                onClick={() => setRemoveAllSourcesDialogOpen(true)}
-              >
-                Remove all sources
-              </button>
-              <div style={{ flex: 1 }} />
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() => setSourcesSheetOpen(false)}
-              >
-                Done
-              </button>
+              <div className="dialog-body">
+                This removes all source folders from the library. Files stay on disk.
+              </div>
+              <div className="dialog-actions">
+                <button
+                  type="button"
+                  className="quiet-button"
+                  onClick={() => setRemoveAllSourcesDialogOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={() => {
+                    setRemoveAllSourcesDialogOpen(false);
+                    void removeAllSources();
+                  }}
+                >
+                  Remove all
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {removeAllSourcesDialogOpen && (
-        <div className='dialog-backdrop' role='presentation' onMouseDown={(e) => { if (e.target === e.currentTarget) setRemoveAllSourcesDialogOpen(false); }}>
-          <div className='album-dialog' role='dialog' aria-modal='true'>
-            <div className='dialog-heading'><h2>Remove all sources?</h2></div>
-            <div className='dialog-body'>This removes all source folders from the library. Files stay on disk.</div>
-            <div className='dialog-actions'>
-              <button type='button' className='quiet-button' onClick={() => setRemoveAllSourcesDialogOpen(false)}>Cancel</button>
-              <button type='button' className='danger-button' onClick={() => { setRemoveAllSourcesDialogOpen(false); void removeAllSources(); }}>Remove all</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {folderPendingRemove && (
-        <div
-          className="dialog-backdrop"
-          role="presentation"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget && !removingFolder)
-              setFolderPendingRemove(null);
-          }}
-        >
+        {folderPendingRemove && (
           <div
-            ref={removeFolderDialogRef}
-            className="album-dialog delete-album-dialog"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="remove-folder-title"
-            aria-describedby="remove-folder-description"
+            className="dialog-backdrop"
+            role="presentation"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget && !removingFolder) setFolderPendingRemove(null);
+            }}
           >
-            <div className="dialog-heading">
-              <div>
-                <p className="eyebrow">FOLDER</p>
-                <h2 id="remove-folder-title">Remove Folder?</h2>
+            <div
+              ref={removeFolderDialogRef}
+              className="album-dialog delete-album-dialog"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="remove-folder-title"
+              aria-describedby="remove-folder-description"
+            >
+              <div className="dialog-heading">
+                <div>
+                  <p className="eyebrow">FOLDER</p>
+                  <h2 id="remove-folder-title">Remove Folder?</h2>
+                </div>
+                <button
+                  type="button"
+                  className="dialog-close"
+                  aria-label="Close"
+                  onClick={() => setFolderPendingRemove(null)}
+                  disabled={removingFolder}
+                >
+                  ×
+                </button>
               </div>
-              <button
-                type="button"
-                className="dialog-close"
-                aria-label="Close"
-                onClick={() => setFolderPendingRemove(null)}
-                disabled={removingFolder}
-              >
-                ×
-              </button>
-            </div>
-            <p className="delete-album-copy">
-              Remove <b>“{folderPendingRemove.name}”</b> from VistoGallery?
-            </p>
-            <div className="delete-album-safety" id="remove-folder-description">
-              <span>
-                <FolderIcon size={19} />
-              </span>
-              <p>
-                <b>Your files are safe.</b>{" "}
-                {folderPendingRemove.itemCount > 0
-                  ? `This only unstages the folder and its ${folderPendingRemove.itemCount.toLocaleString()} item${folderPendingRemove.itemCount === 1 ? "" : "s"} from the library.`
-                  : "This only removes the empty folder entry from the library."}{" "}
-                Nothing is deleted from disk — import the folder again to bring
-                it back.
+              <p className="delete-album-copy">
+                Remove <b>“{folderPendingRemove.name}”</b> from VistoGallery?
               </p>
-            </div>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() => setFolderPendingRemove(null)}
-                disabled={removingFolder}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="danger-button"
-                onClick={confirmRemoveFolder}
-                disabled={removingFolder}
-              >
-                {removingFolder ? "Removing…" : "Remove Folder"}
-              </button>
+              <div className="delete-album-safety" id="remove-folder-description">
+                <span>
+                  <FolderIcon size={19} />
+                </span>
+                <p>
+                  <b>Your files are safe.</b>{" "}
+                  {folderPendingRemove.itemCount > 0
+                    ? `This only unstages the folder and its ${folderPendingRemove.itemCount.toLocaleString()} item${folderPendingRemove.itemCount === 1 ? "" : "s"} from the library.`
+                    : "This only removes the empty folder entry from the library."}{" "}
+                  Nothing is deleted from disk — import the folder again to bring it back.
+                </p>
+              </div>
+              <div className="dialog-actions">
+                <button
+                  type="button"
+                  className="quiet-button"
+                  onClick={() => setFolderPendingRemove(null)}
+                  disabled={removingFolder}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="danger-button"
+                  onClick={confirmRemoveFolder}
+                  disabled={removingFolder}
+                >
+                  {removingFolder ? "Removing…" : "Remove Folder"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {playbackItem && playbackItemId && screen !== "Video" && (
-        <MiniPlayer
-          onPrevious={playPreviousVideo}
-          onNext={playNextVideo}
-          onExpand={() => {
-            setViewerOrigin(screen);
-            setBackgroundVideo(playbackItem);
-            setScreen("Video");
-          }}
-          onClose={() => {
-            usePlaybackStore.getState().stop();
-            setBackgroundVideo(null);
-            setVideoQueue([]);
-            videoQueuePagingRef.current = null;
-            setQueueAutoPlayId(null);
-          }}
-        />
-      )}
+        {playbackItem && playbackItemId && screen !== "Video" && (
+          <MiniPlayer
+            onPrevious={playPreviousVideo}
+            onNext={playNextVideo}
+            onExpand={() => {
+              setViewerOrigin(screen);
+              setBackgroundVideo(playbackItem);
+              setScreen("Video");
+            }}
+            onClose={() => {
+              usePlaybackStore.getState().stop();
+              setBackgroundVideo(null);
+              setVideoQueue([]);
+              videoQueuePagingRef.current = null;
+              setQueueAutoPlayId(null);
+            }}
+          />
+        )}
 
-      <SlideshowOverlay assetUrl={assetUrl} />
+        <SlideshowOverlay assetUrl={assetUrl} />
 
-      {contextMenu && (
-        <ContextMenu
-          items={contextMenu.items}
-          x={contextMenu.x}
-          y={contextMenu.y}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
-    </div>
+        {contextMenu && (
+          <ContextMenu
+            items={contextMenu.items}
+            x={contextMenu.x}
+            y={contextMenu.y}
+            onClose={() => setContextMenu(null)}
+          />
+        )}
+      </div>
     </ErrorBoundary>
   );
 }

@@ -68,22 +68,10 @@ describe("video player screen", () => {
 
     expect(screen.getByText("VIDEO PLAYER")).toBeInTheDocument();
     expect(screen.getByText("2 videos in this queue")).toBeInTheDocument();
-    expect(screen.getByTestId("video-player")).toHaveAttribute(
-      "data-item-id",
-      "video-a",
-    );
-    expect(screen.getByTestId("video-player")).toHaveAttribute(
-      "data-width",
-      "1920",
-    );
-    expect(screen.getByTestId("video-player")).toHaveAttribute(
-      "data-height",
-      "1080",
-    );
-    expect(screen.getAllByTestId("queue-thumbnail")[0]).toHaveAttribute(
-      "data-eager",
-      "true",
-    );
+    expect(screen.getByTestId("video-player")).toHaveAttribute("data-item-id", "video-a");
+    expect(screen.getByTestId("video-player")).toHaveAttribute("data-width", "1920");
+    expect(screen.getByTestId("video-player")).toHaveAttribute("data-height", "1080");
+    expect(screen.getAllByTestId("queue-thumbnail")[0]).toHaveAttribute("data-eager", "true");
     fireEvent.click(screen.getByRole("button", { name: "Play video-b.mp4" }));
     expect(onSelect).toHaveBeenCalledWith("video-b");
   });
@@ -105,13 +93,7 @@ describe("video player screen", () => {
 
     expect(screen.getByTestId("video-player")).toBeInTheDocument();
     expect(container.querySelector("section")).toHaveAttribute("inert");
-    expect(container.querySelector("section")).toHaveAttribute(
-      "aria-hidden",
-      "true",
-    );
-    expect(screen.getAllByTestId("queue-thumbnail")[0]).toHaveAttribute(
-      "data-eager",
-      "false",
-    );
+    expect(container.querySelector("section")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getAllByTestId("queue-thumbnail")[0]).toHaveAttribute("data-eager", "false");
   });
 });

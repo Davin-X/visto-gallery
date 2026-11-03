@@ -149,8 +149,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
     try {
       await togglePictureInPicture(video);
     } catch (err) {
-      if (import.meta.env.DEV)
-        console.warn("Picture-in-picture unavailable", err);
+      if (import.meta.env.DEV) console.warn("Picture-in-picture unavailable", err);
     }
   };
 
@@ -198,21 +197,13 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
         e.preventDefault();
         e.stopPropagation();
         toggle();
-      } else if (
-        e.key === "ArrowUp" &&
-        item.kind === "video" &&
-        videoRef.current
-      ) {
+      } else if (e.key === "ArrowUp" && item.kind === "video" && videoRef.current) {
         e.preventDefault();
         e.stopPropagation();
         const v = videoRef.current;
         v.volume = Math.min(1, v.volume + 0.1);
         if (v.volume > 0) v.muted = false;
-      } else if (
-        e.key === "ArrowDown" &&
-        item.kind === "video" &&
-        videoRef.current
-      ) {
+      } else if (e.key === "ArrowDown" && item.kind === "video" && videoRef.current) {
         e.preventDefault();
         e.stopPropagation();
         const v = videoRef.current;
@@ -237,8 +228,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
   const toggleFullscreen = async () => {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
-      else
-        await document.querySelector(".slideshow-overlay")?.requestFullscreen();
+      else await document.querySelector(".slideshow-overlay")?.requestFullscreen();
     } catch {}
   };
 
@@ -303,8 +293,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
           <div className="slideshow-video-fallback">
             <CachedThumbnail itemId={item.id} name={item.name} size={1024} />
             <p>
-              This format can't play in the slideshow. Open it from the Library
-              in a desktop player.
+              This format can't play in the slideshow. Open it from the Library in a desktop player.
             </p>
           </div>
         ) : isVideo ? (
@@ -364,12 +353,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
         onBlurCapture={releaseHud}
       >
         {/* Transport - all same style */}
-        <button
-          type="button"
-          onClick={previous}
-          aria-label="Previous slide"
-          title="Previous (←)"
-        >
+        <button type="button" onClick={previous} aria-label="Previous slide" title="Previous (←)">
           <ChevronLeftIcon size={18} />
         </button>
         <button
@@ -380,12 +364,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
         >
           {playing ? <PauseIcon size={18} /> : <PlayIcon size={18} />}
         </button>
-        <button
-          type="button"
-          onClick={next}
-          aria-label="Next slide"
-          title="Next (→)"
-        >
+        <button type="button" onClick={next} aria-label="Next slide" title="Next (→)">
           <ChevronRightIcon size={18} />
         </button>
 
@@ -565,11 +544,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
 
       {/* Settings popover */}
       {settingsOpen && (
-        <div
-          className="slideshow-settings-pop"
-          role="dialog"
-          aria-label="Slideshow settings"
-        >
+        <div className="slideshow-settings-pop" role="dialog" aria-label="Slideshow settings">
           <div className="slideshow-settings-head">
             <b>Slideshow</b>
             <button
@@ -608,9 +583,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
             <span>Transition</span>
             <select
               value={transition}
-              onChange={(e) =>
-                setTransition(e.target.value as SlideshowTransition)
-              }
+              onChange={(e) => setTransition(e.target.value as SlideshowTransition)}
             >
               <option value="fade">Fade</option>
               <option value="slide">Slide</option>
@@ -622,8 +595,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
 
       {hintsVisible && (
         <div className="slideshow-hints" role="status" aria-live="polite">
-          Space play/pause · ←/→ navigate · Esc close · F fullscreen · M mute ·
-          +/- zoom · R rotate
+          Space play/pause · ←/→ navigate · Esc close · F fullscreen · M mute · +/- zoom · R rotate
         </div>
       )}
     </div>

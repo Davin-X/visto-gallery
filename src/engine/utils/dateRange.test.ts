@@ -1,10 +1,6 @@
 /// <reference types="vitest/globals" />
 import { describe, expect, test } from "vitest";
-import {
-  endOfLocalDay,
-  startOfLocalDay,
-  toDateInputValue,
-} from "./dateRange";
+import { endOfLocalDay, startOfLocalDay, toDateInputValue } from "./dateRange";
 
 describe("capture date range", () => {
   test("covers the whole selected local day inclusively", () => {

@@ -121,15 +121,10 @@ describe("photo viewer", () => {
   it("starts a slideshow with the photo-only list and current image", () => {
     renderPhotoViewer("photo", 2);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Start photo slideshow" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Start photo slideshow" }));
 
     expect(openSlideshow).toHaveBeenCalledWith(
-      [
-        expect.objectContaining({ id: "photo" }),
-        expect.objectContaining({ id: "photo-2" }),
-      ],
+      [expect.objectContaining({ id: "photo" }), expect.objectContaining({ id: "photo-2" })],
       "photo",
     );
   });
@@ -137,12 +132,8 @@ describe("photo viewer", () => {
   it("keeps video items out of the photo filmstrip", () => {
     const { container } = renderPhotoViewer();
 
-    expect(
-      container.querySelector(".filmstrip button[title='photo.jpg']"),
-    ).toBeTruthy();
-    expect(
-      container.querySelector(".filmstrip button[title='video.mp4']"),
-    ).toBeNull();
+    expect(container.querySelector(".filmstrip button[title='photo.jpg']")).toBeTruthy();
+    expect(container.querySelector(".filmstrip button[title='video.mp4']")).toBeNull();
     expect(screen.getByText("1 / 1")).toBeInTheDocument();
     expect(container.querySelector(".viewer-stage video")).toBeNull();
   });
@@ -150,9 +141,7 @@ describe("photo viewer", () => {
   it("does not render a video in the photo viewing surface", () => {
     renderPhotoViewer("video");
 
-    expect(
-      screen.getByText("No viewable media yet"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("No viewable media yet")).toBeInTheDocument();
     expect(document.querySelector(".viewer-stage video")).toBeNull();
   });
 });

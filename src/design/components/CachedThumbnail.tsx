@@ -14,10 +14,7 @@ const MAX_CONCURRENT_THUMBNAIL_REQUESTS = 6;
 type CachedThumbnailSize = 64 | 128 | 256 | 512 | 1024;
 let activeThumbnailRequests = 0;
 
-function loadThumbnail(
-  itemId: string,
-  size: CachedThumbnailSize,
-): Promise<string> {
+function loadThumbnail(itemId: string, size: CachedThumbnailSize): Promise<string> {
   const key = `${itemId}:${size}`;
   const cached = thumbnailCache.get(key);
   if (cached) {
@@ -37,8 +34,7 @@ function loadThumbnail(
           itemId,
           size,
           quality: useSettingsStore.getState().thumbnailQuality,
-          maxCacheBytes:
-            useSettingsStore.getState().maxCacheSizeGB * 1024 * 1024 * 1024,
+          maxCacheBytes: useSettingsStore.getState().maxCacheSizeGB * 1024 * 1024 * 1024,
         })
         .then((response: any) => {
           const url = thumbnailToDataUrl(response);
@@ -65,10 +61,7 @@ function loadThumbnail(
     });
   });
   thumbnailRequests.set(key, request);
-  while (
-    activeThumbnailRequests < MAX_CONCURRENT_THUMBNAIL_REQUESTS &&
-    thumbnailQueue.length
-  ) {
+  while (activeThumbnailRequests < MAX_CONCURRENT_THUMBNAIL_REQUESTS && thumbnailQueue.length) {
     thumbnailQueue.shift()?.();
   }
   return request;
@@ -94,9 +87,7 @@ function CachedThumbnail({
   eager?: boolean;
 }) {
   const placeholderRef = useRef<HTMLSpanElement | null>(null);
-  const [loaded, setLoaded] = useState<{ key: string; src: string } | null>(
-    null,
-  );
+  const [loaded, setLoaded] = useState<{ key: string; src: string } | null>(null);
   const [failedKey, setFailedKey] = useState<string | null>(null);
   const [nearViewport, setNearViewport] = useState(false);
   const requestKey = `${itemId}:${size}`;
@@ -118,9 +109,7 @@ function CachedThumbnail({
     }
     // Scrollable panels clip their contents, so observing against the viewport
     // would ignore the prefetch margin. Use the nearest panel as the root.
-    const root = placeholder.closest(
-      ".library-grid-container, .edit-picker-grid",
-    );
+    const root = placeholder.closest(".library-grid-container, .edit-picker-grid");
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -162,13 +151,7 @@ function CachedThumbnail({
   }
   if (src) {
     return (
-      <img
-        src={src}
-        alt={name}
-        loading={eager ? "eager" : "lazy"}
-        decoding="async"
-        style={style}
-      />
+      <img src={src} alt={name} loading={eager ? "eager" : "lazy"} decoding="async" style={style} />
     );
   }
   return (

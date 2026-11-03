@@ -20,8 +20,6 @@ export function navigateToBatchExport(context: BatchExportNavigation): void {
   }
   context.setScreen("Batch");
   if (selection.length === 0) {
-    context.showNotice?.(
-      "Select photos or videos in Library, then choose Export again.",
-    );
+    context.showNotice?.("Select photos or videos in Library, then choose Export again.");
   }
 }

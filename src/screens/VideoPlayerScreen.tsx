@@ -34,9 +34,7 @@ export default function VideoPlayerScreen({
   const time = usePlaybackStore((state) => state.time);
   const duration = usePlaybackStore((state) => state.duration);
   const queueStart =
-    currentIndex < 0
-      ? 0
-      : Math.min(Math.max(0, currentIndex - 3), Math.max(0, queue.length - 12));
+    currentIndex < 0 ? 0 : Math.min(Math.max(0, currentIndex - 3), Math.max(0, queue.length - 12));
   const visibleQueue = queue.slice(queueStart, queueStart + 12);
 
   useEffect(() => {
@@ -54,8 +52,7 @@ export default function VideoPlayerScreen({
         await stageRef.current?.requestFullscreen();
       }
     } catch (error) {
-      if (import.meta.env.DEV)
-        console.warn("Unable to toggle video fullscreen", error);
+      if (import.meta.env.DEV) console.warn("Unable to toggle video fullscreen", error);
     }
   }, []);
 
@@ -81,8 +78,7 @@ export default function VideoPlayerScreen({
           <p className="eyebrow">VIDEO PLAYER</p>
           <h1 title={item.name}>{item.name}</h1>
           <span>
-            {formatDuration(time)} /{" "}
-            {formatDuration(duration || item.duration || 0)}
+            {formatDuration(time)} / {formatDuration(duration || item.duration || 0)}
             {currentIndex >= 0 ? ` · ${currentIndex + 1} of ${queue.length}` : ""}
           </span>
         </div>
@@ -116,18 +112,10 @@ export default function VideoPlayerScreen({
             </span>
           </div>
           <div className="video-player-queue-controls">
-            <button
-              type="button"
-              onClick={onPrevious}
-              aria-label="Previous video"
-            >
+            <button type="button" onClick={onPrevious} aria-label="Previous video">
               ‹
             </button>
-            <button
-              type="button"
-              onClick={() => void onNext()}
-              aria-label="Next video"
-            >
+            <button type="button" onClick={() => void onNext()} aria-label="Next video">
               ›
             </button>
           </div>
@@ -137,11 +125,7 @@ export default function VideoPlayerScreen({
             <button
               type="button"
               key={video.id}
-              className={
-                video.id === item.id
-                  ? "video-queue-item active"
-                  : "video-queue-item"
-              }
+              className={video.id === item.id ? "video-queue-item active" : "video-queue-item"}
               onClick={() => onSelect(video.id)}
               aria-label={`Play ${video.name}`}
               aria-current={video.id === item.id ? "true" : undefined}
@@ -155,13 +139,9 @@ export default function VideoPlayerScreen({
                   eager={active}
                   placeholderClassName="video-queue-placeholder"
                 />
-                <span className="video-queue-index">
-                  {queueStart + index + 1}
-                </span>
+                <span className="video-queue-index">{queueStart + index + 1}</span>
                 {video.duration ? (
-                  <span className="video-queue-duration">
-                    {formatDuration(video.duration)}
-                  </span>
+                  <span className="video-queue-duration">{formatDuration(video.duration)}</span>
                 ) : null}
               </span>
               <span className="video-queue-name">{video.name}</span>

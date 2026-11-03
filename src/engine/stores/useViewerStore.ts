@@ -39,8 +39,7 @@ export const useViewerStore = create<ViewerState>()(
       flipX: false,
 
       open: (itemId) => {
-        const { inspectedId, viewerItems, viewerSelected } =
-          useLibraryStore.getState();
+        const { inspectedId, viewerItems, viewerSelected } = useLibraryStore.getState();
         const targetId = itemId || inspectedId || viewerSelected?.id;
         if (targetId) {
           // Opening the viewer moves inspection only - the user's
@@ -48,8 +47,7 @@ export const useViewerStore = create<ViewerState>()(
           useLibraryStore.getState().inspectItem(targetId);
           // Honor the viewer_zoom_behavior setting on open; fall back to "fit".
           const stored = useSettingsStore.getState().viewerZoomBehavior;
-          const fitMode =
-            stored === "last" ? get().fitMode : (stored as "fit" | "actual" | "fill");
+          const fitMode = stored === "last" ? get().fitMode : (stored as "fit" | "actual" | "fill");
           set({
             isOpen: true,
             zoom: 100,
@@ -65,11 +63,8 @@ export const useViewerStore = create<ViewerState>()(
       navigate: (delta) => {
         const { viewerItems, viewerSelected } = useLibraryStore.getState();
         if (!viewerSelected || viewerItems.length === 0) return;
-        const currentIndex = viewerItems.findIndex(
-          (i) => i.id === viewerSelected.id,
-        );
-        const nextIndex =
-          (currentIndex + delta + viewerItems.length) % viewerItems.length;
+        const currentIndex = viewerItems.findIndex((i) => i.id === viewerSelected.id);
+        const nextIndex = (currentIndex + delta + viewerItems.length) % viewerItems.length;
         useLibraryStore.getState().inspectItem(viewerItems[nextIndex].id);
         // Each photo starts untransformed - a rotation applied to one image
         // must not leak onto the next one.
@@ -86,20 +81,14 @@ export const useViewerStore = create<ViewerState>()(
 
       toggleFitMode: () =>
         set((s) => ({
-          fitMode:
-            s.fitMode === "fit"
-              ? "actual"
-              : s.fitMode === "actual"
-                ? "fill"
-                : "fit",
+          fitMode: s.fitMode === "fit" ? "actual" : s.fitMode === "actual" ? "fill" : "fit",
           zoom: 100,
         })),
       setFitMode: (mode) => set({ fitMode: mode }),
 
       setRotation: (deg) => set({ rotation: ((deg % 360) + 360) % 360 }),
 
-      rotate: (delta) =>
-        set((s) => ({ rotation: (((s.rotation + delta) % 360) + 360) % 360 })),
+      rotate: (delta) => set((s) => ({ rotation: (((s.rotation + delta) % 360) + 360) % 360 })),
 
       toggleFlip: () => set((s) => ({ flipX: !s.flipX })),
 

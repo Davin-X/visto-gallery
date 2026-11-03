@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useMemo,
-  useEffect,
-  useCallback,
-  useRef,
-} from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import {
   EditIcon,
   EyeOffIcon,
@@ -19,10 +13,7 @@ import {
 } from "../design/components/icons";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import { KindDot } from "../design/components/KindBadge";
-import {
-  useDraftTransforms,
-  draftTransformStyle,
-} from "../engine/stores/useEditStore";
+import { useDraftTransforms, draftTransformStyle } from "../engine/stores/useEditStore";
 import { useSlideshowStore } from "../engine/stores/useSlideshowStore";
 import { tauri, thumbnailToDataUrl } from "../engine/commands/tauri";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
@@ -58,39 +49,24 @@ interface ViewerScreenProps {
 }
 
 function ViewerScreen(props: ViewerScreenProps) {
-  const items = useMemo(
-    () => props.items.filter((item) => item.kind !== "video"),
-    [props.items],
-  );
-  const photoItems = useMemo(
-    () => items.filter((item) => item.kind === "photo"),
-    [items],
-  );
-  const selected =
-    props.selected?.kind === "video" ? null : props.selected;
+  const items = useMemo(() => props.items.filter((item) => item.kind !== "video"), [props.items]);
+  const photoItems = useMemo(() => items.filter((item) => item.kind === "photo"), [items]);
+  const selected = props.selected?.kind === "video" ? null : props.selected;
   const draftTransforms = useDraftTransforms();
   // Folder context: the pill shows the containing folder, the subtle line the
   // full path. Deriving both from the media path keeps it honest (no fake
   // "LOCAL FILE" label).
   const folderPath = selected?.path
-    ? String(selected.path)
-        .replace(/\\/g, "/")
-        .split("/")
-        .slice(0, -1)
-        .join("/")
+    ? String(selected.path).replace(/\\/g, "/").split("/").slice(0, -1).join("/")
     : "";
-  const folderName =
-    folderPath.split("/").filter(Boolean).pop() || "Local Files";
+  const folderName = folderPath.split("/").filter(Boolean).pop() || "Local Files";
   const [hintsVisible, setHintsVisible] = useState(true);
   const [photoLoadState, setPhotoLoadState] = useState<{
     id: string;
     status: "loading" | "loaded" | "failed";
   } | null>(null);
   const [stripStart, setStripStart] = useState(() =>
-    Math.max(
-      0,
-      items.findIndex((item) => item.id === selected?.id) - 18,
-    ),
+    Math.max(0, items.findIndex((item) => item.id === selected?.id) - 18),
   );
   const hideTimerRef = useRef<number | null>(null);
   const stripRef = useRef<HTMLDivElement | null>(null);
@@ -99,13 +75,9 @@ function ViewerScreen(props: ViewerScreenProps) {
   const selectedIndex = items.findIndex((item) => item.id === selected?.id);
   const stripEnd = Math.min(items.length, stripStart + stripWindowSize);
   const photoStatus =
-    photoLoadState && photoLoadState.id === selected?.id
-      ? photoLoadState.status
-      : "loading";
+    photoLoadState && photoLoadState.id === selected?.id ? photoLoadState.status : "loading";
   const imageRotation =
-    (props.rotation +
-      (draftTransforms.get(selected?.id ?? "")?.rotation || 0)) %
-    360;
+    (props.rotation + (draftTransforms.get(selected?.id ?? "")?.rotation || 0)) % 360;
   const startSlideshow = useCallback(() => {
     useSlideshowStore.getState().open(photoItems, selected?.id);
   }, [photoItems, selected?.id]);
@@ -115,10 +87,7 @@ function ViewerScreen(props: ViewerScreenProps) {
   const flashHints = useCallback(() => {
     setHintsVisible(true);
     if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = window.setTimeout(
-      () => setHintsVisible(false),
-      3500,
-    );
+    hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
   }, []);
 
   useEffect(() => {
@@ -138,20 +107,14 @@ function ViewerScreen(props: ViewerScreenProps) {
     } else if (selectedIndex >= stripStart + stripWindowSize) {
       nextStart = Math.max(
         0,
-        Math.min(
-          selectedIndex - stripWindowSize + 1,
-          items.length - stripWindowSize,
-        ),
+        Math.min(selectedIndex - stripWindowSize + 1, items.length - stripWindowSize),
       );
     }
     if (nextStart !== stripStart) {
       const delta = (nextStart - stripStart) * 60;
       programmaticScrollRef.current = true;
       if (stripRef.current)
-        stripRef.current.scrollLeft = Math.max(
-          0,
-          stripRef.current.scrollLeft + delta,
-        );
+        stripRef.current.scrollLeft = Math.max(0, stripRef.current.scrollLeft + delta);
       window.setTimeout(() => {
         programmaticScrollRef.current = false;
       }, 0);
@@ -182,9 +145,7 @@ function ViewerScreen(props: ViewerScreenProps) {
         items.length - stripWindowSize,
       ),
     );
-    setStripStart((current) =>
-      Math.abs(nextStart - current) > 5 ? nextStart : current,
-    );
+    setStripStart((current) => (Math.abs(nextStart - current) > 5 ? nextStart : current));
   }, [items.length]);
 
   // Keyboard shortcuts
@@ -277,9 +238,7 @@ function ViewerScreen(props: ViewerScreenProps) {
                   <rect x="2" y="2" width="12" height="12" rx="2" />
                   <path d="M8 2v4M8 10v4M2 8h4M10 8h4" />
                 </svg>
-                {new Date(
-                  selected.capturedAt ?? selected.modifiedAt,
-                ).toLocaleDateString()}
+                {new Date(selected.capturedAt ?? selected.modifiedAt).toLocaleDateString()}
               </span>
               <span className="meta-chip">
                 <svg
@@ -311,25 +270,23 @@ function ViewerScreen(props: ViewerScreenProps) {
                 </svg>
                 {formatBytesSimple(selected.size)}
               </span>
-              {selected.kind === "photo" &&
-                selected.width &&
-                selected.height && (
-                  <span className="meta-chip">
-                    <svg
-                      className="meta-icon"
-                      width="10"
-                      height="10"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                    >
-                      <rect x="2" y="2" width="12" height="12" rx="2" />
-                      <path d="M6 2v12M10 2v12M2 6h12M2 10h12" />
-                    </svg>
-                    {selected.width} × {selected.height}
-                  </span>
-                )}
+              {selected.kind === "photo" && selected.width && selected.height && (
+                <span className="meta-chip">
+                  <svg
+                    className="meta-icon"
+                    width="10"
+                    height="10"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  >
+                    <rect x="2" y="2" width="12" height="12" rx="2" />
+                    <path d="M6 2v12M10 2v12M2 6h12M2 10h12" />
+                  </svg>
+                  {selected.width} × {selected.height}
+                </span>
+              )}
               {selected.kind === "video" && selected.duration && (
                 <span className="meta-chip">
                   <svg
@@ -396,10 +353,7 @@ function ViewerScreen(props: ViewerScreenProps) {
             if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
           }}
           onMouseLeave={() => {
-            hideTimerRef.current = window.setTimeout(
-              () => setHintsVisible(false),
-              3500,
-            );
+            hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
           }}
           onClick={() => props.onNavigate(-1)}
           aria-label="Previous"
@@ -414,9 +368,7 @@ function ViewerScreen(props: ViewerScreenProps) {
               src={props.assetUrl(selected.path)}
               alt={selected.name}
               decoding="async"
-              onLoad={() =>
-                setPhotoLoadState({ id: selected.id, status: "loaded" })
-              }
+              onLoad={() => setPhotoLoadState({ id: selected.id, status: "loaded" })}
               onError={(e) => {
                 const target = e.currentTarget;
                 if (target.dataset.fallback === "1") {
@@ -504,10 +456,7 @@ function ViewerScreen(props: ViewerScreenProps) {
             if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
           }}
           onMouseLeave={() => {
-            hideTimerRef.current = window.setTimeout(
-              () => setHintsVisible(false),
-              3500,
-            );
+            hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
           }}
           onClick={() => props.onNavigate(1)}
           aria-label="Next"
@@ -521,10 +470,7 @@ function ViewerScreen(props: ViewerScreenProps) {
             if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
           }}
           onMouseLeave={() => {
-            hideTimerRef.current = window.setTimeout(
-              () => setHintsVisible(false),
-              3500,
-            );
+            hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
           }}
         >
           <span className="viewer-transform-state">
@@ -536,10 +482,7 @@ function ViewerScreen(props: ViewerScreenProps) {
         </div>
         {/* Compact shortcut hints live in the stage corner so the frame keeps
             all of its room for the media and the control bar. */}
-        <div
-          className={`viewer-hints${hintsVisible ? "" : " hidden"}`}
-          aria-hidden="true"
-        >
+        <div className={`viewer-hints${hintsVisible ? "" : " hidden"}`} aria-hidden="true">
           <span>
             <kbd>←</kbd>
             <kbd>→</kbd> Navigate
@@ -569,65 +512,57 @@ function ViewerScreen(props: ViewerScreenProps) {
             className={`viewer-overlay-bottom${hintsVisible ? "" : " hidden"}`}
             onMouseEnter={() => {
               setHintsVisible(true);
-              if (hideTimerRef.current)
-                window.clearTimeout(hideTimerRef.current);
+              if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
             }}
             onMouseLeave={() => {
-              hideTimerRef.current = window.setTimeout(
-                () => setHintsVisible(false),
-                3500,
-              );
+              hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
             }}
           >
-              {selected.kind === "photo" && (
-                <>
-                  <button
-                    type="button"
-                    onClick={props.onResetZoom}
-                    aria-label="Reset zoom"
-                    title="Reset zoom"
-                  >
-                    {props.zoom}%
-                  </button>
-                  <button
-                    type="button"
-                    className="viewer-fit-button"
-                    onClick={props.onToggleFitMode}
-                    aria-label={`Image scaling: ${props.fitMode}. Click to change`}
-                    aria-pressed={props.fitMode !== "fit"}
-                    title={
-                      props.fitMode === "fill"
-                        ? "Fill the frame by cropping edges; image proportions stay unchanged"
-                        : `Image scaling: ${props.fitMode}. Image proportions stay unchanged`
-                    }
-                  >
-                    {props.fitMode === "actual"
-                      ? "Actual"
-                      : props.fitMode === "fill"
-                        ? "Fill"
-                        : "Fit"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      props.onSetZoom(Math.max(25, props.zoom - 25))
-                    }
-                    aria-label="Zoom out"
-                  >
-                    <MinusIcon size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      props.onSetZoom(Math.min(300, props.zoom + 25))
-                    }
-                    aria-label="Zoom in"
-                  >
-                    <PlusIcon size={15} />
-                  </button>
-                  <span className="viewer-divider" />
-                </>
-              )}
+            {selected.kind === "photo" && (
+              <>
+                <button
+                  type="button"
+                  onClick={props.onResetZoom}
+                  aria-label="Reset zoom"
+                  title="Reset zoom"
+                >
+                  {props.zoom}%
+                </button>
+                <button
+                  type="button"
+                  className="viewer-fit-button"
+                  onClick={props.onToggleFitMode}
+                  aria-label={`Image scaling: ${props.fitMode}. Click to change`}
+                  aria-pressed={props.fitMode !== "fit"}
+                  title={
+                    props.fitMode === "fill"
+                      ? "Fill the frame by cropping edges; image proportions stay unchanged"
+                      : `Image scaling: ${props.fitMode}. Image proportions stay unchanged`
+                  }
+                >
+                  {props.fitMode === "actual"
+                    ? "Actual"
+                    : props.fitMode === "fill"
+                      ? "Fill"
+                      : "Fit"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => props.onSetZoom(Math.max(25, props.zoom - 25))}
+                  aria-label="Zoom out"
+                >
+                  <MinusIcon size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => props.onSetZoom(Math.min(300, props.zoom + 25))}
+                  aria-label="Zoom in"
+                >
+                  <PlusIcon size={15} />
+                </button>
+                <span className="viewer-divider" />
+              </>
+            )}
             {selected.kind === "photo" && (
               <button
                 type="button"
@@ -649,17 +584,16 @@ function ViewerScreen(props: ViewerScreenProps) {
                 <FlipIcon size={14} /> Flip
               </button>
             )}
-            {selected.kind === "photo" &&
-              (props.rotation !== 0 || props.flipX) && (
-                <button
-                  type="button"
-                  onClick={() => props.onResetTransform()}
-                  aria-label="Reset rotation and flip"
-                  title="Reset rotation & flip"
-                >
-                  Reset
-                </button>
-              )}
+            {selected.kind === "photo" && (props.rotation !== 0 || props.flipX) && (
+              <button
+                type="button"
+                onClick={() => props.onResetTransform()}
+                aria-label="Reset rotation and flip"
+                title="Reset rotation & flip"
+              >
+                Reset
+              </button>
+            )}
             <button
               type="button"
               onClick={() => props.onToggleFavorite(selected.id)}
@@ -683,28 +617,17 @@ function ViewerScreen(props: ViewerScreenProps) {
               </button>
             )}
             {selected.kind === "photo" && photoItems.length > 1 && (
-              <button
-                type="button"
-                onClick={startSlideshow}
-                aria-label="Start photo slideshow"
-              >
+              <button type="button" onClick={startSlideshow} aria-label="Start photo slideshow">
                 <SlideshowIcon size={14} /> Slideshow
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => void props.onToggleFullscreen()}
-            >
+            <button type="button" onClick={() => void props.onToggleFullscreen()}>
               <FullscreenIcon size={14} /> Full screen
             </button>
           </div>
         )}
       </div>
-      <div
-        className="filmstrip"
-        ref={stripRef}
-        onScroll={handleFilmstripScroll}
-      >
+      <div className="filmstrip" ref={stripRef} onScroll={handleFilmstripScroll}>
         <span className="filmstrip-label">FOLDER</span>
         {stripStart > 0 && (
           <span

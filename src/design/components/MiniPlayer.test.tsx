@@ -16,19 +16,14 @@ const playbackState = vi.hoisted(() => ({
 }));
 
 vi.mock("../../engine/stores/usePlaybackStore", () => ({
-  usePlaybackStore: <T,>(
-    selector: (state: typeof playbackState) => T,
-  ): T => selector(playbackState),
+  usePlaybackStore: <T,>(selector: (state: typeof playbackState) => T): T =>
+    selector(playbackState),
 }));
 
 type WebKitVideo = HTMLVideoElement & {
   webkitPresentationMode?: "inline" | "picture-in-picture";
-  webkitSetPresentationMode?: (
-    mode: "inline" | "picture-in-picture",
-  ) => void;
-  webkitSupportsPresentationMode?: (
-    mode: "inline" | "picture-in-picture",
-  ) => boolean;
+  webkitSetPresentationMode?: (mode: "inline" | "picture-in-picture") => void;
+  webkitSupportsPresentationMode?: (mode: "inline" | "picture-in-picture") => boolean;
 };
 
 describe("Now Playing picture in picture control", () => {
@@ -58,12 +53,11 @@ describe("Now Playing picture in picture control", () => {
     fireEvent.click(button);
 
     await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Exit picture in picture" }),
-      ).toHaveAttribute("aria-pressed", "true"),
+      expect(screen.getByRole("button", { name: "Exit picture in picture" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      ),
     );
-    expect(video.webkitSetPresentationMode).toHaveBeenCalledWith(
-      "picture-in-picture",
-    );
+    expect(video.webkitSetPresentationMode).toHaveBeenCalledWith("picture-in-picture");
   });
 });

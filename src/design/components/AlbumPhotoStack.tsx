@@ -2,9 +2,7 @@ import React from "react";
 import VideoThumb from "./VideoThumb";
 import { CachedThumbnail } from "./CachedThumbnail";
 import { canPlayVideoInApp } from "../../engine/utils/mediaTypes";
-import {
-  useDraftTransforms,
-} from "../../engine/stores/useEditStore";
+import { useDraftTransforms } from "../../engine/stores/useEditStore";
 import { draftImageStyle } from "../../engine/utils/draftImage";
 
 function albumStackPose(count: number, index: number) {

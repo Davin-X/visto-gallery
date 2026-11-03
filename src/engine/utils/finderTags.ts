@@ -1,7 +1,4 @@
-import type {
-  FinderTagCopyResult,
-  FinderTagFailure,
-} from "../types/commands";
+import type { FinderTagCopyResult, FinderTagFailure } from "../types/commands";
 
 export interface FinderTagItem {
   id: string;

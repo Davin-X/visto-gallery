@@ -9,18 +9,9 @@ import {
 } from "./pictureInPicture";
 
 const pictureInPictureDescriptors = [
-  [
-    "pictureInPictureEnabled",
-    Object.getOwnPropertyDescriptor(document, "pictureInPictureEnabled"),
-  ],
-  [
-    "pictureInPictureElement",
-    Object.getOwnPropertyDescriptor(document, "pictureInPictureElement"),
-  ],
-  [
-    "exitPictureInPicture",
-    Object.getOwnPropertyDescriptor(document, "exitPictureInPicture"),
-  ],
+  ["pictureInPictureEnabled", Object.getOwnPropertyDescriptor(document, "pictureInPictureEnabled")],
+  ["pictureInPictureElement", Object.getOwnPropertyDescriptor(document, "pictureInPictureElement")],
+  ["exitPictureInPicture", Object.getOwnPropertyDescriptor(document, "exitPictureInPicture")],
 ] as const;
 
 afterEach(() => {
@@ -36,9 +27,7 @@ describe("picture-in-picture helpers", () => {
   it("uses WebKit presentation mode when available", async () => {
     const video = document.createElement("video") as HTMLVideoElement & {
       webkitPresentationMode?: "inline" | "picture-in-picture";
-      webkitSetPresentationMode?: (
-        mode: "inline" | "picture-in-picture",
-      ) => void;
+      webkitSetPresentationMode?: (mode: "inline" | "picture-in-picture") => void;
       webkitSupportsPresentationMode?: (mode: string) => boolean;
     };
     video.webkitPresentationMode = "inline";
@@ -50,9 +39,7 @@ describe("picture-in-picture helpers", () => {
     expect(supportsPictureInPicture(video)).toBe(true);
     expect(isPictureInPicture(video)).toBe(false);
     await enterPictureInPicture(video);
-    expect(video.webkitSetPresentationMode).toHaveBeenCalledWith(
-      "picture-in-picture",
-    );
+    expect(video.webkitSetPresentationMode).toHaveBeenCalledWith("picture-in-picture");
     expect(isPictureInPicture(video)).toBe(true);
     await enterPictureInPicture(video);
     expect(video.webkitSetPresentationMode).toHaveBeenCalledOnce();
@@ -143,11 +130,7 @@ describe("picture-in-picture helpers", () => {
     video.webkitPresentationMode = "inline";
     video.dispatchEvent(new Event("webkitpresentationmodechanged"));
 
-    expect(onChange.mock.calls.map(([active]) => active)).toEqual([
-      false,
-      true,
-      false,
-    ]);
+    expect(onChange.mock.calls.map(([active]) => active)).toEqual([false, true, false]);
     unobserve();
   });
 });

@@ -21,25 +21,18 @@ export function ViewingPanel(props: {
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Default Layout</b>
-            <span className="settings-row-desc">
-              Starting layout when opening the library
-            </span>
+            <span className="settings-row-desc">Starting layout when opening the library</span>
           </div>
           <div className="settings-row-control">
-            {props.renderRadioGroup(
-              "layout",
-              props.defaultLayout,
-              LAYOUT_OPTIONS,
-              (v: string) => props.onChange("defaultLayout", v),
+            {props.renderRadioGroup("layout", props.defaultLayout, LAYOUT_OPTIONS, (v: string) =>
+              props.onChange("defaultLayout", v),
             )}
           </div>
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Thumbnail Size</b>
-            <span className="settings-row-desc">
-              Default thumbnail dimensions in grid view
-            </span>
+            <span className="settings-row-desc">Default thumbnail dimensions in grid view</span>
           </div>
           <div className="settings-row-control">
             <select
@@ -67,10 +60,7 @@ export function ViewingPanel(props: {
             <b>Interval</b>
             <span className="settings-row-desc">Seconds between slides</span>
           </div>
-          <div
-            className="settings-row-control"
-            style={{ alignItems: "center" }}
-          >
+          <div className="settings-row-control" style={{ alignItems: "center" }}>
             <input
               type="range"
               className="settings-slider"
@@ -83,14 +73,10 @@ export function ViewingPanel(props: {
               max={30}
               step={1}
               value={props.slideshowInterval}
-              onChange={(e) =>
-                props.onChange("slideshowInterval", Number(e.target.value))
-              }
+              onChange={(e) => props.onChange("slideshowInterval", Number(e.target.value))}
               aria-label="Slideshow interval in seconds"
             />
-            <span className="settings-slider-value">
-              {props.slideshowInterval}s
-            </span>
+            <span className="settings-slider-value">{props.slideshowInterval}s</span>
           </div>
         </div>
         <div className="settings-row">
@@ -104,9 +90,7 @@ export function ViewingPanel(props: {
                 type="checkbox"
                 aria-label="Shuffle slideshow"
                 checked={props.slideshowShuffle}
-                onChange={(e) =>
-                  props.onChange("slideshowShuffle", e.target.checked)
-                }
+                onChange={(e) => props.onChange("slideshowShuffle", e.target.checked)}
               />
               <span className="toggle-track" />
             </label>
@@ -115,9 +99,7 @@ export function ViewingPanel(props: {
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Loop</b>
-            <span className="settings-row-desc">
-              Restart from beginning when reaching the end
-            </span>
+            <span className="settings-row-desc">Restart from beginning when reaching the end</span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
@@ -125,9 +107,7 @@ export function ViewingPanel(props: {
                 type="checkbox"
                 aria-label="Loop slideshow"
                 checked={props.slideshowLoop}
-                onChange={(e) =>
-                  props.onChange("slideshowLoop", e.target.checked)
-                }
+                onChange={(e) => props.onChange("slideshowLoop", e.target.checked)}
               />
               <span className="toggle-track" />
             </label>
@@ -142,9 +122,7 @@ export function ViewingPanel(props: {
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Auto-play</b>
-            <span className="settings-row-desc">
-              Start playing videos when opened in viewer
-            </span>
+            <span className="settings-row-desc">Start playing videos when opened in viewer</span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
@@ -152,9 +130,7 @@ export function ViewingPanel(props: {
                 type="checkbox"
                 aria-label="Auto-play videos"
                 checked={props.videoAutoPlay}
-                onChange={(e) =>
-                  props.onChange("videoAutoPlay", e.target.checked)
-                }
+                onChange={(e) => props.onChange("videoAutoPlay", e.target.checked)}
               />
               <span className="toggle-track" />
             </label>
@@ -163,9 +139,7 @@ export function ViewingPanel(props: {
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Loop Videos</b>
-            <span className="settings-row-desc">
-              Restart video when it ends
-            </span>
+            <span className="settings-row-desc">Restart video when it ends</span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">

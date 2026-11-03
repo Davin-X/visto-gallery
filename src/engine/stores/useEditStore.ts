@@ -40,7 +40,9 @@ function pruneDrafts() {
   if (order.length <= MAX_DRAFTS) return;
   const toRemove = order.slice(0, order.length - MAX_DRAFTS);
   for (const id of toRemove) {
-    try { localStorage.removeItem(draftKey(id)); } catch {}
+    try {
+      localStorage.removeItem(draftKey(id));
+    } catch {}
   }
   setDraftOrder(order.slice(order.length - MAX_DRAFTS));
 }
@@ -306,13 +308,9 @@ export const useEditStore = create<EditState>()(
           if (recipe && recipe.edits) {
             values = { ...defaultEdits, ...recipe.edits };
             crop = { ...defaultCrop, ...(recipe.crop || {}) };
-            history = Array.isArray(recipe.history)
-              ? recipe.history
-              : [values];
+            history = Array.isArray(recipe.history) ? recipe.history : [values];
             historyIndex =
-              typeof recipe.historyIndex === "number"
-                ? recipe.historyIndex
-                : history.length - 1;
+              typeof recipe.historyIndex === "number" ? recipe.historyIndex : history.length - 1;
             loadedFromSqlite = true;
           }
         } catch (error) {
@@ -325,10 +323,8 @@ export const useEditStore = create<EditState>()(
           if (raw) {
             try {
               const persisted = JSON.parse(raw);
-              if (persisted.edits)
-                values = { ...defaultEdits, ...persisted.edits };
-              if (persisted.crop)
-                crop = { ...defaultCrop, ...persisted.crop };
+              if (persisted.edits) values = { ...defaultEdits, ...persisted.edits };
+              if (persisted.crop) crop = { ...defaultCrop, ...persisted.crop };
               if (Array.isArray(persisted.history)) {
                 history = persisted.history;
                 historyIndex =
@@ -353,7 +349,10 @@ export const useEditStore = create<EditState>()(
 
       close: async () => {
         const { item, values, history, historyIndex, crop } = get();
-        if (item && (hasEditChanges(values, crop) || useDraftMetaStore.getState().ids.has(item.id))) {
+        if (
+          item &&
+          (hasEditChanges(values, crop) || useDraftMetaStore.getState().ids.has(item.id))
+        ) {
           await persistDraft(item.id, values, history, historyIndex, crop);
         }
         set({
@@ -367,7 +366,10 @@ export const useEditStore = create<EditState>()(
 
       saveDraft: async () => {
         const { item, values, history, historyIndex, crop } = get();
-        if (item && (hasEditChanges(values, crop) || useDraftMetaStore.getState().ids.has(item.id))) {
+        if (
+          item &&
+          (hasEditChanges(values, crop) || useDraftMetaStore.getState().ids.has(item.id))
+        ) {
           await persistDraft(item.id, values, history, historyIndex, crop);
         }
       },
@@ -383,14 +385,7 @@ export const useEditStore = create<EditState>()(
           history: newHistory,
           historyIndex: newHistory.length - 1,
         });
-        if (item)
-          await persistDraft(
-            item.id,
-            next,
-            newHistory,
-            newHistory.length - 1,
-            get().crop,
-          );
+        if (item) await persistDraft(item.id, next, newHistory, newHistory.length - 1, get().crop);
       },
 
       setValues: async (partial) => {
@@ -404,14 +399,7 @@ export const useEditStore = create<EditState>()(
           history: newHistory,
           historyIndex: newHistory.length - 1,
         });
-        if (item)
-          await persistDraft(
-            item.id,
-            next,
-            newHistory,
-            newHistory.length - 1,
-            get().crop,
-          );
+        if (item) await persistDraft(item.id, next, newHistory, newHistory.length - 1, get().crop);
       },
 
       reset: async () => {
@@ -448,13 +436,7 @@ export const useEditStore = create<EditState>()(
           historyIndex: newHistory.length - 1,
         });
         if (item)
-          await persistDraft(
-            item.id,
-            autoEdits,
-            newHistory,
-            newHistory.length - 1,
-            get().crop,
-          );
+          await persistDraft(item.id, autoEdits, newHistory, newHistory.length - 1, get().crop);
       },
 
       rotate: async (degrees) => {
@@ -470,14 +452,7 @@ export const useEditStore = create<EditState>()(
           history: newHistory,
           historyIndex: newHistory.length - 1,
         });
-        if (item)
-          await persistDraft(
-            item.id,
-            next,
-            newHistory,
-            newHistory.length - 1,
-            get().crop,
-          );
+        if (item) await persistDraft(item.id, next, newHistory, newHistory.length - 1, get().crop);
       },
 
       flip: async () => {
@@ -490,29 +465,20 @@ export const useEditStore = create<EditState>()(
           history: newHistory,
           historyIndex: newHistory.length - 1,
         });
-        if (item)
-          await persistDraft(
-            item.id,
-            next,
-            newHistory,
-            newHistory.length - 1,
-            get().crop,
-          );
+        if (item) await persistDraft(item.id, next, newHistory, newHistory.length - 1, get().crop);
       },
 
       setCrop: async (partial) => {
         const { item, values, history, historyIndex, crop } = get();
         const nextCrop = { ...crop, ...partial };
         set({ crop: nextCrop });
-        if (item)
-          await persistDraft(item.id, values, history, historyIndex, nextCrop);
+        if (item) await persistDraft(item.id, values, history, historyIndex, nextCrop);
       },
 
       resetCrop: async () => {
         const { item, values, history, historyIndex } = get();
         set({ crop: defaultCrop });
-        if (item)
-          await persistDraft(item.id, values, history, historyIndex, defaultCrop);
+        if (item) await persistDraft(item.id, values, history, historyIndex, defaultCrop);
       },
 
       undo: async () => {
@@ -520,14 +486,7 @@ export const useEditStore = create<EditState>()(
         if (historyIndex > 0) {
           const nextIndex = historyIndex - 1;
           set({ values: history[nextIndex], historyIndex: nextIndex });
-          if (item)
-            await persistDraft(
-              item.id,
-              history[nextIndex],
-              history,
-              nextIndex,
-              get().crop,
-            );
+          if (item) await persistDraft(item.id, history[nextIndex], history, nextIndex, get().crop);
         }
       },
 
@@ -536,14 +495,7 @@ export const useEditStore = create<EditState>()(
         if (historyIndex < history.length - 1) {
           const nextIndex = historyIndex + 1;
           set({ values: history[nextIndex], historyIndex: nextIndex });
-          if (item)
-            await persistDraft(
-              item.id,
-              history[nextIndex],
-              history,
-              nextIndex,
-              get().crop,
-            );
+          if (item) await persistDraft(item.id, history[nextIndex], history, nextIndex, get().crop);
         }
       },
 

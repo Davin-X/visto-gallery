@@ -2,9 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import { DuplicatesIcon } from "../design/components/icons";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import { KindBadge } from "../design/components/KindBadge";
-import {
-  useDraftTransforms,
-} from "../engine/stores/useEditStore";
+import { useDraftTransforms } from "../engine/stores/useEditStore";
 import type { MediaItem, DuplicateGroup } from "../engine/types/media";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import { draftImageStyle } from "../engine/utils/draftImage";
@@ -30,8 +28,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
 
   const groups = props.groups || [];
   const totalCopies = useMemo(
-    () =>
-      groups.reduce((sum: number, g: any) => sum + (g.items?.length || 0), 0),
+    () => groups.reduce((sum: number, g: any) => sum + (g.items?.length || 0), 0),
     [groups],
   );
   const reclaimableBytes = useMemo(() => {
@@ -96,9 +93,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   };
 
   const groupSelectedIds = (group: any) =>
-    (group.items || [])
-      .filter((it: any) => selected.has(it.id))
-      .map((it: any) => it.id);
+    (group.items || []).filter((it: any) => selected.has(it.id)).map((it: any) => it.id);
 
   const toggleGroupExpand = (sha256: string) => {
     setExpandedGroups((prev) => {
@@ -123,18 +118,15 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
             <DuplicatesIcon size={34} />
           </span>
           <b>No duplicates found</b>
-          <p>
-            Duplicate scans compare file content (SHA-256), not just names or
-            sizes.
-          </p>
-            <button
-              className="primary-button"
-              type="button"
-              onClick={props.onScan}
-              disabled={props.busy}
-            >
-              Scan for duplicates
-            </button>
+          <p>Duplicate scans compare file content (SHA-256), not just names or sizes.</p>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={props.onScan}
+            disabled={props.busy}
+          >
+            Scan for duplicates
+          </button>
         </div>
       );
     }
@@ -148,8 +140,8 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
             </span>
             {selected.size > 0 && (
               <small>
-                {formatBytesSimple(selectedBytes)} selected ·{" "}
-                {formatBytesSimple(reclaimableBytes)} can be reclaimed
+                {formatBytesSimple(selectedBytes)} selected · {formatBytesSimple(reclaimableBytes)}{" "}
+                can be reclaimed
               </small>
             )}
           </div>
@@ -212,28 +204,20 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
             </button>
           </div>
         </div>
-        <div
-          className="duplicate-scroll-container"
-          ref={scrollRef}
-          onScroll={handleScroll}
-        >
+        <div className="duplicate-scroll-container" ref={scrollRef} onScroll={handleScroll}>
           {groups.slice(0, renderLimit).map((group: any) => (
             <section className="duplicate-result" key={String(group.sha256)}>
               <div className="duplicate-group-head">
                 <div className="duplicate-group-title">
                   <b>Identical files</b>
                   <span>{group.items?.length || 0} copies · SHA-256 match</span>
-                  <span className="duplicate-group-hash">
-                    {shortHash(group.sha256)}
-                  </span>
+                  <span className="duplicate-group-hash">{shortHash(group.sha256)}</span>
                 </div>
                 <div className="duplicate-group-actions">
                   <button
                     className="secondary-button"
                     type="button"
-                    disabled={
-                      props.busy || groupSelectedIds(group).length === 0
-                    }
+                    disabled={props.busy || groupSelectedIds(group).length === 0}
                     onClick={() => props.onHideIds?.(groupSelectedIds(group))}
                   >
                     Hide selected
@@ -241,12 +225,8 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                   <button
                     className="danger-button"
                     type="button"
-                    disabled={
-                      props.busy || groupSelectedIds(group).length === 0
-                    }
-                    onClick={() =>
-                      props.onRequestDeleteItems?.(groupSelectedIds(group))
-                    }
+                    disabled={props.busy || groupSelectedIds(group).length === 0}
+                    onClick={() => props.onRequestDeleteItems?.(groupSelectedIds(group))}
                   >
                     Move to Trash
                   </button>
@@ -286,21 +266,14 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                             type="checkbox"
                             className="duplicate-check"
                             checked={selected.has(item.id)}
-                            aria-label={
-                              i === 0 ? "Keep original" : "Select copy"
-                            }
-                            onChange={(
-                              e: React.ChangeEvent<HTMLInputElement>,
-                            ) => {
+                            aria-label={i === 0 ? "Keep original" : "Select copy"}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                               e.stopPropagation();
                               toggleSelected(item.id);
                             }}
                           />
                           {i === 0 && (
-                            <span
-                              className="duplicate-keep-badge"
-                              title="Original copy"
-                            >
+                            <span className="duplicate-keep-badge" title="Original copy">
                               Original
                             </span>
                           )}
@@ -310,10 +283,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                                 itemId={item.id}
                                 name={item.name}
                                 size={256}
-                                style={draftImageStyle(
-                                  draftTransforms,
-                                  item.id,
-                                )}
+                                style={draftImageStyle(draftTransforms, item.id)}
                               />
                             ) : (
                               <div className="duplicate-nonimage">
@@ -351,14 +321,10 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                             type="checkbox"
                             className="duplicate-check"
                             checked={groupItemsSelected(group)}
-                            onChange={(
-                              e: React.ChangeEvent<HTMLInputElement>,
-                            ) => {
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                               e.stopPropagation();
                               const ids = new Set<string>();
-                              (items || [])
-                                .slice(1)
-                                .forEach((it: any) => ids.add(it.id));
+                              (items || []).slice(1).forEach((it: any) => ids.add(it.id));
                               setSelected((prev) => {
                                 const next = new Set(prev);
                                 if (groupItemsSelected(group)) {
@@ -386,9 +352,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               <button
                 type="button"
                 className="quiet-button"
-                onClick={() =>
-                  setRenderLimit((n) => Math.min(n + 50, groups.length))
-                }
+                onClick={() => setRenderLimit((n) => Math.min(n + 50, groups.length))}
               >
                 Show {Math.min(50, groups.length - renderLimit)} more groups
               </button>

@@ -30,14 +30,9 @@ export function AdvancedPanel(props: {
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Maximum Cache Size</b>
-            <span className="settings-row-desc">
-              Disk space for thumbnails and previews
-            </span>
+            <span className="settings-row-desc">Disk space for thumbnails and previews</span>
           </div>
-          <div
-            className="settings-row-control"
-            style={{ alignItems: "center" }}
-          >
+          <div className="settings-row-control" style={{ alignItems: "center" }}>
             <input
               type="range"
               className="settings-slider"
@@ -50,14 +45,10 @@ export function AdvancedPanel(props: {
               max={50}
               step={1}
               value={props.maxCacheSize}
-              onChange={(e) =>
-                props.onChange("maxCacheSizeGB", Number(e.target.value))
-              }
+              onChange={(e) => props.onChange("maxCacheSizeGB", Number(e.target.value))}
               aria-label="Maximum cache size in gigabytes"
             />
-            <span className="settings-slider-value">
-              {props.maxCacheSize} GB
-            </span>
+            <span className="settings-slider-value">{props.maxCacheSize} GB</span>
           </div>
         </div>
         <div className="settings-row">
@@ -67,10 +58,7 @@ export function AdvancedPanel(props: {
               JPEG quality for generated thumbnails (higher = larger files)
             </span>
           </div>
-          <div
-            className="settings-row-control"
-            style={{ alignItems: "center" }}
-          >
+          <div className="settings-row-control" style={{ alignItems: "center" }}>
             <input
               type="range"
               className="settings-slider"
@@ -83,14 +71,10 @@ export function AdvancedPanel(props: {
               max={100}
               step={5}
               value={props.thumbnailQuality}
-              onChange={(e) =>
-                props.onChange("thumbnailQuality", Number(e.target.value))
-              }
+              onChange={(e) => props.onChange("thumbnailQuality", Number(e.target.value))}
               aria-label="Thumbnail JPEG quality percentage"
             />
-            <span className="settings-slider-value">
-              {props.thumbnailQuality}%
-            </span>
+            <span className="settings-slider-value">{props.thumbnailQuality}%</span>
           </div>
         </div>
         <div className="settings-row">
@@ -118,9 +102,8 @@ export function AdvancedPanel(props: {
           <CpuIcon size={14} /> Catalog Backup
         </h2>
         <p className="settings-section-desc">
-          Back up albums, tags, ratings, Smart Albums, and library settings in
-          one versioned SQLite snapshot. Original media files are never copied
-          or modified.
+          Back up albums, tags, ratings, Smart Albums, and library settings in one versioned SQLite
+          snapshot. Original media files are never copied or modified.
         </p>
         <div className="settings-row">
           <div className="settings-row-label">
@@ -144,8 +127,8 @@ export function AdvancedPanel(props: {
           <div className="settings-row-label">
             <b>Restore Catalog Backup…</b>
             <span className="settings-row-desc">
-              Validates first, creates a pre-restore snapshot, and reports files
-              that are no longer at their saved paths
+              Validates first, creates a pre-restore snapshot, and reports files that are no longer
+              at their saved paths
             </span>
           </div>
           <div className="settings-row-control">
@@ -184,9 +167,7 @@ export function AdvancedPanel(props: {
                 type="checkbox"
                 aria-label="Enable debug logging"
                 checked={props.debugLogging}
-                onChange={(e) =>
-                  props.onChange("enableDebugLogging", e.target.checked)
-                }
+                onChange={(e) => props.onChange("enableDebugLogging", e.target.checked)}
               />
               <span className="toggle-track" />
             </label>
@@ -205,9 +186,7 @@ export function AdvancedPanel(props: {
                 type="checkbox"
                 aria-label="Show native limit warnings"
                 checked={props.showNativeWarnings}
-                onChange={(e) =>
-                  props.onChange("showNativeLimitWarnings", e.target.checked)
-                }
+                onChange={(e) => props.onChange("showNativeLimitWarnings", e.target.checked)}
               />
               <span className="toggle-track" />
             </label>
@@ -220,15 +199,13 @@ export function AdvancedPanel(props: {
           <TrashIcon size={14} /> Danger Zone
         </h2>
         <p className="settings-section-desc">
-          These actions change VistoGallery preferences or its catalog. Original
-          media files are never deleted.
+          These actions change VistoGallery preferences or its catalog. Original media files are
+          never deleted.
         </p>
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Reset All Settings</b>
-            <span className="settings-row-desc">
-              Restores all settings to defaults
-            </span>
+            <span className="settings-row-desc">Restores all settings to defaults</span>
           </div>
           <div className="settings-row-control">
             <button

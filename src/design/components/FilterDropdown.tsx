@@ -1,11 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FilterIcon } from "./icons";
-import {
-  endOfLocalDay,
-  startOfLocalDay,
-  toDateInputValue,
-} from "../../engine/utils/dateRange";
+import { endOfLocalDay, startOfLocalDay, toDateInputValue } from "../../engine/utils/dateRange";
 
 interface FilterDropdownProps {
   minRating: number | null;
@@ -41,10 +37,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (
-        !buttonRef.current?.contains(target) &&
-        !panelRef.current?.contains(target)
-      ) {
+      if (!buttonRef.current?.contains(target) && !panelRef.current?.contains(target)) {
         setOpen(false);
       }
     };
@@ -199,10 +192,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
                     value={toDateInputValue(props.dateFrom)}
                     max={toDateInputValue(props.dateTo) || undefined}
                     onChange={(e) =>
-                      props.onSetDateRange(
-                        startOfLocalDay(e.target.value),
-                        props.dateTo,
-                      )
+                      props.onSetDateRange(startOfLocalDay(e.target.value), props.dateTo)
                     }
                   />
                 </label>
@@ -213,10 +203,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
                     value={toDateInputValue(props.dateTo)}
                     min={toDateInputValue(props.dateFrom) || undefined}
                     onChange={(e) =>
-                      props.onSetDateRange(
-                        props.dateFrom,
-                        endOfLocalDay(e.target.value),
-                      )
+                      props.onSetDateRange(props.dateFrom, endOfLocalDay(e.target.value))
                     }
                   />
                 </label>
@@ -230,9 +217,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
               <div className="filter-section-heading">
                 <span className="filter-section-label">Color label</span>
                 {props.colorLabelFilter && (
-                  <span className="filter-current-value">
-                    {props.colorLabelFilter}
-                  </span>
+                  <span className="filter-current-value">{props.colorLabelFilter}</span>
                 )}
               </div>
               <div className="filter-chip-row">
@@ -289,7 +274,6 @@ export function FilterDropdown(props: FilterDropdownProps) {
                 </span>
               </div>
             )}
-
           </div>,
           portalRoot,
         )}

@@ -32,10 +32,7 @@ export interface NativeMenuHandlers {
  * Route a native menu event to its app action. Returns false for unknown
  * events so callers can ignore forward-compatible additions.
  */
-export function dispatchNativeMenuEvent(
-  event: string,
-  handlers: NativeMenuHandlers,
-): boolean {
+export function dispatchNativeMenuEvent(event: string, handlers: NativeMenuHandlers): boolean {
   switch (event) {
     case "menu-open-folder":
       handlers.importFolder();

@@ -60,12 +60,7 @@ function batchDateLabel(ms?: number) {
 }
 
 /** Mirrors `render_batch_filename` in src-tauri so the preview matches reality. */
-function batchPreviewName(
-  item: any,
-  pattern: string,
-  index: number,
-  format: string,
-) {
+function batchPreviewName(item: any, pattern: string, index: number, format: string) {
   const extension = batchExtension(format, item);
   const stem = String(item.name || "export").replace(/\.[^.]+$/, "");
   const template = pattern.trim() || "{name}_{number}";
@@ -79,8 +74,7 @@ function batchPreviewName(
   const dot = rendered.lastIndexOf(".");
   const existing = dot > -1 ? rendered.slice(dot + 1).toLowerCase() : "";
   if (!existing) return `${rendered}.${extension}`;
-  if (existing === extension || (extension === "jpg" && existing === "jpeg"))
-    return rendered;
+  if (existing === extension || (extension === "jpg" && existing === "jpeg")) return rendered;
   return `${rendered.slice(0, dot)}.${extension}`;
 }
 
@@ -104,12 +98,8 @@ interface BatchScreenProps {
   onSetPattern: ReturnType<typeof useBatchStore.getState>["setPattern"];
   onSetFormat: ReturnType<typeof useBatchStore.getState>["setFormat"];
   onSetQuality: ReturnType<typeof useBatchStore.getState>["setQuality"];
-  onSetStripMetadata: ReturnType<
-    typeof useBatchStore.getState
-  >["setStripMetadata"];
-  onSetMaxDimension: ReturnType<
-    typeof useBatchStore.getState
-  >["setMaxDimension"];
+  onSetStripMetadata: ReturnType<typeof useBatchStore.getState>["setStripMetadata"];
+  onSetMaxDimension: ReturnType<typeof useBatchStore.getState>["setMaxDimension"];
   onSetStep: ReturnType<typeof useBatchStore.getState>["setStep"];
   onChooseFolder: () => void | Promise<void>;
   onOpenFolder: () => void;
@@ -161,10 +151,7 @@ function BatchScreen(props: BatchScreenProps) {
     { label: "Source size", value: formatBytesSimple(totalSize) },
     {
       label: "Format",
-      value:
-        config.format === "source"
-          ? "Keep source"
-          : config.format.toUpperCase(),
+      value: config.format === "source" ? "Keep source" : config.format.toUpperCase(),
     },
     {
       label: "Resize",
@@ -178,12 +165,8 @@ function BatchScreen(props: BatchScreenProps) {
 
   const failed = result?.failed || [];
   const cancelled = Boolean(result?.cancelled);
-  const skipped =
-    cancelled && result
-      ? Math.max(0, total - result.exported - failed.length)
-      : 0;
-  const failedName = (itemId: string) =>
-    items.find((item) => item.id === itemId)?.name || "Export";
+  const skipped = cancelled && result ? Math.max(0, total - result.exported - failed.length) : 0;
+  const failedName = (itemId: string) => items.find((item) => item.id === itemId)?.name || "Export";
 
   const addToken = (token: string) => {
     const pattern = String(config.pattern || "");
@@ -193,9 +176,7 @@ function BatchScreen(props: BatchScreenProps) {
 
   const removeUnsupported = () => {
     props.onSetSelection?.(
-      items
-        .filter((item) => item.kind !== "video" && item.kind !== "raw")
-        .map((item) => item.id),
+      items.filter((item) => item.kind !== "video" && item.kind !== "raw").map((item) => item.id),
     );
   };
 
@@ -206,16 +187,11 @@ function BatchScreen(props: BatchScreenProps) {
           <p className="eyebrow">BATCH EXPORT</p>
           <h1>Prepare a batch export.</h1>
           <p className="page-subtitle">
-            Rename, convert, resize, or strip metadata. Originals are never
-            modified.
+            Rename, convert, resize, or strip metadata. Originals are never modified.
           </p>
         </div>
         {total > 0 && !busy && (
-          <button
-            className="quiet-button"
-            type="button"
-            onClick={props.onOpenLibrary}
-          >
+          <button className="quiet-button" type="button" onClick={props.onOpenLibrary}>
             Change selection
           </button>
         )}
@@ -241,9 +217,7 @@ function BatchScreen(props: BatchScreenProps) {
             <span className="batch-spinner" aria-hidden="true" />
             <div>
               <b>Exporting copies…</b>
-              <small>
-                {progress?.currentFile || "Preparing the first file"}
-              </small>
+              <small>{progress?.currentFile || "Preparing the first file"}</small>
             </div>
             <span className="batch-progress-count">
               {Math.min(progress?.current || 0, progress?.total || total)} /{" "}
@@ -256,9 +230,7 @@ function BatchScreen(props: BatchScreenProps) {
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={
-              progress?.total
-                ? Math.round(((progress.current || 0) / progress.total) * 100)
-                : 0
+              progress?.total ? Math.round(((progress.current || 0) / progress.total) * 100) : 0
             }
           >
             <span
@@ -274,8 +246,7 @@ function BatchScreen(props: BatchScreenProps) {
               onClick={props.onCancelBatch}
               disabled={cancelRequested}
             >
-              <StopIcon size={13} />{" "}
-              {cancelRequested ? "Cancelling…" : "Cancel export"}
+              <StopIcon size={13} /> {cancelRequested ? "Cancelling…" : "Cancel export"}
             </button>
             <span>
               {cancelRequested
@@ -284,13 +255,11 @@ function BatchScreen(props: BatchScreenProps) {
             </span>
           </div>
           <p className="batch-note">
-            Files are written one at a time. Keep this window open until the
-            export finishes.
+            Files are written one at a time. Keep this window open until the export finishes.
           </p>
           {stalled && (
             <p className="batch-error">
-              No progress for 15s — export may be stalled. You can cancel and
-              retry.
+              No progress for 15s — export may be stalled. You can cancel and retry.
             </p>
           )}
         </div>
@@ -367,9 +336,7 @@ function BatchScreen(props: BatchScreenProps) {
                   </div>
                 ))}
                 {result.outputs.length > 8 && (
-                  <small className="batch-result-more">
-                    +{result.outputs.length - 8} more
-                  </small>
+                  <small className="batch-result-more">+{result.outputs.length - 8} more</small>
                 )}
               </div>
             </div>
@@ -386,13 +353,8 @@ function BatchScreen(props: BatchScreenProps) {
               <div className="batch-failure-list">
                 {(showAllFailures ? failed : failed.slice(0, 5)).map(
                   (failure: any, index: number) => (
-                    <div
-                      key={`${failure.itemId}-${index}`}
-                      className="batch-failure"
-                    >
-                      <b>
-                        {failure.itemId ? failedName(failure.itemId) : "Export"}
-                      </b>
+                    <div key={`${failure.itemId}-${index}`} className="batch-failure">
+                      <b>{failure.itemId ? failedName(failure.itemId) : "Export"}</b>
                       <small>{failure.error}</small>
                     </div>
                   ),
@@ -403,9 +365,7 @@ function BatchScreen(props: BatchScreenProps) {
                     type="button"
                     onClick={() => setShowAllFailures((value) => !value)}
                   >
-                    {showAllFailures
-                      ? "Show fewer"
-                      : `Show all ${failed.length} failures`}
+                    {showAllFailures ? "Show fewer" : `Show all ${failed.length} failures`}
                   </button>
                 )}
               </div>
@@ -415,18 +375,10 @@ function BatchScreen(props: BatchScreenProps) {
           {error && <p className="batch-error">{error}</p>}
 
           <div className="batch-result-actions">
-            <button
-              className="primary-button"
-              type="button"
-              onClick={props.onReset}
-            >
+            <button className="primary-button" type="button" onClick={props.onReset}>
               {cancelled ? "Review settings" : "Export another batch"}
             </button>
-            <button
-              className="quiet-button"
-              type="button"
-              onClick={props.onOpenLibrary}
-            >
+            <button className="quiet-button" type="button" onClick={props.onOpenLibrary}>
               Back to Library
             </button>
           </div>
@@ -440,14 +392,12 @@ function BatchScreen(props: BatchScreenProps) {
                 <div>
                   <h2>Files in this batch</h2>
                   <p>
-                    Pick items in the Library, then return here. Removing a file
-                    only removes it from this batch.
+                    Pick items in the Library, then return here. Removing a file only removes it
+                    from this batch.
                   </p>
                 </div>
                 {total > 0 && (
-                  <span className="batch-count-pill">
-                    {total.toLocaleString()} selected
-                  </span>
+                  <span className="batch-count-pill">{total.toLocaleString()} selected</span>
                 )}
               </div>
 
@@ -458,23 +408,14 @@ function BatchScreen(props: BatchScreenProps) {
                   </span>
                   <b>No files in this batch yet</b>
                   <p>
-                    Select items in the Library grid and choose{" "}
-                    <strong>Batch</strong> from the selection bar, or select
-                    everything visible.
+                    Select items in the Library grid and choose <strong>Batch</strong> from the
+                    selection bar, or select everything visible.
                   </p>
                   <div className="batch-empty-actions">
-                    <button
-                      className="primary-button"
-                      type="button"
-                      onClick={props.onOpenLibrary}
-                    >
+                    <button className="primary-button" type="button" onClick={props.onOpenLibrary}>
                       Go to Library
                     </button>
-                    <button
-                      className="quiet-button"
-                      type="button"
-                      onClick={props.onSelectAll}
-                    >
+                    <button className="quiet-button" type="button" onClick={props.onSelectAll}>
                       Select all visible
                     </button>
                   </div>
@@ -491,11 +432,7 @@ function BatchScreen(props: BatchScreenProps) {
                         title={`Remove ${item.name} from this batch`}
                       >
                         {item.kind === "photo" ? (
-                          <CachedThumbnail
-                            itemId={item.id}
-                            name={item.name}
-                            size={128}
-                          />
+                          <CachedThumbnail itemId={item.id} name={item.name} size={128} />
                         ) : (
                           <span className={`batch-thumb-kind ${item.kind}`}>
                             {item.kind === "raw" ? "RAW" : "VID"}
@@ -508,31 +445,17 @@ function BatchScreen(props: BatchScreenProps) {
                       </button>
                     ))}
                     {items.length > 10 && (
-                      <span className="batch-thumb-more">
-                        +{items.length - 10}
-                      </span>
+                      <span className="batch-thumb-more">+{items.length - 10}</span>
                     )}
                   </div>
                   <div className="batch-tray-actions">
-                    <button
-                      className="quiet-button"
-                      type="button"
-                      onClick={props.onOpenLibrary}
-                    >
+                    <button className="quiet-button" type="button" onClick={props.onOpenLibrary}>
                       Add more
                     </button>
-                    <button
-                      className="quiet-button"
-                      type="button"
-                      onClick={props.onSelectAll}
-                    >
+                    <button className="quiet-button" type="button" onClick={props.onSelectAll}>
                       Select all visible
                     </button>
-                    <button
-                      className="quiet-button"
-                      type="button"
-                      onClick={props.onClearSelection}
-                    >
+                    <button className="quiet-button" type="button" onClick={props.onClearSelection}>
                       Clear batch
                     </button>
                   </div>
@@ -556,9 +479,7 @@ function BatchScreen(props: BatchScreenProps) {
                         {unsupported} unsupported · remove
                       </button>
                     )}
-                    <span className="batch-tray-order">
-                      Exported in this order
-                    </span>
+                    <span className="batch-tray-order">Exported in this order</span>
                   </div>
                 </>
               )}
@@ -569,43 +490,26 @@ function BatchScreen(props: BatchScreenProps) {
                 <span className="batch-step-badge">2</span>
                 <div>
                   <h2>Output settings</h2>
-                  <p>
-                    Choose where copies go, how they are named, and how they are
-                    encoded.
-                  </p>
+                  <p>Choose where copies go, how they are named, and how they are encoded.</p>
                 </div>
               </div>
 
-              <div
-                className={`batch-destination${outputFolder ? "" : " is-empty"}`}
-              >
+              <div className={`batch-destination${outputFolder ? "" : " is-empty"}`}>
                 <span className="batch-destination-icon">
                   <FolderIcon size={17} />
                 </span>
                 <div className="batch-destination-copy">
-                  <b>
-                    {outputFolder
-                      ? folderDisplayName(outputFolder)
-                      : "No destination chosen"}
-                  </b>
+                  <b>{outputFolder ? folderDisplayName(outputFolder) : "No destination chosen"}</b>
                   <small title={outputFolder}>
                     {outputFolder || "Choose a folder for the exported copies."}
                   </small>
                 </div>
                 <div className="batch-destination-actions">
-                  <button
-                    className="quiet-button"
-                    type="button"
-                    onClick={props.onChooseFolder}
-                  >
+                  <button className="quiet-button" type="button" onClick={props.onChooseFolder}>
                     Choose…
                   </button>
                   {outputFolder && (
-                    <button
-                      className="quiet-button"
-                      type="button"
-                      onClick={props.onOpenFolder}
-                    >
+                    <button className="quiet-button" type="button" onClick={props.onOpenFolder}>
                       Open
                     </button>
                   )}
@@ -645,8 +549,8 @@ function BatchScreen(props: BatchScreenProps) {
                   </button>
                 </div>
                 <small className="batch-help">
-                  Live preview is on the right. Existing files are never
-                  overwritten — duplicates get a numeric suffix.
+                  Live preview is on the right. Existing files are never overwritten — duplicates
+                  get a numeric suffix.
                 </small>
               </div>
 
@@ -654,11 +558,7 @@ function BatchScreen(props: BatchScreenProps) {
                 <span className="batch-field-label">
                   <span>Output format</span>
                 </span>
-                <div
-                  className="batch-format-grid"
-                  role="radiogroup"
-                  aria-label="Output format"
-                >
+                <div className="batch-format-grid" role="radiogroup" aria-label="Output format">
                   {BATCH_FORMATS.map((option) => (
                     <button
                       key={option.value}
@@ -669,9 +569,7 @@ function BatchScreen(props: BatchScreenProps) {
                       onClick={() => props.onSetFormat(option.value)}
                     >
                       <span className="batch-format-name">{option.label}</span>
-                      <span className="batch-format-detail">
-                        {option.detail}
-                      </span>
+                      <span className="batch-format-detail">{option.detail}</span>
                     </button>
                   ))}
                 </div>
@@ -689,14 +587,12 @@ function BatchScreen(props: BatchScreenProps) {
                     min={40}
                     max={100}
                     value={config.quality}
-                    onChange={(event) =>
-                      props.onSetQuality(Number(event.target.value))
-                    }
+                    onChange={(event) => props.onSetQuality(Number(event.target.value))}
                     aria-label="JPEG quality"
                   />
                   <small className="batch-help">
-                    85–90 is a good balance between file size and detail. PNG
-                    and WebP export losslessly.
+                    85–90 is a good balance between file size and detail. PNG and WebP export
+                    losslessly.
                   </small>
                 </div>
               ) : (
@@ -718,25 +614,19 @@ function BatchScreen(props: BatchScreenProps) {
                   value={config.maxDimension ?? "original"}
                   onChange={(event) =>
                     props.onSetMaxDimension(
-                      event.target.value === "original"
-                        ? null
-                        : Number(event.target.value),
+                      event.target.value === "original" ? null : Number(event.target.value),
                     )
                   }
                   aria-label="Maximum image size"
                 >
                   {BATCH_MAX_DIMENSIONS.map((option) => (
-                    <option
-                      key={String(option.value)}
-                      value={option.value ?? "original"}
-                    >
+                    <option key={String(option.value)} value={option.value ?? "original"}>
                       {option.label}
                     </option>
                   ))}
                 </select>
                 <small className="batch-help">
-                  Images are scaled down proportionally; smaller images are
-                  never enlarged.
+                  Images are scaled down proportionally; smaller images are never enlarged.
                 </small>
               </div>
 
@@ -744,9 +634,7 @@ function BatchScreen(props: BatchScreenProps) {
                 <input
                   type="checkbox"
                   checked={config.stripMetadata}
-                  onChange={(event) =>
-                    props.onSetStripMetadata(event.target.checked)
-                  }
+                  onChange={(event) => props.onSetStripMetadata(event.target.checked)}
                 />
                 <span className="batch-switch" aria-hidden="true">
                   <span />
@@ -754,8 +642,8 @@ function BatchScreen(props: BatchScreenProps) {
                 <span className="batch-toggle-copy">
                   <b>Strip metadata</b>
                   <small>
-                    Removes EXIF, GPS, and camera information when a file is
-                    re-encoded. Copies that need no changes keep their metadata.
+                    Removes EXIF, GPS, and camera information when a file is re-encoded. Copies that
+                    need no changes keep their metadata.
                   </small>
                 </span>
               </label>
@@ -763,20 +651,17 @@ function BatchScreen(props: BatchScreenProps) {
               <p className="batch-note batch-note-honest">
                 <SparkleIcon size={14} />
                 <span>
-                  Converting, resizing, or stripping always re-encodes the
-                  image. RAW and video files can only be copied unchanged in
-                  “Keep source” mode.
+                  Converting, resizing, or stripping always re-encodes the image. RAW and video
+                  files can only be copied unchanged in “Keep source” mode.
                 </span>
               </p>
 
               {(videos > 0 || raws > 0) && unsupported > 0 && (
                 <div className="batch-warning">
                   <span>
-                    {unsupported} selected{" "}
-                    {unsupported === 1 ? "file needs" : "files need"} native
-                    macOS image support and will be reported as failed unless
-                    you choose “Keep source”, turn off resizing, and turn off
-                    metadata stripping.
+                    {unsupported} selected {unsupported === 1 ? "file needs" : "files need"} native
+                    macOS image support and will be reported as failed unless you choose “Keep
+                    source”, turn off resizing, and turn off metadata stripping.
                   </span>
                   <button
                     type="button"
@@ -815,40 +700,22 @@ function BatchScreen(props: BatchScreenProps) {
               {items.length === 0 ? (
                 <div className="batch-preview-empty">
                   <b>Nothing to preview</b>
-                  <small>
-                    Select files in the Library to see their new names.
-                  </small>
+                  <small>Select files in the Library to see their new names.</small>
                 </div>
               ) : (
                 items.slice(0, 6).map((item, index) => (
                   <div key={item.id} className="batch-preview-row">
                     <span className="batch-preview-thumb">
                       {item.kind === "photo" ? (
-                        <CachedThumbnail
-                          itemId={item.id}
-                          name={item.name}
-                          size={128}
-                        />
+                        <CachedThumbnail itemId={item.id} name={item.name} size={128} />
                       ) : (
                         <span>{item.kind === "raw" ? "RAW" : "VID"}</span>
                       )}
                     </span>
                     <span className="batch-preview-name">
                       <small title={item.name}>{item.name}</small>
-                      <b
-                        title={batchPreviewName(
-                          item,
-                          config.pattern,
-                          index,
-                          config.format,
-                        )}
-                      >
-                        {batchPreviewName(
-                          item,
-                          config.pattern,
-                          index,
-                          config.format,
-                        )}
+                      <b title={batchPreviewName(item, config.pattern, index, config.format)}>
+                        {batchPreviewName(item, config.pattern, index, config.format)}
                       </b>
                     </span>
                   </div>
@@ -870,9 +737,7 @@ function BatchScreen(props: BatchScreenProps) {
                 ? `Export ${total.toLocaleString()} ${total === 1 ? "copy" : "copies"}`
                 : "Export batch"}
             </button>
-            <p className="batch-footnote">
-              Originals are never modified, moved, or deleted.
-            </p>
+            <p className="batch-footnote">Originals are never modified, moved, or deleted.</p>
           </aside>
         </div>
       )}

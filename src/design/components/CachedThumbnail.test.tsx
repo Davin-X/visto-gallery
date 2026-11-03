@@ -35,14 +35,7 @@ describe("CachedThumbnail", () => {
       dataUrl: "data:image/jpeg;base64,dGVzdA==",
     });
 
-    render(
-      <CachedThumbnail
-        itemId="video"
-        name="video.mp4"
-        size={128}
-        eager
-      />,
-    );
+    render(<CachedThumbnail itemId="video" name="video.mp4" size={128} eager />);
 
     await waitFor(() => expect(mocks.getThumbnail).toHaveBeenCalledOnce());
     expect(mocks.getThumbnail).toHaveBeenCalledWith(

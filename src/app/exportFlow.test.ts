@@ -34,8 +34,6 @@ describe("Batch Export navigation", () => {
 
     expect(setSelection).not.toHaveBeenCalled();
     expect(setScreen).toHaveBeenCalledWith("Batch");
-    expect(showNotice).toHaveBeenCalledWith(
-      expect.stringContaining("Select photos or videos"),
-    );
+    expect(showNotice).toHaveBeenCalledWith(expect.stringContaining("Select photos or videos"));
   });
 });

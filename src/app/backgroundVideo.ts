@@ -10,7 +10,6 @@ export function getAdjacentVideo(
   if (currentIndex < 0) {
     return direction > 0 ? queue[0] : queue[queue.length - 1];
   }
-  const nextIndex =
-    (currentIndex + direction + queue.length) % queue.length;
+  const nextIndex = (currentIndex + direction + queue.length) % queue.length;
   return queue[nextIndex];
 }
