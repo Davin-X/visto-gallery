@@ -296,6 +296,10 @@ function ViewerScreen(props: ViewerScreenProps) {
       (draftTransforms.get(selected?.id ?? "")?.rotation || 0)) %
     360;
 
+  useEffect(() => {
+    setFloatingMinimized(false);
+  }, [playbackItem?.id]);
+
   const clampFloatingPosition = useCallback((left: number, top: number) => {
     const stage = stageRef.current;
     const frame = floatingFrameRef.current;
