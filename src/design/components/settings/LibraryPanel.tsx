@@ -38,46 +38,28 @@ export function LibraryPanel(props: {
             </label>
           </div>
         </div>
-        <div className="settings-row">
+        <div className="settings-row settings-row-unavailable">
           <div className="settings-row-label">
-            <b>Pair RAW + JPEG</b>
+            <b>
+              Pair RAW + JPEG{" "}
+              <span className="settings-unavailable">Not implemented</span>
+            </b>
             <span className="settings-row-desc">
-              Group RAW and JPEG files shot together as a single item
+              RAW and JPEG files from the same shot are imported as separate
+              items. This control is hidden until pairing is fully implemented.
             </span>
-          </div>
-          <div className="settings-row-control">
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                aria-label="Pair RAW and JPEG files"
-                checked={props.pairRawJpeg}
-                onChange={(e) =>
-                  props.onChange("pairRawJpeg", e.target.checked)
-                }
-              />
-              <span className="toggle-track" />
-            </label>
           </div>
         </div>
-        <div className="settings-row">
+        <div className="settings-row settings-row-unavailable">
           <div className="settings-row-label">
-            <b>Stack Burst Photos</b>
+            <b>
+              Stack Burst Photos{" "}
+              <span className="settings-unavailable">Not implemented</span>
+            </b>
             <span className="settings-row-desc">
-              Group rapid-sequence shots (burst mode) into stacks
+              Burst sequences are shown individually. Stacking will return once
+              grouping is supported end to end.
             </span>
-          </div>
-          <div className="settings-row-control">
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                aria-label="Stack burst photos"
-                checked={props.stackBursts}
-                onChange={(e) =>
-                  props.onChange("stackBursts", e.target.checked)
-                }
-              />
-              <span className="toggle-track" />
-            </label>
           </div>
         </div>
       </section>

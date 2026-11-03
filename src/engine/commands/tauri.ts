@@ -7,6 +7,13 @@ import type {
   ImportSession,
   LibraryFilterDTO,
   LibraryItemsPage,
+  AlbumOverview,
+  SmartAlbum,
+  SmartAlbumFilter,
+  BackupInfo,
+  RestoreResult,
+  RootPathMappingPreview,
+  RootPathMappingResult,
   ThumbnailRequest,
   ThumbnailResponse,
   ExifData,
@@ -58,6 +65,8 @@ export const tauri = {
 
     getFolders: (): Promise<LibraryFolder[]> => invoke("get_library_folders"),
 
+    getRoots: (): Promise<string[]> => invoke("get_library_roots"),
+
     getStats: (): Promise<LibraryStats> => invoke("get_library_stats"),
 
     removeFolder: (path: string, deleteFiles = false): Promise<number> =>
@@ -106,6 +115,9 @@ export const tauri = {
   albums: {
     get: (): Promise<Album[]> => invoke("get_albums"),
 
+    getOverviews: (): Promise<AlbumOverview[]> =>
+      invoke("get_album_overviews"),
+
     getItems: (albumId: string): Promise<MediaItem[]> =>
       invoke("get_album_items", { albumId }),
 
@@ -125,6 +137,51 @@ export const tauri = {
 
     removeItems: (albumId: string, itemIds: string[]): Promise<void> =>
       invoke("remove_from_album", { albumId, itemIds }),
+  },
+
+  smartAlbums: {
+    get: (): Promise<SmartAlbum[]> => invoke("get_smart_albums"),
+
+    create: (name: string, filter: SmartAlbumFilter): Promise<SmartAlbum> =>
+      invoke("create_smart_album", { name, filter }),
+
+    rename: (albumId: string, name: string): Promise<void> =>
+      invoke("rename_smart_album", { albumId, name }),
+
+    delete: (albumId: string): Promise<void> =>
+      invoke("delete_smart_album", { albumId }),
+
+    getItems: (
+      albumId: string,
+      limit?: number,
+      cursor?: string,
+    ): Promise<LibraryItemsPage> =>
+      invoke("get_smart_album_items", { albumId, limit, cursor }),
+  },
+
+  rootMap: {
+    preview: (
+      oldRoot: string,
+      newRoot: string,
+    ): Promise<RootPathMappingPreview> =>
+      invoke("preview_root_path_mapping", { oldRoot, newRoot }),
+
+    apply: (
+      oldRoot: string,
+      newRoot: string,
+    ): Promise<RootPathMappingResult> =>
+      invoke("apply_root_path_mapping", { oldRoot, newRoot }),
+  },
+
+  backup: {
+    create: (destinationPath: string): Promise<BackupInfo> =>
+      invoke("create_catalog_backup", { destinationPath }),
+
+    validate: (path: string): Promise<BackupInfo> =>
+      invoke("validate_catalog_backup", { path }),
+
+    restore: (path: string): Promise<RestoreResult> =>
+      invoke("restore_catalog_backup", { path }),
   },
 
   metadata: {
@@ -165,6 +222,10 @@ export const tauri = {
 
     readTags: (path: string): Promise<string[]> =>
       invoke("read_finder_tags", { path }),
+
+    /** Merge app tags into existing Finder tags without deleting any. */
+    mergeTags: (path: string, tags: string[]): Promise<string[]> =>
+      invoke("merge_finder_tags", { path, tags }),
   },
 
   settings: {
@@ -260,6 +321,10 @@ export const events = {
 
   onFolderChanged: (callback: (path: string) => void) =>
     listen("folder-changed", (e: any) => callback(e.payload)),
+
+  onFolderWatchError: (
+    callback: (event: { path: string; message: string }) => void,
+  ) => listen("folder-watch-error", (e: any) => callback(e.payload)),
 };
 
 // Helper: Build thumbnail data URL from response

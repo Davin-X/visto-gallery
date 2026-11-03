@@ -1,71 +1,49 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { AlbumsIcon, PlusIcon } from "../design/components/icons";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
 import type { Album, MediaItem, MediaKind } from "../engine/types/media";
+import type { SmartAlbum } from "../engine/types/commands";
 
 interface AlbumsScreenProps {
   albums: Album[];
   items: MediaItem[];
+  smartAlbums?: SmartAlbum[];
   assetUrl: (path: string) => string;
   onCreateAlbum: () => void;
   onAlbumContextMenu: (album: any, e: React.MouseEvent) => void;
   onOpenAlbum: (albumId: string) => void;
+  onOpenSmartAlbum?: (albumId: string) => void;
+  onSmartAlbumContextMenu?: (album: SmartAlbum, e: React.MouseEvent) => void;
 }
 
 function AlbumsScreen(props: AlbumsScreenProps) {
   const library = useLibraryStore();
-  const loadAlbumItems = library.loadAlbumItems;
-  const albumItemsCache = library.albumItems;
+  const overviews = library.albumOverviews;
 
-  const [loadedAlbumIds, setLoadedAlbumIds] = React.useState<Set<string>>(
-    new Set(),
-  );
-
-  // Load items for each album that hasn't been loaded yet
-  useEffect(() => {
-    const loadPromises = (props.albums || [])
-      .filter((album: any) => !loadedAlbumIds.has(album.id))
-      .map((album: any) => loadAlbumItems(album.id));
-
-    if (loadPromises.length > 0) {
-      Promise.all(loadPromises).then(() => {
-        setLoadedAlbumIds((prev) => {
-          const next = new Set(prev);
-          (props.albums || []).forEach((a: any) => next.add(a.id));
-          return next;
-        });
-      });
-    }
-  }, [props.albums, loadAlbumItems, loadedAlbumIds]);
-
-  const albums = React.useMemo(
-    () =>
-      (props.albums || []).map((album: any, index: number) => {
-        // Use loaded album items from store (complete catalog), not paginated
-        // props.items which would miss items on non-loaded pages.
-        const albumItems: MediaItem[] =
-          albumItemsCache[album.id] ||
-          (props.items || []).filter(
-            (item: any) =>
-              (album.itemIds || []).includes(item.id) && !item.hidden,
-          );
-        // Skip RAW-only files for the cover fan; they have no poster frame.
-        const photos = albumItems
-          .filter(
-            (item: any) => item.kind === "photo" || item.kind === "video",
-          )
-          .slice(0, 3);
-        return {
-          ...album,
-          photos,
-          albumItems,
-          count: Number(album.itemCount),
-          color: ["coral", "violet", "blue", "green"][index % 4],
-        };
-      }),
-    [props.albums, props.items, albumItemsCache, loadedAlbumIds],
-  );
+  // Opening Albums must not fetch every album's full membership. The overview
+  // query returns counts plus at most four cover candidates per album; the
+  // complete membership is loaded only when a card is opened.
+  const albums = React.useMemo(() => {
+    const byId = new Map(overviews.map((overview) => [overview.id, overview]));
+    return (props.albums || []).map((album: any, index: number) => {
+      const overview = byId.get(album.id);
+      const coverItems: MediaItem[] = overview?.coverItems ?? [];
+      const photos = coverItems
+        .filter(
+          (item: any) => item.kind === "photo" || item.kind === "video",
+        )
+        .slice(0, 3);
+      return {
+        ...album,
+        itemCount: overview?.itemCount ?? album.itemCount,
+        photos,
+        albumItems: coverItems,
+        count: Number(overview?.itemCount ?? album.itemCount),
+        color: ["coral", "violet", "blue", "green"][index % 4],
+      };
+    });
+  }, [props.albums, overviews]);
 
   return (
     <div className="feature-page albums-page">
@@ -81,7 +59,41 @@ function AlbumsScreen(props: AlbumsScreenProps) {
         </div>
       </div>
 
-      {albums.length === 0 ? (
+      {(props.smartAlbums?.length ?? 0) > 0 && (
+        <section className="smart-albums-section" aria-label="Smart Albums">
+          <div className="smart-albums-heading">
+            <div>
+              <p className="eyebrow">SAVED FILTERS</p>
+              <h2>Smart Albums</h2>
+            </div>
+            <span className="settings-row-desc">
+              Updates automatically as your library changes.
+            </span>
+          </div>
+          <div className="smart-albums-list">
+            {props.smartAlbums!.map((album) => (
+              <button
+                key={album.id}
+                type="button"
+                className="smart-album-row"
+                onClick={() => props.onOpenSmartAlbum?.(album.id)}
+                onContextMenu={(e) =>
+                  props.onSmartAlbumContextMenu?.(album, e)
+                }
+                title={`Open ${album.name}`}
+              >
+                <span className="smart-album-name">{album.name}</span>
+                <span className="smart-album-count">
+                  {album.itemCount.toLocaleString()}{" "}
+                  {album.itemCount === 1 ? "item" : "items"}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {albums.length === 0 && (props.smartAlbums?.length ?? 0) === 0 ? (
         <div className="empty-state albums-empty">
           <span>
             <AlbumsIcon size={30} />

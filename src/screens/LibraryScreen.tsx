@@ -23,6 +23,7 @@ import {
   PlayIcon,
   PlusIcon,
   SearchIcon,
+  TagIcon,
   TimelineIcon,
   TrashIcon,
 } from "../design/components/icons";
@@ -78,6 +79,7 @@ interface LibraryScreenProps {
   onChangeQuery: (query: string) => void;
   onClearSelection: () => void;
   onContextMenu: (items: any[], e: React.MouseEvent) => void;
+  onCopyTagsToFinder?: (ids: string[]) => void | Promise<void>;
   onCreateAlbum: (itemIds?: string[]) => void;
   onImportFiles?: () => void;
   onImportFolder?: () => void;
@@ -119,8 +121,12 @@ interface LibraryScreenProps {
     favorites: number;
   };
   colorLabelFilter: string | null;
+  dateFrom: number | null;
+  dateTo: number | null;
   onSetMinRating: (rating: number | null) => void;
   onSetColorLabelFilter: (colorLabel: string | null) => void;
+  onSetDateRange: (from: number | null, to: number | null) => void;
+  onCreateSmartAlbum?: (name: string) => void;
   notice: any;
   progress: any;
   searchInputRef: any;
@@ -801,6 +807,11 @@ function LibraryScreen(props: LibraryScreenProps) {
       label: "Open in Finder",
       onClick: () => tauri.items.revealInFinder(item.path),
     },
+    {
+      label: "Copy tags to Finder",
+      disabled: !(item.tags || []).length,
+      onClick: () => props.onCopyTagsToFinder?.([item.id]),
+    },
     { divider: true },
     {
       label: "Add to Album…",
@@ -1274,8 +1285,12 @@ function LibraryScreen(props: LibraryScreenProps) {
             <FilterDropdown
               minRating={props.minRating}
               colorLabelFilter={props.colorLabelFilter}
+              dateFrom={props.dateFrom}
+              dateTo={props.dateTo}
               onSetMinRating={props.onSetMinRating}
               onSetColorLabelFilter={props.onSetColorLabelFilter}
+              onSetDateRange={props.onSetDateRange}
+              onCreateSmartAlbum={props.onCreateSmartAlbum}
             />
           </div>
 
@@ -1397,6 +1412,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                     <AlbumsIcon size={13} /> Add to album
                   </button>
                 )}
+                <button
+                  type="button"
+                  className="selection-bar-action"
+                  onClick={() => props.onCopyTagsToFinder?.(props.selectedIds)}
+                  disabled={!selectedItems.some((item) => item.tags?.length)}
+                  title="Merge VistoGallery tags into each file's Finder tags. Existing Finder tags are kept."
+                >
+                  <TagIcon size={13} /> Tags to Finder
+                </button>
                 {inAlbum && (
                   <button
                     type="button"

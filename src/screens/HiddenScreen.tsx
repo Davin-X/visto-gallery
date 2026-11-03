@@ -188,8 +188,11 @@ function HiddenScreen(props: HiddenScreenProps) {
         onSetColorLabelForIds={library.setColorLabelForIds}
         minRating={library.minRating}
         colorLabelFilter={library.colorLabelFilter}
+        dateFrom={library.dateFrom}
+        dateTo={library.dateTo}
         onSetMinRating={library.setMinRating}
         onSetColorLabelFilter={library.setColorLabelFilter}
+        onSetDateRange={library.setDateRange}
         onUpdateTags={library.updateItemTags}
         onDeleteItems={library.deleteItems}
         onRequestDeleteItems={props.onRequestDeleteItems}

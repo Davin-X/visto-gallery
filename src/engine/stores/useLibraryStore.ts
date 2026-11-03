@@ -12,9 +12,12 @@ import type {
   Screen,
 } from "../types/media";
 import type {
+  AlbumOverview,
   LibraryFolder,
   LibraryFilterDTO,
   LibraryItemsPage,
+  SmartAlbum,
+  SmartAlbumFilter,
 } from "../types/commands";
 import { tauri } from "../commands/tauri";
 import { formatBytes } from "../commands/tauri";
@@ -44,6 +47,8 @@ interface LibraryState {
   // Data
   items: MediaItem[];
   albums: Album[];
+  albumOverviews: AlbumOverview[];
+  smartAlbums: SmartAlbum[];
   tags: Tag[];
   duplicates: DuplicateGroup[];
   folders: LibraryFolder[];
@@ -67,9 +72,14 @@ interface LibraryState {
   showInspector: boolean;
   sidebarOpen: boolean;
   activeAlbum: string | null;
+  activeSmartAlbum: string | null;
   // Source filter (a library folder path). Independent of `filter`, which is
   // the media-kind filter; the two compose so "Photos inside Pictures" works.
   activeSource: string | null;
+  // Capture-date range. Null means open-ended; the backend falls back to file
+  // modification time when an item has no EXIF capture date.
+  dateFrom: number | null;
+  dateTo: number | null;
   screen: Screen;
   // Rating and color-label filters (applied on top of `filter`)
   minRating: number | null; // items at or above this star rating
@@ -157,6 +167,7 @@ interface LibraryState {
   setCameraFilter: (camera: string | null) => void;
   setLensFilter: (lens: string | null) => void;
   setLayout: (layout: LayoutMode) => void;
+  setDateRange: (from: number | null, to: number | null) => void;
   setSort: (
     sortBy: LibraryState["sortBy"],
     sortOrder: LibraryState["sortOrder"],
@@ -186,6 +197,13 @@ interface LibraryState {
   addToAlbum: (albumId: string, itemIds?: string[]) => Promise<void>;
   removeFromAlbum: (albumId: string, itemIds: string[]) => Promise<void>;
   loadAlbumItems: (albumId: string) => Promise<void>;
+
+  // Actions - Smart Albums
+  loadSmartAlbums: () => Promise<void>;
+  createSmartAlbum: (name: string) => Promise<void>;
+  renameSmartAlbum: (albumId: string, name: string) => Promise<void>;
+  deleteSmartAlbum: (albumId: string) => Promise<void>;
+  openSmartAlbum: (albumId: string) => Promise<void>;
 
   // Actions - Duplicates
   scanDuplicates: () => Promise<void>;
@@ -225,6 +243,8 @@ function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
     albumId: state.activeAlbum ?? undefined,
     query: state.query.trim() || undefined,
     sourcePath: state.activeSource ?? undefined,
+    dateFrom: state.dateFrom ?? undefined,
+    dateTo: state.dateTo ?? undefined,
     sortBy: state.sortBy,
     sortOrder: state.sortOrder,
     rating: state.minRating ?? undefined,
@@ -399,6 +419,8 @@ export const useLibraryStore = create<LibraryState>()(
       // Initial State
       items: [],
       albums: [],
+      albumOverviews: [],
+      smartAlbums: [],
       tags: [],
       duplicates: [],
       folders: [],
@@ -414,7 +436,10 @@ export const useLibraryStore = create<LibraryState>()(
       showInspector: true,
       sidebarOpen: true,
       activeAlbum: null,
+      activeSmartAlbum: null,
       activeSource: null,
+      dateFrom: null,
+      dateTo: null,
       screen: "Library",
       viewerScope: "library",
       minRating: null,
@@ -486,13 +511,26 @@ export const useLibraryStore = create<LibraryState>()(
             return;
           }
 
-          const [pageResult, albums, tags, folders] = await Promise.all([
-            tauri.library.getItems(dto),
-            tauri.albums.get(),
-            tauri.albums.getTags(),
-            tauri.library.getFolders(),
-          ]);
+          const [pageResult, albumOverviews, smartAlbums, tags, folders] =
+            await Promise.all([
+              tauri.library.getItems(dto),
+              tauri.albums.getOverviews(),
+              tauri.smartAlbums.get(),
+              tauri.albums.getTags(),
+              tauri.library.getFolders(),
+            ]);
           if (generation !== libraryLoadGeneration) return;
+          // Cards only need counts and a bounded cover set. The full
+          // membership is fetched when an album is opened.
+          const albums: Album[] = albumOverviews.map((album) => ({
+            id: album.id,
+            name: album.name,
+            colorIndex: album.colorIndex,
+            itemCount: album.itemCount,
+            itemIds: [],
+            createdAt: album.createdAt,
+            updatedAt: album.updatedAt,
+          }));
           // Supports the old array response in browser fixtures while native
           // callers use the bounded page contract.
           const page: LibraryItemsPage = Array.isArray(pageResult)
@@ -502,6 +540,8 @@ export const useLibraryStore = create<LibraryState>()(
           set({
             items: page.items,
             albums,
+            albumOverviews,
+            smartAlbums,
             tags,
             folders,
             busy: false,
@@ -737,6 +777,7 @@ export const useLibraryStore = create<LibraryState>()(
         set({
           filter,
           activeAlbum: filter === "Favorites" ? null : get().activeAlbum,
+          activeSmartAlbum: null,
         });
         get().refreshDerived();
         void get().loadLibrary();
@@ -748,25 +789,35 @@ export const useLibraryStore = create<LibraryState>()(
         // Toggle off when the active source is clicked again; picking a source
         // leaves any album so the two scopes never stack invisibly.
         const next = get().activeSource === path ? null : path;
-        set({ activeSource: next, activeAlbum: null });
+        set({
+          activeSource: next,
+          activeAlbum: null,
+          activeSmartAlbum: null,
+        });
+        get().refreshDerived();
+        void get().loadLibrary();
+      },
+
+      setDateRange: (dateFrom, dateTo) => {
+        set({ dateFrom, dateTo, activeSmartAlbum: null });
         get().refreshDerived();
         void get().loadLibrary();
       },
 
       setMinRating: (rating) => {
-        set({ minRating: rating });
+        set({ minRating: rating, activeSmartAlbum: null });
         get().refreshDerived();
         void get().loadLibrary();
       },
 
       setColorLabelFilter: (colorLabel) => {
-        set({ colorLabelFilter: colorLabel });
+        set({ colorLabelFilter: colorLabel, activeSmartAlbum: null });
         get().refreshDerived();
         void get().loadLibrary();
       },
 
       setCameraFilter: (camera: string | null) => {
-        set({ cameraFilter: camera });
+        set({ cameraFilter: camera, activeSmartAlbum: null });
         get().refreshDerived();
         if (cameraLensReloadTimer) clearTimeout(cameraLensReloadTimer);
         cameraLensReloadTimer = setTimeout(() => {
@@ -776,7 +827,7 @@ export const useLibraryStore = create<LibraryState>()(
       },
 
       setLensFilter: (lens: string | null) => {
-        set({ lensFilter: lens });
+        set({ lensFilter: lens, activeSmartAlbum: null });
         get().refreshDerived();
         if (cameraLensReloadTimer) clearTimeout(cameraLensReloadTimer);
         cameraLensReloadTimer = setTimeout(() => {
@@ -786,7 +837,7 @@ export const useLibraryStore = create<LibraryState>()(
       },
 
       setQuery: (query) => {
-        set({ query });
+        set({ query, activeSmartAlbum: null });
         get().refreshDerived();
         if (queryReloadTimer) clearTimeout(queryReloadTimer);
         queryReloadTimer = setTimeout(() => {
@@ -817,7 +868,12 @@ export const useLibraryStore = create<LibraryState>()(
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 
       setActiveAlbum: (albumId) => {
-        set({ activeAlbum: albumId, filter: "All", activeSource: null });
+        set({
+          activeAlbum: albumId,
+          activeSmartAlbum: null,
+          filter: "All",
+          activeSource: null,
+        });
         get().refreshDerived();
         void get().loadLibrary();
       },
@@ -1078,8 +1134,29 @@ export const useLibraryStore = create<LibraryState>()(
           return item && !item.hidden;
         }).length;
         const created = { ...album, itemIds: ids, itemCount: visibleCount };
+        const coverItems = ids
+          .map((id) => get().items.find((item) => item.id === id))
+          .filter(
+            (item): item is MediaItem =>
+              !!item &&
+              !item.hidden &&
+              (item.kind === "photo" || item.kind === "video"),
+          )
+          .slice(0, 4);
         set((s) => ({
           albums: [...s.albums, created],
+          albumOverviews: [
+            ...s.albumOverviews,
+            {
+              id: created.id,
+              name: created.name,
+              colorIndex: created.colorIndex,
+              createdAt: created.createdAt,
+              updatedAt: created.updatedAt,
+              itemCount: visibleCount,
+              coverItems,
+            },
+          ],
           items: s.items.map((item) =>
             ids.includes(item.id)
               ? {
@@ -1111,6 +1188,7 @@ export const useLibraryStore = create<LibraryState>()(
         // sync without a full library round-trip.
         set((s) => ({
           albums: s.albums.filter((a) => a.id !== albumId),
+          albumOverviews: s.albumOverviews.filter((a) => a.id !== albumId),
           items: s.items.map((item) =>
             item.albumIds?.includes(albumId)
               ? {
@@ -1128,6 +1206,9 @@ export const useLibraryStore = create<LibraryState>()(
         await tauri.albums.rename(albumId, name);
         set((s) => ({
           albums: s.albums.map((a) => (a.id === albumId ? { ...a, name } : a)),
+          albumOverviews: s.albumOverviews.map((a) =>
+            a.id === albumId ? { ...a, name } : a,
+          ),
         }));
       },
 
@@ -1160,6 +1241,14 @@ export const useLibraryStore = create<LibraryState>()(
               : item,
           ),
           albums: s.albums.map((album) =>
+            album.id === albumId
+              ? {
+                  ...album,
+                  itemCount: (album.itemCount || 0) + newlyAdded.length,
+                }
+              : album,
+          ),
+          albumOverviews: s.albumOverviews.map((album) =>
             album.id === albumId
               ? {
                   ...album,
@@ -1211,6 +1300,17 @@ export const useLibraryStore = create<LibraryState>()(
                 }
               : album,
           ),
+          albumOverviews: s.albumOverviews.map((album) =>
+            album.id === albumId
+              ? {
+                  ...album,
+                  itemCount: Math.max(
+                    0,
+                    (album.itemCount || 0) - removedIds.length,
+                  ),
+                }
+              : album,
+          ),
           // Removed photos are no longer visible in the open album, so don't
           // leave ghost selection or an inspector pointing at an absent tile.
           selectedIds:
@@ -1238,6 +1338,134 @@ export const useLibraryStore = create<LibraryState>()(
         set((s) => ({
           albumItems: { ...s.albumItems, [albumId]: items },
         }));
+      },
+
+      // Smart Albums save the validated filter definition, not item ids, so
+      // their membership follows metadata changes automatically.
+      loadSmartAlbums: async () => {
+        try {
+          const smartAlbums = await tauri.smartAlbums.get();
+          set({ smartAlbums });
+        } catch (error) {
+          get().showNotice(
+            `Could not load Smart Albums: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+      },
+
+      createSmartAlbum: async (name) => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        const state = get();
+        const kind =
+          state.filter === "Photos"
+            ? "photo"
+            : state.filter === "Videos"
+              ? "video"
+              : state.filter === "RAW"
+                ? "raw"
+                : undefined;
+        const filter: SmartAlbumFilter = {
+          kind,
+          favorite:
+            state.filter === "Favorites" ? true : undefined,
+          query: state.query.trim() || undefined,
+          dateFrom: state.dateFrom ?? undefined,
+          dateTo: state.dateTo ?? undefined,
+          sourcePath: state.activeSource ?? undefined,
+          rating: state.minRating ?? undefined,
+          colorLabel: state.colorLabelFilter ?? undefined,
+          camera: state.cameraFilter ?? undefined,
+          lens: state.lensFilter ?? undefined,
+          sortBy: state.sortBy,
+          sortOrder: state.sortOrder,
+        };
+        try {
+          const album = await tauri.smartAlbums.create(trimmed, filter);
+          set((s) => ({ smartAlbums: [...s.smartAlbums, album] }));
+          get().showNotice(`Saved Smart Album "${album.name}".`);
+        } catch (error) {
+          get().showNotice(
+            `Could not save Smart Album: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+      },
+
+      renameSmartAlbum: async (albumId, name) => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        try {
+          await tauri.smartAlbums.rename(albumId, trimmed);
+          set((s) => ({
+            smartAlbums: s.smartAlbums.map((album) =>
+              album.id === albumId ? { ...album, name: trimmed } : album,
+            ),
+          }));
+        } catch (error) {
+          get().showNotice(
+            `Could not rename Smart Album: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+      },
+
+      deleteSmartAlbum: async (albumId) => {
+        try {
+          await tauri.smartAlbums.delete(albumId);
+          set((s) => ({
+            smartAlbums: s.smartAlbums.filter((album) => album.id !== albumId),
+            activeSmartAlbum:
+              s.activeSmartAlbum === albumId ? null : s.activeSmartAlbum,
+          }));
+          get().showNotice("Smart Album deleted. Photos were not changed.");
+        } catch (error) {
+          get().showNotice(
+            `Could not delete Smart Album: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+      },
+
+      openSmartAlbum: async (albumId) => {
+        const album = get().smartAlbums.find((entry) => entry.id === albumId);
+        if (!album) {
+          get().showNotice("That Smart Album no longer exists.");
+          return;
+        }
+        const filter = album.filter;
+        const kindFilter: Filter =
+          filter.favorite === true
+            ? "Favorites"
+            : filter.kind === "photo"
+              ? "Photos"
+              : filter.kind === "video"
+                ? "Videos"
+                : filter.kind === "raw"
+                  ? "RAW"
+                  : "All";
+        set({
+          activeAlbum: null,
+          activeSmartAlbum: albumId,
+          filter: kindFilter,
+          query: filter.query ?? "",
+          activeSource: filter.sourcePath ?? null,
+          dateFrom: filter.dateFrom ?? null,
+          dateTo: filter.dateTo ?? null,
+          minRating: filter.rating ?? null,
+          colorLabelFilter: filter.colorLabel ?? null,
+          cameraFilter: filter.camera ?? null,
+          lensFilter: filter.lens ?? null,
+          sortBy: filter.sortBy ?? get().sortBy,
+          sortOrder: filter.sortOrder ?? get().sortOrder,
+        });
+        get().refreshDerived();
+        await get().loadLibrary();
       },
 
       // Duplicates
@@ -1348,7 +1576,13 @@ export const useMinRating = () => useLibraryStore((s) => s.minRating);
 export const useColorLabelFilter = () => useLibraryStore((s) => s.colorLabelFilter);
 export const useCameraFilter = () => useLibraryStore((s) => s.cameraFilter);
 export const useLensFilter = () => useLibraryStore((s) => s.lensFilter);
+export const useDateFrom = () => useLibraryStore((s) => s.dateFrom);
+export const useDateTo = () => useLibraryStore((s) => s.dateTo);
 export const useAlbums = () => useLibraryStore((s) => s.albums);
+export const useAlbumOverviews = () => useLibraryStore((s) => s.albumOverviews);
+export const useSmartAlbums = () => useLibraryStore((s) => s.smartAlbums);
+export const useActiveSmartAlbum = () =>
+  useLibraryStore((s) => s.activeSmartAlbum);
 export const useDuplicates = () => useLibraryStore((s) => s.duplicates);
 export const useBusy = () => useLibraryStore((s) => s.busy);
 export const useProgress = () => useLibraryStore((s) => s.progress);

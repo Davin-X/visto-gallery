@@ -53,6 +53,93 @@ export interface LibraryItemsPage {
   totalCount: number;
 }
 
+/** Bounded album-card data. Full membership is fetched only on open. */
+export interface AlbumOverview {
+  id: string;
+  name: string;
+  colorIndex: number;
+  createdAt: number;
+  updatedAt: number;
+  itemCount: number;
+  coverItems: MediaItem[];
+}
+
+/**
+ * A saved Smart Album is a validated filter definition, never SQL or a copied
+ * item list. Unknown fields are rejected by the backend.
+ */
+export interface SmartAlbumFilter {
+  kind?: "photo" | "video" | "raw";
+  favorite?: boolean;
+  query?: string;
+  tags?: string[];
+  dateFrom?: number;
+  dateTo?: number;
+  sourcePath?: string;
+  rating?: number;
+  colorLabel?: string;
+  camera?: string;
+  lens?: string;
+  sortBy?: "capturedAt" | "modifiedAt" | "name" | "size" | "kind";
+  sortOrder?: "asc" | "desc";
+}
+
+export interface SmartAlbum {
+  id: string;
+  name: string;
+  filter: SmartAlbumFilter;
+  itemCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface BackupInfo {
+  path: string;
+  version: number;
+  appVersion: string;
+  createdAt: number;
+  itemCount: number;
+  albumCount: number;
+  tagCount: number;
+  folderCount: number;
+}
+
+export interface RestoreResult {
+  backup: BackupInfo;
+  preRestoreBackup: string;
+  missingItemCount: number;
+  missingPaths: string[];
+  missingRoots: string[];
+}
+
+export interface RootPathMappingPreview {
+  oldRoot: string;
+  newRoot: string;
+  itemCount: number;
+  rootCount: number;
+  samplePaths: string[];
+  conflictingPaths: string[];
+  existingNewPathCount: number;
+}
+
+export interface RootPathMappingResult {
+  oldRoot: string;
+  newRoot: string;
+  updatedItemCount: number;
+}
+
+export interface FinderTagFailure {
+  path: string;
+  error: string;
+}
+
+export interface FinderTagCopyResult {
+  updated: number;
+  skipped: number;
+  failed: FinderTagFailure[];
+  tagsByPath: Record<string, string[]>;
+}
+
 export interface ThumbnailRequest {
   itemId: string;
   size: 64 | 128 | 256 | 512 | 1024;
