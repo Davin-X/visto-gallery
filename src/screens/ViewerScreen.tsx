@@ -80,9 +80,6 @@ function FloatingVideoControls({
   minimized,
   onToggleMinimized,
   videoName,
-  onMovePointerDown,
-  onMovePointerMove,
-  onMovePointerEnd,
   onMoveKeyDown,
 }: {
   onPrevious: () => boolean;
@@ -92,9 +89,6 @@ function FloatingVideoControls({
   minimized: boolean;
   onToggleMinimized: () => void;
   videoName: string;
-  onMovePointerDown: React.PointerEventHandler<HTMLButtonElement>;
-  onMovePointerMove: React.PointerEventHandler<HTMLButtonElement>;
-  onMovePointerEnd: React.PointerEventHandler<HTMLButtonElement>;
   onMoveKeyDown: React.KeyboardEventHandler<HTMLButtonElement>;
 }) {
   const playing = usePlaybackStore((s) => s.playing);
@@ -114,10 +108,6 @@ function FloatingVideoControls({
       <button
         type="button"
         className="floating-overlay-drag"
-        onPointerDown={onMovePointerDown}
-        onPointerMove={onMovePointerMove}
-        onPointerUp={onMovePointerEnd}
-        onPointerCancel={onMovePointerEnd}
         onKeyDown={onMoveKeyDown}
         aria-label="Move floating video"
         title="Drag to move video"
@@ -279,7 +269,9 @@ function ViewerScreen(props: ViewerScreenProps) {
     startY: number;
     startLeft: number;
     startTop: number;
+    moved: boolean;
   } | null>(null);
+  const suppressFloatingClickRef = useRef(false);
   const [floatingPosition, setFloatingPosition] = useState<{
     left: number;
     top: number;
@@ -310,56 +302,78 @@ function ViewerScreen(props: ViewerScreenProps) {
     };
   }, []);
 
-  const handleFloatingPointerDown: React.PointerEventHandler<
-    HTMLButtonElement
-  > = useCallback(
-    (event) => {
-      const stage = stageRef.current;
-      const frame = floatingFrameRef.current;
-      if (!stage || !frame) return;
-      event.preventDefault();
-      const stageRect = stage.getBoundingClientRect();
-      const frameRect = frame.getBoundingClientRect();
-      const position = clampFloatingPosition(
-        frameRect.left - stageRect.left,
-        frameRect.top - stageRect.top,
-      );
-      floatingDragRef.current = {
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
-        startLeft: position.left,
-        startTop: position.top,
-      };
-      setFloatingPosition(position);
-      event.currentTarget.setPointerCapture(event.pointerId);
-    },
-    [clampFloatingPosition],
-  );
+  const handleFloatingPointerDown: React.PointerEventHandler<HTMLDivElement> =
+    useCallback(
+      (event) => {
+        const stage = stageRef.current;
+        const frame = floatingFrameRef.current;
+        if (!stage || !frame) return;
+        const target = event.target;
+        if (
+          target instanceof Element &&
+          target.closest(
+            "button:not(.floating-overlay-drag), input, select, textarea, a, [role='slider']",
+          )
+        ) {
+          return;
+        }
+        const stageRect = stage.getBoundingClientRect();
+        const frameRect = frame.getBoundingClientRect();
+        const position = clampFloatingPosition(
+          frameRect.left - stageRect.left,
+          frameRect.top - stageRect.top,
+        );
+        floatingDragRef.current = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          startLeft: position.left,
+          startTop: position.top,
+          moved: false,
+        };
+        setFloatingPosition(position);
+      },
+      [clampFloatingPosition],
+    );
 
-  const handleFloatingPointerMove: React.PointerEventHandler<
-    HTMLButtonElement
-  > = useCallback(
-    (event) => {
+  const handleFloatingPointerMove: React.PointerEventHandler<HTMLDivElement> =
+    useCallback(
+      (event) => {
+        const drag = floatingDragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        const deltaX = event.clientX - drag.startX;
+        const deltaY = event.clientY - drag.startY;
+        if (!drag.moved && Math.hypot(deltaX, deltaY) < 3) return;
+        drag.moved = true;
+        setFloatingPosition(
+          clampFloatingPosition(
+            drag.startLeft + deltaX,
+            drag.startTop + deltaY,
+          ),
+        );
+      },
+      [clampFloatingPosition],
+    );
+
+  const handleFloatingPointerEnd: React.PointerEventHandler<HTMLDivElement> =
+    useCallback((event) => {
       const drag = floatingDragRef.current;
-      if (!drag || drag.pointerId !== event.pointerId) return;
-      setFloatingPosition(
-        clampFloatingPosition(
-          drag.startLeft + event.clientX - drag.startX,
-          drag.startTop + event.clientY - drag.startY,
-        ),
-      );
-    },
-    [clampFloatingPosition],
-  );
+      if (drag?.pointerId === event.pointerId) {
+        suppressFloatingClickRef.current =
+          drag.moved &&
+          event.target instanceof Node &&
+          !!floatingFrameRef.current?.contains(event.target);
+        floatingDragRef.current = null;
+      }
+    }, []);
 
-  const handleFloatingPointerEnd: React.PointerEventHandler<
-    HTMLButtonElement
-  > = useCallback((event) => {
-    if (floatingDragRef.current?.pointerId === event.pointerId) {
-      floatingDragRef.current = null;
-    }
-  }, []);
+  const handleFloatingClickCapture: React.MouseEventHandler<HTMLDivElement> =
+    useCallback((event) => {
+      if (!suppressFloatingClickRef.current) return;
+      suppressFloatingClickRef.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+    }, []);
 
   const handleFloatingKeyDown: React.KeyboardEventHandler<
     HTMLButtonElement
@@ -678,6 +692,21 @@ function ViewerScreen(props: ViewerScreenProps) {
       <div
         ref={stageRef}
         className="viewer-stage"
+        onPointerMove={
+          selected.kind !== "video" && props.active
+            ? handleFloatingPointerMove
+            : undefined
+        }
+        onPointerUp={
+          selected.kind !== "video" && props.active
+            ? handleFloatingPointerEnd
+            : undefined
+        }
+        onPointerCancel={
+          selected.kind !== "video" && props.active
+            ? handleFloatingPointerEnd
+            : undefined
+        }
         onMouseMove={() => flashHints()}
         onDoubleClick={(e) => {
           if ((e.target as HTMLElement).closest("button, input")) return;
@@ -763,6 +792,16 @@ function ViewerScreen(props: ViewerScreenProps) {
                 ? "viewer-video-frame-focused"
                 : `viewer-video-frame-floating${floatingMinimized ? " viewer-video-frame-floating-minimized" : ""}`
             }`}
+            onPointerDown={
+              selected.kind !== "video" && props.active
+                ? handleFloatingPointerDown
+                : undefined
+            }
+            onClickCapture={
+              selected.kind !== "video" && props.active
+                ? handleFloatingClickCapture
+                : undefined
+            }
             style={
               floatingPosition
                 ? {
@@ -806,9 +845,6 @@ function ViewerScreen(props: ViewerScreenProps) {
                   props.onExpandBackgroundVideo(playbackItem.id)
                 }
                 onStop={props.onStopBackgroundVideo}
-                onMovePointerDown={handleFloatingPointerDown}
-                onMovePointerMove={handleFloatingPointerMove}
-                onMovePointerEnd={handleFloatingPointerEnd}
                 onMoveKeyDown={handleFloatingKeyDown}
               />
             )}
