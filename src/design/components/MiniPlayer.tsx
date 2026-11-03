@@ -1,6 +1,21 @@
 import { usePlaybackStore } from "../../engine/stores/usePlaybackStore";
 import { formatDuration } from "../../engine/utils/time";
-import { PauseIcon, PlayIcon, VolumeIcon } from "./icons";
+import {
+  PauseIcon,
+  PictureInPictureIcon,
+  PlayIcon,
+  VolumeIcon,
+} from "./icons";
+
+type WebKitPresentationVideo = HTMLVideoElement & {
+  webkitPresentationMode?: "inline" | "picture-in-picture";
+  webkitSetPresentationMode?: (
+    mode: "inline" | "picture-in-picture",
+  ) => void;
+  webkitSupportsPresentationMode?: (
+    mode: "inline" | "picture-in-picture",
+  ) => boolean;
+};
 
 /**
  * Compact "now playing" bar shown when the user leaves the Viewer while a
@@ -10,9 +25,13 @@ import { PauseIcon, PlayIcon, VolumeIcon } from "./icons";
 export function MiniPlayer({
   onExpand,
   onClose,
+  onPrevious,
+  onNext,
 }: {
   onExpand: () => void;
   onClose: () => void;
+  onPrevious: () => boolean;
+  onNext: () => boolean;
 }) {
   const itemId = usePlaybackStore((s) => s.itemId);
   const name = usePlaybackStore((s) => s.name);
@@ -23,6 +42,28 @@ export function MiniPlayer({
   const toggle = usePlaybackStore((s) => s.toggle);
   const seek = usePlaybackStore((s) => s.seek);
   const toggleMute = usePlaybackStore((s) => s.toggleMute);
+
+  const togglePip = async () => {
+    const video = usePlaybackStore.getState().element;
+    if (!video) return;
+    try {
+      const webkitVideo = video as WebKitPresentationVideo;
+      if (webkitVideo.webkitSupportsPresentationMode?.("picture-in-picture")) {
+        webkitVideo.webkitSetPresentationMode?.(
+          webkitVideo.webkitPresentationMode === "picture-in-picture"
+            ? "inline"
+            : "picture-in-picture",
+        );
+      } else if (document.pictureInPictureElement === video) {
+        await document.exitPictureInPicture();
+      } else if (typeof video.requestPictureInPicture === "function") {
+        await video.requestPictureInPicture();
+      }
+    } catch (err) {
+      if (import.meta.env.DEV)
+        console.warn("Picture-in-picture unavailable", err);
+    }
+  };
 
   if (!itemId) return null;
 
@@ -43,11 +84,31 @@ export function MiniPlayer({
       <button
         type="button"
         className="mini-player-button"
+        onClick={onPrevious}
+        aria-label="Previous video"
+        title="Previous video"
+      >
+        ‹
+      </button>
+
+      <button
+        type="button"
+        className="mini-player-button"
         onClick={toggle}
         aria-label={playing ? "Pause" : "Play"}
         title={playing ? "Pause" : "Play"}
       >
         {playing ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
+      </button>
+
+      <button
+        type="button"
+        className="mini-player-button"
+        onClick={onNext}
+        aria-label="Next video"
+        title="Next video"
+      >
+        ›
       </button>
 
       <input
@@ -69,6 +130,16 @@ export function MiniPlayer({
         title={muted ? "Unmute" : "Mute"}
       >
         <VolumeIcon size={14} muted={muted} />
+      </button>
+
+      <button
+        type="button"
+        className="mini-player-button"
+        onClick={togglePip}
+        aria-label="Picture in picture"
+        title="Picture in picture"
+      >
+        <PictureInPictureIcon size={14} />
       </button>
 
       <button

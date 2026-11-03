@@ -309,6 +309,19 @@ export function FullscreenIcon({
   );
 }
 
+export function PictureInPictureIcon({
+  size = 15,
+  className = "",
+  strokeWidth = 1.8,
+}: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <rect x="12" y="12" width="8" height="6" />
+    </Svg>
+  );
+}
+
 export function VolumeIcon({
   size = 15,
   className = "",

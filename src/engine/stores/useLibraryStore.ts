@@ -385,14 +385,16 @@ function computeDerived(state: LibraryState) {
   const playable = visible.filter(
     (item) => item.kind === "photo" || item.kind === "video",
   );
-  const viewerPool =
-    viewerScope === "hidden"
-      ? hiddenItems
-      : sorted.filter((item) => !item.hidden);
-  const viewer = viewerPool.filter(
-    (item) =>
-      item.kind === "photo" || item.kind === "video" || item.kind === "raw",
-  );
+  const viewerPool = viewerScope === "hidden" ? hiddenItems : visible;
+  // viewerItems follows the library filter so the filmstrip and navigation
+  // are predictable: Photos→photos, Videos→videos, RAW→raw, All→mixed.
+  const viewer = viewerPool.filter((item) => {
+    if (filter === "Photos" && item.kind !== "photo") return false;
+    if (filter === "Videos" && item.kind !== "video") return false;
+    if (filter === "RAW" && item.kind !== "raw") return false;
+    if (filter === "Favorites" && !item.favorite) return false;
+    return true;
+  });
   const viewerSelected =
     viewer.find((item) => item.id === inspectedId) || viewer[0] || null;
   const currentIndex = Math.max(

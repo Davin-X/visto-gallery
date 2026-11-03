@@ -11,8 +11,11 @@ import {
   FullscreenIcon,
   HeartIcon,
   MinusIcon,
+  PauseIcon,
   PlusIcon,
+  PlayIcon,
   RotateIcon,
+  VolumeIcon,
   ViewerIcon,
 } from "../design/components/icons";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
@@ -24,6 +27,7 @@ import {
   draftTransformStyle,
 } from "../engine/stores/useEditStore";
 import { useSlideshowStore } from "../engine/stores/useSlideshowStore";
+import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { tauri, thumbnailToDataUrl } from "../engine/commands/tauri";
 import {
   formatBytesSimple,
@@ -37,11 +41,17 @@ interface ViewerScreenProps {
   active: boolean;
   items: MediaItem[];
   selected: MediaItem | null;
+  playbackItem: MediaItem | null;
+  queueAutoPlayItemId: string | null;
   zoom: number;
   fitMode: "fit" | "actual" | "fill";
   rotation: number;
   flipX: boolean;
   onNavigate: (delta: number) => void;
+  onNextVideo: () => boolean;
+  onPreviousVideo: () => boolean;
+  onExpandBackgroundVideo: (itemId: string) => void;
+  onStopBackgroundVideo: () => void;
   onSetPhoto: (id: string) => void;
   onSetZoom: (zoom: number) => void;
   onZoomIn: () => void;
@@ -60,8 +70,138 @@ interface ViewerScreenProps {
   assetUrl: (path: string) => string;
 }
 
+function FloatingVideoControls({
+  onPrevious,
+  onNext,
+  onExpand,
+  onStop,
+  onMovePointerDown,
+  onMovePointerMove,
+  onMovePointerEnd,
+  onMoveKeyDown,
+}: {
+  onPrevious: () => boolean;
+  onNext: () => boolean;
+  onExpand: () => void;
+  onStop: () => void;
+  onMovePointerDown: React.PointerEventHandler<HTMLButtonElement>;
+  onMovePointerMove: React.PointerEventHandler<HTMLButtonElement>;
+  onMovePointerEnd: React.PointerEventHandler<HTMLButtonElement>;
+  onMoveKeyDown: React.KeyboardEventHandler<HTMLButtonElement>;
+}) {
+  const playing = usePlaybackStore((s) => s.playing);
+  const time = usePlaybackStore((s) => s.time);
+  const duration = usePlaybackStore((s) => s.duration);
+  const muted = usePlaybackStore((s) => s.muted);
+  const toggle = usePlaybackStore((s) => s.toggle);
+  const seek = usePlaybackStore((s) => s.seek);
+  const toggleMute = usePlaybackStore((s) => s.toggleMute);
+
+  return (
+    <div
+      className="floating-overlay-bar"
+      role="group"
+      aria-label="Background video controls"
+    >
+      <button
+        type="button"
+        className="floating-overlay-drag"
+        onPointerDown={onMovePointerDown}
+        onPointerMove={onMovePointerMove}
+        onPointerUp={onMovePointerEnd}
+        onPointerCancel={onMovePointerEnd}
+        onKeyDown={onMoveKeyDown}
+        aria-label="Move floating video"
+        title="Drag to move video"
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <circle cx="4" cy="3" r="1" />
+          <circle cx="8" cy="3" r="1" />
+          <circle cx="4" cy="6" r="1" />
+          <circle cx="8" cy="6" r="1" />
+          <circle cx="4" cy="9" r="1" />
+          <circle cx="8" cy="9" r="1" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        className="floating-overlay-prev"
+        onClick={onPrevious}
+        aria-label="Previous video"
+        title="Previous video"
+      >
+        ⟨
+      </button>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={playing ? "Pause" : "Play"}
+        title={playing ? "Pause" : "Play"}
+      >
+        {playing ? <PauseIcon size={11} /> : <PlayIcon size={11} />}
+      </button>
+      <input
+        type="range"
+        className="floating-overlay-seek"
+        min={0}
+        max={duration || 0}
+        step={0.05}
+        value={Math.min(time, duration || 0)}
+        onChange={(e) => seek(Number(e.target.value))}
+        aria-label="Seek"
+      />
+      <span className="floating-overlay-time">
+        {formatDuration(time)} / {formatDuration(duration)}
+      </span>
+      <button
+        type="button"
+        className="floating-overlay-next"
+        onClick={onNext}
+        aria-label="Next video"
+        title="Next video"
+      >
+        ⟩
+      </button>
+      <button
+        type="button"
+        className="floating-overlay-mute"
+        onClick={toggleMute}
+        aria-label={muted ? "Unmute" : "Mute"}
+        title={muted ? "Unmute" : "Mute"}
+      >
+        <VolumeIcon size={11} muted={muted} />
+      </button>
+      <button
+        type="button"
+        className="floating-overlay-expand"
+        onClick={onExpand}
+        aria-label="Return to full video"
+        title="Return to full video"
+      >
+        ↥
+      </button>
+      <button
+        type="button"
+        className="floating-overlay-close"
+        onClick={onStop}
+        aria-label="Stop background video"
+        title="Stop background video"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
 function ViewerScreen(props: ViewerScreenProps) {
-  const selected = props.selected;
+  const playbackItem = props.playbackItem;
+  const selected = props.selected ?? playbackItem;
   const draftTransforms = useDraftTransforms();
   // Folder context: the pill shows the containing folder, the subtle line the
   // full path. Deriving both from the media path keeps it honest (no fake
@@ -84,6 +224,19 @@ function ViewerScreen(props: ViewerScreenProps) {
   );
   const hideTimerRef = useRef<number | null>(null);
   const stripRef = useRef<HTMLDivElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const floatingFrameRef = useRef<HTMLDivElement | null>(null);
+  const floatingDragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startLeft: number;
+    startTop: number;
+  } | null>(null);
+  const [floatingPosition, setFloatingPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
   const programmaticScrollRef = useRef(false);
   const stripWindowSize = 50;
   const selectedIndex = props.items.findIndex(
@@ -94,6 +247,119 @@ function ViewerScreen(props: ViewerScreenProps) {
     (props.rotation +
       (draftTransforms.get(selected?.id ?? "")?.rotation || 0)) %
     360;
+
+  const clampFloatingPosition = useCallback((left: number, top: number) => {
+    const stage = stageRef.current;
+    const frame = floatingFrameRef.current;
+    if (!stage || !frame) return { left, top };
+    return {
+      left: Math.max(0, Math.min(left, stage.clientWidth - frame.offsetWidth)),
+      top: Math.max(0, Math.min(top, stage.clientHeight - frame.offsetHeight)),
+    };
+  }, []);
+
+  const handleFloatingPointerDown: React.PointerEventHandler<
+    HTMLButtonElement
+  > = useCallback(
+    (event) => {
+      const stage = stageRef.current;
+      const frame = floatingFrameRef.current;
+      if (!stage || !frame) return;
+      event.preventDefault();
+      const stageRect = stage.getBoundingClientRect();
+      const frameRect = frame.getBoundingClientRect();
+      const position = clampFloatingPosition(
+        frameRect.left - stageRect.left,
+        frameRect.top - stageRect.top,
+      );
+      floatingDragRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        startLeft: position.left,
+        startTop: position.top,
+      };
+      setFloatingPosition(position);
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    [clampFloatingPosition],
+  );
+
+  const handleFloatingPointerMove: React.PointerEventHandler<
+    HTMLButtonElement
+  > = useCallback(
+    (event) => {
+      const drag = floatingDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      setFloatingPosition(
+        clampFloatingPosition(
+          drag.startLeft + event.clientX - drag.startX,
+          drag.startTop + event.clientY - drag.startY,
+        ),
+      );
+    },
+    [clampFloatingPosition],
+  );
+
+  const handleFloatingPointerEnd: React.PointerEventHandler<
+    HTMLButtonElement
+  > = useCallback((event) => {
+    if (floatingDragRef.current?.pointerId === event.pointerId) {
+      floatingDragRef.current = null;
+    }
+  }, []);
+
+  const handleFloatingKeyDown: React.KeyboardEventHandler<
+    HTMLButtonElement
+  > = useCallback(
+    (event) => {
+      const offsets: Record<string, [number, number]> = {
+        ArrowLeft: [-16, 0],
+        ArrowRight: [16, 0],
+        ArrowUp: [0, -16],
+        ArrowDown: [0, 16],
+      };
+      const offset = offsets[event.key];
+      if (!offset) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const stage = stageRef.current;
+      const frame = floatingFrameRef.current;
+      if (!stage || !frame) return;
+      const stageRect = stage.getBoundingClientRect();
+      const frameRect = frame.getBoundingClientRect();
+      const current =
+        floatingPosition ??
+        clampFloatingPosition(
+          frameRect.left - stageRect.left,
+          frameRect.top - stageRect.top,
+        );
+      setFloatingPosition(
+        clampFloatingPosition(
+          current.left + offset[0],
+          current.top + offset[1],
+        ),
+      );
+    },
+    [clampFloatingPosition, floatingPosition],
+  );
+
+  useEffect(() => {
+    if (!floatingPosition) return;
+    const stage = stageRef.current;
+    const frame = floatingFrameRef.current;
+    if (!stage || !frame) return;
+    const observer = new ResizeObserver(() => {
+      setFloatingPosition((position) =>
+        position
+          ? clampFloatingPosition(position.left, position.top)
+          : position,
+      );
+    });
+    observer.observe(stage);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [floatingPosition !== null, clampFloatingPosition]);
 
   // Shortcut hints are shown on open and whenever the pointer moves over the
   // stage, then fade away after a short pause so the frame stays clean.
@@ -358,6 +624,7 @@ function ViewerScreen(props: ViewerScreenProps) {
         </div>
       </div>
       <div
+        ref={stageRef}
         className="viewer-stage"
         onMouseMove={() => flashHints()}
         onDoubleClick={(e) => {
@@ -388,17 +655,7 @@ function ViewerScreen(props: ViewerScreenProps) {
         >
           ‹
         </button>
-        {selected.kind === "video" ? (
-          <VideoPlayer
-            itemId={selected.id}
-            active={!!props.active}
-            src={props.assetUrl(selected.path)}
-            path={selected.path}
-            name={selected.name}
-            onFullscreen={() => void props.onToggleFullscreen()}
-            onNext={() => props.onNavigate(1)}
-          />
-        ) : selected.kind === "photo" ? (
+        {selected.kind === "photo" ? (
           <img
             key={selected.id}
             src={props.assetUrl(selected.path)}
@@ -439,10 +696,65 @@ function ViewerScreen(props: ViewerScreenProps) {
                 .join(" "),
             }}
           />
-        ) : (
+        ) : selected.kind !== "video" ? (
           <div className="raw-viewer">
             <b>{selected.extension.toUpperCase()}</b>
             <span>RAW preview requires native backend</span>
+          </div>
+        ) : null}
+        {playbackItem && (
+          <div
+            ref={floatingFrameRef}
+            key="playback-video"
+            className={`viewer-video-frame ${
+              selected.kind === "video"
+                ? "viewer-video-frame-focused"
+                : "viewer-video-frame-floating"
+            }`}
+            style={
+              floatingPosition
+                ? {
+                    left: floatingPosition.left,
+                    top: floatingPosition.top,
+                    right: "auto",
+                    bottom: "auto",
+                  }
+                : undefined
+            }
+          >
+            <VideoPlayer
+              itemId={playbackItem.id}
+              active={!!props.active}
+              src={props.assetUrl(playbackItem.path)}
+              path={playbackItem.path}
+              name={playbackItem.name}
+              compact={selected.kind !== "video" || !props.active}
+              forceAutoPlay={
+                props.queueAutoPlayItemId === playbackItem.id
+              }
+              onFullscreen={() => {
+                if (selected.kind === "video") {
+                  props.onToggleFullscreen();
+                } else {
+                  props.onExpandBackgroundVideo(playbackItem.id);
+                }
+              }}
+              onNext={props.onNextVideo}
+            />
+            {selected.kind !== "video" && props.active && (
+              <FloatingVideoControls
+                onPrevious={props.onPreviousVideo}
+                onNext={props.onNextVideo}
+                onExpand={() =>
+                  props.onExpandBackgroundVideo(playbackItem.id)
+                }
+                onStop={props.onStopBackgroundVideo}
+                onMovePointerDown={handleFloatingPointerDown}
+                onMovePointerMove={handleFloatingPointerMove}
+                onMovePointerEnd={handleFloatingPointerEnd}
+                onMoveKeyDown={handleFloatingKeyDown}
+              />
+            )}
           </div>
         )}
         <button

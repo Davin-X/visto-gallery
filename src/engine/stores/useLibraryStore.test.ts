@@ -61,7 +61,7 @@ function makeItem(
   id: string,
   name: string,
   favorite = false,
-  kind: "photo" | "video" = "photo",
+  kind: "photo" | "video" | "raw" = "photo",
 ): MediaItem {
   // Fixed timestamp keeps sort order deterministic across runs; Date.now()
   // resolution differs per call and made the default (desc by capturedAt)
@@ -114,6 +114,43 @@ test("setQuery narrows visible items", () => {
   useLibraryStore.getState().setQuery("sunset");
   expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual([
     "a",
+  ]);
+});
+
+test("viewer filmstrip follows media category and the active browsing scope", () => {
+  const photo = makeItem("photo", "photo.jpg");
+  const video = makeItem("video", "clip.mp4", false, "video");
+  const raw = makeItem("raw", "capture.cr3", false, "raw");
+  const albumPhoto = {
+    ...makeItem("album-photo", "trip-photo.jpg"),
+    albumIds: ["album-1"],
+  };
+  useLibraryStore.setState({
+    items: [photo, video, raw, albumPhoto],
+    inspectedId: photo.id,
+  });
+  useLibraryStore.getState().refreshDerived();
+  expect(useLibraryStore.getState().viewerItems.map((item) => item.id)).toEqual([
+    "album-photo",
+    "photo",
+    "video",
+    "raw",
+  ]);
+
+  useLibraryStore.setState({ filter: "Videos" });
+  useLibraryStore.getState().refreshDerived();
+  expect(useLibraryStore.getState().viewerItems.map((item) => item.id)).toEqual([
+    "video",
+  ]);
+
+  useLibraryStore.setState({
+    filter: "All",
+    activeAlbum: "album-1",
+    query: "trip",
+  });
+  useLibraryStore.getState().refreshDerived();
+  expect(useLibraryStore.getState().viewerItems.map((item) => item.id)).toEqual([
+    "album-photo",
   ]);
 });
 

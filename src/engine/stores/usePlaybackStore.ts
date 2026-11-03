@@ -50,20 +50,26 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
   lastVolume: 1,
 
   register: (element, meta) =>
-    set({ element, itemId: meta.itemId, name: meta.name }),
+    set((state) => ({
+      element,
+      itemId: meta.itemId,
+      name: meta.name,
+      // Re-registering the same item is a handoff between two mounted players
+      // (foreground ↔ background); the snapshot must survive so playback
+      // resumes where it left off. A different item starts a fresh snapshot.
+      ...(state.itemId === meta.itemId
+        ? {}
+        : { playing: false, time: 0, duration: 0 }),
+    })),
 
   unregister: (element) => {
     // A new video may have registered before the old one unmounted; only the
     // owner of the current reference is allowed to clear it.
     if (get().element !== element) return;
-    set({
-      element: null,
-      itemId: null,
-      name: "",
-      playing: false,
-      time: 0,
-      duration: 0,
-    });
+    // Keep the snapshot (item, position, playing state): the next player to
+    // mount for this item resumes from it. stop() and registering another
+    // item clear it.
+    set({ element: null });
   },
 
   sync: (patch) => set(patch),

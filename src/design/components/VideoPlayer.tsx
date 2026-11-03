@@ -30,6 +30,8 @@ function VideoPlayer({
   name,
   onFullscreen,
   onNext,
+  compact = false,
+  forceAutoPlay = false,
 }: {
   itemId: string;
   active?: boolean;
@@ -37,7 +39,10 @@ function VideoPlayer({
   path?: string;
   name?: string;
   onFullscreen?: () => void;
-  onNext?: () => void;
+  onNext?: () => boolean;
+  /** Render a clean thumbnail-like frame; transport actions are owned by PiP. */
+  compact?: boolean;
+  forceAutoPlay?: boolean;
 }) {
   const videoAutoPlay = useSettingsStore((s) => s.videoAutoPlay);
   const videoLoop = useSettingsStore((s) => s.videoLoop);
@@ -99,13 +104,26 @@ function VideoPlayer({
     const video = ref.current;
     if (!video) return;
     registerPlayback(video, { itemId, name: name || "Video" });
-    syncPlayback({
-      playing: !video.paused,
-      time: video.currentTime,
-      duration: Number.isFinite(video.duration) ? video.duration : 0,
-      muted: video.muted,
-      volume: video.volume,
-    });
+    const state = usePlaybackStore.getState();
+    const hasSnapshot = state.itemId === itemId && state.duration > 0;
+    if (hasSnapshot) {
+      // Handoff between foreground/background players: snapshot survived.
+      // Resume playback if it was playing; sync volume/muted from snapshot.
+      if (state.playing && video.paused) {
+        void video.play().catch(() => {});
+      }
+      video.volume = state.volume;
+      video.muted = state.muted;
+    } else {
+      // Fresh video: no snapshot to preserve; record current element state.
+      syncPlayback({
+        playing: !video.paused,
+        time: video.currentTime,
+        duration: Number.isFinite(video.duration) ? video.duration : 0,
+        muted: video.muted,
+        volume: video.volume,
+      });
+    }
     return () => unregisterPlayback(video);
   }, [itemId, name, registerPlayback, unregisterPlayback, syncPlayback]);
 
@@ -131,6 +149,11 @@ function VideoPlayer({
         // Already playing, just sync
       } else if (playing) {
         void video.play().catch(() => {});
+      } else {
+        // The snapshot says paused: defeat the autoPlay attribute so a
+        // handoff between players does not resume a paused video.
+        video.autoplay = false;
+        video.pause();
       }
       setPlaying(playing);
       setTime(time);
@@ -187,18 +210,16 @@ function VideoPlayer({
     const video = ref.current;
     if (!video) return;
     const onEnded = () => {
-      if (autoAdvance && active && onNext) {
-        // Auto-advance is a foreground affordance: background playback must
-        // not silently navigate the library while another tab is on screen.
-        onNext();
-      } else {
+      const advanced =
+        onNext && (compact || (autoAdvance && active)) ? onNext() : false;
+      if (advanced === false) {
         setPlaying(false);
         syncPlayback({ playing: false });
       }
     };
     video.addEventListener("ended", onEnded);
     return () => video.removeEventListener("ended", onEnded);
-  }, [src, autoAdvance, active, onNext, syncPlayback]);
+  }, [src, autoAdvance, active, compact, onNext, syncPlayback]);
 
   // Pause the video when the viewer is torn down so the Tauri webview does not
   // keep media alive briefly while React removes the element. Navigation away
@@ -462,21 +483,25 @@ function VideoPlayer({
     <>
       <video
         ref={ref}
-        className="viewer-video"
+        className={`viewer-video${compact ? " viewer-video-compact" : ""}`}
         src={src}
         title={name}
-        autoPlay={videoAutoPlay}
-        loop={videoLoop && !autoAdvance}
+        autoPlay={videoAutoPlay || forceAutoPlay}
+        loop={videoLoop && !autoAdvance && !compact}
         playsInline
         preload="metadata"
         onClick={handleVideoClick}
-        onDoubleClick={() => onFullscreen?.()}
+        onDoubleClick={(event) => {
+          event.stopPropagation();
+          onFullscreen?.();
+        }}
         onError={() => setFailed(true)}
         tabIndex={0}
       />
       {/* macOS hides a video's native control bar unless the pointer is over the
           frame, so playback gets a permanent bar of our own instead. */}
-      <div className="viewer-video-controls">
+      {!compact && (
+        <div className="viewer-video-controls">
         <button
           type="button"
           onClick={toggle}
@@ -603,6 +628,7 @@ function VideoPlayer({
           </button>
         )}
       </div>
+      )}
     </>
   );
 }

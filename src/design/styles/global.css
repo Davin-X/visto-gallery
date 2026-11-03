@@ -3288,7 +3288,8 @@ kbd {
   object-fit: contain;
   background: #15191d;
 }
-.viewer-stage > video {
+.viewer-stage > video,
+.viewer-stage > .viewer-video-frame-focused > video {
   max-width: 90%;
   max-height: 85%;
 }
