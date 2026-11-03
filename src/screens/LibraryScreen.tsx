@@ -507,6 +507,16 @@ function LibraryScreen(props: LibraryScreenProps) {
   ]);
 
   const loadMore = () => {
+    if (supportsGridVirtualization) {
+      // The virtualizer handles local DOM windowing. Near-bottom scrolling
+      // should fetch the next catalog page without stepping a second,
+      // redundant local render limit.
+      if (!library.loadingNextPage && library.hasMore && !library.busy) {
+        void library.loadNextPage();
+      }
+      return;
+    }
+
     const nextRenderLimit = Math.min(
       renderLimit + GALLERY_PAGE_SIZE,
       props.items.length,
@@ -581,10 +591,14 @@ function LibraryScreen(props: LibraryScreenProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [handleGridKeyDown]);
 
-  const renderedItems = useMemo(
-    () => props.items.slice(0, renderLimit),
-    [props.items, renderLimit],
-  );
+  const renderedItems = useMemo(() => {
+    // Virtualized grid/overview layouts already window which tiles the DOM
+    // contains, so slicing them a second time creates a misleading "show
+    // more" footer and limits scroll-triggered page loading.
+    return supportsGridVirtualization
+      ? props.items
+      : props.items.slice(0, renderLimit);
+  }, [props.items, renderLimit, supportsGridVirtualization]);
   const virtualGrid = useMemo(() => {
     if (!supportsGridVirtualization || renderedItems.length === 0) {
       return { items: renderedItems, topSpacer: 0, bottomSpacer: 0 };
@@ -1974,14 +1988,15 @@ function LibraryScreen(props: LibraryScreenProps) {
               </div>
             );
           })()}
-          {renderLimit < props.items.length && (
-            <div className="grid-more">
-              <button type="button" className="quiet-button" onClick={loadMore}>
-                Show more ·{" "}
-                {(props.items.length - renderLimit).toLocaleString()} remaining
-              </button>
-            </div>
-          )}
+          {!supportsGridVirtualization &&
+            renderLimit < props.items.length && (
+              <div className="grid-more">
+                <button type="button" className="quiet-button" onClick={loadMore}>
+                  Show more loaded items ·{" "}
+                  {(props.items.length - renderLimit).toLocaleString()}
+                </button>
+              </div>
+            )}
         </div>
       </section>
 
