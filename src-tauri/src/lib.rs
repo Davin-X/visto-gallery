@@ -199,6 +199,7 @@ pub fn run() {
             // Metadata
             read_exif,
             backfill_metadata,
+            supported_extensions,
             // Editing
             render_edited,
             move_exported_file,

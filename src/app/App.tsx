@@ -186,67 +186,6 @@ const initialEdits = {
   flip: false,
 };
 
-const MEDIA_EXTENSIONS = [
-  "avif",
-  "bmp",
-  "gif",
-  "heic",
-  "heif",
-  "jfif",
-  "jpe",
-  "jpeg",
-  "jpg",
-  "jxl",
-  "png",
-  "tif",
-  "tiff",
-  "webp",
-  "3fr",
-  "ari",
-  "arw",
-  "bay",
-  "cap",
-  "cr2",
-  "cr3",
-  "dcs",
-  "dcr",
-  "dng",
-  "drf",
-  "eip",
-  "erf",
-  "fff",
-  "gpr",
-  "iiq",
-  "k25",
-  "kdc",
-  "mdc",
-  "mef",
-  "mos",
-  "mrw",
-  "nef",
-  "nrw",
-  "obm",
-  "orf",
-  "pef",
-  "ptx",
-  "pxn",
-  "r3d",
-  "raf",
-  "raw",
-  "rw2",
-  "rwl",
-  "sr2",
-  "srf",
-  "srw",
-  "x3f",
-  "m4v",
-  "mov",
-  "mp4",
-  "mpeg",
-  "mpg",
-  "webm",
-];
-
 /** Tauri rejects with a plain string, but anything else can surface too. */
 function describeError(error: unknown): string {
   if (typeof error === "string") return error;
@@ -270,6 +209,9 @@ function App() {
   const [screenHistory, setScreenHistory] = useState<Screen[]>([]);
   const [lastFolder, setLastFolder] = useState<string | null>(null);
   const [lastScreen, setLastScreen] = useState<Screen | null>(null);
+  // Supported media extensions, fetched from the backend so the file picker
+  // filter stays in sync with the backend scanner.
+  const supportedExtensionsRef = useRef<string[] | null>(null);
 
   const goBack = () => {
     setScreenHistory((prev) => {
@@ -878,6 +820,14 @@ function App() {
     // Opening the saved catalog is cheap; source scans are always user-started.
     liveRef.current.library.loadLibrary();
     liveRef.current.settings.hydrate();
+
+    // Fetch the canonical list of supported extensions from the backend so the
+    // file picker filter stays in sync with the backend scanner.
+    if (supportedExtensionsRef.current === null) {
+      void tauri.library.supportedExtensions().then((exts) => {
+        supportedExtensionsRef.current = exts;
+      });
+    }
 
     // Listen for native menu events (cleaned up on unmount / StrictMode remount).
     let cancelled = false;
@@ -1821,7 +1771,7 @@ function App() {
       const selected = await openFileDialog({
         directory: false,
         multiple: true,
-        filters: [{ name: "Media", extensions: MEDIA_EXTENSIONS }],
+        filters: [{ name: "Media", extensions: supportedExtensionsRef.current ?? [] }],
       });
       if (!selected) return;
       paths = Array.isArray(selected) ? selected : [selected];
@@ -2039,7 +1989,7 @@ function App() {
       const selected = await openFileDialog({
         directory: false,
         multiple: true,
-        filters: [{ name: "Media", extensions: MEDIA_EXTENSIONS }],
+        filters: [{ name: "Media", extensions: supportedExtensionsRef.current ?? [] }],
       });
       if (!selected) return;
       paths = Array.isArray(selected) ? selected : [selected];

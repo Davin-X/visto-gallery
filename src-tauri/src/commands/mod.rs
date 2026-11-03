@@ -469,6 +469,38 @@ fn is_media_file(ext: &str) -> bool {
     image_exts.contains(&ext) || raw_exts.contains(&ext) || video_exts.contains(&ext)
 }
 
+/// Returns the canonical list of supported media extensions, so the frontend
+/// file picker and the backend scanner stay in sync.
+#[tauri::command]
+pub fn supported_extensions() -> Vec<String> {
+    let mut exts: Vec<String> = vec![
+        "avif", "bmp", "gif", "heic", "heif", "jfif", "jpe", "jpeg", "jpg", "jxl", "png", "tif",
+        "tiff", "webp",
+    ]
+    .into_iter()
+    .map(|s| s.to_string())
+    .collect();
+    exts.extend(
+        [
+            "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip",
+            "erf", "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw",
+            "obm", "orf", "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf",
+            "srw", "x3f",
+        ]
+        .into_iter()
+        .map(|s| s.to_string()),
+    );
+    exts.extend(
+        [
+            "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
+            "mts", "ogv", "ts", "vob", "webm", "wmv",
+        ]
+        .into_iter()
+        .map(|s| s.to_string()),
+    );
+    exts
+}
+
 fn kind_for_ext(ext: &str) -> &'static str {
     let video_exts = [
         "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
