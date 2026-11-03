@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- Capture-date range filtering with EXIF capture time and file-modification fallback
+- Smart Albums backed by validated, rule-based filter definitions rather than copied item lists
+- Versioned catalog backup and restore with integrity/schema validation, transactional restore, automatic pre-restore snapshots, and missing-path reporting
+- Explicit moved-source-root mapping with preview, conflict detection, and transactional rewriting of only the selected registered root
+- Automatic folder watching for registered library sources, including startup recovery and actionable watcher errors
+- Single-file and bulk actions to merge VistoGallery tags into existing Finder tags without deleting Finder-only tags
+- Bounded Albums overview cards based on counts and up to four cover candidates per album
 - Details and Timeline library views, including sortable details columns and timeline group selection
 - Sources manager actions for filtering, rescanning, revealing, and removing indexed folders
 - Multi-folder source selection from the native folder picker
@@ -17,6 +24,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Video volume controls (ArrowUp/ArrowDown) in viewer and slideshow
 
 ### Changed
+- Automatic update checks are now opt-in and default off; Help > Check for Updates remains available and Privacy copy describes the GitHub release-metadata request accurately
+- Ordinary library refreshes no longer block behind scan/import busy UI; filter changes use a quiet, non-blocking refresh state with a delayed indicator
+- Library grid/overview layouts use the virtualized tile window directly, avoiding a redundant progressive-render wall and misleading "remaining" counter
+- Album overview cards load a bounded cover set instead of each album's complete membership
+- RAW/JPEG pairing and burst-stacking settings are clearly marked unavailable while dormant values remain compatible
 - Refined the top bar, compact navigation, source controls, and destructive settings section
 - Updated README and release notes to reflect the current views and browser preview limitations
 - Built the browser harness as a second Vite entry so it also works with `npm run preview`
@@ -31,6 +43,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Limited duplicate hashing to one file at a time to reduce disk contention on large libraries
 
 ### Fixed
+- File > Export… and Cmd/Ctrl+E now route to Batch Export instead of reporting "coming soon"
+- Folder auto-import can process watched-source changes when enabled, coalesces duplicate events, and surfaces scan failures
+- Finder-tag copying deduplicates safely, merges into existing tags, and reports per-file failures without discarding unrelated Finder tags
+- Context menus and confirmation dialogs provide usable keyboard focus behavior and predictable focus return
+- Clear all resets media type, query, source, rating, label, camera, lens, Smart Album, and capture-date filters from one visible action
 - Slideshow video playback now advances on the video's ended event and follows play/pause state
 - Videos no longer pause automatically when the app loses focus, enabling background playback
 - Inspector toggle uses the inspector icon and remains available in narrow windows
@@ -38,6 +55,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Removed unused panel imports, props, CSS rules, and frontend dependencies
 - Fixed source-picker errors and made warnings visible above the panel that triggered them
 - Fixed multi-folder selection registering all selected folders in a single pass
+
+### Known limitations
+- Native Finder tag visibility, folder watcher behavior under macOS permission denial, native menu click-through, and the full VoiceOver pass still require target-Mac validation
+- Smart Album restart persistence and dynamic membership are covered only partially; invalid definitions and applied filter behavior are covered
+- First useful screen time, thumbnail concurrency, and memory use have not yet been measured; no performance target is claimed for those metrics
+- RAW/JPEG pairing and burst stacking are not implemented
 
 ## [0.1.0] — 2026-10-19
 
