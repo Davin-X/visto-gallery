@@ -333,7 +333,7 @@ struct LibraryCursor {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryItemsPage {
-    items: Vec<MediaItem>,
+    pub(crate) items: Vec<MediaItem>,
     has_more: bool,
     next_cursor: Option<String>,
     pub(crate) total_count: i64,

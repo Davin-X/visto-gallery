@@ -79,6 +79,11 @@ function AlbumsScreen(props: AlbumsScreenProps) {
               else if (filter.favorite) badge = "❤️";
               else if (filter.query) badge = "🔍";
               else if (filter.tags?.length) badge = "🏷️";
+              const coverPhotos = (album.coverItems ?? [])
+                .filter(
+                  (item: any) => item.kind === "photo" || item.kind === "video",
+                )
+                .slice(0, 3);
               return (
                 <button
                   key={album.id}
@@ -90,7 +95,19 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   }
                   title={`Open ${album.name}`}
                 >
-                  <span className="smart-album-tile-badge">{badge}</span>
+                  <span className="smart-album-tile-cover">
+                    {coverPhotos.length ? (
+                      <AlbumPhotoStack
+                        photos={coverPhotos}
+                        assetUrl={props.assetUrl}
+                        albumItems={album.coverItems ?? []}
+                      />
+                    ) : (
+                      <span className="smart-album-tile-cover-empty">
+                        {badge}
+                      </span>
+                    )}
+                  </span>
                   <span className="smart-album-tile-name">{album.name}</span>
                   <span className="smart-album-tile-count">
                     {album.itemCount.toLocaleString()}{" "}

@@ -10531,6 +10531,35 @@ body {
   white-space: nowrap;
 }
 
+.smart-album-tile-cover {
+  position: relative;
+  width: 100%;
+  height: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  margin-bottom: 4px;
+}
+
+.smart-album-tile-cover .album-stack-photo img,
+.smart-album-tile-cover .album-stack-photo video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.smart-album-tile-cover-empty {
+  width: 100%;
+  height: 72px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  color: color-mix(in srgb, var(--ink) 50%, transparent);
+}
+
 .smart-album-count {
   color: var(--muted);
   font-size: 11px;

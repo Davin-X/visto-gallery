@@ -1,5 +1,5 @@
 use super::LibraryFilterDTO;
-use crate::AppState;
+use crate::{models::MediaItem, AppState};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use tauri::State;
@@ -92,11 +92,16 @@ pub struct SmartAlbum {
     pub name: String,
     pub filter: SmartAlbumFilter,
     pub item_count: i64,
+    pub cover_items: Vec<MediaItem>,
     pub created_at: i64,
     pub updated_at: i64,
 }
 
-fn row_to_album(row: &sqlx::sqlite::SqliteRow, item_count: i64) -> Result<SmartAlbum, String> {
+fn row_to_album(
+    row: &sqlx::sqlite::SqliteRow,
+    item_count: i64,
+    cover_items: Vec<MediaItem>,
+) -> Result<SmartAlbum, String> {
     let filter_json: String = row.try_get("filter_json").map_err(|e| e.to_string())?;
     let filter: SmartAlbumFilter = serde_json::from_str(&filter_json)
         .map_err(|e| format!("Invalid Smart Album filter: {e}"))?;
@@ -106,6 +111,7 @@ fn row_to_album(row: &sqlx::sqlite::SqliteRow, item_count: i64) -> Result<SmartA
         name: row.try_get("name").map_err(|e| e.to_string())?,
         filter,
         item_count,
+        cover_items,
         created_at: row.try_get("created_at").map_err(|e| e.to_string())?,
         updated_at: row.try_get("updated_at").map_err(|e| e.to_string())?,
     })
@@ -121,6 +127,21 @@ async fn count_matches(db: &sqlx::SqlitePool, filter: &SmartAlbumFilter) -> Resu
     )
     .await?;
     Ok(page.total_count)
+}
+
+async fn cover_items_for(
+    db: &sqlx::SqlitePool,
+    filter: &SmartAlbumFilter,
+) -> Result<Vec<MediaItem>, String> {
+    let page = super::library::get_library_items_page(
+        db,
+        LibraryFilterDTO {
+            limit: Some(3),
+            ..filter.to_library_filter()
+        },
+    )
+    .await?;
+    Ok(page.items)
 }
 
 /// Read and validate every persisted definition, including the dynamic match
@@ -143,7 +164,8 @@ pub(crate) async fn get_smart_albums_in_catalog(
             .map_err(|e| format!("Invalid Smart Album filter: {e}"))?;
         filter.validate()?;
         let item_count = count_matches(db, &filter).await?;
-        albums.push(row_to_album(&row, item_count)?);
+        let covers = cover_items_for(db, &filter).await?;
+        albums.push(row_to_album(&row, item_count, covers)?);
     }
     Ok(albums)
 }
@@ -181,12 +203,14 @@ pub(crate) async fn create_smart_album_in_catalog(
         }
     })?;
     let item_count = count_matches(db, &filter).await?;
+    let covers = cover_items_for(db, &filter).await?;
 
     Ok(SmartAlbum {
         id,
         name,
         filter,
         item_count,
+        cover_items: covers,
         created_at: now,
         updated_at: now,
     })
