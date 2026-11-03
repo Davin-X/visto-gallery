@@ -2,11 +2,10 @@ import React, { useRef, useState, useEffect, useCallback } from "react";
 import { useSettingsStore } from "../../engine/stores/useSettingsStore";
 import { usePlaybackStore } from "../../engine/stores/usePlaybackStore";
 import {
-  MinusIcon,
-  PlusIcon,
   VolumeIcon,
   StopIcon,
   FullscreenIcon,
+  PictureInPictureIcon,
   PlayIcon,
   PauseIcon,
 } from "./icons";
@@ -17,6 +16,11 @@ import {
   canPlayVideoInApp,
   fileExtension,
 } from "../../engine/utils/mediaTypes";
+import {
+  observePictureInPicture,
+  supportsPictureInPicture,
+  togglePictureInPicture,
+} from "../../engine/utils/pictureInPicture";
 
 // WKWebView can decode MP4/MOV (H.264/HEVC) and WebM, but not Matroska or AVI.
 // Files outside the supported list never reach the <video> element: WebKit
@@ -28,6 +32,8 @@ function VideoPlayer({
   src,
   path,
   name,
+  width,
+  height,
   onFullscreen,
   onNext,
   compact = false,
@@ -38,9 +44,11 @@ function VideoPlayer({
   src: string;
   path?: string;
   name?: string;
+  width?: number;
+  height?: number;
   onFullscreen?: () => void;
-  onNext?: () => boolean;
-  /** Render a clean thumbnail-like frame; transport actions are owned by PiP. */
+  onNext?: () => boolean | Promise<boolean>;
+  /** Render a clean thumbnail-like frame; transport actions are external. */
   compact?: boolean;
   forceAutoPlay?: boolean;
 }) {
@@ -51,17 +59,67 @@ function VideoPlayer({
   const syncPlayback = usePlaybackStore((s) => s.sync);
   const ref = useRef<HTMLVideoElement | null>(null);
   const clickTimerRef = useRef<number | null>(null);
+  const controlsRef = useRef<HTMLDivElement | null>(null);
+  const controlsTimerRef = useRef<number | null>(null);
+  const hintsTimerRef = useRef<number | null>(null);
+  const controlsFocusedRef = useRef(false);
   const [playing, setPlaying] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [keyboardFocusWithinControls, setKeyboardFocusWithinControls] =
+    useState(false);
+  const [hintsVisible, setHintsVisible] = useState(true);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(() => usePlaybackStore.getState().lastVolume);
   const [muted, setMuted] = useState(false);
-  const [pip, setPip] = useState(false);
+  const [pictureInPicture, setPictureInPicture] = useState(false);
+  const [pictureInPictureSupported, setPictureInPictureSupported] =
+    useState(false);
+  const [pictureInPictureError, setPictureInPictureError] = useState<
+    string | null
+  >(null);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const [autoAdvance, setAutoAdvance] = useState(false);
-  const [pipSupported, setPipSupported] = useState(false);
   const [failed, setFailed] = useState(() => !canPlayVideoInApp(path, name));
   const [players, setPlayers] = useState<ExternalPlayer[]>([]);
   const [openError, setOpenError] = useState<string | null>(null);
+
+  const scheduleControlsHide = useCallback(() => {
+    if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
+    if (!playing || controlsFocusedRef.current) return;
+    controlsTimerRef.current = window.setTimeout(
+      () => setControlsVisible(false),
+      3500,
+    );
+  }, [playing]);
+
+  const showPlayerActivity = useCallback(() => {
+    setControlsVisible(true);
+    setHintsVisible(true);
+    scheduleControlsHide();
+    if (hintsTimerRef.current) window.clearTimeout(hintsTimerRef.current);
+    hintsTimerRef.current = window.setTimeout(
+      () => setHintsVisible(false),
+      3500,
+    );
+  }, [scheduleControlsHide]);
+
+  useEffect(() => {
+    if (playing) {
+      scheduleControlsHide();
+    } else {
+      if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
+      setControlsVisible(true);
+    }
+  }, [playing, scheduleControlsHide]);
+
+  useEffect(() => {
+    showPlayerActivity();
+    return () => {
+      if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
+      if (hintsTimerRef.current) window.clearTimeout(hintsTimerRef.current);
+    };
+  }, [src, showPlayerActivity]);
 
   // A different item can use a different container, so re-evaluate on change.
   useEffect(() => {
@@ -97,9 +155,7 @@ function VideoPlayer({
     }
   };
 
-  // Expose this element to the mini-player that takes over when the user
-  // navigates away from the Viewer. The viewer is kept mounted off-screen, so
-  // the media element is never torn down during tab switches.
+  // Expose the single active video element to the audio-only Now Playing card.
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
@@ -209,21 +265,32 @@ function VideoPlayer({
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
+    setPictureInPictureSupported(supportsPictureInPicture(video));
+    setPictureInPictureError(null);
+    return observePictureInPicture(video, setPictureInPicture);
+  }, [src]);
+
+  useEffect(() => {
+    const video = ref.current;
+    if (!video) return;
     const onEnded = () => {
-      const advanced =
-        onNext && (compact || (autoAdvance && active)) ? onNext() : false;
-      if (advanced === false) {
+      if (!onNext || !(compact || (autoAdvance && active))) {
         setPlaying(false);
         syncPlayback({ playing: false });
+        return;
       }
+      void Promise.resolve(onNext()).then((advanced) => {
+        if (!advanced) {
+          setPlaying(false);
+          syncPlayback({ playing: false });
+        }
+      });
     };
     video.addEventListener("ended", onEnded);
     return () => video.removeEventListener("ended", onEnded);
   }, [src, autoAdvance, active, compact, onNext, syncPlayback]);
 
-  // Pause the video when the viewer is torn down so the Tauri webview does not
-  // keep media alive briefly while React removes the element. Navigation away
-  // from the Viewer does not unmount it (see the viewer host in App).
+  // Pause playback when the player host is removed, such as after Stop.
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
@@ -287,53 +354,6 @@ function VideoPlayer({
     video.addEventListener("keydown", handleKeyDown);
     return () => video.removeEventListener("keydown", handleKeyDown);
   }, [onFullscreen, adjustVolume]);
-
-  useEffect(() => {
-    const video = ref.current;
-    if (!video) return;
-    setPipSupported(
-      Boolean(
-        (document as any).pictureInPictureEnabled ||
-        (video as any).webkitSupportsPresentationMode?.("picture-in-picture"),
-      ),
-    );
-    const onEnter = () => setPip(true);
-    const onLeave = () => setPip(false);
-    const onWebKitMode = () =>
-      setPip((video as any).webkitPresentationMode === "picture-in-picture");
-    video.addEventListener("enterpictureinpicture", onEnter);
-    video.addEventListener("leavepictureinpicture", onLeave);
-    video.addEventListener("webkitpresentationmodechanged", onWebKitMode);
-    return () => {
-      video.removeEventListener("enterpictureinpicture", onEnter);
-      video.removeEventListener("leavepictureinpicture", onLeave);
-      video.removeEventListener("webkitpresentationmodechanged", onWebKitMode);
-    };
-  }, [src]);
-
-  const togglePip = async () => {
-    const video = ref.current;
-    if (!video) return;
-    try {
-      const v = video as any;
-      if (v.webkitSupportsPresentationMode?.("picture-in-picture")) {
-        v.webkitSetPresentationMode(
-          v.webkitPresentationMode === "picture-in-picture"
-            ? "inline"
-            : "picture-in-picture",
-        );
-        return;
-      }
-      if (document.pictureInPictureElement === video) {
-        await document.exitPictureInPicture();
-      } else if (typeof video.requestPictureInPicture === "function") {
-        await video.requestPictureInPicture();
-      }
-    } catch (err) {
-      if (import.meta.env.DEV)
-        console.warn("Picture-in-picture unavailable", err);
-    }
-  };
 
   useEffect(() => {
     const video = ref.current;
@@ -407,9 +427,34 @@ function VideoPlayer({
     setTime(value);
   };
 
+  const skipBy = (delta: number) => {
+    const video = ref.current;
+    if (!video) return;
+    const target = Math.max(0, video.currentTime + delta);
+    seek(
+      Number.isFinite(video.duration)
+        ? Math.min(target, video.duration)
+        : target,
+    );
+  };
+
+  const togglePip = async () => {
+    const video = ref.current;
+    if (!video) return;
+    setPictureInPictureError(null);
+    try {
+      await togglePictureInPicture(video);
+    } catch (error) {
+      setPictureInPictureError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  };
+
   // A double-click means "fullscreen". Delay the single-click toggle briefly so
   // the second click of a double-click does not pause and resume the video.
   const handleVideoClick = () => {
+    showPlayerActivity();
     if (clickTimerRef.current) {
       window.clearTimeout(clickTimerRef.current);
       clickTimerRef.current = null;
@@ -480,12 +525,21 @@ function VideoPlayer({
   }
 
   return (
-    <>
+    <div
+      className="video-player-surface"
+      onPointerMove={showPlayerActivity}
+      onPointerDown={showPlayerActivity}
+    >
       <video
         ref={ref}
         className={`viewer-video${compact ? " viewer-video-compact" : ""}`}
         src={src}
-        title={name}
+        width={width}
+        height={height}
+        style={{
+          aspectRatio:
+            width && height ? `auto ${width} / ${height}` : "auto",
+        }}
         autoPlay={videoAutoPlay || forceAutoPlay}
         loop={videoLoop && !autoAdvance && !compact}
         playsInline
@@ -497,139 +551,213 @@ function VideoPlayer({
         }}
         onError={() => setFailed(true)}
         tabIndex={0}
+        aria-keyshortcuts="Space ArrowLeft ArrowRight ArrowUp ArrowDown F M"
+        title={`${name || "Video"} — focus for shortcuts: Space play/pause, ←/→ seek, F fullscreen`}
       />
       {/* macOS hides a video's native control bar unless the pointer is over the
           frame, so playback gets a permanent bar of our own instead. */}
       {!compact && (
-        <div className="viewer-video-controls">
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={playing ? "Pause" : "Play"}
-          title={playing ? "Pause" : "Play"}
-        >
-          {playing ? <PauseIcon size={15} /> : <PlayIcon size={15} />}
-        </button>
-        <button
-          type="button"
-          onClick={() => setAutoAdvance((v) => !v)}
-          aria-pressed={autoAdvance}
-          aria-label="Auto-advance to the next item"
-          title={
-            autoAdvance
-              ? "Auto-advance on: play the next item when this ends"
-              : "Auto-advance off: stop at the end"
-          }
-        >
-          {autoAdvance ? (
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+        <>
+          <div
+            ref={controlsRef}
+            className={`viewer-video-controls${controlsVisible ? "" : " is-hidden"}${keyboardFocusWithinControls ? " is-keyboard-focused" : ""}`}
+            onPointerDownCapture={() => {
+              controlsFocusedRef.current = false;
+              setKeyboardFocusWithinControls(false);
+            }}
+            onFocusCapture={(event) => {
+              const keyboardFocused =
+                event.target instanceof HTMLElement &&
+                event.target.matches(":focus-visible");
+              controlsFocusedRef.current = keyboardFocused;
+              setKeyboardFocusWithinControls(keyboardFocused);
+              if (keyboardFocused) {
+                if (controlsTimerRef.current)
+                  window.clearTimeout(controlsTimerRef.current);
+                setControlsVisible(true);
+              } else {
+                scheduleControlsHide();
+              }
+            }}
+            onBlurCapture={(event) => {
+              if (
+                event.relatedTarget instanceof Node &&
+                controlsRef.current?.contains(event.relatedTarget)
+              )
+                return;
+              controlsFocusedRef.current = false;
+              setKeyboardFocusWithinControls(false);
+              scheduleControlsHide();
+            }}
+          >
+            <button
+              type="button"
+              className="video-play-button"
+              onClick={toggle}
+              aria-label={playing ? "Pause" : "Play"}
+              title={playing ? "Pause" : "Play"}
             >
-              <polygon points="5 4 15 12 5 20 5 4" />
-              <line x1="19" y1="5" x2="19" y2="19" />
-            </svg>
-          ) : (
-            <StopIcon size={14} />
+              {playing ? <PauseIcon size={15} /> : <PlayIcon size={15} />}
+            </button>
+            <button
+              type="button"
+              className="video-skip-button"
+              onClick={() => skipBy(-10)}
+              aria-label="Back 10 seconds"
+              title="Back 10 seconds"
+            >
+              −10
+            </button>
+            <span className="video-time">{formatDuration(time)}</span>
+            <input
+              type="range"
+              min={0}
+              max={duration || 0}
+              step={0.05}
+              value={time}
+              onChange={(e) => seek(Number(e.target.value))}
+              aria-label="Seek"
+            />
+            <span className="video-time">{formatDuration(duration)}</span>
+            <button
+              type="button"
+              className="video-skip-button"
+              onClick={() => skipBy(10)}
+              aria-label="Forward 10 seconds"
+              title="Forward 10 seconds"
+            >
+              +10
+            </button>
+            <button
+              type="button"
+              onClick={() => setAutoAdvance((value) => !value)}
+              aria-pressed={autoAdvance}
+              aria-label="Auto-advance to the next item"
+              title={
+                autoAdvance
+                  ? "Auto-advance on: play the next item when this ends"
+                  : "Auto-advance off: stop at the end"
+              }
+            >
+              {autoAdvance ? (
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polygon points="5 4 15 12 5 20 5 4" />
+                  <line x1="19" y1="5" x2="19" y2="19" />
+                </svg>
+              ) : (
+                <StopIcon size={14} />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMuted((value) => !value)}
+              aria-label={muted ? "Unmute" : "Mute"}
+              title={muted ? "Unmute" : "Mute"}
+            >
+              <VolumeIcon size={14} muted={muted || volume === 0} />
+            </button>
+            <input
+              type="range"
+              className="video-volume"
+              min={0}
+              max={1}
+              step={0.01}
+              value={muted ? 0 : volume}
+              onChange={(e) => {
+                const nextVolume = Number(e.target.value);
+                setVolume(nextVolume);
+                if (nextVolume > 0) setMuted(false);
+              }}
+              aria-label="Volume"
+            />
+            <select
+              className="video-playback-rate"
+              value={playbackRate}
+              onChange={(event) => {
+                const rate = Number(event.currentTarget.value);
+                setPlaybackRate(rate);
+                if (ref.current) ref.current.playbackRate = rate;
+              }}
+              aria-label="Playback speed"
+              title="Playback speed"
+            >
+              {[0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => (
+                <option value={rate} key={rate}>
+                  {rate}×
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => void togglePip()}
+              disabled={!pictureInPictureSupported}
+              aria-label={
+                pictureInPicture
+                  ? "Exit picture in picture"
+                  : "Enter picture in picture"
+              }
+              aria-pressed={pictureInPicture}
+              title={
+                pictureInPictureSupported
+                  ? pictureInPicture
+                    ? "Exit picture in picture"
+                    : "Picture in picture"
+                  : "Picture in picture is unavailable"
+              }
+            >
+              <PictureInPictureIcon size={14} />
+            </button>
+            {onFullscreen && (
+              <button
+                type="button"
+                onClick={onFullscreen}
+                aria-label="Full screen"
+                title="Full screen"
+              >
+                <FullscreenIcon size={14} />
+              </button>
+            )}
+          </div>
+          <div
+            className={`video-player-hints${hintsVisible ? "" : " is-hidden"}`}
+            aria-hidden="true"
+          >
+            <span>
+              <kbd>Space</kbd> Play / pause
+            </span>
+            <span>
+              <kbd>←</kbd>
+              <kbd>→</kbd> Seek
+            </span>
+            <span>
+              <kbd>↑</kbd>
+              <kbd>↓</kbd> Volume
+            </span>
+            <span>
+              <kbd>F</kbd> Full screen
+            </span>
+            <span>
+              <kbd>M</kbd> Mute
+            </span>
+          </div>
+          {pictureInPictureError && (
+            <p className="video-pip-error" role="status">
+              {pictureInPictureError}
+            </p>
           )}
-        </button>
-        <span className="video-time">{formatDuration(time)}</span>
-        <input
-          type="range"
-          min={0}
-          max={duration || 0}
-          step={0.05}
-          value={time}
-          onChange={(e) => seek(Number(e.target.value))}
-          aria-label="Seek"
-        />
-        <span className="video-time">{formatDuration(duration)}</span>
-        <button
-          type="button"
-          onClick={() => setMuted((m) => !m)}
-          aria-label={muted ? "Unmute" : "Mute"}
-          title={muted ? "Unmute" : "Mute"}
-        >
-          <VolumeIcon size={14} muted={muted || volume === 0} />
-        </button>
-        <button
-          type="button"
-          onClick={() => adjustVolume(-0.1)}
-          aria-label="Volume down"
-          title="Volume down"
-        >
-          <MinusIcon size={12} />
-        </button>
-        <input
-          type="range"
-          className="video-volume"
-          min={0}
-          max={1}
-          step={0.01}
-          value={muted ? 0 : volume}
-          onChange={(e) => {
-            const v = Number(e.target.value);
-            setVolume(v);
-            if (v > 0) setMuted(false);
-          }}
-          aria-label="Volume"
-        />
-        <button
-          type="button"
-          onClick={() => adjustVolume(0.1)}
-          aria-label="Volume up"
-          title="Volume up"
-        >
-          <PlusIcon size={12} />
-        </button>
-        {pipSupported && (
-          <button
-            type="button"
-            onClick={togglePip}
-            aria-label={pip ? "Exit picture in picture" : "Picture in picture"}
-            title="Picture in picture"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="2" y="4" width="20" height="16" rx="2" />
-              <rect
-                x="12"
-                y="12"
-                width="8"
-                height="6"
-                fill={pip ? "currentColor" : "none"}
-              />
-            </svg>
-          </button>
-        )}
-        {onFullscreen && (
-          <button
-            type="button"
-            onClick={onFullscreen}
-            aria-label="Full screen"
-            title="Full screen"
-          >
-            <FullscreenIcon size={14} />
-          </button>
-        )}
-      </div>
+        </>
       )}
-    </>
+    </div>
   );
 }
 

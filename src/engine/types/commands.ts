@@ -89,6 +89,7 @@ export interface SmartAlbum {
   name: string;
   filter: SmartAlbumFilter;
   itemCount: number;
+  coverItems?: MediaItem[];
   createdAt: number;
   updatedAt: number;
 }

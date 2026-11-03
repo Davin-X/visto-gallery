@@ -71,24 +71,51 @@ function AlbumsScreen(props: AlbumsScreenProps) {
             </span>
           </div>
           <div className="smart-albums-list">
-            {props.smartAlbums!.map((album) => (
-              <button
-                key={album.id}
-                type="button"
-                className="smart-album-row"
-                onClick={() => props.onOpenSmartAlbum?.(album.id)}
-                onContextMenu={(e) =>
-                  props.onSmartAlbumContextMenu?.(album, e)
-                }
-                title={`Open ${album.name}`}
-              >
-                <span className="smart-album-name">{album.name}</span>
-                <span className="smart-album-count">
-                  {album.itemCount.toLocaleString()}{" "}
-                  {album.itemCount === 1 ? "item" : "items"}
-                </span>
-              </button>
-            ))}
+            {props.smartAlbums!.map((album) => {
+              const filter = album.filter;
+              let badge = "📷";
+              if (filter.kind === "video") badge = "▶️";
+              else if (filter.kind === "raw") badge = "📷";
+              else if (filter.favorite) badge = "❤️";
+              else if (filter.query) badge = "🔍";
+              else if (filter.tags?.length) badge = "🏷️";
+              const coverPhotos = (album.coverItems ?? [])
+                .filter(
+                  (item: any) => item.kind === "photo" || item.kind === "video",
+                )
+                .slice(0, 3);
+              return (
+                <button
+                  key={album.id}
+                  type="button"
+                  className="smart-album-tile"
+                  onClick={() => props.onOpenSmartAlbum?.(album.id)}
+                  onContextMenu={(e) =>
+                    props.onSmartAlbumContextMenu?.(album, e)
+                  }
+                  title={`Open ${album.name}`}
+                >
+                  <span className="smart-album-tile-cover">
+                    {coverPhotos.length ? (
+                      <AlbumPhotoStack
+                        photos={coverPhotos}
+                        assetUrl={props.assetUrl}
+                        albumItems={album.coverItems ?? []}
+                      />
+                    ) : (
+                      <span className="smart-album-tile-cover-empty">
+                        {badge}
+                      </span>
+                    )}
+                  </span>
+                  <span className="smart-album-tile-name">{album.name}</span>
+                  <span className="smart-album-tile-count">
+                    {album.itemCount.toLocaleString()}{" "}
+                    {album.itemCount === 1 ? "item" : "items"}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </section>
       )}

@@ -145,7 +145,7 @@ interface LibraryState {
   refresh: () => Promise<void>;
   refreshDerived: () => void;
   navigatePhoto: (delta: number) => void;
-  navigateViewerPhoto: (delta: number) => void;
+  navigateViewerPhoto: (delta: number) => Promise<boolean>;
 
   // Actions - Inspection & Selection (independent concepts)
   inspectItem: (id: string | null) => void;
@@ -177,6 +177,7 @@ interface LibraryState {
   ) => void;
   setScreen: (screen: Screen) => void;
   setViewerScope: (scope: "library" | "hidden") => void;
+  getCurrentLibraryFilter: () => LibraryFilterDTO;
   toggleInspector: () => void;
   toggleSidebar: () => void;
   setActiveAlbum: (albumId: string | null) => void;
@@ -726,20 +727,43 @@ export const useLibraryStore = create<LibraryState>()(
         });
       },
 
-      navigateViewerPhoto: (delta) => {
-        const { viewerItems, viewerSelected } = get();
-        if (viewerItems.length === 0 || !viewerSelected) return;
-        const currentIndex = viewerItems.findIndex(
-          (i) => i.id === viewerSelected.id,
-        );
+      navigateViewerPhoto: async (delta) => {
+        let state = get();
+        const currentId = state.viewerSelected?.id;
+        if (!currentId || delta === 0) return false;
+
+        let photos = state.viewerItems.filter((item) => item.kind !== "video");
+        let currentIndex = photos.findIndex((item) => item.id === currentId);
+        if (currentIndex < 0) return false;
+
+        if (
+          delta > 0 &&
+          state.viewerScope === "library" &&
+          currentIndex + delta >= photos.length
+        ) {
+          while (state.hasMore) {
+            const previousItemCount = state.items.length;
+            await state.loadNextPage();
+            state = get();
+            if (state.items.length === previousItemCount && state.hasMore)
+              return false;
+
+            photos = state.viewerItems.filter((item) => item.kind !== "video");
+            currentIndex = photos.findIndex((item) => item.id === currentId);
+            if (currentIndex < 0) return false;
+            if (currentIndex + delta < photos.length) break;
+          }
+        }
+
         const nextIndex =
-          (currentIndex + delta + viewerItems.length) % viewerItems.length;
-        const state = get();
-        const inspectedId = viewerItems[nextIndex].id;
+          (currentIndex + delta + photos.length) % photos.length;
+        const inspectedId = photos[nextIndex].id;
+        state = get();
         set({
           inspectedId,
           ...computeInspectionDerived({ ...state, inspectedId }),
         });
+        return true;
       },
 
       selectRange: (startId, endId) => {
@@ -890,6 +914,7 @@ export const useLibraryStore = create<LibraryState>()(
         get().refreshDerived();
       },
 
+      getCurrentLibraryFilter: () => currentLibraryFilter(get()),
       toggleInspector: () => set((s) => ({ showInspector: !s.showInspector })),
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 
