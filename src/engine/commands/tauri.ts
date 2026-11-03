@@ -70,6 +70,8 @@ export const tauri = {
       invoke("remove_library_folder", { path, deleteFiles }),
 
     deleteDatabase: (): Promise<void> => invoke("delete_library_database"),
+
+    supportedExtensions: (): Promise<string[]> => invoke("supported_extensions"),
   },
 
   items: {
