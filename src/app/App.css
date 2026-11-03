@@ -10479,19 +10479,21 @@ body {
 
 .smart-albums-list {
   display: grid;
-  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
 }
 
-.smart-album-row {
+.smart-album-tile {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
   width: 100%;
-  min-height: 38px;
-  padding: 0 12px;
+  min-height: 96px;
+  padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: 12px;
   background: var(--surface);
   color: var(--ink);
   font: inherit;
@@ -10499,19 +10501,34 @@ body {
   cursor: pointer;
 }
 
-.smart-album-row:hover {
+.smart-album-tile:hover {
   border-color: var(--line-strong);
   background: var(--surface-2);
 }
 
-.smart-album-row:focus-visible {
+.smart-album-tile:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--accent);
 }
 
-.smart-album-name {
-  font-size: 12px;
+.smart-album-tile-badge {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.smart-album-tile-name {
+  font-size: 14px;
   font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.smart-album-tile-count {
+  font-size: 12px;
+  color: var(--ink-dim);
+  white-space: nowrap;
 }
 
 .smart-album-count {
