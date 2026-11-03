@@ -123,13 +123,16 @@ async fn count_matches(db: &sqlx::SqlitePool, filter: &SmartAlbumFilter) -> Resu
     Ok(page.total_count)
 }
 
-#[tauri::command]
-pub async fn get_smart_albums(state: State<'_, AppState>) -> Result<Vec<SmartAlbum>, String> {
-    let db = super::get_db(&state)?;
+/// Read and validate every persisted definition, including the dynamic match
+/// count. Kept separate from the Tauri command so restart behavior can be
+/// tested against a real file-backed catalog.
+pub(crate) async fn get_smart_albums_in_catalog(
+    db: &sqlx::SqlitePool,
+) -> Result<Vec<SmartAlbum>, String> {
     let rows = sqlx::query(
         "SELECT id, name, filter_json, created_at, updated_at FROM smart_albums ORDER BY name COLLATE NOCASE ASC",
     )
-    .fetch_all(&db)
+    .fetch_all(db)
     .await
     .map_err(|e| e.to_string())?;
 
@@ -139,24 +142,24 @@ pub async fn get_smart_albums(state: State<'_, AppState>) -> Result<Vec<SmartAlb
         let filter: SmartAlbumFilter = serde_json::from_str(&filter_json)
             .map_err(|e| format!("Invalid Smart Album filter: {e}"))?;
         filter.validate()?;
-        let item_count = count_matches(&db, &filter).await?;
+        let item_count = count_matches(db, &filter).await?;
         albums.push(row_to_album(&row, item_count)?);
     }
     Ok(albums)
 }
 
-#[tauri::command]
-pub async fn create_smart_album(
+/// Create and validate a Smart Album in the given catalog. Kept separate from
+/// the Tauri command so restart behavior can be tested without a State.
+pub(crate) async fn create_smart_album_in_catalog(
+    db: &sqlx::SqlitePool,
     name: String,
     filter: SmartAlbumFilter,
-    state: State<'_, AppState>,
 ) -> Result<SmartAlbum, String> {
     let name = name.trim().to_string();
     if name.is_empty() {
         return Err("Smart Album name cannot be empty".to_string());
     }
     filter.validate()?;
-    let db = super::get_db(&state)?;
     let id = Uuid::new_v4().to_string();
     let now = super::now_ms();
     let filter_json = serde_json::to_string(&filter).map_err(|e| e.to_string())?;
@@ -168,7 +171,7 @@ pub async fn create_smart_album(
     .bind(&filter_json)
     .bind(now)
     .bind(now)
-    .execute(&db)
+    .execute(db)
     .await
     .map_err(|e| {
         if e.to_string().contains("UNIQUE") {
@@ -177,15 +180,32 @@ pub async fn create_smart_album(
             e.to_string()
         }
     })?;
+    let item_count = count_matches(db, &filter).await?;
 
     Ok(SmartAlbum {
         id,
         name,
         filter,
-        item_count: 0,
+        item_count,
         created_at: now,
         updated_at: now,
     })
+}
+
+#[tauri::command]
+pub async fn get_smart_albums(state: State<'_, AppState>) -> Result<Vec<SmartAlbum>, String> {
+    let db = super::get_db(&state)?;
+    get_smart_albums_in_catalog(&db).await
+}
+
+#[tauri::command]
+pub async fn create_smart_album(
+    name: String,
+    filter: SmartAlbumFilter,
+    state: State<'_, AppState>,
+) -> Result<SmartAlbum, String> {
+    let db = super::get_db(&state)?;
+    create_smart_album_in_catalog(&db, name, filter).await
 }
 
 #[tauri::command]
@@ -258,6 +278,106 @@ pub async fn get_smart_album_items(
 #[cfg(test)]
 mod tests {
     use super::SmartAlbumFilter;
+
+    #[tokio::test]
+    async fn smart_albums_survive_catalog_restart_and_counts_track_changes() {
+        use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+
+        let catalog_dir = std::env::temp_dir().join(format!(
+            "visto-smart-album-restart-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&catalog_dir).unwrap();
+        let catalog_path = catalog_dir.join("catalog.db");
+
+        let options = SqliteConnectOptions::new()
+            .filename(&catalog_path)
+            .create_if_missing(true);
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options.clone())
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&db).await.unwrap();
+
+        sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, created_at, updated_at, rating, color_label) VALUES ('rated', '/rated.jpg', 'rated.jpg', 'jpg', 'photo', 1, 100, 100, 1, 1, 5, 'blue')")
+            .execute(&db)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO albums (id, name, color_index, created_at, updated_at) VALUES ('regular', 'Regular album', 0, 1, 1)")
+            .execute(&db)
+            .await
+            .unwrap();
+
+        let filter = SmartAlbumFilter {
+            kind: Some("photo".into()),
+            rating: Some(4),
+            ..Default::default()
+        };
+        let created =
+            super::create_smart_album_in_catalog(&db, "Rated photos".into(), filter.clone())
+                .await
+                .unwrap();
+        assert_eq!(created.item_count, 1);
+        db.close().await;
+
+        // Reopen the same file and apply the migration set again, matching a restart.
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&db).await.unwrap();
+
+        let albums = super::get_smart_albums_in_catalog(&db).await.unwrap();
+        assert_eq!(albums.len(), 1);
+        assert_eq!(albums[0].id, created.id);
+        assert_eq!(albums[0].name, "Rated photos");
+        assert_eq!(albums[0].filter, filter);
+        assert_eq!(albums[0].item_count, 1);
+        let regular_album_name: String =
+            sqlx::query_scalar("SELECT name FROM albums WHERE id = 'regular'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(regular_album_name, "Regular album");
+
+        sqlx::query("UPDATE media_items SET rating = 2 WHERE id = 'rated'")
+            .execute(&db)
+            .await
+            .unwrap();
+        let albums = super::get_smart_albums_in_catalog(&db).await.unwrap();
+        assert_eq!(albums[0].item_count, 0);
+
+        sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, created_at, updated_at, rating, color_label) VALUES ('new-match', '/new.jpg', 'new.jpg', 'jpg', 'photo', 1, 101, 101, 1, 1, 5, 'blue')")
+            .execute(&db)
+            .await
+            .unwrap();
+        let albums = super::get_smart_albums_in_catalog(&db).await.unwrap();
+        assert_eq!(albums[0].item_count, 1);
+
+        db.close().await;
+        let _ = std::fs::remove_dir_all(catalog_dir);
+    }
+
+    #[tokio::test]
+    async fn invalid_persisted_smart_album_fails_visibly() {
+        use sqlx::sqlite::SqlitePoolOptions;
+
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&db).await.unwrap();
+        sqlx::query("INSERT INTO smart_albums (id, name, filter_json, created_at, updated_at) VALUES ('bad', 'Bad definition', '{\"rating\":99}', 1, 1)")
+            .execute(&db)
+            .await
+            .unwrap();
+
+        let error = super::get_smart_albums_in_catalog(&db).await.unwrap_err();
+        assert!(error.contains("Smart Album rating must be between 0 and 5"));
+    }
 
     #[test]
     fn rejects_unknown_fields() {
