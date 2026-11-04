@@ -9,7 +9,6 @@ import React, {
 } from "react";
 import HiddenScreen from "../screens/HiddenScreen";
 import LibraryScreen from "../screens/LibraryScreen";
-import { useFocusTrap } from "../design/hooks/useFocusTrap";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
 import EditScreen from "../screens/EditScreen";
 import ViewerScreen from "../screens/ViewerScreen";
@@ -63,6 +62,7 @@ import { copyTagsToFinder } from "../engine/utils/finderTags";
 import { describeError } from "./utils/describeError";
 import { isWarningNotice } from "./utils/isWarningNotice";
 import { startConfiguredSlideshow } from "./utils/startConfiguredSlideshow";
+import { AppDialogs } from "./AppDialogs";
 
 /**
  * Apply the item's saved edit draft to a preview image. Passing the shared map
@@ -216,10 +216,6 @@ function App() {
   const [removingFolder, setRemovingFolder] = useState(false);
   const [sourcesSheetOpen, setSourcesSheetOpen] = useState(false);
   const [removeAllSourcesDialogOpen, setRemoveAllSourcesDialogOpen] = useState(false);
-  useFocusTrap(albumDialogOpen, albumDialogRef);
-  useFocusTrap(!!albumPendingDelete, deleteAlbumDialogRef);
-  useFocusTrap(itemPendingDeleteCount > 0, deleteItemDialogRef);
-  useFocusTrap(!!folderPendingRemove, removeFolderDialogRef);
 
   const rescanInProgress = useRef(false);
   // Where the viewer returns when it closes. Opening the viewer from Hidden
@@ -234,14 +230,6 @@ function App() {
   const [albumDragOver, setAlbumDragOver] = useState(false);
   const [appVersion, setAppVersion] = useState("");
   const [aboutOpen, setAboutOpen] = useState(false);
-  useEffect(() => {
-    if (!aboutOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setAboutOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [aboutOpen]);
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [updateChecking, setUpdateChecking] = useState(false);
@@ -250,15 +238,7 @@ function App() {
   const updateDialogOpenRef = useRef(false);
   useEffect(() => {
     updateDialogOpenRef.current = updateDialogOpen;
-    if (!updateDialogOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setUpdateDialogOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
   }, [updateDialogOpen]);
-  useFocusTrap(updateDialogOpen, updateDialogRef);
-  useFocusTrap(aboutOpen, aboutDialogRef);
   useEffect(() => {
     let cancelled = false;
     tauri.app
@@ -1576,17 +1556,6 @@ function App() {
     })();
   };
 
-  useEffect(() => {
-    if (itemPendingDeleteCount === 0) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      setItemPendingDeleteCount(0);
-      itemPendingDeleteRef.current = null;
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [itemPendingDeleteCount]);
   const confirmDeleteAlbum = async () => {
     if (!albumPendingDelete || deletingAlbum) return;
     const wasActiveAlbum = library.activeAlbum === albumPendingDelete.id;
@@ -1602,17 +1571,6 @@ function App() {
       setDeletingAlbum(false);
     }
   };
-
-  useEffect(() => {
-    if (!albumPendingDelete) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      if (!deletingAlbum) setAlbumPendingDelete(null);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [albumPendingDelete, deletingAlbum]);
 
   const confirmRemoveFolder = async () => {
     if (!folderPendingRemove || removingFolder) return;
@@ -1631,30 +1589,6 @@ function App() {
       setRemovingFolder(false);
     }
   };
-
-  useEffect(() => {
-    if (!folderPendingRemove) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      if (!removingFolder) setFolderPendingRemove(null);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [folderPendingRemove, removingFolder]);
-
-  // The sources sheet owns Escape unless the remove-confirmation is stacked on
-  // top of it (that dialog has its own handler above).
-  useEffect(() => {
-    if (!sourcesSheetOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || folderPendingRemove) return;
-      e.preventDefault();
-      setSourcesSheetOpen(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [sourcesSheetOpen, folderPendingRemove]);
 
   const importPathsIntoAlbum = async (paths: string[], albumId: string) => {
     const album = library.albums.find((a: any) => a.id === albumId);
@@ -3034,694 +2968,74 @@ function App() {
           </div>
         )}
 
-        {updateDialogOpen && updateInfo && (
-          <div
-            className="dialog-backdrop"
-            role="presentation"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget) setUpdateDialogOpen(false);
-            }}
-          >
-            <div
-              ref={updateDialogRef}
-              className="album-dialog update-dialog"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="update-dialog-title"
-            >
-              <div className="dialog-heading">
-                <div>
-                  <p className="eyebrow">UPDATE</p>
-                  <h2 id="update-dialog-title">
-                    VistoGallery {updateInfo.latestVersion} is available
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  className="dialog-close"
-                  aria-label="Close"
-                  onClick={() => setUpdateDialogOpen(false)}
-                >
-                  ×
-                </button>
-              </div>
-              <p className="dialog-hint">
-                You're running v{updateInfo.currentVersion}. Download the latest build, then drag
-                VistoGallery.app into Applications to replace the old copy.
-              </p>
-              {updateInfo.notes && <pre className="update-notes">{updateInfo.notes}</pre>}
-              <div className="dialog-actions">
-                <button
-                  type="button"
-                  className="quiet-button"
-                  onClick={() => {
-                    localStorage.setItem(`update:skip:${updateInfo.latestVersion}`, "1");
-                    setUpdateDialogOpen(false);
-                  }}
-                >
-                  Skip this version
-                </button>
-                <button
-                  type="button"
-                  className="quiet-button"
-                  onClick={() => setUpdateDialogOpen(false)}
-                >
-                  Later
-                </button>
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => {
-                    void tauri.app.openExternal(updateInfo.downloadUrl || updateInfo.releaseUrl);
-                  }}
-                >
-                  Download
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {aboutOpen && (
-          <div
-            className="dialog-backdrop"
-            role="presentation"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget) setAboutOpen(false);
-            }}
-          >
-            <div
-              ref={aboutDialogRef}
-              className="album-dialog"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="about-dialog-title"
-            >
-              <div className="dialog-heading">
-                <div>
-                  <p className="eyebrow">ABOUT</p>
-                  <h2 id="about-dialog-title">VistoGallery</h2>
-                </div>
-                <button
-                  type="button"
-                  className="dialog-close"
-                  aria-label="Close"
-                  onClick={() => setAboutOpen(false)}
-                >
-                  ×
-                </button>
-              </div>
-              <p className="dialog-hint">Native macOS photo gallery.</p>
-              <p className="dialog-hint">Version {appVersion || "dev"}</p>
-              {updateInfo?.available && (
-                <p className="dialog-hint">
-                  Version {updateInfo.latestVersion} is available to download.
-                </p>
-              )}
-              <div className="dialog-actions">
-                <button
-                  type="button"
-                  className="quiet-button"
-                  onClick={() => void checkForUpdates(true)}
-                  disabled={updateChecking}
-                >
-                  {updateChecking ? "Checking…" : "Check for Updates"}
-                </button>
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => setAboutOpen(false)}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {albumDialogOpen && (
-          <div
-            className="dialog-backdrop"
-            role="presentation"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget) closeAlbumDialog();
-            }}
-          >
-            <form
-              ref={albumDialogRef}
-              className="album-dialog"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="album-dialog-title"
-              onSubmit={submitAlbum}
-            >
-              <div className="dialog-heading">
-                <div>
-                  <p className="eyebrow">ORGANISE</p>
-                  <h2 id="album-dialog-title">
-                    {albumDialogMode === "rename" ? "Rename album" : "New album"}
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  className="dialog-close"
-                  aria-label="Close"
-                  onClick={closeAlbumDialog}
-                  disabled={creatingAlbum}
-                >
-                  ×
-                </button>
-              </div>
-              <div className="dialog-field">
-                <label htmlFor="album-name">Album name</label>
-                <input
-                  id="album-name"
-                  ref={albumInputRef}
-                  value={albumName}
-                  onChange={(e) => setAlbumName(e.target.value)}
-                  placeholder="e.g. Summer 2026"
-                  maxLength={80}
-                  autoComplete="off"
-                  disabled={creatingAlbum}
-                />
-              </div>
-              <p className="dialog-hint">
-                {albumDialogMode === "rename"
-                  ? "This only changes the album name. Photos stay in this album."
-                  : (() => {
-                      const count =
-                        albumSeedIds?.length ??
-                        (library.selectedIds.length || (library.inspectedId ? 1 : 0));
-                      return count
-                        ? `Adds ${count.toLocaleString()} item${count === 1 ? "" : "s"} to the new album.`
-                        : "You can add photos to it from the library or an album at any time.";
-                    })()}
-              </p>
-              <div className="dialog-actions">
-                <button
-                  type="button"
-                  className="quiet-button"
-                  onClick={closeAlbumDialog}
-                  disabled={creatingAlbum}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="primary-button"
-                  disabled={!albumName.trim() || creatingAlbum}
-                >
-                  {creatingAlbum
-                    ? albumDialogMode === "rename"
-                      ? "Saving…"
-                      : "Creating…"
-                    : albumDialogMode === "rename"
-                      ? "Save name"
-                      : "Create album"}
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {albumPickerOpen && (
-          <div
-            className="dialog-backdrop"
-            role="presentation"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget && !addingToAlbumId) setAlbumPickerOpen(false);
-            }}
-          >
-            <div
-              className="album-dialog album-picker-dialog"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="album-picker-title"
-            >
-              <div className="dialog-heading">
-                <div>
-                  <p className="eyebrow">ORGANISE</p>
-                  <h2 id="album-picker-title">Add to album</h2>
-                </div>
-                <button
-                  type="button"
-                  className="dialog-close"
-                  aria-label="Close"
-                  onClick={() => setAlbumPickerOpen(false)}
-                  disabled={Boolean(addingToAlbumId)}
-                >
-                  ×
-                </button>
-              </div>
-              <p className="album-picker-subtitle">
-                {albumPickerItemIds.length.toLocaleString()} selected item
-                {albumPickerItemIds.length === 1 ? "" : "s"}
-              </p>
-
-              <div className="album-picker-search">
-                <SearchIcon size={15} />
-                <input
-                  ref={albumSearchRef}
-                  value={albumSearch}
-                  onChange={(e) => setAlbumSearch(e.target.value)}
-                  placeholder="Search albums"
-                  aria-label="Search albums"
-                  disabled={Boolean(addingToAlbumId)}
-                />
-                {albumSearch && (
-                  <button
-                    type="button"
-                    className="album-picker-search-clear"
-                    aria-label="Clear album search"
-                    onClick={() => {
-                      setAlbumSearch("");
-                      albumSearchRef.current?.focus();
-                    }}
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-
-              <div className="album-picker-list" role="listbox" aria-label="Albums">
-                {(() => {
-                  const selectedItems = library.items.filter((item: any) =>
-                    albumPickerItemIds.includes(item.id),
-                  );
-                  const query = albumSearch.trim().toLowerCase();
-                  const matching = library.albums.filter(
-                    (album: any) => !query || album.name.toLowerCase().includes(query),
-                  );
-                  if (!matching.length) {
-                    return (
-                      <div className="album-picker-empty">
-                        <AlbumsIcon size={24} />
-                        <b>{library.albums.length ? "No matching albums" : "No albums yet"}</b>
-                        <p>
-                          {library.albums.length
-                            ? "Try a different search."
-                            : "Create an album and these photos will be added to it."}
-                        </p>
-                      </div>
-                    );
-                  }
-                  return matching.map((album: any, index: number) => {
-                    const alreadyAdded =
-                      selectedItems.length > 0 &&
-                      selectedItems.every((item: any) => item.albumIds?.includes(album.id));
-                    const busy = addingToAlbumId === album.id;
-                    return (
-                      <button
-                        key={album.id}
-                        type="button"
-                        className="album-picker-row"
-                        onClick={() => addPickedItemsToAlbum(album)}
-                        disabled={Boolean(addingToAlbumId) || alreadyAdded}
-                        role="option"
-                        aria-selected="false"
-                      >
-                        <i
-                          className={`album-dot ${["coral", "violet", "blue", "green"][index % 4]}`}
-                        />
-                        <span className="album-picker-name">{album.name}</span>
-                        <span className="album-picker-count">
-                          {alreadyAdded
-                            ? "Already added"
-                            : (() => {
-                                const count = album.itemCount || 0;
-                                return `${count.toLocaleString()} ${count === 1 ? "item" : "items"}`;
-                              })()}
-                        </span>
-                        {busy && <span className="spinner album-picker-spinner" />}
-                      </button>
-                    );
-                  });
-                })()}
-              </div>
-
-              <div className="dialog-actions">
-                <button
-                  type="button"
-                  className="quiet-button"
-                  onClick={() => setAlbumPickerOpen(false)}
-                  disabled={Boolean(addingToAlbumId)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={createAlbumFromPicker}
-                  disabled={Boolean(addingToAlbumId)}
-                >
-                  <PlusIcon size={14} /> New album
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {albumPendingDelete && (
-          <div
-            className="dialog-backdrop"
-            role="presentation"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget && !deletingAlbum) setAlbumPendingDelete(null);
-            }}
-          >
-            <div
-              ref={deleteAlbumDialogRef}
-              className="album-dialog delete-album-dialog"
-              role="alertdialog"
-              aria-modal="true"
-              aria-labelledby="delete-album-title"
-              aria-describedby="delete-album-description"
-            >
-              <div className="dialog-heading">
-                <div>
-                  <p className="eyebrow">ALBUM</p>
-                  <h2 id="delete-album-title">Delete Album?</h2>
-                </div>
-                <button
-                  type="button"
-                  className="dialog-close"
-                  aria-label="Close"
-                  onClick={() => setAlbumPendingDelete(null)}
-                  disabled={deletingAlbum}
-                >
-                  ×
-                </button>
-              </div>
-              <p className="delete-album-copy">
-                Are you sure you want to delete <b>“{albumPendingDelete.name}”</b>?
-              </p>
-              <div className="delete-album-safety" id="delete-album-description">
-                <span>
-                  <AlbumsIcon size={19} />
-                </span>
-                <p>
-                  <b>Your photos are safe.</b> This only removes the album and its grouping.{" "}
-                  {albumPendingDelete.itemCount
-                    ? `${albumPendingDelete.itemCount.toLocaleString()} item${albumPendingDelete.itemCount === 1 ? "" : "s"} will remain in your library.`
-                    : "The items remain in your library."}
-                </p>
-              </div>
-              <div className="dialog-actions">
-                <button
-                  type="button"
-                  className="quiet-button"
-                  onClick={() => setAlbumPendingDelete(null)}
-                  disabled={deletingAlbum}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="danger-button"
-                  onClick={confirmDeleteAlbum}
-                  disabled={deletingAlbum}
-                >
-                  {deletingAlbum ? "Deleting…" : "Delete Album"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {itemPendingDeleteCount > 0 && (
-          <div
-            className="dialog-backdrop"
-            role="presentation"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget) {
-                setItemPendingDeleteCount(0);
-                itemPendingDeleteRef.current = null;
-              }
-            }}
-          >
-            <div
-              ref={deleteItemDialogRef}
-              className="album-dialog delete-album-dialog"
-              role="alertdialog"
-              aria-modal="true"
-            >
-              <div className="dialog-heading">
-                <div>
-                  <p className="eyebrow">PHOTO</p>
-                  <h2>Delete Item?</h2>
-                </div>
-                <button
-                  type="button"
-                  className="dialog-close"
-                  aria-label="Close"
-                  onClick={() => {
-                    setItemPendingDeleteCount(0);
-                    itemPendingDeleteRef.current = null;
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-              <p className="delete-album-copy">
-                Are you sure you want to delete{" "}
-                <b>
-                  {itemPendingDeleteCount} item
-                  {itemPendingDeleteCount === 1 ? "" : "s"}
-                </b>
-                ? They will be moved to Trash.
-              </p>
-              <div className="dialog-actions">
-                <button
-                  type="button"
-                  className="quiet-button"
-                  onClick={() => {
-                    setItemPendingDeleteCount(0);
-                    itemPendingDeleteRef.current = null;
-                  }}
-                >
-                  Cancel
-                </button>
-                <button type="button" className="danger-button" onClick={confirmDeleteItem}>
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {albumRemovePending && (
-          <div
-            className="dialog-backdrop"
-            role="presentation"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget) setAlbumRemovePending(null);
-            }}
-          >
-            <div className="album-dialog delete-album-dialog" role="alertdialog" aria-modal="true">
-              <div className="dialog-heading">
-                <div>
-                  <p className="eyebrow">ALBUM</p>
-                  <h2>Remove from Album?</h2>
-                </div>
-                <button
-                  type="button"
-                  className="dialog-close"
-                  aria-label="Close"
-                  onClick={() => setAlbumRemovePending(null)}
-                >
-                  ×
-                </button>
-              </div>
-              <p className="delete-album-copy">
-                Remove {albumRemovePending.itemIds.length} item
-                {albumRemovePending.itemIds.length === 1 ? "" : "s"} from this album?
-              </p>
-              <div className="dialog-actions">
-                <button
-                  type="button"
-                  className="quiet-button"
-                  onClick={() => setAlbumRemovePending(null)}
-                >
-                  Cancel
-                </button>
-                <button type="button" className="danger-button" onClick={confirmRemoveFromAlbum}>
-                  Remove
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {sourcesSheetOpen && (
-          <div
-            className="dialog-backdrop"
-            role="presentation"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget) setSourcesSheetOpen(false);
-            }}
-          >
-            <div
-              className="album-dialog sources-sheet"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="sources-sheet-title"
-            >
-              <div className="dialog-heading">
-                <div>
-                  <p className="eyebrow">LIBRARY</p>
-                  <h2 id="sources-sheet-title">Sources</h2>
-                </div>
-                <button
-                  type="button"
-                  className="dialog-close"
-                  aria-label="Close"
-                  onClick={() => setSourcesSheetOpen(false)}
-                >
-                  ×
-                </button>
-              </div>
-              <SourcesManager
-                variant="sheet"
-                onAddFolder={() => importFolder()}
-                onRemoveFolder={(folder: LibraryFolder) => setFolderPendingRemove(folder)}
-                onFilterSource={() => {
-                  setScreen("Library");
-                  setSourcesSheetOpen(false);
-                }}
-                onRescan={() => {
-                  void rescanSources();
-                }}
-                onRescanFolder={(folder) => {
-                  void rescanSource(folder);
-                }}
-              />
-              <div className="dialog-actions">
-                <button
-                  type="button"
-                  className="danger-button"
-                  disabled={library.busy || library.folders.length === 0}
-                  onClick={() => setRemoveAllSourcesDialogOpen(true)}
-                >
-                  Remove all sources
-                </button>
-                <div style={{ flex: 1 }} />
-                <button
-                  type="button"
-                  className="quiet-button"
-                  onClick={() => setSourcesSheetOpen(false)}
-                >
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {removeAllSourcesDialogOpen && (
-          <div
-            className="dialog-backdrop"
-            role="presentation"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget) setRemoveAllSourcesDialogOpen(false);
-            }}
-          >
-            <div className="album-dialog" role="dialog" aria-modal="true">
-              <div className="dialog-heading">
-                <h2>Remove all sources?</h2>
-              </div>
-              <div className="dialog-body">
-                This removes all source folders from the library. Files stay on disk.
-              </div>
-              <div className="dialog-actions">
-                <button
-                  type="button"
-                  className="quiet-button"
-                  onClick={() => setRemoveAllSourcesDialogOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="danger-button"
-                  onClick={() => {
-                    setRemoveAllSourcesDialogOpen(false);
-                    void removeAllSources();
-                  }}
-                >
-                  Remove all
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {folderPendingRemove && (
-          <div
-            className="dialog-backdrop"
-            role="presentation"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget && !removingFolder) setFolderPendingRemove(null);
-            }}
-          >
-            <div
-              ref={removeFolderDialogRef}
-              className="album-dialog delete-album-dialog"
-              role="alertdialog"
-              aria-modal="true"
-              aria-labelledby="remove-folder-title"
-              aria-describedby="remove-folder-description"
-            >
-              <div className="dialog-heading">
-                <div>
-                  <p className="eyebrow">FOLDER</p>
-                  <h2 id="remove-folder-title">Remove Folder?</h2>
-                </div>
-                <button
-                  type="button"
-                  className="dialog-close"
-                  aria-label="Close"
-                  onClick={() => setFolderPendingRemove(null)}
-                  disabled={removingFolder}
-                >
-                  ×
-                </button>
-              </div>
-              <p className="delete-album-copy">
-                Remove <b>“{folderPendingRemove.name}”</b> from VistoGallery?
-              </p>
-              <div className="delete-album-safety" id="remove-folder-description">
-                <span>
-                  <FolderIcon size={19} />
-                </span>
-                <p>
-                  <b>Your files are safe.</b>{" "}
-                  {folderPendingRemove.itemCount > 0
-                    ? `This only unstages the folder and its ${folderPendingRemove.itemCount.toLocaleString()} item${folderPendingRemove.itemCount === 1 ? "" : "s"} from the library.`
-                    : "This only removes the empty folder entry from the library."}{" "}
-                  Nothing is deleted from disk — import the folder again to bring it back.
-                </p>
-              </div>
-              <div className="dialog-actions">
-                <button
-                  type="button"
-                  className="quiet-button"
-                  onClick={() => setFolderPendingRemove(null)}
-                  disabled={removingFolder}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="danger-button"
-                  onClick={confirmRemoveFolder}
-                  disabled={removingFolder}
-                >
-                  {removingFolder ? "Removing…" : "Remove Folder"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <AppDialogs
+          albumDialogOpen={albumDialogOpen}
+          albumDialogMode={albumDialogMode}
+          albumName={albumName}
+          albumSeedIds={albumSeedIds}
+          creatingAlbum={creatingAlbum}
+          setAlbumDialogOpen={setAlbumDialogOpen}
+          setAlbumDialogMode={setAlbumDialogMode}
+          setAlbumName={setAlbumName}
+          setAlbumSeedIds={setAlbumSeedIds}
+          setRenamingAlbumId={setRenamingAlbumId}
+          setCreatingAlbum={setCreatingAlbum}
+          albumPendingDelete={albumPendingDelete}
+          deletingAlbum={deletingAlbum}
+          setAlbumPendingDelete={setAlbumPendingDelete}
+          setDeletingAlbum={setDeletingAlbum}
+          itemPendingDeleteCount={itemPendingDeleteCount}
+          setItemPendingDeleteCount={setItemPendingDeleteCount}
+          albumRemovePending={albumRemovePending}
+          setAlbumRemovePending={setAlbumRemovePending}
+          albumPickerOpen={albumPickerOpen}
+          albumPickerItemIds={albumPickerItemIds}
+          albumPickerSearch={albumSearch}
+          addingToAlbumId={addingToAlbumId}
+          setAlbumPickerOpen={setAlbumPickerOpen}
+          setAlbumPickerItemIds={setAlbumPickerItemIds}
+          setAlbumPickerSearch={setAlbumSearch}
+          setAddingToAlbumId={setAddingToAlbumId}
+          sourcesSheetOpen={sourcesSheetOpen}
+          setSourcesSheetOpen={setSourcesSheetOpen}
+          removeAllSourcesDialogOpen={removeAllSourcesDialogOpen}
+          setRemoveAllSourcesDialogOpen={setRemoveAllSourcesDialogOpen}
+          folderPendingRemove={folderPendingRemove}
+          removingFolder={removingFolder}
+          setFolderPendingRemove={setFolderPendingRemove}
+          setRemovingFolder={setRemovingFolder}
+          aboutOpen={aboutOpen}
+          setAboutOpen={setAboutOpen}
+          appVersion={appVersion}
+          updateDialogOpen={updateDialogOpen}
+          setUpdateDialogOpen={setUpdateDialogOpen}
+          updateInfo={updateInfo}
+          updateChecking={updateChecking}
+          library={library}
+          setScreen={(screen: string) => setScreen(screen as Screen)}
+          submitAlbum={submitAlbum}
+          closeAlbumDialog={closeAlbumDialog}
+          addPickedItemsToAlbum={addPickedItemsToAlbum}
+          createAlbumFromPicker={createAlbumFromPicker}
+          confirmDeleteAlbum={confirmDeleteAlbum}
+          confirmDeleteItem={confirmDeleteItem}
+          confirmRemoveFromAlbum={confirmRemoveFromAlbum}
+          confirmRemoveFolder={confirmRemoveFolder}
+          removeAllSources={removeAllSources}
+          rescanSources={rescanSources}
+          rescanSource={rescanSource}
+          importFolder={importFolder}
+          checkForUpdates={checkForUpdates}
+          albumDialogRef={albumDialogRef}
+          updateDialogRef={updateDialogRef}
+          aboutDialogRef={aboutDialogRef}
+          deleteAlbumDialogRef={deleteAlbumDialogRef}
+          deleteItemDialogRef={deleteItemDialogRef}
+          removeFolderDialogRef={removeFolderDialogRef}
+          albumInputRef={albumInputRef}
+          albumSearchRef={albumSearchRef}
+          itemPendingDeleteRef={itemPendingDeleteRef}
+        />
 
         {playbackItem && playbackItemId && screen !== "Video" && (
           <MiniPlayer
