@@ -104,6 +104,47 @@ pub async fn list_edit_recipes(state: State<'_, AppState>) -> Result<Vec<EditRec
     Ok(recipes)
 }
 
+/// Revert a media item to its original state by restoring from the .bak backup
+/// created during in-place edits, then deleting the edit recipe.
+#[tauri::command]
+pub async fn revert_edit_recipe(
+    media_id: String,
+    state: State<'_, AppState>,
+) -> Result<bool, String> {
+    let db = super::get_db(&state)?;
+    let row = sqlx::query("SELECT path FROM media_items WHERE id = ?")
+        .bind(&media_id)
+        .fetch_optional(&db)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("No media item found for id {media_id}"))?;
+    let source_path: String = row.get("path");
+
+    let backup_path = Path::new(&source_path).with_extension("bak");
+    if !backup_path.exists() {
+        return Err(format!(
+            "No backup found for {}. Nothing to revert.",
+            media_id
+        ));
+    }
+
+    // Restore the original file from backup
+    std::fs::copy(&backup_path, &source_path)
+        .map_err(|e| format!("Failed to restore backup: {}", e))?;
+
+    // Remove the backup
+    let _ = std::fs::remove_file(&backup_path);
+
+    // Delete the edit recipe
+    sqlx::query("DELETE FROM edit_recipes WHERE media_id = ?")
+        .bind(&media_id)
+        .execute(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(true)
+}
+
 /// Delete an edit recipe for a media item.
 #[tauri::command]
 pub async fn delete_edit_recipe(

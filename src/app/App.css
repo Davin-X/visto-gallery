@@ -8574,9 +8574,60 @@ body {
   background: var(--surface-2);
   color: var(--text);
 }
+.edit-adjustment-actions .edit-revert-button {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+  color: var(--danger);
+}
+.edit-adjustment-actions .edit-revert-button:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 15%, var(--surface));
+  color: var(--danger);
+}
 .edit-adjustment-actions button:disabled {
   opacity: 0.42;
   cursor: default;
+}
+.edit-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 18, 23, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: dialog-fade 0.15s ease;
+}
+.edit-confirm-dialog {
+  width: min(420px, 92vw);
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  animation: dialog-slide 0.2s ease;
+}
+.edit-confirm-dialog p {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.edit-confirm-dialog p b {
+  color: var(--text);
+}
+.edit-confirm-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.edit-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
 }
 .edit-tabs {
   gap: 4px;
