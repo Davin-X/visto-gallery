@@ -1200,6 +1200,35 @@ function App() {
   );
 
   // Route photos to the photo viewer and videos to the independent player.
+  // Shared setup for a video playback session: scope the queue to the
+  // session's collection and lock it, so later filter changes never rewrite
+  // what plays next.
+  const beginVideoSession = useCallback(
+    (item: MediaItem, scope: "library" | "hidden" = "library") => {
+      library.setViewerScope(scope);
+      const libraryState = useLibraryStore.getState();
+      const scopedVideos = libraryState.viewerItems.filter(
+        (candidate) =>
+          candidate.kind === "video" && canPlayVideoInApp(candidate.path, candidate.name),
+      );
+      if (!scopedVideos.some((candidate) => candidate.id === item.id)) scopedVideos.unshift(item);
+      setVideoQueue(scopedVideos);
+      videoQueuePagingRef.current =
+        scope === "library"
+          ? {
+              filter: libraryState.getCurrentLibraryFilter(),
+              cursor: libraryState.nextCursor,
+              hasMore: libraryState.hasMore,
+              pageSize: libraryState.pageSize,
+              loading: false,
+            }
+          : null;
+      backgroundVideoDismissedRef.current = null;
+      setBackgroundVideo(item);
+    },
+    [library],
+  );
+
   const openViewer = useCallback(
     (id?: string, origin: Screen = "Library", scope: "library" | "hidden" = "library") => {
       const targetId = id ?? library.inspectedId;
@@ -1209,35 +1238,32 @@ function App() {
         null;
       if (!item) return;
       setViewerOrigin(origin);
-      library.setViewerScope(scope);
       if (item.kind === "video") {
-        backgroundVideoDismissedRef.current = null;
-        const libraryState = useLibraryStore.getState();
-        const scopedVideos = libraryState.viewerItems.filter(
-          (candidate) =>
-            candidate.kind === "video" && canPlayVideoInApp(candidate.path, candidate.name),
-        );
-        if (!scopedVideos.some((candidate) => candidate.id === item.id)) scopedVideos.unshift(item);
-        setVideoQueue(scopedVideos);
-        videoQueuePagingRef.current =
-          scope === "library"
-            ? {
-                filter: libraryState.getCurrentLibraryFilter(),
-                cursor: libraryState.nextCursor,
-                hasMore: libraryState.hasMore,
-                pageSize: libraryState.pageSize,
-                loading: false,
-              }
-            : null;
-        setBackgroundVideo(item);
+        beginVideoSession(item, scope);
         viewer.close();
         setScreen("Video");
       } else {
+        library.setViewerScope(scope);
         viewer.open(item.id);
         setScreen("Viewer");
       }
     },
-    [library, viewer],
+    [library, viewer, beginVideoSession],
+  );
+
+  // Start a video session without leaving the current screen; the Now
+  // Playing chip is the way back to the player.
+  const playVideoInBackground = useCallback(
+    (id?: string, scope: "library" | "hidden" = "library") => {
+      const targetId = id ?? library.inspectedId;
+      const item =
+        library.items.find((candidate) => candidate.id === targetId) ??
+        library.hiddenItems.find((candidate) => candidate.id === targetId) ??
+        null;
+      if (!item || item.kind !== "video") return;
+      beginVideoSession(item, scope);
+    },
+    [library, beginVideoSession],
   );
 
   // Slideshow is a mode over the current context, not a separate screen:
@@ -2322,6 +2348,7 @@ function App() {
         assetUrl={assetUrl}
         setScreen={setScreen}
         openViewer={openViewer}
+        playVideoInBackground={playVideoInBackground}
         openScreen={openScreen}
         openAlbumDialog={openAlbumDialog}
         openAlbumPicker={openAlbumPicker}
