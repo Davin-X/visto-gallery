@@ -93,6 +93,7 @@ interface EditScreenProps {
 function EditScreen(props: EditScreenProps) {
   const [showOriginalPreview, setShowOriginalPreview] = useState(false);
   const [confirmReplace, setConfirmReplace] = useState(false);
+  const [confirmRevert, setConfirmRevert] = useState(false);
   const [draftTrayOpen, setDraftTrayOpen] = useState(false);
   const draftTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [draftPopoverPos, setDraftPopoverPos] = useState<{
@@ -154,6 +155,21 @@ function EditScreen(props: EditScreenProps) {
       void props.onSaveDraft?.();
     };
   }, [exitItemId, props.onSaveDraft]);
+
+  const handleRevert = async () => {
+    if (!props.item) return;
+    try {
+      await tauri.edit.revertRecipe(props.item.id);
+      props.onNotice?.("Reverted to original");
+      // Refresh the item so the catalog row reflects the restored file
+      if (props.onOpenEdit) {
+        void props.onOpenEdit(props.item);
+      }
+    } catch (error) {
+      props.onNotice?.(`Revert failed: ${error}`);
+    }
+  };
+
   useEffect(() => {
     if (!drag || !props.item) return;
     const onMove = (e: any) => {
@@ -658,7 +674,46 @@ function EditScreen(props: EditScreenProps) {
                   >
                     Reset all
                   </button>
+                  <button
+                    className="edit-revert-button"
+                    type="button"
+                    onClick={() => setConfirmRevert(true)}
+                    disabled={!hasAdjustments}
+                  >
+                    Revert to original
+                  </button>
                 </div>
+                {confirmRevert && (
+                  <div className="edit-confirm-overlay">
+                    <div className="edit-confirm-dialog">
+                      <p>
+                        Revert <b>{props.item?.name}</b> to its original state?
+                      </p>
+                      <p className="edit-confirm-note">
+                        This restores the file from its pre-edit backup and cannot be undone.
+                      </p>
+                      <div className="edit-confirm-actions">
+                        <button
+                          type="button"
+                          className="quiet-button"
+                          onClick={() => setConfirmRevert(false)}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="danger-button"
+                          onClick={async () => {
+                            setConfirmRevert(false);
+                            await handleRevert();
+                          }}
+                        >
+                          Revert
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               {[
                 {

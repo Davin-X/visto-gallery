@@ -207,6 +207,7 @@ pub fn run() {
             get_edit_recipe,
             list_edit_recipes,
             delete_edit_recipe,
+            revert_edit_recipe,
             copy_edit_recipe,
             batch_apply_edit,
             save_edit_preset,

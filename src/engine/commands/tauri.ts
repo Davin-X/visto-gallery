@@ -220,6 +220,7 @@ export const tauri = {
     listRecipes: () => invoke<EditRecipe[]>("list_edit_recipes"),
 
     deleteRecipe: (mediaId: string) => invoke<boolean>("delete_edit_recipe", { mediaId }),
+    revertRecipe: (mediaId: string) => invoke<boolean>("revert_edit_recipe", { mediaId }),
 
     copyRecipe: (req: { fromMediaId: string; toMediaId: string }) =>
       invoke<EditRecipe>("copy_edit_recipe", req),
