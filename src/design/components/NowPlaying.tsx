@@ -1,4 +1,4 @@
-import { PauseIcon, PlayIcon, StopIcon } from "./icons";
+import { ChevronLeftIcon, ChevronRightIcon, PauseIcon, PlayIcon, StopIcon } from "./icons";
 
 interface NowPlayingProps {
   /** Track name as shown in the player. */
@@ -9,6 +9,9 @@ interface NowPlayingProps {
   onToggle: () => void;
   /** End the background session entirely. */
   onStop: () => void;
+  /** Prev/next are offered only for multi-video sessions. */
+  onPrevious?: () => void;
+  onNext?: () => void;
 }
 
 /**
@@ -16,7 +19,15 @@ interface NowPlayingProps {
  * it never covers gallery content, survives tab navigation, and stays
  * glanceable like macOS's own Now Playing menu item.
  */
-export function NowPlaying({ name, playing, onExpand, onToggle, onStop }: NowPlayingProps) {
+export function NowPlaying({
+  name,
+  playing,
+  onExpand,
+  onToggle,
+  onStop,
+  onPrevious,
+  onNext,
+}: NowPlayingProps) {
   const sessionLabel = `Now playing: ${name}`;
   return (
     <div className="now-playing" role="group" aria-label="Now playing">
@@ -34,6 +45,17 @@ export function NowPlaying({ name, playing, onExpand, onToggle, onStop }: NowPla
         </span>
         <span className="now-playing-name">{name}</span>
       </button>
+      {onPrevious && (
+        <button
+          type="button"
+          className="now-playing-btn"
+          onClick={onPrevious}
+          aria-label="Previous video"
+          title="Previous video"
+        >
+          <ChevronLeftIcon size={13} />
+        </button>
+      )}
       <button
         type="button"
         className="now-playing-btn"
@@ -43,6 +65,17 @@ export function NowPlaying({ name, playing, onExpand, onToggle, onStop }: NowPla
       >
         {playing ? <PauseIcon size={13} /> : <PlayIcon size={13} />}
       </button>
+      {onNext && (
+        <button
+          type="button"
+          className="now-playing-btn"
+          onClick={onNext}
+          aria-label="Next video"
+          title="Next video"
+        >
+          <ChevronRightIcon size={13} />
+        </button>
+      )}
       <button
         type="button"
         className="now-playing-btn"

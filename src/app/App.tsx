@@ -1974,7 +1974,11 @@ function App() {
           accentColor={accentColor}
           nowPlaying={
             playbackItem && playbackItemId && screen !== "Video"
-              ? { name: playbackName || playbackItem.name, playing: fhPlaying }
+              ? {
+                  name: playbackName || playbackItem.name,
+                  playing: fhPlaying,
+                  navigable: videoQueue.length > 1 || Boolean(videoQueuePagingRef.current?.hasMore),
+                }
               : null
           }
           onNowPlayingExpand={() => {
@@ -1984,6 +1988,12 @@ function App() {
             setScreen("Video");
           }}
           onNowPlayingToggle={() => usePlaybackStore.getState().toggle()}
+          onNowPlayingPrevious={() => {
+            playPreviousVideo();
+          }}
+          onNowPlayingNext={() => {
+            void playNextVideo();
+          }}
           onNowPlayingStop={() => {
             if (playbackItem) backgroundVideoDismissedRef.current = playbackItem.id;
             usePlaybackStore.getState().stop();

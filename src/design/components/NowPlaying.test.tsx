@@ -37,6 +37,43 @@ test("shows the track name and wires play/pause/stop/open controls", () => {
   expect(onStop).toHaveBeenCalled();
 });
 
+test("renders prev/next only when the session is navigable", () => {
+  const { unmount } = render(
+    <div className="app-frame">
+      <NowPlaying
+        name="blueprint-399.mov"
+        playing
+        onExpand={vi.fn()}
+        onToggle={vi.fn()}
+        onStop={vi.fn()}
+      />
+    </div>,
+  );
+  expect(screen.queryByRole("button", { name: "Previous video" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Next video" })).not.toBeInTheDocument();
+  unmount();
+
+  const onPrevious = vi.fn();
+  const onNext = vi.fn();
+  render(
+    <div className="app-frame">
+      <NowPlaying
+        name="blueprint-399.mov"
+        playing
+        onExpand={vi.fn()}
+        onToggle={vi.fn()}
+        onStop={vi.fn()}
+        onPrevious={onPrevious}
+        onNext={onNext}
+      />
+    </div>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Previous video" }));
+  fireEvent.click(screen.getByRole("button", { name: "Next video" }));
+  expect(onPrevious).toHaveBeenCalled();
+  expect(onNext).toHaveBeenCalled();
+});
+
 test("paused state offers Play instead of Pause", () => {
   renderPill(false);
   expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();

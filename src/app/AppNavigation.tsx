@@ -51,10 +51,12 @@ interface AppTopBarProps {
   onMouseDown: (e: React.MouseEvent) => void;
   onDoubleClick: (e: React.MouseEvent) => void;
   /** Set while a video is in the background player on a non-Video screen. */
-  nowPlaying?: { name: string; playing: boolean } | null;
+  nowPlaying?: { name: string; playing: boolean; navigable?: boolean } | null;
   onNowPlayingExpand?: () => void;
   onNowPlayingToggle?: () => void;
   onNowPlayingStop?: () => void;
+  onNowPlayingPrevious?: () => void;
+  onNowPlayingNext?: () => void;
 }
 
 export function AppTopBar({
@@ -77,6 +79,8 @@ export function AppTopBar({
   onNowPlayingExpand,
   onNowPlayingToggle,
   onNowPlayingStop,
+  onNowPlayingPrevious,
+  onNowPlayingNext,
 }: AppTopBarProps) {
   const inspectorAvailable = screen === "Library" || screen === "Hidden";
 
@@ -117,6 +121,8 @@ export function AppTopBar({
           onExpand={onNowPlayingExpand}
           onToggle={onNowPlayingToggle}
           onStop={onNowPlayingStop}
+          onPrevious={nowPlaying.navigable ? onNowPlayingPrevious : undefined}
+          onNext={nowPlaying.navigable ? onNowPlayingNext : undefined}
         />
       )}
       <div className="topbar-actions">
