@@ -646,11 +646,21 @@ kbd {
   height: 100%;
   border-radius: 50%;
 }
-.tile-color-red .color-dot { background: #ef4444; }
-.tile-color-yellow .color-dot { background: #eab308; }
-.tile-color-green .color-dot { background: #22c55e; }
-.tile-color-blue .color-dot { background: #3b82f6; }
-.tile-color-purple .color-dot { background: #a855f7; }
+.tile-color-red .color-dot {
+  background: #ef4444;
+}
+.tile-color-yellow .color-dot {
+  background: #eab308;
+}
+.tile-color-green .color-dot {
+  background: #22c55e;
+}
+.tile-color-blue .color-dot {
+  background: #3b82f6;
+}
+.tile-color-purple .color-dot {
+  background: #a855f7;
+}
 
 /* Favourite and colour label share the top-left corner. When both exist, move
    the heart beside the dot so neither badge covers the other, and align their
@@ -673,7 +683,9 @@ kbd {
   font-size: 10px;
   line-height: 1;
 }
-.tile-rating .star.filled { color: #fbbf24; }
+.tile-rating .star.filled {
+  color: #fbbf24;
+}
 .color-dot-small {
   display: inline-block;
   width: 12px;
@@ -688,11 +700,21 @@ kbd {
   min-width: 32px;
   justify-content: center;
 }
-.quick-filter-color-red .color-dot-small { background: #ef4444; }
-.quick-filter-color-yellow .color-dot-small { background: #eab308; }
-.quick-filter-color-green .color-dot-small { background: #22c55e; }
-.quick-filter-color-blue .color-dot-small { background: #3b82f6; }
-.quick-filter-color-purple .color-dot-small { background: #a855f7; }
+.quick-filter-color-red .color-dot-small {
+  background: #ef4444;
+}
+.quick-filter-color-yellow .color-dot-small {
+  background: #eab308;
+}
+.quick-filter-color-green .color-dot-small {
+  background: #22c55e;
+}
+.quick-filter-color-blue .color-dot-small {
+  background: #3b82f6;
+}
+.quick-filter-color-purple .color-dot-small {
+  background: #a855f7;
+}
 .empty-state {
   grid-column: 1/-1;
   display: grid;
@@ -907,13 +929,7 @@ kbd {
   height: 32px;
   place-items: center;
   border-radius: 4px;
-  background: linear-gradient(
-    135deg,
-    #d8e7d6 0 30%,
-    #c8e2ed 30% 48%,
-    #e7ead8 48% 72%,
-    #d0e1d6 72%
-  );
+  background: linear-gradient(135deg, #d8e7d6 0 30%, #c8e2ed 30% 48%, #e7ead8 48% 72%, #d0e1d6 72%);
   color: #e07665;
   font-size: 16px;
 }
@@ -1022,12 +1038,7 @@ kbd {
   border: 1px solid var(--line);
   border-radius: 12px;
   background:
-    radial-gradient(
-      ellipse at 50% 0%,
-      rgba(139, 164, 244, 0.15),
-      transparent 62%
-    ),
-    var(--surface-2);
+    radial-gradient(ellipse at 50% 0%, rgba(139, 164, 244, 0.15), transparent 62%), var(--surface-2);
   text-align: center;
 }
 .semantic-orb {
@@ -1038,11 +1049,7 @@ kbd {
   place-items: center;
   border: 1px solid rgba(143, 132, 228, 0.28);
   border-radius: 14px;
-  background: linear-gradient(
-    145deg,
-    rgba(135, 174, 246, 0.18),
-    rgba(197, 147, 228, 0.2)
-  );
+  background: linear-gradient(145deg, rgba(135, 174, 246, 0.18), rgba(197, 147, 228, 0.2));
   color: #8f88d9;
   font-size: 24px;
 }
@@ -2511,18 +2518,17 @@ kbd {
     border-radius: 0;
   }
   .topbar {
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    column-gap: 10px;
     height: 50px;
     padding: 0 12px;
   }
   .topbar-context {
     display: none;
   }
-  .topbar-brand {
-    grid-column: 2;
-  }
-  .topbar-actions {
-    grid-column: 3;
+  .app-frame .topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    padding-left: 80px;
   }
   .theme-button {
     width: 29px;
@@ -3691,8 +3697,7 @@ kbd {
 }
 
 .app-frame :is(h1, h2, h3, h4) {
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
 }
 
 .app-frame :is(.page-heading h1, .content-heading h1) {
@@ -4517,12 +4522,7 @@ body {
   border-color: var(--line);
   border-radius: 14px;
   background:
-    radial-gradient(
-      ellipse at 50% 0%,
-      rgba(104, 142, 220, 0.12),
-      transparent 62%
-    ),
-    var(--surface-2);
+    radial-gradient(ellipse at 50% 0%, rgba(104, 142, 220, 0.12), transparent 62%), var(--surface-2);
 }
 
 .semantic-orb {
@@ -4730,9 +4730,9 @@ body {
    - in dark mode that made "Scan N files" dark-on-dark and unreadable. */
 .app-frame
   .empty-state
-  button:not(.primary-button):not(.quiet-button):not(.danger-button):not(
-    .outline-button
-  ):not(.toolbar-button) {
+  button:not(.primary-button):not(.quiet-button):not(.danger-button):not(.outline-button):not(
+    .toolbar-button
+  ) {
   min-height: 32px;
   padding: 0 10px;
   border: 1px solid var(--line-strong);
@@ -5049,7 +5049,6 @@ body {
   min-height: 0;
 }
 
-
 /* Filter dropdown */
 .filter-dropdown {
   position: relative;
@@ -5068,12 +5067,11 @@ body {
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background:
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--accent) 5%, var(--surface)) 0%,
-      var(--surface) 36%
-    );
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--accent) 5%, var(--surface)) 0%,
+    var(--surface) 36%
+  );
   box-shadow:
     0 18px 48px rgba(0, 0, 0, 0.22),
     0 2px 8px rgba(0, 0, 0, 0.12),
