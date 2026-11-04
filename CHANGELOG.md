@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [0.3.0] - 2026-11-04
+
+### Added
 - Capture-date range filtering with EXIF capture time and file-modification fallback
 - Smart Albums backed by validated, rule-based filter definitions rather than copied item lists
 - Versioned catalog backup and restore with integrity/schema validation, transactional restore, automatic pre-restore snapshots, and missing-path reporting
