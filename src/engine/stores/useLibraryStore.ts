@@ -135,6 +135,8 @@ interface LibraryState {
   albumItems: Record<string, MediaItem[]>;
   // Actions - Data Loading
   loadLibrary: (filter?: LibraryFilter) => Promise<void>;
+  loadItemsPage: (filter?: LibraryFilter) => Promise<void>;
+  loadCatalogMetadata: () => Promise<void>;
   loadNextPage: () => Promise<void>;
   loadFolders: () => Promise<void>;
   removeFolder: (path: string, deleteFiles?: boolean) => Promise<number>;
@@ -464,12 +466,12 @@ export const useLibraryStore = create<LibraryState>()(
       // Per-album item cache (all items in an album, not paginated)
       albumItems: {},
       // Data Loading
-      loadLibrary: async (filter) => {
+      // Load only library items (paged). Called frequently when filters change.
+      // Catalog metadata (albums, smart albums, tags, folders) is NOT refreshed
+      // here — call loadCatalogMetadata() for that.
+      loadItemsPage: async (filter?: LibraryFilter) => {
         const generation = ++libraryLoadGeneration;
         set({
-          // A paged catalog query is not a scan. Keeping it out of the
-          // blocking busy/progress state lets filter clicks stay cheap and
-          // avoids flashing the full importer UI for ordinary refinements.
           refreshingLibrary: true,
           page: 0,
           hasMore: false,
@@ -496,16 +498,44 @@ export const useLibraryStore = create<LibraryState>()(
             return;
           }
 
-          const [pageResult, albumOverviews, smartAlbums, tags, folders] = await Promise.all([
-            tauri.library.getItems(dto),
+          const pageResult = await tauri.library.getItems(dto);
+          if (generation !== libraryLoadGeneration) return;
+          const page: LibraryItemsPage = Array.isArray(pageResult)
+            ? { items: pageResult, hasMore: false, totalCount: pageResult.length }
+            : pageResult;
+
+          set({
+            items: page.items,
+            refreshingLibrary: false,
+            page: 0,
+            hasMore: page.hasMore,
+            nextCursor: page.nextCursor ?? null,
+            totalCount: page.totalCount ?? 0,
+          });
+          get().refreshDerived();
+        } catch (e) {
+          if (generation !== libraryLoadGeneration) return;
+          if (import.meta.env.DEV) console.error("loadItemsPage failed:", e);
+          set({
+            refreshingLibrary: false,
+            notice: "Failed to load library: " + String(e),
+          });
+        }
+      },
+
+      // Load catalog metadata (albums, smart albums, tags, folders). Called
+      // infrequently when sources or albums change — not on every filter
+      // change.
+      loadCatalogMetadata: async () => {
+        const generation = ++libraryLoadGeneration;
+        try {
+          const [albumOverviews, smartAlbums, tags, folders] = await Promise.all([
             tauri.albums.getOverviews(),
             tauri.smartAlbums.get(),
             tauri.albums.getTags(),
             tauri.library.getFolders(),
           ]);
           if (generation !== libraryLoadGeneration) return;
-          // Cards only need counts and a bounded cover set. The full
-          // membership is fetched when an album is opened.
           const albums: Album[] = albumOverviews.map((album) => ({
             id: album.id,
             name: album.name,
@@ -515,36 +545,30 @@ export const useLibraryStore = create<LibraryState>()(
             createdAt: album.createdAt,
             updatedAt: album.updatedAt,
           }));
-          // Supports the old array response in browser fixtures while native
-          // callers use the bounded page contract.
-          const page: LibraryItemsPage = Array.isArray(pageResult)
-            ? { items: pageResult, hasMore: false, totalCount: pageResult.length }
-            : pageResult;
-
           set({
-            items: page.items,
             albums,
             albumOverviews,
             smartAlbums,
             tags,
             folders,
-            refreshingLibrary: false,
-            page: 0,
-            hasMore: page.hasMore,
-            nextCursor: page.nextCursor ?? null,
-            totalCount: page.totalCount ?? 0,
           });
           get().refreshDerived();
         } catch (e) {
-          // A superseded request must not end the newer request's spinner or
-          // report a stale failure to the user.
           if (generation !== libraryLoadGeneration) return;
-          if (import.meta.env.DEV) console.error("loadLibrary failed:", e);
+          if (import.meta.env.DEV) console.error("loadCatalogMetadata failed:", e);
           set({
-            refreshingLibrary: false,
-            notice: "Failed to load library: " + String(e),
+            notice: "Failed to load catalog metadata: " + String(e),
           });
         }
+      },
+
+      // Load both items (paged) and catalog metadata. Used on first load or
+      // when both need refreshing. For filter-only changes, prefer
+      // loadItemsPage().
+      loadLibrary: async (filter?: LibraryFilter) => {
+        await get().loadItemsPage(filter);
+        await get().loadCatalogMetadata();
+        get().refreshDerived();
       },
 
       loadNextPage: async () => {
