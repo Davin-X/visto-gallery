@@ -5359,6 +5359,58 @@ body {
   min-height: 34px;
 }
 
+.shortcuts-cheat-sheet {
+  width: min(520px, 92vw);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.shortcuts-cheat-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.shortcuts-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shortcuts-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.shortcuts-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
+}
+
+.shortcuts-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+  width: 120px;
+}
+
+.shortcuts-label {
+  font-size: 13px;
+  color: var(--text);
+}
+
 .confirm-dialog {
   width: min(460px, 100%);
 }
