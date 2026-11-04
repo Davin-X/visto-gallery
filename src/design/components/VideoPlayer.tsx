@@ -166,6 +166,11 @@ function VideoPlayer({
         muted: video.muted,
         volume: video.volume,
       });
+      // WKWebView is finicky about autoplay for tiny background hosts: the
+      // attribute alone can stall indefinitely with the host page inert. Ask
+      // for playback explicitly; it happens within the user's gesture when
+      // the click started the session.
+      if (video.autoplay) void video.play().catch(() => {});
     }
     return () => unregisterPlayback(video);
   }, [itemId, name, registerPlayback, unregisterPlayback, syncPlayback]);

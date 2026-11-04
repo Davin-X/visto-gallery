@@ -2138,10 +2138,48 @@ body {
   pointer-events: none;
 }
 
+/* Inspector video preview: matches tiles (poster + play affordance); the
+   actual session goes through the same background player as everything
+   else. */
+.inspector-video-preview {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #000;
+}
+
+.inspector-video-preview video,
+.inspector-video-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.inspector-video-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding-left: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  transform: translate(-50%, -50%);
+  backdrop-filter: blur(3px);
+}
+
 .inspector-actions {
   display: flex;
   gap: 8px;
   margin: 12px 0 16px;
+  flex-wrap: wrap;
 }
 
 .inspector-action {
@@ -2164,6 +2202,17 @@ body {
 .inspector-action:hover {
   background: var(--surface-3);
   border-color: var(--blue);
+}
+
+.inspector-action.primary {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  color: var(--accent);
+}
+
+.inspector-action.primary:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent-text);
 }
 
 .inspector-action.favorite {
@@ -2953,6 +3002,25 @@ body {
 .app-frame .topbar {
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   padding-left: 104px;
+}
+
+/* Pin children to explicit columns so hiding a column never shifts placement. */
+.topbar-brand {
+  grid-column: 1;
+  justify-self: start;
+}
+
+.topbar-context {
+  grid-column: 2;
+}
+
+.now-playing {
+  grid-column: 3;
+  justify-self: end;
+}
+
+.topbar-actions {
+  grid-column: 4;
 }
 
 .traffic-lights {

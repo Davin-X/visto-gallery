@@ -1466,6 +1466,23 @@ function LibraryScreen(props: LibraryScreenProps) {
                               <KindBadge kind={item.kind} />
                             </span>
                           )}
+                          {item.kind === "video" &&
+                            canPlayVideoInApp(item.path, item.name) &&
+                            props.onPlayBackground && (
+                              <button
+                                type="button"
+                                className="tile-play-background"
+                                aria-label={`Play ${tileAlt(item)} in background`}
+                                title="Play in background"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  props.onPlayBackground?.(item.id);
+                                }}
+                                onDoubleClick={(event) => event.stopPropagation()}
+                              >
+                                <PlayIcon size={16} />
+                              </button>
+                            )}
                           {item.kind === "video" && (
                             <span className="video-label">
                               <PlayIcon size={10} />
@@ -1747,6 +1764,23 @@ function LibraryScreen(props: LibraryScreenProps) {
                             <KindBadge kind={item.kind} />
                           </span>
                         )}
+                        {item.kind === "video" &&
+                          canPlayVideoInApp(item.path, item.name) &&
+                          props.onPlayBackground && (
+                            <button
+                              type="button"
+                              className="tile-play-background"
+                              aria-label={`Play ${tileAlt(item)} in background`}
+                              title="Play in background"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                props.onPlayBackground?.(item.id);
+                              }}
+                              onDoubleClick={(event) => event.stopPropagation()}
+                            >
+                              <PlayIcon size={16} />
+                            </button>
+                          )}
                         {item.kind === "video" && (
                           <span className="video-label">
                             <PlayIcon size={10} />
@@ -1875,7 +1909,12 @@ function LibraryScreen(props: LibraryScreenProps) {
                         style={draftImageStyle(draftTransforms, sel.id)}
                       />
                     ) : sel.kind === "video" ? (
-                      <video src={assetUrl(sel.path)} controls />
+                      <span className="inspector-video-preview">
+                        <VideoThumb src={assetUrl(sel.path)} name={tileAlt(sel)} />
+                        <span className="inspector-video-play">
+                          <PlayIcon size={22} />
+                        </span>
+                      </span>
                     ) : (
                       <span className="raw-tile">
                         <KindBadge kind={sel.kind} />
@@ -1887,6 +1926,16 @@ function LibraryScreen(props: LibraryScreenProps) {
                     </span>
                   </button>
                   <div className="inspector-actions">
+                    {sel.kind === "video" && props.onPlayBackground && (
+                      <button
+                        className="inspector-action primary"
+                        onClick={() => props.onPlayBackground?.(sel.id)}
+                        title="Play in background — keep browsing; the top bar shows playback"
+                      >
+                        <PlayIcon size={14} />
+                        <span>Play</span>
+                      </button>
+                    )}
                     <button
                       className={`inspector-action ${sel.favorite ? "favorite active" : ""}`}
                       onClick={() => props.onToggleFavorite(props.inspectedId as string)}
