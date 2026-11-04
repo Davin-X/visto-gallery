@@ -1,30 +1,7 @@
-import React, {
-  useEffect,
-  useRef,
-  useState,
-  useCallback,
-  useMemo,
-  useDeferredValue,
-  memo,
-} from "react";
-import HiddenScreen from "../screens/HiddenScreen";
-import LibraryScreen from "../screens/LibraryScreen";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
-import EditScreen from "../screens/EditScreen";
-import ViewerScreen from "../screens/ViewerScreen";
-import VideoPlayerScreen from "../screens/VideoPlayerScreen";
-import CameraLensBrowserScreen from "../screens/CameraLensBrowserScreen";
-import BatchScreen from "../screens/BatchScreen";
-import AlbumsScreen from "../screens/AlbumsScreen";
-import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
-import VideoThumb from "../design/components/VideoThumb";
-import DuplicatesScreen from "../screens/DuplicatesScreen";
-import { CachedThumbnail } from "../design/components/CachedThumbnail";
-import { KindBadge, KindDot } from "../design/components/KindBadge";
-
-import { createPortal } from "react-dom";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { save, open as openFileDialog } from "@tauri-apps/plugin-dialog";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import {
   currentMonitor,
   getCurrentWindow,
@@ -41,16 +18,12 @@ import {
   useBatchStore,
   useSettingsStore,
   useSystemDark,
-  useThumbnailSize,
   ACCENT_PALETTE,
   applyTheme,
-  useDraftIds,
-  clearEditDraft,
   usePlaybackStore,
 } from "../engine/stores";
-import { draftImageStyle } from "../engine/utils/draftImage";
 import { MiniPlayer } from "../design/components/MiniPlayer";
-import { canPlayVideoInApp, getTypeIdentity, formatBytesSimple } from "../engine/utils/mediaTypes";
+import { canPlayVideoInApp, formatBytesSimple } from "../engine/utils/mediaTypes";
 import { dispatchNativeMenuEvent } from "./nativeMenu";
 import { isExportShortcut } from "./shortcuts";
 import { shouldCheckForUpdatesOnLaunch } from "./startup";
@@ -64,68 +37,18 @@ import { startConfiguredSlideshow } from "./utils/startConfiguredSlideshow";
 import { AppDialogs } from "./AppDialogs";
 import { AppSidebar, AppTopBar } from "./AppNavigation";
 import { AppShell } from "./AppShell";
+import { AppScreenRouter } from "./AppScreenRouter";
 import type { Screen } from "./screen";
 
-/**
- * Apply the item's saved edit draft to a preview image. Passing the shared map
- * keeps this synchronous and avoids a localStorage read per tile.
- */
-
-import type {
-  MediaItem,
-  MediaKind,
-  DuplicateGroup,
-  Album,
-  Filter,
-  LayoutMode,
-  EditValues,
-  CropRect,
-} from "../engine/types/media";
+import type { MediaItem } from "../engine/types/media";
 import type {
   LibraryFolder,
   LibraryFilterDTO,
   LibraryStats,
   UpdateCheckResult,
 } from "../engine/types/commands";
-import { SettingsScreen } from "../design/components/SettingsScreen";
-import { SourcesManager } from "../design/components/SourcesManager";
 import { SlideshowOverlay } from "../design/components/SlideshowOverlay";
 import { ContextMenu } from "../design/components/ContextMenu";
-import {
-  SearchIcon,
-  PlusIcon,
-  MinusIcon,
-  MoreIcon,
-  GridIcon,
-  OverviewIcon,
-  DetailsIcon,
-  TimelineIcon,
-  HeartIcon,
-  EyeIcon,
-  FullscreenIcon,
-  RotateIcon,
-  CropIcon,
-  FlipIcon,
-  SparkleIcon,
-  UsersIcon,
-  TagIcon,
-  ImageOffIcon,
-  ShareIcon,
-  CheckIcon,
-  StopIcon,
-  TrashIcon,
-} from "../design/components/icons";
-
-const initialEdits = {
-  exposure: 0,
-  contrast: 0,
-  warmth: 0,
-  shadows: 0,
-  highlights: 0,
-  saturation: 0,
-  rotation: 0,
-  flip: false,
-};
 
 /** Modifier glyph for the "focus search" hint - Command on macOS, Ctrl elsewhere. */
 function App() {
@@ -155,7 +78,6 @@ function App() {
   const systemDark = useSystemDark();
   const appearance = useSettingsStore((s) => s.appearance);
   const accentColor = useSettingsStore((s) => s.accentColor);
-  const [accentPickerOpen, setAccentPickerOpen] = useState(false);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const animateTransitions = useSettingsStore((s) => s.animateTransitions);
   // Resolved appearance: the user's choice, or the OS setting when "system".
@@ -475,7 +397,6 @@ function App() {
     if (screen === "Viewer" && !viewer.isOpen) viewer.open();
   }, [screen, viewer.isOpen, viewer.open]);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   // The library search input lives in LibraryScreen, but the Cmd+F shortcut
   // is owned here. Sharing the node through a ref keeps the shortcut working
@@ -930,7 +851,7 @@ function App() {
       }
 
       // Listen for native import progress events from scan/import commands.
-      const unlistenProgress = await events.onImportProgress((progress) => {
+      await events.onImportProgress((progress) => {
         const { phase, processed, total } = progress;
         liveRef.current.library.setBusy(true);
         liveRef.current.library.setProgress({
@@ -1835,14 +1756,6 @@ function App() {
     setScreen(next);
   };
 
-  const navigatePhoto = (delta: number) => {
-    if (library.playableItems.length === 0) return;
-    const nextIndex =
-      (library.currentIndex + delta + library.playableItems.length) % library.playableItems.length;
-    // Arrow keys move inspection only - the multi-selection survives.
-    library.inspectItem(library.playableItems[nextIndex].id);
-  };
-
   const importFiles = async () => {
     let paths: string[];
     try {
@@ -2396,384 +2309,52 @@ function App() {
         </>
       }
     >
-      <main
-        id="main-content"
-        className="main-content"
-        tabIndex={-1}
-        style={{ position: "relative" }}
-      >
-        {screenHistory.length > 0 && (
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Go back"
-            title="Go back"
-            onClick={goBack}
-            style={{
-              position: "absolute",
-              top: 10,
-              right: 10,
-              zIndex: 5,
-              width: 32,
-              height: 32,
-              padding: 0,
-              borderRadius: 8,
-              opacity: 0.8,
-            }}
-          >
-            ←
-          </button>
-        )}
-        {screen === "Library" && (
-          <LibraryScreen
-            items={library.visibleItems}
-            hasItems={library.items.length > 0}
-            inspectedId={library.inspectedId}
-            selectedIds={library.selectedIds}
-            filter={library.filter}
-            query={library.query}
-            layout={library.layout}
-            showInspector={library.showInspector}
-            activeAlbum={library.activeAlbum}
-            albums={library.albums}
-            onInspectItem={library.inspectItem}
-            onToggleSelect={library.toggleSelection}
-            onSelectRange={library.selectRange}
-            onSetSelection={library.setSelectedIds}
-            onToggleSelectAll={library.toggleSelectAll}
-            onClearSelection={library.clearSelection}
-            onOpenBatch={() => exportToBatch()}
-            onChangeFilter={library.setFilter}
-            onChangeQuery={library.setQuery}
-            onChangeLayout={library.setLayout}
-            onToggleInspector={library.toggleInspector}
-            onSetActiveAlbum={library.setActiveAlbum}
-            onOpenAlbums={() => openScreen("Albums")}
-            onAddItems={(albumId: string) => addItemsToAlbum(albumId)}
-            onOpenAlbumPicker={(itemIds?: string[]) => openAlbumPicker(itemIds)}
-            onAlbumMenu={(e: React.MouseEvent) => {
-              const album = library.albums.find((a: any) => a.id === library.activeAlbum);
-              if (album) openAlbumMenu(album, e);
-            }}
-            albumDragOver={albumDragOver}
-            onToggleFavorite={library.toggleFavorite}
-            onToggleHidden={library.toggleHidden}
-            onSetFavoriteForIds={library.setFavoriteForIds}
-            onSetHiddenForIds={library.setHiddenForIds}
-            onSetRatingForIds={library.setRatingForIds}
-            onSetColorLabelForIds={library.setColorLabelForIds}
-            minRating={library.minRating}
-            libraryStats={libraryStats}
-            colorLabelFilter={library.colorLabelFilter}
-            dateFrom={library.dateFrom}
-            dateTo={library.dateTo}
-            onSetMinRating={library.setMinRating}
-            onSetColorLabelFilter={library.setColorLabelFilter}
-            onSetDateRange={library.setDateRange}
-            onCreateSmartAlbum={(name: string) => void library.createSmartAlbum(name)}
-            onCopyTagsToFinder={copyTagsToFinderForIds}
-            onUpdateTags={library.updateItemTags}
-            onDeleteItems={library.deleteItems}
-            onRequestDeleteItems={(ids: string[]) => {
-              itemPendingDeleteRef.current = ids;
-              setItemPendingDeleteCount(ids.length);
-            }}
-            onRequestRemoveFromAlbum={(albumId: string, itemIds: string[]) =>
-              setAlbumRemovePending({ albumId, itemIds })
-            }
-            onOpenViewer={(id?: string) => openViewer(id, "Library")}
-            onOpenEdit={async (item: any) => {
-              if (item?.kind === "video") {
-                openViewer(item.id, "Library");
-                return;
-              }
-              await edit.saveDraft();
-              await edit.open(item);
-              setScreen("Edit");
-            }}
-            onImportFolder={() => importFolder()}
-            onImportFiles={() => importFiles()}
-            onPlaySlideshow={playSlideshow}
-            onCreateAlbum={openAlbumDialog}
-            searchInputRef={searchInputRef}
-            onContextMenu={openContextMenu}
-            busy={library.busy}
-            progress={library.progress}
-            notice={showNotice}
-            assetUrl={assetUrl}
-            hiddenCount={library.hiddenCount}
-          />
-        )}
-
-        {screen === "Albums" && (
-          <AlbumsScreen
-            albums={library.albums}
-            items={library.items}
-            smartAlbums={library.smartAlbums}
-            assetUrl={assetUrl}
-            onCreateAlbum={openAlbumDialog}
-            onAlbumContextMenu={openAlbumMenu}
-            onSmartAlbumContextMenu={openSmartAlbumMenu}
-            onOpenSmartAlbum={(albumId: string) => void openSmartAlbum(albumId)}
-            onOpenAlbum={async (albumId: string) => {
-              library.setActiveAlbum(albumId);
-              library.setFilter("All");
-              library.setQuery("");
-              await library.loadAlbumItems(albumId);
-              setScreen("Library");
-            }}
-          />
-        )}
-
-        {screen === "Viewer" && (
-          <ViewerScreen
-            active
-            items={photoViewerItems}
-            selected={library.viewerSelected?.kind === "video" ? null : library.viewerSelected}
-            zoom={viewer.zoom}
-            fitMode={viewer.fitMode}
-            rotation={viewer.rotation}
-            flipX={viewer.flipX}
-            onNavigate={navigateViewer}
-            onSetPhoto={selectViewerItem}
-            onSetZoom={viewer.setZoom}
-            onZoomIn={viewer.zoomIn}
-            onZoomOut={viewer.zoomOut}
-            onResetZoom={viewer.resetZoom}
-            onToggleFitMode={viewer.toggleFitMode}
-            onRotate={viewer.rotate}
-            onToggleFlip={viewer.toggleFlip}
-            onResetTransform={viewer.resetTransform}
-            onToggleFullscreen={viewer.toggleFullscreen}
-            onClose={viewer.close}
-            onToggleFavorite={library.toggleFavorite}
-            onToggleHidden={library.toggleHidden}
-            onOpenEdit={async (item: MediaItem) => {
-              await edit.saveDraft();
-              await edit.open(item);
-              setScreen("Edit");
-            }}
-            onContextMenu={openContextMenu}
-            assetUrl={assetUrl}
-          />
-        )}
-
-        <VideoPlayerScreen
-          active={screen === "Video"}
-          item={playbackItem}
-          queue={videoQueue}
-          queueAutoPlayItemId={queueAutoPlayId}
-          assetUrl={assetUrl}
-          onBack={() => setScreen(viewerOrigin || "Library")}
-          onSelect={selectVideoItem}
-          onPrevious={playPreviousVideo}
-          onNext={playNextVideo}
-        />
-
-        {screen === "Edit" && (
-          <EditScreen
-            item={edit.item}
-            values={edit.values}
-            crop={edit.crop}
-            history={edit.history}
-            historyIndex={edit.historyIndex}
-            onSetValue={edit.setValue}
-            onSetValues={edit.setValues}
-            onReset={edit.reset}
-            onAuto={edit.auto}
-            onRotate={edit.rotate}
-            onFlip={edit.flip}
-            onSetCrop={edit.setCrop}
-            onResetCrop={edit.resetCrop}
-            onUndo={edit.undo}
-            onRedo={edit.redo}
-            canUndo={edit.canUndo}
-            canRedo={edit.canRedo}
-            onClose={edit.close}
-            onSaveDraft={edit.saveDraft}
-            onBack={() => setScreen("Library")}
-            onExport={async (inPlace = false) => {
-              const item = edit.item;
-              if (!item) return;
-              const sourceExtension = String(
-                item.extension || item.name.split(".").pop() || "",
-              ).toLowerCase();
-              if (inPlace) {
-                if (!["jpg", "jpeg", "png", "webp"].includes(sourceExtension)) {
-                  showNotice("Replace original supports JPEG, PNG, and WebP. Save a copy instead.");
-                  return;
-                }
-              }
-              try {
-                const v = edit.values || {};
-                const crop = edit.crop || {
-                  enabled: false,
-                  x: 0,
-                  y: 0,
-                  width: 1,
-                  height: 1,
-                };
-
-                // Build render request for native backend
-                const request = {
-                  sourcePath: item.path,
-                  edits: v,
-                  outputFormat: (inPlace ? "in_place" : "image/jpeg") as
-                    "jpeg" | "png" | "webp" | "heic" | "avif" | "in_place",
-                  quality: 0.92,
-                  stripMetadata: false,
-                  crop: crop.enabled ? crop : undefined,
-                };
-
-                const result = await tauri.editing.render(request);
-
-                if (!inPlace) {
-                  // For save-copy, backend wrote to temp; now show save dialog
-                  const suggestedName = String(item.name).replace(/\.[^.]+$/, "") + "_edited.jpg";
-                  const finalPath = await save({
-                    defaultPath: suggestedName,
-                    filters: [{ name: "JPEG image", extensions: ["jpg", "jpeg"] }],
-                  });
-                  if (!finalPath) {
-                    showNotice("Export cancelled");
-                    return;
-                  }
-                  // Move temp file to final destination
-                  await tauri.editing.moveExportedFile(result.outputPath, finalPath);
-                }
-
-                clearEditDraft(item.id);
-                if (inPlace) await library.loadLibrary();
-                showNotice(inPlace ? "Replaced original" : "Exported edited copy");
-              } catch (e) {
-                if (String(e).includes("cancelled")) {
-                  showNotice("Export cancelled");
-                } else {
-                  showNotice("Export failed: " + String(e));
-                }
-              }
-            }}
-            onClearDraft={edit.clearDraft}
-            onNotice={showNotice}
-            assetUrl={assetUrl}
-            items={library.items.filter((i: any) => i.kind === "photo" && !i.hidden)}
-            onOpenEdit={async (item: any) => {
-              await edit.saveDraft();
-              await edit.open(item);
-            }}
-          />
-        )}
-
-        {screen === "Batch" && (
-          <BatchScreen
-            items={library.items.filter((i: any) => library.selectedIds.includes(i.id))}
-            selectedIds={library.selectedIds}
-            config={batch}
-            state={batch}
-            onSetPattern={batch.setPattern}
-            onSetFormat={batch.setFormat}
-            onSetQuality={batch.setQuality}
-            onSetStripMetadata={batch.setStripMetadata}
-            onSetMaxDimension={batch.setMaxDimension}
-            onSetStep={batch.setStep}
-            onChooseFolder={async () => {
-              const folder = await openFileDialog({
-                directory: true,
-                multiple: false,
-                title: "Choose export folder",
-              });
-              if (typeof folder === "string") batch.setOutputFolder(folder);
-            }}
-            onOpenFolder={() => {
-              if (batch.outputFolder) tauri.items.openFolder(batch.outputFolder);
-            }}
-            onExportBatch={batch.exportBatch}
-            onCancelBatch={batch.cancelBatch}
-            onReset={batch.reset}
-            onOpenLibrary={() => setScreen("Library")}
-            onClearSelection={library.clearSelection}
-            onSelectAll={library.selectAll}
-            onSetSelection={library.setSelectedIds}
-            onRemoveItem={library.toggleSelection}
-            busy={batch.busy}
-            cancelRequested={batch.cancelRequested}
-            progress={batch.progress}
-            result={batch.result}
-            error={batch.error}
-            assetUrl={assetUrl}
-          />
-        )}
-
-        {screen === "CameraLens" && (
-          <CameraLensBrowserScreen
-            items={library.items}
-            assetUrl={assetUrl}
-            onBack={() => setScreen("Library")}
-            onOpenViewer={(id?: string) => openViewer(id, "Library")}
-          />
-        )}
-
-        {screen === "Hidden" && (
-          <HiddenScreen
-            assetUrl={assetUrl}
-            searchInputRef={searchInputRef}
-            onContextMenu={openContextMenu}
-            onNavigate={openScreen}
-            onCreateAlbum={openAlbumDialog}
-            onOpenAlbumPicker={(itemIds?: string[]) => openAlbumPicker(itemIds)}
-            onRequestDeleteItems={(ids: string[]) => {
-              itemPendingDeleteRef.current = ids;
-              setItemPendingDeleteCount(ids.length);
-            }}
-            onOpenEdit={async (item: any) => {
-              if (item?.kind === "video") {
-                openViewer(item.id, "Hidden", "hidden");
-                return;
-              }
-              await edit.saveDraft();
-              await edit.open(item);
-              setScreen("Edit");
-            }}
-            onOpenViewer={(id?: string) => openViewer(id, "Hidden", "hidden")}
-          />
-        )}
-
-        {screen === "Duplicates" && (
-          <DuplicatesScreen
-            groups={library.duplicates}
-            items={library.items}
-            onScan={library.scanDuplicates}
-            onClear={library.clearDuplicates}
-            busy={library.busy}
-            assetUrl={assetUrl}
-            onRequestDeleteItems={(ids: string[]) => {
-              itemPendingDeleteRef.current = ids;
-              setItemPendingDeleteCount(ids.length);
-            }}
-            onHideIds={async (ids: string[]) => {
-              if (!ids.length) return;
-              library.showNotice(`Hiding ${ids.length.toLocaleString()} item(s)…`);
-              await library.setHiddenForIds(ids, true);
-              library.showNotice(`Hidden ${ids.length.toLocaleString()} item(s).`);
-              await library.scanDuplicates();
-            }}
-          />
-        )}
-
-        {screen === "Settings" && (
-          <SettingsScreen
-            onAddFolder={() => importFolder()}
-            onRemoveFolder={(folder: LibraryFolder) => setFolderPendingRemove(folder)}
-            onRescan={() => {
-              void rescanSources();
-            }}
-            onRescanFolder={(folder) => {
-              void rescanSource(folder);
-            }}
-            onRemoveAllSources={() => setRemoveAllSourcesDialogOpen(true)}
-          />
-        )}
-      </main>
+      <AppScreenRouter
+        screen={screen}
+        screenHistory={screenHistory}
+        goBack={goBack}
+        library={library}
+        viewer={viewer}
+        edit={edit}
+        batch={batch}
+        assetUrl={assetUrl}
+        setScreen={setScreen}
+        openViewer={openViewer}
+        openScreen={openScreen}
+        openAlbumDialog={openAlbumDialog}
+        openAlbumPicker={openAlbumPicker}
+        openContextMenu={openContextMenu}
+        searchInputRef={searchInputRef}
+        itemPendingDeleteRef={itemPendingDeleteRef}
+        setItemPendingDeleteCount={setItemPendingDeleteCount}
+        setFolderPendingRemove={setFolderPendingRemove}
+        setRemoveAllSourcesDialogOpen={setRemoveAllSourcesDialogOpen}
+        rescanSources={rescanSources}
+        rescanSource={rescanSource}
+        importFiles={importFiles}
+        importFolder={importFolder}
+        showNotice={showNotice}
+        exportToBatch={exportToBatch}
+        addItemsToAlbum={addItemsToAlbum}
+        albumDragOver={albumDragOver}
+        libraryStats={libraryStats}
+        photoViewerItems={photoViewerItems}
+        playbackItem={playbackItem}
+        videoQueue={videoQueue}
+        queueAutoPlayId={queueAutoPlayId}
+        viewerOrigin={viewerOrigin}
+        navigateViewer={navigateViewer}
+        selectViewerItem={selectViewerItem}
+        selectVideoItem={selectVideoItem}
+        playPreviousVideo={playPreviousVideo}
+        playNextVideo={playNextVideo}
+        playSlideshow={playSlideshow}
+        openAlbumMenu={openAlbumMenu}
+        openSmartAlbum={openSmartAlbum}
+        openSmartAlbumMenu={openSmartAlbumMenu}
+        setAlbumRemovePending={setAlbumRemovePending}
+        copyTagsToFinderForIds={copyTagsToFinderForIds}
+      />
     </AppShell>
   );
 }
