@@ -34,7 +34,7 @@ function HiddenScreen(props: HiddenScreenProps) {
 
   const items = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    return library.hiddenItems.filter((item: MediaItem) => {
+    return library.items.filter((item: MediaItem) => {
       if (filter === "Photos" && item.kind !== "photo") return false;
       if (filter === "Videos" && item.kind !== "video") return false;
       if (filter === "RAW" && item.kind !== "raw") return false;
@@ -44,7 +44,7 @@ function HiddenScreen(props: HiddenScreenProps) {
         .toLowerCase()
         .includes(normalized);
     });
-  }, [library.hiddenItems, filter, query]);
+  }, [library.items, filter, query]);
 
   useEffect(() => {
     const onOpenHidden = (event: Event) => {

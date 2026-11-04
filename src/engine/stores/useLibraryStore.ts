@@ -250,6 +250,7 @@ function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
     colorLabel: state.colorLabelFilter ?? undefined,
     camera: state.cameraFilter ?? undefined,
     lens: state.lensFilter ?? undefined,
+    hidden: false,
   };
 }
 
@@ -329,12 +330,13 @@ function computeDerived(state: LibraryState) {
     sortOrder,
   } = state;
 
-  // One sort for every derived collection. Hidden items are a separate,
-  // first-class set: they never appear in the normal grid, viewer, album
-  // covers, or counts.
+  // Items arrive from the backend already filtered by kind, query, date
+  // range, source, rating, color label, camera, lens, and album membership.
+  // Hidden items are excluded by the hidden=false filter sent with every
+  // request. Client-side filtering below is a safety net for when the
+  // backend is not available (e.g. browser preview mode without Tauri IPC).
   const sorted = getSortedItems(state, items, sortBy, sortOrder);
-  const hiddenItems = sorted.filter((item) => item.hidden);
-  let visible = sorted.filter((item) => !item.hidden);
+  let visible = sorted;
 
   visible = visible.filter((item) => {
     if (filter === "Photos" && item.kind !== "photo") return false;
@@ -345,9 +347,6 @@ function computeDerived(state: LibraryState) {
   });
 
   if (activeAlbum) {
-    // Album membership is hydrated onto each item as `albumIds`; the album
-    // list itself only carries an item count, so filter by membership rather
-    // than expecting the backend to echo every item id back on the album.
     visible = visible.filter((item) => item.albumIds?.includes(activeAlbum));
   }
 
@@ -360,43 +359,41 @@ function computeDerived(state: LibraryState) {
     );
   }
 
-  // Source filter: only items physically inside the selected source folder.
-  // Uses a real path boundary so /Photos never matches /Photos2.
   if (activeSource) {
     const prefix = activeSource.endsWith("/") ? activeSource : `${activeSource}/`;
     visible = visible.filter((item) => item.path === activeSource || item.path.startsWith(prefix));
   }
 
   const playable = visible.filter((item) => item.kind === "photo" || item.kind === "video");
-  const viewerPool = viewerScope === "hidden" ? hiddenItems : visible;
-  // viewerItems follows the library filter so the filmstrip and navigation
-  // are predictable: Photos→photos, Videos→videos, RAW→raw, All→mixed.
-  const viewer = viewerPool.filter((item) => {
-    if (filter === "Photos" && item.kind !== "photo") return false;
-    if (filter === "Videos" && item.kind !== "video") return false;
-    if (filter === "RAW" && item.kind !== "raw") return false;
-    if (filter === "Favorites" && !item.favorite) return false;
+  // Hidden items are excluded by the hidden=false filter sent to the
+  // backend, so viewerItems always comes from the visible set.
+  const viewerItems = visible.filter((item) => {
+    if (state.filter === "Photos" && item.kind !== "photo") return false;
+    if (state.filter === "Videos" && item.kind !== "video") return false;
+    if (state.filter === "RAW" && item.kind !== "raw") return false;
+    if (state.filter === "Favorites" && !item.favorite) return false;
     return true;
   });
-  const viewerSelected = viewer.find((item) => item.id === inspectedId) || viewer[0] || null;
+  const viewerSelected =
+    viewerItems.find((item) => item.id === inspectedId) || viewerItems[0] || null;
   const currentIndex = Math.max(
     0,
     playable.findIndex((item) => item.id === inspectedId),
   );
   const viewerIndex = viewerSelected
-    ? viewer.findIndex((item) => item.id === viewerSelected.id)
+    ? viewerItems.findIndex((item) => item.id === viewerSelected.id)
     : -1;
 
   return {
     visibleItems: visible,
-    sortedItems: sorted,
+    sortedItems: items,
     playableItems: playable,
-    viewerItems: viewer,
+    viewerItems,
     viewerSelected,
     currentIndex,
     viewerIndex,
-    hiddenItems,
-    hiddenCount: hiddenItems.length,
+    hiddenItems: [],
+    hiddenCount: 0,
   };
 }
 
