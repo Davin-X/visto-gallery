@@ -1,0 +1,17 @@
+# CODEOWNERS
+
+# Documentation & config
+/docs/ @Davin-X
+*.md @Davin-X
+.github/ @Davin-X
+
+# Frontend
+src/ @Davin-X
+*.ts @Davin-X
+*.tsx @Davin-X
+*.css @Davin-X
+
+# Tauri / Rust backend
+src-tauri/ @Davin-X
+*.rs @Davin-X
+Cargo.toml @Davin-X
