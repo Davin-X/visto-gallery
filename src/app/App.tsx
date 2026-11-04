@@ -22,7 +22,6 @@ import {
   applyTheme,
   usePlaybackStore,
 } from "../engine/stores";
-import { MiniPlayer } from "../design/components/MiniPlayer";
 import { canPlayVideoInApp, formatBytesSimple } from "../engine/utils/mediaTypes";
 import { dispatchNativeMenuEvent } from "./nativeMenu";
 import { isExportShortcut } from "./shortcuts";
@@ -244,6 +243,9 @@ function App() {
   // The player keeps its own selection while the photo viewer has an
   // independent cursor.
   const [backgroundVideo, setBackgroundVideo] = useState<MediaItem | null>(null);
+  // The video whose Now Playing session the user explicitly ended. Sidebar
+  // “Viewer” must not resurrect that session from a stale inspector.
+  const backgroundVideoDismissedRef = useRef<string | null>(null);
   // Locked video queue: captured when playback starts so switching filters
   // mid-playback never changes what plays next.
   const [videoQueue, setVideoQueue] = useState<MediaItem[]>([]);
@@ -257,6 +259,7 @@ function App() {
   } | null>(null);
   const playbackItemId = usePlaybackStore((s) => s.itemId);
   const fhPlaying = usePlaybackStore((s) => s.playing);
+  const playbackName = usePlaybackStore((s) => s.name);
   const storedPlaybackItem = useMemo(
     () => library.items.find((item) => item.id === playbackItemId) ?? null,
     [library.items, playbackItemId],
@@ -1208,6 +1211,7 @@ function App() {
       setViewerOrigin(origin);
       library.setViewerScope(scope);
       if (item.kind === "video") {
+        backgroundVideoDismissedRef.current = null;
         const libraryState = useLibraryStore.getState();
         const scopedVideos = libraryState.viewerItems.filter(
           (candidate) =>
@@ -1701,11 +1705,16 @@ function App() {
         library.inspectItem(null);
         inspected = undefined;
       }
-      const target =
+      let target =
         inspected ??
         library.viewerSelected ??
         library.viewerItems.find((item) => item.kind !== "video") ??
         null;
+      // A video whose Now Playing session was closed with its X stays closed:
+      // fall back to the nearest photo instead of reopening the player.
+      if (target?.kind === "video" && backgroundVideoDismissedRef.current === target.id) {
+        target = library.viewerItems.find((item) => item.kind !== "video") ?? null;
+      }
       if (target?.kind === "video") {
         openViewer(target.id, "Library");
         return;
@@ -1963,6 +1972,26 @@ function App() {
           showInspector={library.showInspector}
           dark={dark}
           accentColor={accentColor}
+          nowPlaying={
+            playbackItem && playbackItemId && screen !== "Video"
+              ? { name: playbackName || playbackItem.name, playing: fhPlaying }
+              : null
+          }
+          onNowPlayingExpand={() => {
+            if (!playbackItem) return;
+            setViewerOrigin(screen);
+            setBackgroundVideo(playbackItem);
+            setScreen("Video");
+          }}
+          onNowPlayingToggle={() => usePlaybackStore.getState().toggle()}
+          onNowPlayingStop={() => {
+            if (playbackItem) backgroundVideoDismissedRef.current = playbackItem.id;
+            usePlaybackStore.getState().stop();
+            setBackgroundVideo(null);
+            setVideoQueue([]);
+            videoQueuePagingRef.current = null;
+            setQueueAutoPlayId(null);
+          }}
           onToggleSidebar={() => library.toggleSidebar()}
           onToggleInspector={() => library.toggleInspector()}
           onToggleAppearance={() => settings.update("appearance", dark ? "light" : "dark")}
@@ -2258,25 +2287,6 @@ function App() {
             albumSearchRef={albumSearchRef}
             itemPendingDeleteRef={itemPendingDeleteRef}
           />
-
-          {playbackItem && playbackItemId && screen !== "Video" && (
-            <MiniPlayer
-              onPrevious={playPreviousVideo}
-              onNext={playNextVideo}
-              onExpand={() => {
-                setViewerOrigin(screen);
-                setBackgroundVideo(playbackItem);
-                setScreen("Video");
-              }}
-              onClose={() => {
-                usePlaybackStore.getState().stop();
-                setBackgroundVideo(null);
-                setVideoQueue([]);
-                videoQueuePagingRef.current = null;
-                setQueueAutoPlayId(null);
-              }}
-            />
-          )}
 
           <SlideshowOverlay assetUrl={assetUrl} />
 

@@ -1,5 +1,6 @@
 import { BrandMark } from "../design/components/BrandMark";
 import { KindDot } from "../design/components/KindBadge";
+import { NowPlaying } from "../design/components/NowPlaying";
 import {
   GearIcon,
   SunIcon,
@@ -49,6 +50,11 @@ interface AppTopBarProps {
   onOpenSettings: () => void;
   onMouseDown: (e: React.MouseEvent) => void;
   onDoubleClick: (e: React.MouseEvent) => void;
+  /** Set while a video is in the background player on a non-Video screen. */
+  nowPlaying?: { name: string; playing: boolean } | null;
+  onNowPlayingExpand?: () => void;
+  onNowPlayingToggle?: () => void;
+  onNowPlayingStop?: () => void;
 }
 
 export function AppTopBar({
@@ -67,6 +73,10 @@ export function AppTopBar({
   onOpenSettings,
   onMouseDown,
   onDoubleClick,
+  nowPlaying,
+  onNowPlayingExpand,
+  onNowPlayingToggle,
+  onNowPlayingStop,
 }: AppTopBarProps) {
   const inspectorAvailable = screen === "Library" || screen === "Hidden";
 
@@ -100,6 +110,15 @@ export function AppTopBar({
           </span>
         )}
       </div>
+      {nowPlaying && onNowPlayingExpand && onNowPlayingToggle && onNowPlayingStop && (
+        <NowPlaying
+          name={nowPlaying.name}
+          playing={nowPlaying.playing}
+          onExpand={onNowPlayingExpand}
+          onToggle={onNowPlayingToggle}
+          onStop={onNowPlayingStop}
+        />
+      )}
       <div className="topbar-actions">
         <button
           className="icon-button"
