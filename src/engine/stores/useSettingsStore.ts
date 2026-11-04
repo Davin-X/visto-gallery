@@ -198,7 +198,9 @@ export function applyTheme(settings: Pick<AppSettings, "appearance" | "accentCol
 
   // Sync native window background
   try {
-    void getCurrentWindow().setBackgroundColor(tokens.surface);
+    void getCurrentWindow()
+      .setBackgroundColor(tokens.surface)
+      .catch(() => {});
   } catch {
     // Tauri not available (web preview) or API call failed — ignore.
   }

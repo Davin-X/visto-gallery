@@ -947,7 +947,6 @@ function App() {
       try {
         if (cancelled) return;
         applyTheme({ appearance, accentColor });
-        await getCurrentWindow().setTheme(dark ? "dark" : "light");
       } catch {
         /* browser preview - no native window */
       }
@@ -955,7 +954,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [dark, appearance, accentColor, systemDark]);
+  }, [dark, appearance, accentColor]);
 
   // Honor the startup_view setting once settings are hydrated: open to the
   // Library, the last screen/folder, or start a slideshow.
@@ -998,12 +997,9 @@ function App() {
     }
   }, [screen, library.activeAlbum]);
 
-  const showNotice = useCallback(
-    (text: string) => {
-      library.showNotice(text);
-    },
-    [library],
-  );
+  const showNotice = useCallback((text: string) => {
+    useLibraryStore.getState().showNotice(text);
+  }, []);
 
   // File > Export… and Cmd/Ctrl+E share this action. Batch Export already
   // renders a useful empty state, so an empty selection is a prompt, not an
