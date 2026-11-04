@@ -169,8 +169,9 @@ function VideoPlayer({
       // WKWebView is finicky about autoplay for tiny background hosts: the
       // attribute alone can stall indefinitely with the host page inert. Ask
       // for playback explicitly; it happens within the user's gesture when
-      // the click started the session.
-      if (video.autoplay) void video.play().catch(() => {});
+      // the click started the session. Unconditional: the user gesture is
+      // the signal, not the attribute.
+      void video.play().catch(() => {});
     }
     return () => unregisterPlayback(video);
   }, [itemId, name, registerPlayback, unregisterPlayback, syncPlayback]);
@@ -245,12 +246,20 @@ function VideoPlayer({
     video.addEventListener("timeupdate", onTimeUpdate);
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
+    // A second, belt-and-suspenders attempt once the media is actually ready:
+    // the mount-time play() can lose the race against the canplay event in
+    // WKWebView, which silently leaves the video idle at 0:00.
+    const attemptAutoPlay = () => void video.play().catch(() => {});
+    if (storeItemId !== itemId || duration === 0) {
+      video.addEventListener("canplay", attemptAutoPlay, { once: true });
+    }
     if (video.readyState >= 1) onMetadata();
     return () => {
       video.removeEventListener("loadedmetadata", onMetadata);
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);
+      video.removeEventListener("canplay", attemptAutoPlay);
     };
   }, [src, syncPlayback]);
 

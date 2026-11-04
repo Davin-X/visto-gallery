@@ -21,6 +21,7 @@ import {
   ImageOffIcon,
   MinusIcon,
   MoreIcon,
+  PauseIcon,
   PlayIcon,
   PlusIcon,
   SearchIcon,
@@ -36,6 +37,7 @@ import { useDraftTransforms } from "../engine/stores/useEditStore";
 import { draftImageStyle } from "../engine/utils/draftImage";
 import { searchShortcutLabel } from "../engine/utils/shortcut";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
+import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { FilterDropdown } from "../design/components/FilterDropdown";
 import { useSettingsStore } from "../engine/stores/useSettingsStore";
 import { useThumbnailSize } from "../engine/stores/useSettingsStore";
@@ -123,6 +125,17 @@ interface LibraryScreenProps {
 
 function LibraryScreen(props: LibraryScreenProps) {
   const library = useLibraryStore();
+  const playingId = usePlaybackStore((state) => state.itemId);
+  const isPlaying = usePlaybackStore((state) => state.playing);
+  /** In sync with the top bar: starts the item, or toggles its session. */
+  const toggleBackground = (item: any) => {
+    if (!item) return;
+    if (usePlaybackStore.getState().itemId === item.id) {
+      usePlaybackStore.getState().toggle();
+      return;
+    }
+    props.onPlayBackground?.(item.id);
+  };
   const [showRefreshHint, setShowRefreshHint] = useState(false);
   useEffect(() => {
     if (!library.refreshingLibrary) {
@@ -736,7 +749,7 @@ function LibraryScreen(props: LibraryScreenProps) {
       ? [
           {
             label: "Play in background",
-            onClick: () => props.onPlayBackground?.(item.id),
+            onClick: () => toggleBackground(item),
           },
         ]
       : []),
@@ -1472,15 +1485,34 @@ function LibraryScreen(props: LibraryScreenProps) {
                               <button
                                 type="button"
                                 className="tile-play-background"
-                                aria-label={`Play ${tileAlt(item)} in background`}
-                                title="Play in background"
+
+                                aria-label={
+                                  playingId === item.id && isPlaying
+                                    ? `Pause ${tileAlt(item)}`
+                                    : `Play ${tileAlt(item)} in background`
+                                }
+
+                                title={
+                                  playingId === item.id && isPlaying
+                                    ? "Pause"
+                                    : "Play in background"
+                                }
+
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  props.onPlayBackground?.(item.id);
+
+                                  toggleBackground(item);
                                 }}
+
                                 onDoubleClick={(event) => event.stopPropagation()}
+
+                                aria-pressed={playingId === item.id && isPlaying}
                               >
-                                <PlayIcon size={16} />
+                                {playingId === item.id && isPlaying ? (
+                                  <PauseIcon size={16} />
+                                ) : (
+                                  <PlayIcon size={16} />
+                                )}
                               </button>
                             )}
                           {item.kind === "video" && (
@@ -1633,15 +1665,34 @@ function LibraryScreen(props: LibraryScreenProps) {
                                         <button
                                           type="button"
                                           className="tile-play-background"
-                                          aria-label={`Play ${tileAlt(item)} in background`}
-                                          title="Play in background"
+
+                                          aria-label={
+                                            playingId === item.id && isPlaying
+                                              ? `Pause ${tileAlt(item)}`
+                                              : `Play ${tileAlt(item)} in background`
+                                          }
+
+                                          title={
+                                            playingId === item.id && isPlaying
+                                              ? "Pause"
+                                              : "Play in background"
+                                          }
+
                                           onClick={(event) => {
                                             event.stopPropagation();
-                                            props.onPlayBackground?.(item.id);
+
+                                            toggleBackground(item);
                                           }}
+
                                           onDoubleClick={(event) => event.stopPropagation()}
+
+                                          aria-pressed={playingId === item.id && isPlaying}
                                         >
-                                          <PlayIcon size={16} />
+                                          {playingId === item.id && isPlaying ? (
+                                            <PauseIcon size={16} />
+                                          ) : (
+                                            <PlayIcon size={16} />
+                                          )}
                                         </button>
                                       )}
                                     {item.kind === "video" && (
@@ -1770,15 +1821,32 @@ function LibraryScreen(props: LibraryScreenProps) {
                             <button
                               type="button"
                               className="tile-play-background"
-                              aria-label={`Play ${tileAlt(item)} in background`}
-                              title="Play in background"
+
+                              aria-label={
+                                playingId === item.id && isPlaying
+                                  ? `Pause ${tileAlt(item)}`
+                                  : `Play ${tileAlt(item)} in background`
+                              }
+
+                              title={
+                                playingId === item.id && isPlaying ? "Pause" : "Play in background"
+                              }
+
                               onClick={(event) => {
                                 event.stopPropagation();
-                                props.onPlayBackground?.(item.id);
+
+                                toggleBackground(item);
                               }}
+
                               onDoubleClick={(event) => event.stopPropagation()}
+
+                              aria-pressed={playingId === item.id && isPlaying}
                             >
-                              <PlayIcon size={16} />
+                              {playingId === item.id && isPlaying ? (
+                                <PauseIcon size={16} />
+                              ) : (
+                                <PlayIcon size={16} />
+                              )}
                             </button>
                           )}
                         {item.kind === "video" && (
@@ -1886,54 +1954,90 @@ function LibraryScreen(props: LibraryScreenProps) {
                       ×
                     </button>
                   </div>
-                  <button
-                    className={`inspector-image${masked(sel) ? " hidden-obscured" : ""}`}
-                    type="button"
-                    aria-label={
-                      masked(sel)
-                        ? "Hold to reveal preview; double-click to open"
-                        : `Open ${sel.name} in viewer`
-                    }
-                    onDoubleClick={() => props.onOpenViewer(sel.id)}
-                    title={
-                      masked(sel)
-                        ? "Hold to reveal preview · double-click to open"
-                        : "Double-click to open in viewer"
-                    }
-                    {...holdHandlers(sel.id)}
-                  >
-                    {sel.kind === "photo" ? (
-                      <img
-                        src={assetUrl(sel.path)}
-                        alt={tileAlt(sel)}
-                        style={draftImageStyle(draftTransforms, sel.id)}
-                      />
-                    ) : sel.kind === "video" ? (
-                      <span className="inspector-video-preview">
-                        <VideoThumb src={assetUrl(sel.path)} name={tileAlt(sel)} />
-                        <span className="inspector-video-play">
-                          <PlayIcon size={22} />
+                  <span className="inspector-image-wrapper">
+                    <button
+                      className={`inspector-image${masked(sel) ? " hidden-obscured" : ""}`}
+                      type="button"
+                      aria-label={
+                        masked(sel)
+                          ? "Hold to reveal preview; double-click to open"
+                          : `Open ${sel.name} in viewer`
+                      }
+                      onDoubleClick={() => props.onOpenViewer(sel.id)}
+                      title={
+                        masked(sel)
+                          ? "Hold to reveal preview · double-click to open"
+                          : "Double-click to open in viewer"
+                      }
+                      {...holdHandlers(sel.id)}
+                    >
+                      {sel.kind === "photo" ? (
+                        <img
+                          src={assetUrl(sel.path)}
+                          alt={tileAlt(sel)}
+                          style={draftImageStyle(draftTransforms, sel.id)}
+                        />
+                      ) : sel.kind === "video" ? (
+                        <span className="inspector-video-preview">
+                          <video
+                            src={assetUrl(sel.path)}
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                            preload="metadata"
+                            aria-label={`${tileAlt(sel)} preview`}
+                          />
                         </span>
+                      ) : (
+                        <span className="raw-tile">
+                          <KindBadge kind={sel.kind} />
+                        </span>
+                      )}
+                      <span>Double-click to view</span>
+                      <span className="inspector-type-badge">
+                        {sel.kind === "video" ? "Video" : sel.kind === "raw" ? "RAW" : "Photo"}
                       </span>
-                    ) : (
-                      <span className="raw-tile">
-                        <KindBadge kind={sel.kind} />
-                      </span>
+                    </button>
+                    {sel.kind === "video" && props.onPlayBackground && (
+                      <button
+                        type="button"
+                        className="inspector-video-play"
+                        aria-label={
+                          playingId === sel.id && isPlaying
+                            ? `Pause ${tileAlt(sel)}`
+                            : `Play ${tileAlt(sel)} in background`
+                        }
+                        aria-pressed={playingId === sel.id && isPlaying}
+                        title={playingId === sel.id && isPlaying ? "Pause" : "Play in background"}
+                        onClick={() => toggleBackground(sel)}
+                      >
+                        {playingId === sel.id && isPlaying ? (
+                          <PauseIcon size={20} />
+                        ) : (
+                          <PlayIcon size={20} />
+                        )}
+                      </button>
                     )}
-                    <span>Double-click to view</span>
-                    <span className="inspector-type-badge">
-                      {sel.kind === "video" ? "Video" : sel.kind === "raw" ? "RAW" : "Photo"}
-                    </span>
-                  </button>
+                  </span>
                   <div className="inspector-actions">
                     {sel.kind === "video" && props.onPlayBackground && (
                       <button
                         className="inspector-action primary"
-                        onClick={() => props.onPlayBackground?.(sel.id)}
-                        title="Play in background — keep browsing; the top bar shows playback"
+                        onClick={() => toggleBackground(sel)}
+                        title={
+                          playingId === sel.id && isPlaying
+                            ? "Pause — the top bar controls the session"
+                            : "Play in background — keep browsing; the top bar shows playback"
+                        }
+                        aria-pressed={playingId === sel.id && isPlaying}
                       >
-                        <PlayIcon size={14} />
-                        <span>Play</span>
+                        {playingId === sel.id && isPlaying ? (
+                          <PauseIcon size={14} />
+                        ) : (
+                          <PlayIcon size={14} />
+                        )}
+                        <span>{playingId === sel.id && isPlaying ? "Pause" : "Play"}</span>
                       </button>
                     )}
                     <button

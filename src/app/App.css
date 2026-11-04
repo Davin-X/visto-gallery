@@ -1895,8 +1895,10 @@ body {
    without leaving the grid. */
 .tile-play-background {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: auto;
+  right: auto;
+  bottom: 10px;
+  left: 8px;
   z-index: 2;
   display: grid;
   place-items: center;
@@ -2158,21 +2160,47 @@ body {
   object-fit: cover;
 }
 
+.inspector-image-wrapper {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
 .inspector-video-play {
   position: absolute;
   top: 50%;
   left: 50%;
+  z-index: 2;
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  padding-left: 3px;
+  width: 48px;
+  height: 48px;
+  padding: 0 0 0 2px;
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.55);
   color: #fff;
+  cursor: pointer;
   transform: translate(-50%, -50%);
   backdrop-filter: blur(3px);
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.inspector-video-play:hover {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--accent) 65%, rgba(0, 0, 0, 0.7));
+}
+
+.inspector-video-play:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.inspector-video-play[aria-pressed="true"] {
+  padding: 0;
+  background: color-mix(in srgb, var(--accent) 65%, rgba(0, 0, 0, 0.7));
 }
 
 .inspector-actions {
