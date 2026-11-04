@@ -1324,25 +1324,16 @@ function App() {
     setAlbumDialogMode("create");
   }, [creatingAlbum]);
 
-  // Focus the name field as soon as the dialog mounts, and keep Escape working
-  // even if focus somehow leaves the form.
+  // Focus the name field as soon as the dialog mounts. Escape is owned by the
+  // dialog layer (AppDialogs), not by this effect.
   useEffect(() => {
     if (!albumDialogOpen) return;
     const frame = requestAnimationFrame(() => {
       albumInputRef.current?.focus();
       albumInputRef.current?.select();
     });
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      closeAlbumDialog();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [albumDialogOpen, closeAlbumDialog]);
+    return () => cancelAnimationFrame(frame);
+  }, [albumDialogOpen]);
 
   const submitAlbum = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -1389,16 +1380,7 @@ function App() {
   useEffect(() => {
     if (!albumPickerOpen) return;
     const frame = requestAnimationFrame(() => albumSearchRef.current?.focus());
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      setAlbumPickerOpen(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("keydown", onKeyDown);
-    };
+    return () => cancelAnimationFrame(frame);
   }, [albumPickerOpen]);
 
   const addPickedItemsToAlbum = async (album: any) => {

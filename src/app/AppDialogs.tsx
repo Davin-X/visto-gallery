@@ -712,6 +712,7 @@ function SourcesSheet({
   onRescan,
   onRescanFolder,
   onRequestRemoveAll,
+  escapeBlocked,
   library,
 }: {
   open: boolean;
@@ -722,9 +723,11 @@ function SourcesSheet({
   onRescan: () => Promise<void>;
   onRescanFolder: (folder: LibraryFolder) => Promise<void>;
   onRequestRemoveAll: () => void;
+  /** When a confirmation is stacked on top, it owns Escape instead. */
+  escapeBlocked: boolean;
   library: any;
 }) {
-  useEscape(onClose, open);
+  useEscape(onClose, open && !escapeBlocked);
 
   if (!open) return null;
 
@@ -1031,6 +1034,7 @@ export function AppDialogs(props: AppDialogsProps) {
         onRescan={rescanSources}
         onRescanFolder={rescanSource}
         onRequestRemoveAll={() => setRemoveAllSourcesDialogOpen(true)}
+        escapeBlocked={removeAllSourcesDialogOpen || folderPendingRemove != null}
         library={library}
       />
       <RemoveAllSourcesDialog
