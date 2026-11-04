@@ -1286,9 +1286,7 @@ pub async fn delete_library_database(state: State<'_, AppState>) -> Result<(), S
 #[tauri::command]
 pub async fn open_external(url: String) -> Result<(), String> {
     let trimmed = url.trim();
-    let allowed = trimmed.starts_with("https://")
-        || trimmed.starts_with("http://")
-        || trimmed.starts_with("mailto:");
+    let allowed = trimmed.starts_with("https://") || trimmed.starts_with("mailto:");
     if !allowed {
         return Err("Unsupported URL scheme".to_string());
     }
