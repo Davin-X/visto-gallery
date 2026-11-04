@@ -538,213 +538,206 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const canAct = !busy && selected.size > 0;
   const allCopiesSelected = totalCopies > 0 && selected.size >= totalCopies;
 
-  return (
-    <div className="feature-page duplicates-page" ref={pageRef} onScroll={handleScroll}>
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">CLEANUP</p>
-          <h1>Duplicate files</h1>
-          <p className="page-subtitle">
-            {hasGroups
-              ? `${groups.length.toLocaleString()} ${groups.length === 1 ? "group" : "groups"} · ${libraryTotals.copies.toLocaleString()} extra ${libraryTotals.copies === 1 ? "copy" : "copies"} · ${formatBytesSimple(libraryTotals.bytes)} reclaimable`
-              : "Find byte-identical files by SHA-256 content hash and reclaim disk space."}
-          </p>
-        </div>
-        <div className="duplicate-heading-actions">
-          {hasGroups && (
-            <button type="button" className="quiet-button" onClick={onClear} disabled={busy}>
-              Clear
-            </button>
-          )}
-          <button type="button" className="primary-button" onClick={onScan} disabled={busy}>
-            {busy ? "Scanning…" : hasGroups ? "Rescan" : "Scan library"}
+  const pageHeading = (
+    <div className="page-heading">
+      <div>
+        <p className="eyebrow">CLEANUP</p>
+        <h1>Duplicate files</h1>
+        <p className="page-subtitle">
+          {hasGroups
+            ? `${groups.length.toLocaleString()} ${groups.length === 1 ? "group" : "groups"} · ${libraryTotals.copies.toLocaleString()} extra ${libraryTotals.copies === 1 ? "copy" : "copies"} · ${formatBytesSimple(libraryTotals.bytes)} reclaimable`
+            : "Find byte-identical files by SHA-256 content hash and reclaim disk space."}
+        </p>
+      </div>
+      <div className="duplicate-heading-actions">
+        {hasGroups && (
+          <button type="button" className="quiet-button" onClick={onClear} disabled={busy}>
+            Clear
           </button>
+        )}
+        <button type="button" className="primary-button" onClick={onScan} disabled={busy}>
+          {busy ? "Scanning…" : hasGroups ? "Rescan" : "Scan library"}
+        </button>
+      </div>
+    </div>
+  );
+
+  const scanBar = busy ? (
+    <div className="duplicate-scan" role="status" aria-live="polite">
+      <span className="duplicate-scan-pip" aria-hidden="true" />
+      <div className="duplicate-scan-copy">
+        <span className="duplicate-scan-title">
+          {progress?.phase === "hashing" ? "Comparing file contents" : "Finding candidates"}
+          {scanPercent !== null ? ` · ${scanPercent}%` : ""}
+        </span>
+        <span className="duplicate-scan-file" title={progress?.currentFile}>
+          {progress?.currentFile || "Reading file fingerprints…"}
+        </span>
+        <div className={`duplicate-scan-track${scanPercent === null ? " is-indeterminate" : ""}`}>
+          <span
+            className="duplicate-scan-fill"
+            style={scanPercent !== null ? { width: `${scanPercent}%` } : undefined}
+          />
         </div>
       </div>
+      <button type="button" className="quiet-button" onClick={onClear}>
+        Cancel
+      </button>
+    </div>
+  ) : null;
 
-      {busy && (
-        <div className="duplicate-scan" role="status" aria-live="polite">
-          <span className="duplicate-scan-pip" aria-hidden="true" />
-          <div className="duplicate-scan-copy">
-            <span className="duplicate-scan-title">
-              {progress?.phase === "hashing" ? "Comparing file contents" : "Finding candidates"}
-              {scanPercent !== null ? ` · ${scanPercent}%` : ""}
-            </span>
-            <span className="duplicate-scan-file" title={progress?.currentFile}>
-              {progress?.currentFile || "Reading file fingerprints…"}
-            </span>
-            <div
-              className={`duplicate-scan-track${scanPercent === null ? " is-indeterminate" : ""}`}
-            >
-              <span
-                className="duplicate-scan-fill"
-                style={scanPercent !== null ? { width: `${scanPercent}%` } : undefined}
-              />
-            </div>
-          </div>
-          <button type="button" className="quiet-button" onClick={onClear}>
-            Cancel
-          </button>
-        </div>
-      )}
+  return (
+    <div className="feature-page duplicates-page" ref={pageRef} onScroll={handleScroll}>
+      {hasGroups ? (
+        <header className="duplicate-header">
+          {pageHeading}
+          {scanBar}
 
-      {hasVisibleGroups && (
-        <div className="duplicate-stats">
-          <div className="duplicate-stat">
-            <span className="duplicate-stat-value">{groupViews.length.toLocaleString()}</span>
-            <span className="duplicate-stat-label">Groups</span>
-          </div>
-          <div className="duplicate-stat">
-            <span className="duplicate-stat-value">{totalCopies.toLocaleString()}</span>
-            <span className="duplicate-stat-label">Extra copies</span>
-          </div>
-          <div className="duplicate-stat is-savings">
-            <span className="duplicate-stat-value">{formatBytesSimple(reclaimableBytes)}</span>
-            <span className="duplicate-stat-label">Reclaimable</span>
-          </div>
-          <div className={`duplicate-stat${selected.size > 0 ? " is-selected" : ""}`}>
-            <span className="duplicate-stat-value">{selected.size.toLocaleString()}</span>
-            <span className="duplicate-stat-label">Selected</span>
-          </div>
-        </div>
-      )}
-
-      {hasGroups && (
-        <div className="duplicate-toolbar">
-          <div className="duplicate-filter-tabs" role="tablist" aria-label="Filter by media type">
-            {(Object.keys(KIND_LABELS) as KindFilter[]).map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                role="tab"
-                aria-selected={filterKind === kind}
-                className={[
-                  filterKind === kind ? "is-active" : "",
-                  kindCounts[kind] === 0 ? "is-empty" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                onClick={() => changeFilter(kind)}
+          {hasGroups && (
+            <div className="duplicate-toolbar">
+              <div
+                className="duplicate-filter-tabs"
+                role="tablist"
+                aria-label="Filter by media type"
               >
-                {KIND_LABELS[kind]}
-                <span className="duplicate-filter-count">{kindCounts[kind]}</span>
-              </button>
-            ))}
-          </div>
-          <div className="duplicate-toolbar-right">
-            <div className="duplicate-keeper" role="group" aria-label="Default copy to keep">
-              <span className="duplicate-keeper-label">Keep</span>
-              <button
-                type="button"
-                className={keeperMode === "oldest" ? "is-active" : ""}
-                aria-pressed={keeperMode === "oldest"}
-                title="Keep the copy that entered your library first"
-                onClick={() => changeKeeperMode("oldest")}
-              >
-                Oldest
-              </button>
-              <button
-                type="button"
-                className={keeperMode === "newest" ? "is-active" : ""}
-                aria-pressed={keeperMode === "newest"}
-                title="Keep the copy that entered your library last"
-                onClick={() => changeKeeperMode("newest")}
-              >
-                Newest
-              </button>
-            </div>
-            <div className="sort-control" role="group" aria-label="Sort groups">
-              <select
-                aria-label="Sort duplicate groups by"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortBy)}
-              >
-                {(Object.keys(SORT_LABELS) as SortBy[]).map((option) => (
-                  <option key={option} value={option}>
-                    {SORT_LABELS[option]}
-                  </option>
+                {(Object.keys(KIND_LABELS) as KindFilter[]).map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    role="tab"
+                    aria-selected={filterKind === kind}
+                    className={[
+                      filterKind === kind ? "is-active" : "",
+                      kindCounts[kind] === 0 ? "is-empty" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    onClick={() => changeFilter(kind)}
+                  >
+                    {KIND_LABELS[kind]}
+                    <span className="duplicate-filter-count">{kindCounts[kind]}</span>
+                  </button>
                 ))}
-              </select>
+              </div>
+              <div className="duplicate-toolbar-right">
+                <div className="duplicate-keeper" role="group" aria-label="Default copy to keep">
+                  <span className="duplicate-keeper-label">Keep</span>
+                  <button
+                    type="button"
+                    className={keeperMode === "oldest" ? "is-active" : ""}
+                    aria-pressed={keeperMode === "oldest"}
+                    title="Keep the copy that entered your library first"
+                    onClick={() => changeKeeperMode("oldest")}
+                  >
+                    Oldest
+                  </button>
+                  <button
+                    type="button"
+                    className={keeperMode === "newest" ? "is-active" : ""}
+                    aria-pressed={keeperMode === "newest"}
+                    title="Keep the copy that entered your library last"
+                    onClick={() => changeKeeperMode("newest")}
+                  >
+                    Newest
+                  </button>
+                </div>
+                <div className="sort-control" role="group" aria-label="Sort groups">
+                  <select
+                    aria-label="Sort duplicate groups by"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortBy)}
+                  >
+                    {(Object.keys(SORT_LABELS) as SortBy[]).map((option) => (
+                      <option key={option} value={option}>
+                        {SORT_LABELS[option]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="layout-switcher" role="group" aria-label="Tile layout">
+                  <button
+                    type="button"
+                    className={viewMode === "grid" ? "selected" : ""}
+                    aria-pressed={viewMode === "grid"}
+                    title="Grid view"
+                    onClick={() => setViewMode("grid")}
+                  >
+                    <GridIcon size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={viewMode === "list" ? "selected" : ""}
+                    aria-pressed={viewMode === "list"}
+                    title="List view"
+                    onClick={() => setViewMode("list")}
+                  >
+                    <ColumnsIcon size={14} />
+                  </button>
+                </div>
+                {expandableGroups.length > 0 && (
+                  <button type="button" className="quiet-button" onClick={toggleAllGroups}>
+                    {allExpanded ? "Collapse all" : "Expand all"}
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="layout-switcher" role="group" aria-label="Tile layout">
-              <button
-                type="button"
-                className={viewMode === "grid" ? "selected" : ""}
-                aria-pressed={viewMode === "grid"}
-                title="Grid view"
-                onClick={() => setViewMode("grid")}
-              >
-                <GridIcon size={14} />
-              </button>
-              <button
-                type="button"
-                className={viewMode === "list" ? "selected" : ""}
-                aria-pressed={viewMode === "list"}
-                title="List view"
-                onClick={() => setViewMode("list")}
-              >
-                <ColumnsIcon size={14} />
-              </button>
+          )}
+          {hasVisibleGroups && (
+            <div className="duplicate-selection-bar">
+              <div className="duplicate-selection-copy">
+                <span>
+                  <b>{selected.size.toLocaleString()}</b> of {totalCopies.toLocaleString()} extra
+                  copies selected
+                </span>
+                {selected.size > 0 && (
+                  <span className="duplicate-selection-savings">
+                    {formatBytesSimple(selectedBytes)} reclaimable
+                  </span>
+                )}
+              </div>
+              <div className="duplicate-selection-actions">
+                <button
+                  type="button"
+                  className="quiet-button"
+                  disabled={busy || totalCopies === 0 || allCopiesSelected}
+                  onClick={selectAllCopies}
+                >
+                  Select copies
+                </button>
+                <button
+                  type="button"
+                  className="quiet-button"
+                  disabled={selected.size === 0}
+                  onClick={selectNone}
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  className="quiet-button"
+                  disabled={!canAct}
+                  onClick={() => void onHideIds([...selected])}
+                >
+                  Hide
+                </button>
+                <button
+                  type="button"
+                  className="danger-button"
+                  disabled={!canAct}
+                  onClick={() => onRequestDeleteItems([...selected])}
+                >
+                  <TrashIcon size={13} /> Move to Trash
+                </button>
+              </div>
             </div>
-            {expandableGroups.length > 0 && (
-              <button type="button" className="quiet-button" onClick={toggleAllGroups}>
-                {allExpanded ? "Collapse all" : "Expand all"}
-              </button>
-            )}
-          </div>
-        </div>
+          )}
+        </header>
+      ) : (
+        <>
+          {pageHeading}
+          {scanBar}
+        </>
       )}
-
-      {hasVisibleGroups && (
-        <div className="duplicate-selection-bar">
-          <div className="duplicate-selection-copy">
-            <span>
-              <b>{selected.size.toLocaleString()}</b> of {totalCopies.toLocaleString()} extra copies
-              selected
-            </span>
-            {selected.size > 0 && (
-              <span className="duplicate-selection-savings">
-                {formatBytesSimple(selectedBytes)} reclaimable
-              </span>
-            )}
-          </div>
-          <div className="duplicate-selection-actions">
-            <button
-              type="button"
-              className="quiet-button"
-              disabled={busy || totalCopies === 0 || allCopiesSelected}
-              onClick={selectAllCopies}
-            >
-              Select copies
-            </button>
-            <button
-              type="button"
-              className="quiet-button"
-              disabled={selected.size === 0}
-              onClick={selectNone}
-            >
-              Clear
-            </button>
-            <button
-              type="button"
-              className="quiet-button"
-              disabled={!canAct}
-              onClick={() => void onHideIds([...selected])}
-            >
-              Hide
-            </button>
-            <button
-              type="button"
-              className="danger-button"
-              disabled={!canAct}
-              onClick={() => onRequestDeleteItems([...selected])}
-            >
-              <TrashIcon size={13} /> Move to Trash
-            </button>
-          </div>
-        </div>
-      )}
-
       {!hasVisibleGroups ? (
         <div className={`duplicate-empty${hasGroups && !busy ? " is-compact" : ""}`}>
           <span className="duplicate-empty-icon" aria-hidden="true">
