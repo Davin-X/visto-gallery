@@ -63,6 +63,8 @@ import { describeError } from "./utils/describeError";
 import { isWarningNotice } from "./utils/isWarningNotice";
 import { startConfiguredSlideshow } from "./utils/startConfiguredSlideshow";
 import { AppDialogs } from "./AppDialogs";
+import { AppSidebar, AppTopBar } from "./AppNavigation";
+import type { Screen } from "./screen";
 
 /**
  * Apply the item's saved edit draft to a preview image. Passing the shared map
@@ -89,30 +91,17 @@ import { SettingsScreen } from "../design/components/SettingsScreen";
 import { SourcesManager } from "../design/components/SourcesManager";
 import { SlideshowOverlay } from "../design/components/SlideshowOverlay";
 import { ContextMenu } from "../design/components/ContextMenu";
-import { BrandMark } from "../design/components/BrandMark";
 import {
-  GearIcon,
-  SunIcon,
-  MoonIcon,
-  LibraryIcon,
-  AlbumsIcon,
-  ViewerIcon,
-  DuplicatesIcon,
-  EditIcon,
-  BatchIcon,
   SearchIcon,
   PlusIcon,
   MinusIcon,
   MoreIcon,
-  InspectorIcon,
-  FolderIcon,
   GridIcon,
   OverviewIcon,
   DetailsIcon,
   TimelineIcon,
   HeartIcon,
   EyeIcon,
-  EyeOffIcon,
   FullscreenIcon,
   RotateIcon,
   CropIcon,
@@ -126,18 +115,6 @@ import {
   StopIcon,
   TrashIcon,
 } from "../design/components/icons";
-
-type Screen =
-  | "Library"
-  | "Albums"
-  | "Viewer"
-  | "Video"
-  | "Duplicates"
-  | "Edit"
-  | "Batch"
-  | "Hidden"
-  | "CameraLens"
-  | "Settings";
 
 const initialEdits = {
   exposure: 0,
@@ -2071,6 +2048,10 @@ function App() {
     openViewer: (id: string) => openViewer(id),
   };
 
+  const activeAlbumName = library.activeAlbum
+    ? (library.albums.find((a: any) => a.id === library.activeAlbum)?.name ?? "Album")
+    : null;
+
   return (
     <ErrorBoundary>
       <div
@@ -2080,315 +2061,44 @@ function App() {
         <a className="skip-to-content" href="#main-content">
           Skip to main content
         </a>
-        <header
-          className="topbar"
+        <AppTopBar
+          screen={screen}
+          activeAlbumName={activeAlbumName}
+          busy={library.busy}
+          progressPhase={library.progress?.phase ?? null}
+          sidebarOpen={library.sidebarOpen}
+          showInspector={library.showInspector}
+          dark={dark}
+          accentColor={accentColor}
+          onToggleSidebar={() => library.toggleSidebar()}
+          onToggleInspector={() => library.toggleInspector()}
+          onToggleAppearance={() => settings.update("appearance", dark ? "light" : "dark")}
+          onCycleAccent={() => {
+            const index = ACCENT_PALETTE.findIndex((c) => c.id === accentColor);
+            const next = ACCENT_PALETTE[(index + 1) % ACCENT_PALETTE.length].id;
+            settings.update("accentColor", next as any);
+          }}
+          onOpenSettings={() => openScreen("Settings")}
           onMouseDown={beginTopbarDrag}
           onDoubleClick={handleTopbarDoubleClick}
-        >
-          <div className="topbar-brand">
-            <BrandMark size={26} />
-            <b>VistoGallery</b>
-          </div>
-          <div className="topbar-context">
-            {(() => {
-              const activeAlbumRecord = library.activeAlbum
-                ? library.albums.find((a: any) => a.id === library.activeAlbum)
-                : null;
-              const activeAlbumName = library.activeAlbum ? activeAlbumRecord?.name : null;
-              const inAlbum = Boolean(library.activeAlbum);
-              if (screen === "Library") {
-                if (inAlbum) return <span>{activeAlbumName ?? "Album"}</span>;
-                return <span className="muted">Library</span>;
-              }
-              if (screen === "Albums") return <span>Albums</span>;
-              if (screen === "Video") return <span>Video Player</span>;
-              return <span>{screen}</span>;
-            })()}
-            {library.busy && (
-              <span className="topbar-busy">
-                {library.progress?.phase === "hashing"
-                  ? "Checking duplicates…"
-                  : library.progress?.phase === "reading"
-                    ? "Loading library…"
-                    : "Indexing…"}
-              </span>
-            )}
-          </div>
-          <div className="topbar-actions">
-            <button
-              className="icon-button"
-              type="button"
-              aria-label={library.sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-              aria-pressed={library.sidebarOpen}
-              title={library.sidebarOpen ? "Hide sidebar (⌥⌘S)" : "Show sidebar (⌥⌘S)"}
-              onClick={() => library.toggleSidebar()}
-            >
-              <LibraryIcon size={18} />
-            </button>
-            <button
-              className="icon-button"
-              type="button"
-              aria-label={
-                screen !== "Library" && screen !== "Hidden"
-                  ? "Inspector available in Library and Hidden"
-                  : library.showInspector
-                    ? "Hide inspector"
-                    : "Show inspector"
-              }
-              aria-pressed={(screen === "Library" || screen === "Hidden") && library.showInspector}
-              disabled={screen !== "Library" && screen !== "Hidden"}
-              title={
-                screen === "Library" || screen === "Hidden"
-                  ? library.showInspector
-                    ? "Hide inspector (⌥⌘I)"
-                    : "Show inspector (⌥⌘I)"
-                  : "Inspector is available in Library and Hidden"
-              }
-              onClick={() => library.toggleInspector()}
-            >
-              <InspectorIcon size={18} />
-            </button>
-            <button
-              className="icon-button"
-              type="button"
-              aria-label={dark ? "Switch to light appearance" : "Switch to dark appearance"}
-              title={dark ? "Switch to light appearance" : "Switch to dark appearance"}
-              onClick={() => settings.update("appearance", dark ? "light" : "dark")}
-            >
-              {dark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
-            </button>
-            <button
-              className="icon-button"
-              type="button"
-              aria-label="Accent color"
-              title="Cycle accent color"
-              onClick={() => {
-                const i = ACCENT_PALETTE.findIndex((c: any) => c.id === accentColor);
-                const next = ACCENT_PALETTE[(i + 1) % ACCENT_PALETTE.length].id;
-                settings.update("accentColor", next as any);
-              }}
-            >
-              <span
-                style={{
-                  width: 14,
-                  height: 14,
-                  borderRadius: "50%",
-                  background: (ACCENT_PALETTE.find((c: any) => c.id === accentColor) ||
-                    ACCENT_PALETTE[0])[dark ? "dark" : "light"],
-                  display: "inline-block",
-                  border: "1px solid rgba(0,0,0,0.2)",
-                }}
-              />
-            </button>
-            <button
-              className="icon-button"
-              type="button"
-              aria-label="Settings"
-              title="Settings"
-              onClick={() => openScreen("Settings")}
-            >
-              <GearIcon size={18} />
-            </button>
-          </div>
-        </header>
+        />
 
         <div className={`app-body ${library.sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
-          <aside className="sidebar">
-            <div className="sidebar-scroll">
-              <div className="sidebar-header">
-                <div className="sidebar-label">WORKSPACE</div>
-                <nav className="primary-nav" aria-label="Main navigation">
-                  {[
-                    {
-                      label: "Library",
-                      Icon: LibraryIcon,
-                      screen: "Library" as Screen,
-                    },
-                    {
-                      label: "Albums",
-                      Icon: AlbumsIcon,
-                      screen: "Albums" as Screen,
-                    },
-                    {
-                      label: "Viewer",
-                      Icon: ViewerIcon,
-                      screen: "Viewer" as Screen,
-                    },
-                    {
-                      label: "Duplicates",
-                      Icon: DuplicatesIcon,
-                      screen: "Duplicates" as Screen,
-                    },
-                    { label: "Edit", Icon: EditIcon, screen: "Edit" as Screen },
-                    {
-                      label: "Batch",
-                      Icon: BatchIcon,
-                      screen: "Batch" as Screen,
-                    },
-                    {
-                      label: "Hidden",
-                      Icon: EyeOffIcon,
-                      screen: "Hidden" as Screen,
-                    },
-                  ].map(({ label, Icon, screen: target }) => (
-                    <button
-                      key={label}
-                      type="button"
-                      className={`nav-item ${screen === target ? "active" : ""}`}
-                      aria-label={label}
-                      title={label}
-                      aria-current={screen === target ? "page" : undefined}
-                      onClick={() => openScreen(target)}
-                    >
-                      <span className="nav-icon">
-                        <Icon size={18} />
-                      </span>
-                      <span>{label}</span>
-                      {(label === "Library" && library.items.length - library.hiddenCount > 0) ||
-                      (label === "Albums" && library.albums.length > 0) ||
-                      (label === "Hidden" && library.hiddenCount > 0) ? (
-                        <span className="nav-badge">
-                          {label === "Library"
-                            ? library.items.length - library.hiddenCount
-                            : label === "Albums"
-                              ? library.albums.length
-                              : library.hiddenCount}
-                        </span>
-                      ) : null}
-                    </button>
-                  ))}
-                </nav>
-              </div>
-
-              <div className="sidebar-divider" aria-hidden="true" />
-
-              <div className="sidebar-section sources-entry-section">
-                <button
-                  type="button"
-                  className={`sources-entry${sourcesSheetOpen ? " open" : ""}`}
-                  onClick={() => setSourcesSheetOpen(true)}
-                  title="Manage library sources"
-                  aria-haspopup="dialog"
-                  aria-expanded={sourcesSheetOpen}
-                >
-                  <span className="sources-entry-icon">
-                    <FolderIcon size={16} />
-                  </span>
-                  <span className="sources-entry-text">
-                    <span className="sources-entry-name">Sources</span>
-                    <span className="sources-entry-count">
-                      {library.folders.length === 0
-                        ? "No sources yet"
-                        : `${library.folders.length.toLocaleString()} folder${library.folders.length === 1 ? "" : "s"} · ${library.folders.reduce((total: number, folder: LibraryFolder) => total + folder.itemCount, 0).toLocaleString()} items`}
-                    </span>
-                  </span>
-                  <span className="sources-entry-action">
-                    <span className="sources-entry-chevron" aria-hidden="true">
-                      ›
-                    </span>
-                  </span>
-                </button>
-              </div>
-
-              <div className="sidebar-divider" aria-hidden="true" />
-
-              <div className="sidebar-section">
-                <div className="sidebar-section-label">LIBRARY</div>
-                <div className="library-stats">
-                  <div className="stat-row">
-                    <KindDot kind="photo" />
-                    <span className="stat-label">Photos</span>
-                    <span className="stat-value">
-                      {libraryStats.photos.toLocaleString()}
-                      <span className="stat-size">
-                        · {formatBytesSimple(libraryStats.photoSize)}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="stat-row">
-                    <KindDot kind="video" />
-                    <span className="stat-label">Videos</span>
-                    <span className="stat-value">
-                      {libraryStats.videos.toLocaleString()}
-                      <span className="stat-size">
-                        · {formatBytesSimple(libraryStats.videoSize)}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="stat-row">
-                    <KindDot kind="raw" />
-                    <span className="stat-label">RAW</span>
-                    <span className="stat-value">
-                      {libraryStats.raws.toLocaleString()}
-                      <span className="stat-size">· {formatBytesSimple(libraryStats.rawSize)}</span>
-                    </span>
-                  </div>
-                  <div className="stat-row">
-                    <KindDot kind="photo" />
-                    <span className="stat-label">Favorites</span>
-                    <span className="stat-value">
-                      {libraryStats.favorites.toLocaleString()}
-                      <span className="stat-size">
-                        · {formatBytesSimple(libraryStats.favoriteSize)}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="stat-row">
-                    <KindDot kind="photo" />
-                    <span className="stat-label">Uncategorized</span>
-                    <span className="stat-value">
-                      {libraryStats.uncategorized.toLocaleString()}
-                      <span className="stat-size">
-                        · {formatBytesSimple(libraryStats.uncategorizedSize)}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="stat-row hidden">
-                    <KindDot kind="photo" />
-                    <span className="stat-label">Hidden</span>
-                    <span className="stat-value">
-                      {libraryStats.hidden.toLocaleString()}
-                      <span className="stat-size">
-                        · {formatBytesSimple(libraryStats.hiddenSize)}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="stat-row size">
-                    <span className="stat-label">Total</span>
-                    <span className="stat-value">
-                      {(
-                        libraryStats.photos +
-                        libraryStats.videos +
-                        libraryStats.raws +
-                        libraryStats.uncategorized
-                      ).toLocaleString()}{" "}
-                      · {formatBytesSimple(libraryStats.totalSize)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="sidebar-footer">
-              <span className="sidebar-health">
-                <span className="health-dot" aria-hidden="true" />
-                Storage Healthy
-              </span>
-              <div className="sidebar-version-group">
-                {updateInfo?.available && (
-                  <button
-                    type="button"
-                    className="update-badge"
-                    onClick={() => setUpdateDialogOpen(true)}
-                    title={`VistoGallery ${updateInfo.latestVersion} is available`}
-                  >
-                    <span className="update-dot" aria-hidden="true" />
-                    Update
-                  </button>
-                )}
-                <span className="sidebar-version">v{appVersion || "dev"}</span>
-              </div>
-            </div>
-          </aside>
+          <AppSidebar
+            screen={screen}
+            libraryCount={library.items.length - library.hiddenCount}
+            hiddenCount={library.hiddenCount}
+            albumsCount={library.albums.length}
+            folders={library.folders}
+            sourcesSheetOpen={sourcesSheetOpen}
+            stats={libraryStats}
+            updateAvailable={Boolean(updateInfo?.available)}
+            updateVersion={updateInfo?.latestVersion ?? null}
+            appVersion={appVersion}
+            onOpenScreen={openScreen}
+            onOpenSources={() => setSourcesSheetOpen(true)}
+            onOpenUpdate={() => setUpdateDialogOpen(true)}
+          />
 
           <main
             id="main-content"
