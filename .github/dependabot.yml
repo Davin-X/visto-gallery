@@ -1,0 +1,33 @@
+version: 2
+updates:
+  # Keep npm dependencies current
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "npm"
+    reviewers:
+      - "Davin-X"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # Keep Rust/Tauri dependencies current
+  - package-ecosystem: "cargo"
+    directory: "/src-tauri"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "rust"
+    reviewers:
+      - "Davin-X"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
