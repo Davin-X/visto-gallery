@@ -458,6 +458,7 @@ export function AppScreenRouter({
           onScan={library.scanDuplicates}
           onClear={library.clearDuplicates}
           busy={library.busy}
+          progress={library.progress}
           assetUrl={assetUrl}
           onRequestDeleteItems={(ids: string[]) => {
             itemPendingDeleteRef.current = ids;
