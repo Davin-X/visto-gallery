@@ -1,11 +1,20 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
-import { DuplicatesIcon } from "../design/components/icons";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useKeyboard } from "../engine/hooks/useKeyboard";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ColumnsIcon,
+  DuplicatesIcon,
+  EyeIcon,
+  FolderIcon,
+  GridIcon,
+  TrashIcon,
+} from "../design/components/icons";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import { KindBadge } from "../design/components/KindBadge";
-import { useDraftTransforms } from "../engine/stores/useEditStore";
-import type { MediaItem, DuplicateGroup } from "../engine/types/media";
+import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
-import { draftImageStyle } from "../engine/utils/draftImage";
+import type { DuplicateGroup, MediaItem } from "../engine/types/media";
 
 interface DuplicatesScreenProps {
   groups: DuplicateGroup[];
@@ -13,381 +22,778 @@ interface DuplicatesScreenProps {
   onScan: () => void | Promise<void>;
   onClear: () => void;
   busy: boolean;
+  progress?: {
+    phase?: string;
+    processed?: number;
+    total?: number;
+    currentFile?: string;
+    bytesProcessed?: number;
+    bytesTotal?: number;
+  } | null;
   assetUrl: (path: string) => string;
   onRequestDeleteItems: (ids: string[]) => void;
   onHideIds: (ids: string[]) => void | Promise<void>;
+  /** Open a copy in the viewer so it can be inspected before removal. */
+  onOpenItem?: (id: string) => void;
+}
+
+const GROUP_PAGE = 40;
+// Enough tiles to fill one row of a wide window; expansion reveals the rest.
+const INLINE_COPIES = 4;
+
+type ViewMode = "grid" | "list";
+type KeeperMode = "oldest" | "newest";
+type KindFilter = "all" | "photo" | "video" | "raw";
+type SortBy = "saving" | "copies" | "newest" | "name";
+
+const KIND_LABELS: Record<KindFilter, string> = {
+  all: "All",
+  photo: "Photos",
+  video: "Videos",
+  raw: "RAW",
+};
+
+const EMPTY_TITLES: Record<KindFilter, string> = {
+  all: "No duplicates found",
+  photo: "No photo duplicates",
+  video: "No video duplicates",
+  raw: "No RAW duplicates",
+};
+
+const SORT_LABELS: Record<SortBy, string> = {
+  saving: "Largest saving",
+  copies: "Most copies",
+  newest: "Newest",
+  name: "Name",
+};
+
+/** Newest-first ordering is expressed as a negative "oldest" timestamp. */
+function copyOrderValue(item: MediaItem): number {
+  return item.createdAt || item.modifiedAt || 0;
+}
+
+/**
+ * The backend stores hash groups in query order, so the first item is not
+ * necessarily the original file. Order every group explicitly: the keeper
+ * first (oldest or newest import), then the rest by path so the list is
+ * stable between scans.
+ */
+function orderGroup(items: MediaItem[], keeperMode: KeeperMode): MediaItem[] {
+  const direction = keeperMode === "oldest" ? 1 : -1;
+  return [...items].sort((a, b) => {
+    const byAge = (copyOrderValue(a) - copyOrderValue(b)) * direction;
+    if (byAge !== 0) return byAge;
+    if (a.path.length !== b.path.length) return a.path.length - b.path.length;
+    const byName = a.name.localeCompare(b.name);
+    if (byName !== 0) return byName;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+function parentFolder(path: string): string {
+  const index = path.lastIndexOf("/");
+  return index > 0 ? path.slice(0, index) : path;
+}
+
+function formatDate(timestamp?: number): string {
+  if (!timestamp) return "";
+  return new Date(timestamp).toLocaleDateString();
+}
+
+interface GroupView {
+  group: DuplicateGroup;
+  /** Keeper first, then every other copy. */
+  ordered: MediaItem[];
+  keeper: MediaItem;
+  copies: MediaItem[];
+  reclaimable: number;
+  newest: number;
 }
 
 function DuplicatesScreen(props: DuplicatesScreenProps) {
-  const draftTransforms = useDraftTransforms();
+  const {
+    groups: groupsProp,
+    progress: progressProp,
+    busy,
+    onScan,
+    onClear,
+    onRequestDeleteItems,
+    onHideIds,
+    assetUrl,
+    onOpenItem,
+  } = props;
+
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  // Progressive rendering for large duplicate result sets
-  const [renderLimit, setRenderLimit] = useState(50);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [renderLimit, setRenderLimit] = useState(GROUP_PAGE);
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [keeperMode, setKeeperMode] = useState<KeeperMode>("oldest");
+  const [filterKind, setFilterKind] = useState<KindFilter>("all");
+  const [sortBy, setSortBy] = useState<SortBy>("saving");
+  const pageRef = useRef<HTMLDivElement>(null);
 
-  const groups = props.groups || [];
-  const totalCopies = useMemo(
-    () => groups.reduce((sum: number, g: any) => sum + (g.items?.length || 0), 0),
-    [groups],
-  );
-  const reclaimableBytes = useMemo(() => {
-    let bytes = 0;
-    groups.forEach((g: any) => {
-      (g.items || []).slice(1).forEach((it: any) => {
-        bytes += Number(it.size || 0);
-      });
+  const groups = useMemo(() => groupsProp ?? [], [groupsProp]);
+  const progress = progressProp ?? null;
+
+  const kindCounts = useMemo(() => {
+    const counts: Record<KindFilter, number> = { all: groups.length, photo: 0, video: 0, raw: 0 };
+    groups.forEach((group) => {
+      const kinds = new Set(group.items.map((item) => item.kind));
+      if (kinds.has("photo")) counts.photo += 1;
+      if (kinds.has("video")) counts.video += 1;
+      if (kinds.has("raw")) counts.raw += 1;
     });
-    return bytes;
+    return counts;
   }, [groups]);
-  const selectedBytes = useMemo(() => {
-    let bytes = 0;
-    groups.forEach((g: any) => {
-      (g.items || []).forEach((it: any) => {
-        if (selected.has(it.id)) bytes += Number(it.size || 0);
-      });
-    });
-    return bytes;
-  }, [groups, selected]);
 
-  React.useEffect(() => {
-    const ids = new Set<string>();
-    groups.forEach((g: any) => {
-      (g.items || []).forEach((it: any, i: number) => {
-        if (i > 0) ids.add(it.id);
+  // Describes what the scan did find so a filtered-empty view still points
+  // somewhere instead of dead-ending on "no results". Phrased without a verb
+  // so a single group and many groups both read correctly.
+  const otherKinds = useMemo(() => {
+    const parts: string[] = [];
+    (["photo", "video", "raw"] as const).forEach((kind) => {
+      const count = kindCounts[kind];
+      if (kind === filterKind || count === 0) return;
+      const noun = kind === "raw" ? "RAW" : kind;
+      parts.push(`${count.toLocaleString()} ${noun} ${count === 1 ? "group" : "groups"}`);
+    });
+    return parts;
+  }, [filterKind, kindCounts]);
+
+  const otherKindsLabel = useMemo(() => {
+    if (otherKinds.length <= 1) return otherKinds[0] ?? "";
+    return `${otherKinds.slice(0, -1).join(", ")} and ${otherKinds[otherKinds.length - 1]}`;
+  }, [otherKinds]);
+
+  const groupViews = useMemo<GroupView[]>(() => {
+    const views: GroupView[] = [];
+    groups.forEach((group) => {
+      if (filterKind !== "all" && !group.items.some((item) => item.kind === filterKind)) return;
+      const ordered = orderGroup(group.items, keeperMode);
+      const copies = ordered.slice(1);
+      views.push({
+        group,
+        ordered,
+        keeper: ordered[0],
+        copies,
+        reclaimable: copies.reduce((sum, item) => sum + item.size, 0),
+        newest: group.items.reduce((latest, item) => Math.max(latest, copyOrderValue(item)), 0),
       });
     });
-    setSelected(ids);
+    views.sort((a, b) => {
+      if (sortBy === "copies")
+        return b.ordered.length - a.ordered.length || b.reclaimable - a.reclaimable;
+      if (sortBy === "newest") return b.newest - a.newest;
+      if (sortBy === "name") return a.keeper.name.localeCompare(b.keeper.name);
+      return b.reclaimable - a.reclaimable;
+    });
+    return views;
+  }, [groups, filterKind, keeperMode, sortBy]);
+
+  const totalCopies = useMemo(
+    () => groupViews.reduce((sum, view) => sum + view.copies.length, 0),
+    [groupViews],
+  );
+  const reclaimableBytes = useMemo(
+    () => groupViews.reduce((sum, view) => sum + view.reclaimable, 0),
+    [groupViews],
+  );
+  const selectedBytes = useMemo(() => {
+    let total = 0;
+    groupViews.forEach((view) => {
+      view.ordered.forEach((item) => {
+        if (selected.has(item.id)) total += item.size;
+      });
+    });
+    return total;
+  }, [groupViews, selected]);
+
+  const libraryTotals = useMemo(() => {
+    let copies = 0;
+    let bytes = 0;
+    groups.forEach((group) => {
+      copies += Math.max(0, group.items.length - 1);
+      bytes += group.items.slice(1).reduce((sum, item) => sum + item.size, 0);
+    });
+    return { copies, bytes };
   }, [groups]);
 
   useEffect(() => {
-    setRenderLimit(50);
-    scrollRef.current?.scrollTo({ top: 0 });
-  }, [groups]);
+    setRenderLimit(GROUP_PAGE);
+    pageRef.current?.scrollTo({ top: 0 });
+  }, [filterKind, sortBy, keeperMode]);
 
-  const handleScroll = () => {
-    const el = scrollRef.current;
-    if (!el || renderLimit >= groups.length) return;
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 800) {
-      setRenderLimit((n) => Math.min(n + 50, groups.length));
-    }
-  };
-
-  const toggleAllGroups = (expand: boolean) => {
-    if (expand) {
-      const all = new Set<string>();
-      groups.forEach((g: any) => all.add(g.sha256));
-      setExpandedGroups(all);
-    } else {
-      setExpandedGroups(new Set());
-    }
-  };
-
-  const toggleSelected = (id: string) => {
+  const toggleItem = useCallback((id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  };
+  }, []);
 
-  const groupSelectedIds = (group: any) =>
-    (group.items || []).filter((it: any) => selected.has(it.id)).map((it: any) => it.id);
+  const selectNone = useCallback(() => setSelected(new Set()), []);
 
-  const toggleGroupExpand = (sha256: string) => {
+  const selectAllCopies = useCallback(() => {
+    const ids = new Set<string>();
+    groupViews.forEach((view) => view.copies.forEach((item) => ids.add(item.id)));
+    setSelected(ids);
+  }, [groupViews]);
+
+  const toggleGroupCopies = useCallback((view: GroupView) => {
+    const copyIds = view.copies.map((item) => item.id);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const allSelected = copyIds.length > 0 && copyIds.every((id) => prev.has(id));
+      copyIds.forEach((id) => {
+        if (allSelected) next.delete(id);
+        else next.add(id);
+      });
+      return next;
+    });
+  }, []);
+
+  const toggleGroupExpand = useCallback((sha256: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(sha256)) next.delete(sha256);
       else next.add(sha256);
       return next;
     });
+  }, []);
+
+  const expandableGroups = useMemo(
+    () => groupViews.filter((view) => view.ordered.length > INLINE_COPIES),
+    [groupViews],
+  );
+  const allExpanded =
+    expandableGroups.length > 0 &&
+    expandableGroups.every((view) => expandedGroups.has(view.group.sha256));
+
+  const toggleAllGroups = useCallback(() => {
+    setExpandedGroups(
+      allExpanded ? new Set() : new Set(expandableGroups.map((v) => v.group.sha256)),
+    );
+  }, [allExpanded, expandableGroups]);
+
+  // Changing the criteria changes which copies count as removable, so the
+  // previous selection would no longer mean what the user chose.
+  const changeFilter = useCallback((kind: KindFilter) => {
+    setFilterKind(kind);
+    setSelected(new Set());
+  }, []);
+
+  const changeKeeperMode = useCallback((mode: KeeperMode) => {
+    setKeeperMode(mode);
+    setSelected(new Set());
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    const el = pageRef.current;
+    if (!el || renderLimit >= groupViews.length) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 900) {
+      setRenderLimit((limit) => Math.min(limit + GROUP_PAGE, groupViews.length));
+    }
+  }, [groupViews.length, renderLimit]);
+
+  const scanPercent = useMemo(() => {
+    if (!progress?.total || !progress.processed) return null;
+    return Math.max(0, Math.min(100, Math.round((progress.processed / progress.total) * 100)));
+  }, [progress]);
+
+  useKeyboard([
+    useCallback(
+      (e: KeyboardEvent) => {
+        if (busy) return;
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
+          e.preventDefault();
+          selectAllCopies();
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
+          e.preventDefault();
+          selectNone();
+        }
+        if (e.key === "Escape" && selected.size > 0) {
+          e.preventDefault();
+          selectNone();
+        }
+        if ((e.key === "Delete" || e.key === "Backspace") && selected.size > 0) {
+          e.preventDefault();
+          onRequestDeleteItems([...selected]);
+        }
+      },
+      [busy, selected, selectAllCopies, selectNone, onRequestDeleteItems],
+    ),
+  ]);
+
+  const revealItem = (path: string) => {
+    void tauri.items.revealInFinder(path);
   };
 
-  const isGroupExpanded = (sha256: string) => expandedGroups.has(sha256);
-  const shortHash = (sha: string | undefined) => (sha || "").slice(0, 16);
-
-  const groupItemsSelected = (group: any) =>
-    (group.items || []).slice(1).every((it: any) => selected.has(it.id));
-
-  const renderDuplicates = () => {
-    if (groups.length === 0) {
-      return (
-        <div className="empty-state duplicate-empty">
-          <span>
-            <DuplicatesIcon size={34} />
-          </span>
-          <b>No duplicates found</b>
-          <p>Duplicate scans compare file content (SHA-256), not just names or sizes.</p>
-          <button
-            className="primary-button"
-            type="button"
-            onClick={props.onScan}
-            disabled={props.busy}
-          >
-            Scan for duplicates
-          </button>
-        </div>
-      );
+  const stackPose = (count: number, index: number) => {
+    if (count <= 1) return { x: 0, r: 0, z: 1 };
+    if (count === 2) {
+      return index === 0 ? { x: -5, r: -7, z: 1 } : { x: 5, r: 4, z: 2 };
     }
+    const poses = [
+      { x: -11, r: -9, z: 1 },
+      { x: 11, r: 8, z: 2 },
+      { x: 0, r: -1, z: 3 },
+    ];
+    return poses[index] ?? poses[2];
+  };
+
+  const renderTile = (view: GroupView, item: MediaItem) => {
+    const isKeeper = item.id === view.keeper.id;
+    const isSelected = selected.has(item.id);
 
     return (
-      <>
-        <div className="duplicate-batch-bar">
-          <div className="duplicate-batch-summary">
-            <span>
-              {selected.size} of {totalCopies} copies selected
-            </span>
-            {selected.size > 0 && (
-              <small>
-                {formatBytesSimple(selectedBytes)} selected · {formatBytesSimple(reclaimableBytes)}{" "}
-                can be reclaimed
-              </small>
+      <figure
+        key={item.id}
+        className={`duplicate-tile${isSelected ? " is-selected" : ""}${isKeeper ? " is-keeper" : ""}`}
+      >
+        <div className="duplicate-tile-frame">
+          <button
+            type="button"
+            className="duplicate-tile-select"
+            aria-pressed={isSelected}
+            aria-label={`${isSelected ? "Deselect" : "Select"} ${item.name} in ${parentFolder(item.path)}`}
+            onClick={() => toggleItem(item.id)}
+          >
+            {item.kind === "raw" ? (
+              <span className="duplicate-tile-raw">
+                <KindBadge kind="raw" />
+              </span>
+            ) : (
+              <CachedThumbnail
+                itemId={item.id}
+                name={item.name}
+                size={256}
+                fallbackSrc={item.kind === "photo" ? assetUrl(item.path) : undefined}
+              />
             )}
-          </div>
-          <div className="duplicate-batch-actions">
-            <button
-              className="secondary-button"
-              type="button"
-              disabled={props.busy || selected.size === 0}
-              onClick={() => props.onHideIds?.([...selected])}
-            >
-              Hide selected
-            </button>
-            <button
-              className="danger-button"
-              type="button"
-              disabled={props.busy || selected.size === 0}
-              onClick={() => props.onRequestDeleteItems?.([...selected])}
-            >
-              Move selected to Trash
-            </button>
-            <button
-              className="quiet-button"
-              type="button"
-              disabled={props.busy}
-              onClick={() => {
-                const ids = new Set<string>();
-                groups.forEach((g: any) =>
-                  (g.items || []).forEach((it: any, i: number) => {
-                    if (i > 0) ids.add(it.id);
-                  }),
-                );
-                setSelected(ids);
-              }}
-            >
-              Select all copies
-            </button>
-            <button
-              className="quiet-button"
-              type="button"
-              disabled={props.busy}
-              onClick={() => setSelected(new Set())}
-            >
-              Clear selection
-            </button>
-            <button
-              className="quiet-button"
-              type="button"
-              disabled={props.busy || expandedGroups.size === 0}
-              onClick={() => toggleAllGroups(false)}
-            >
-              Collapse all
-            </button>
-            <button
-              className="quiet-button"
-              type="button"
-              disabled={props.busy || expandedGroups.size === groups.length}
-              onClick={() => toggleAllGroups(true)}
-            >
-              Expand all
-            </button>
-          </div>
-        </div>
-        <div className="duplicate-scroll-container" ref={scrollRef} onScroll={handleScroll}>
-          {groups.slice(0, renderLimit).map((group: any) => (
-            <section className="duplicate-result" key={String(group.sha256)}>
-              <div className="duplicate-group-head">
-                <div className="duplicate-group-title">
-                  <b>Identical files</b>
-                  <span>{group.items?.length || 0} copies · SHA-256 match</span>
-                  <span className="duplicate-group-hash">{shortHash(group.sha256)}</span>
-                </div>
-                <div className="duplicate-group-actions">
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    disabled={props.busy || groupSelectedIds(group).length === 0}
-                    onClick={() => props.onHideIds?.(groupSelectedIds(group))}
-                  >
-                    Hide selected
-                  </button>
-                  <button
-                    className="danger-button"
-                    type="button"
-                    disabled={props.busy || groupSelectedIds(group).length === 0}
-                    onClick={() => props.onRequestDeleteItems?.(groupSelectedIds(group))}
-                  >
-                    Move to Trash
-                  </button>
-                  {group.items.length > 5 && (
-                    <button
-                      className="quiet-button"
-                      type="button"
-                      onClick={() => toggleGroupExpand(group.sha256)}
-                    >
-                      {isGroupExpanded(group.sha256)
-                        ? "Show fewer"
-                        : `Show all ${group.items.length}`}
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className="duplicate-grid">
-                {(() => {
-                  const items = group.items || [];
-                  const expanded = isGroupExpanded(group.sha256);
-                  const visible = expanded ? items : items.slice(0, 3);
-                  const showMore = !expanded && items.length > 3;
-                  return (
-                    <>
-                      {visible.map((item: any, i: number) => (
-                        <div
-                          className={`duplicate-card${selected.has(item.id) ? " duplicate-card-selected" : ""}${
-                            i === 0 ? " duplicate-card-keep" : ""
-                          }`}
-                          key={item.id}
-                          onClick={(e: React.MouseEvent) => {
-                            if (e.target instanceof HTMLInputElement) return;
-                            toggleSelected(item.id);
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            className="duplicate-check"
-                            checked={selected.has(item.id)}
-                            aria-label={i === 0 ? "Keep original" : "Select copy"}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                              e.stopPropagation();
-                              toggleSelected(item.id);
-                            }}
-                          />
-                          {i === 0 && (
-                            <span className="duplicate-keep-badge" title="Original copy">
-                              Original
-                            </span>
-                          )}
-                          <div className="duplicate-thumb">
-                            {item.kind === "photo" ? (
-                              <CachedThumbnail
-                                itemId={item.id}
-                                name={item.name}
-                                size={256}
-                                style={draftImageStyle(draftTransforms, item.id)}
-                              />
-                            ) : (
-                              <div className="duplicate-nonimage">
-                                <KindBadge kind={item.kind} />
-                              </div>
-                            )}
-                          </div>
-                          <div className="duplicate-card-body">
-                            <span className="duplicate-card-label">
-                              {i === 0
-                                ? "Keep original"
-                                : selected.has(item.id)
-                                  ? "Selected copy"
-                                  : "Copy"}
-                            </span>
-                            <div className="duplicate-card-meta">
-                              <span title={item.name}>{item.name}</span>
-                              <small title={item.path}>
-                                {formatBytesSimple(item.size)} · {item.path}
-                              </small>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {showMore && (
-                        <div
-                          className={`duplicate-card duplicate-card-showmore${selected.size > 0 && groupItemsSelected(group) ? " duplicate-card-selected" : ""}`}
-                          key="show-all"
-                          onClick={(e: React.MouseEvent) => {
-                            if (e.target instanceof HTMLInputElement) return;
-                            toggleGroupExpand(group.sha256);
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            className="duplicate-check"
-                            checked={groupItemsSelected(group)}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                              e.stopPropagation();
-                              const ids = new Set<string>();
-                              (items || []).slice(1).forEach((it: any) => ids.add(it.id));
-                              setSelected((prev) => {
-                                const next = new Set(prev);
-                                if (groupItemsSelected(group)) {
-                                  ids.forEach((id) => next.delete(id));
-                                } else {
-                                  ids.forEach((id) => next.add(id));
-                                }
-                                return next;
-                              });
-                            }}
-                          />
-                          <span className="duplicate-showmore-label">
-                            Show all {items.length - 3}
-                          </span>
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-            </section>
-          ))}
-          {renderLimit < groups.length && (
-            <div className="grid-more">
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() => setRenderLimit((n) => Math.min(n + 50, groups.length))}
-              >
-                Show {Math.min(50, groups.length - renderLimit)} more groups
-              </button>
-            </div>
+          </button>
+          <span className={`duplicate-tile-check${isSelected ? " is-on" : ""}`} aria-hidden="true">
+            {isSelected ? <CheckIcon size={11} /> : null}
+          </span>
+          <span className={`duplicate-tile-role${isKeeper ? " is-keeper" : ""}`}>
+            {isKeeper ? "Keep" : "Copy"}
+          </span>
+          {item.kind === "video" && (
+            <span className="duplicate-tile-kind">
+              <KindBadge kind="video" />
+            </span>
           )}
         </div>
-      </>
+        <figcaption className="duplicate-tile-caption">
+          <span className="duplicate-tile-head">
+            <span className={`duplicate-tile-flag${isKeeper ? " is-keeper" : ""}`}>
+              {isKeeper ? "Keep" : "Copy"}
+            </span>
+            <span className="duplicate-tile-name" title={item.path}>
+              {item.name}
+            </span>
+            <span className="duplicate-tile-tools">
+              {onOpenItem && (
+                <button
+                  type="button"
+                  className="duplicate-tile-tool"
+                  title="Open in viewer"
+                  aria-label={`Open ${item.name}`}
+                  onClick={() => onOpenItem(item.id)}
+                >
+                  <EyeIcon size={13} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="duplicate-tile-tool"
+                title="Reveal in Finder"
+                aria-label={`Reveal ${item.name} in Finder`}
+                onClick={() => revealItem(item.path)}
+              >
+                <FolderIcon size={13} />
+              </button>
+            </span>
+          </span>
+          <span className="duplicate-tile-meta">
+            {formatBytesSimple(item.size)}
+            {item.width && item.height ? ` · ${item.width}×${item.height}` : ""}
+            {formatDate(item.createdAt || item.modifiedAt)
+              ? ` · ${formatDate(item.createdAt || item.modifiedAt)}`
+              : ""}
+          </span>
+          <span className="duplicate-tile-path" title={item.path}>
+            {parentFolder(item.path)}
+          </span>
+        </figcaption>
+      </figure>
     );
   };
 
+  const renderGroup = (view: GroupView) => {
+    const { group } = view;
+    const expanded = expandedGroups.has(group.sha256);
+    const visible = expanded ? view.ordered : view.ordered.slice(0, INLINE_COPIES);
+    const hiddenCount = view.ordered.length - visible.length;
+    const stackItems = view.ordered.slice(0, 3);
+    const copyIds = view.copies.map((item) => item.id);
+    const allCopiesSelected = copyIds.length > 0 && copyIds.every((id) => selected.has(id));
+    const groupFullySelected = view.ordered.every((item) => selected.has(item.id));
+
+    return (
+      <section className="duplicate-group" key={group.sha256}>
+        <header className="duplicate-group-head">
+          <button
+            type="button"
+            className="duplicate-group-summary"
+            aria-expanded={expanded}
+            onClick={() => toggleGroupExpand(group.sha256)}
+          >
+            <span
+              className={`duplicate-stack${stackItems.length === 1 ? " is-single" : ""}`}
+              aria-hidden="true"
+            >
+              {stackItems.map((item, index) => {
+                const pose = stackPose(stackItems.length, index);
+                return (
+                  <span
+                    key={item.id}
+                    className="duplicate-stack-sheet"
+                    style={
+                      {
+                        "--stack-x": `${pose.x}px`,
+                        "--stack-r": `${pose.r}deg`,
+                        zIndex: pose.z,
+                      } as React.CSSProperties
+                    }
+                  >
+                    {item.kind === "raw" ? (
+                      <span className="duplicate-stack-raw" />
+                    ) : (
+                      <CachedThumbnail itemId={item.id} name="" size={128} />
+                    )}
+                  </span>
+                );
+              })}
+              <span className="duplicate-stack-count">{view.ordered.length}</span>
+            </span>
+            <span className="duplicate-group-copy">
+              <span className="duplicate-group-title">{view.ordered.length} identical copies</span>
+              <span className="duplicate-group-sub">
+                {formatBytesSimple(group.size)} each · <b>{formatBytesSimple(view.reclaimable)}</b>{" "}
+                reclaimable
+              </span>
+              <span className="duplicate-group-hash" title={group.sha256}>
+                SHA-256 {(group.sha256 || "").slice(0, 16)}
+              </span>
+            </span>
+            <span className={`duplicate-group-chevron${expanded ? " is-open" : ""}`}>
+              <ChevronDownIcon size={14} />
+            </span>
+          </button>
+          <div className="duplicate-group-actions">
+            {groupFullySelected && (
+              <span className="duplicate-group-note">Every copy selected</span>
+            )}
+            <button
+              type="button"
+              className="quiet-button"
+              disabled={busy}
+              onClick={() => toggleGroupCopies(view)}
+            >
+              {allCopiesSelected ? "Deselect copies" : "Select copies"}
+            </button>
+            {view.ordered.length > INLINE_COPIES && (
+              <button
+                type="button"
+                className="quiet-button"
+                disabled={busy}
+                onClick={() => toggleGroupExpand(group.sha256)}
+              >
+                {expanded ? "Show fewer" : `Show all ${view.ordered.length}`}
+              </button>
+            )}
+          </div>
+        </header>
+        <div className={`duplicate-tiles${viewMode === "list" ? " is-list" : ""}`}>
+          {visible.map((item) => renderTile(view, item))}
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              className="duplicate-tile-more"
+              onClick={() => toggleGroupExpand(group.sha256)}
+            >
+              +{hiddenCount}
+              <small>more</small>
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  };
+
+  const hasGroups = groups.length > 0;
+  const hasVisibleGroups = groupViews.length > 0;
+  const canAct = !busy && selected.size > 0;
+  const allCopiesSelected = totalCopies > 0 && selected.size >= totalCopies;
+
   return (
-    <div className="feature-page duplicates-page">
+    <div className="feature-page duplicates-page" ref={pageRef} onScroll={handleScroll}>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Duplicates</p>
+          <p className="eyebrow">CLEANUP</p>
           <h1>Duplicate files</h1>
           <p className="page-subtitle">
-            {groups.length === 0
-              ? "Duplicate scans compare file content (SHA-256), not just names or sizes."
-              : `${groups.length} group${groups.length === 1 ? "" : "s"} · ${totalCopies} copies · ${formatBytesSimple(reclaimableBytes)} reclaimable (includes hidden items)`}
+            {hasGroups
+              ? `${groups.length.toLocaleString()} ${groups.length === 1 ? "group" : "groups"} · ${libraryTotals.copies.toLocaleString()} extra ${libraryTotals.copies === 1 ? "copy" : "copies"} · ${formatBytesSimple(libraryTotals.bytes)} reclaimable`
+              : "Find byte-identical files by SHA-256 content hash and reclaim disk space."}
           </p>
         </div>
-        {!props.busy && groups.length > 0 && (
-          <button className="quiet-button" type="button" onClick={props.onScan}>
-            Rescan
+        <div className="duplicate-heading-actions">
+          {hasGroups && (
+            <button type="button" className="quiet-button" onClick={onClear} disabled={busy}>
+              Clear
+            </button>
+          )}
+          <button type="button" className="primary-button" onClick={onScan} disabled={busy}>
+            {busy ? "Scanning…" : hasGroups ? "Rescan" : "Scan library"}
           </button>
-        )}
+        </div>
       </div>
-      {renderDuplicates()}
+
+      {busy && (
+        <div className="duplicate-scan" role="status" aria-live="polite">
+          <span className="duplicate-scan-pip" aria-hidden="true" />
+          <div className="duplicate-scan-copy">
+            <span className="duplicate-scan-title">
+              {progress?.phase === "hashing" ? "Comparing file contents" : "Finding candidates"}
+              {scanPercent !== null ? ` · ${scanPercent}%` : ""}
+            </span>
+            <span className="duplicate-scan-file" title={progress?.currentFile}>
+              {progress?.currentFile || "Reading file fingerprints…"}
+            </span>
+            <div
+              className={`duplicate-scan-track${scanPercent === null ? " is-indeterminate" : ""}`}
+            >
+              <span
+                className="duplicate-scan-fill"
+                style={scanPercent !== null ? { width: `${scanPercent}%` } : undefined}
+              />
+            </div>
+          </div>
+          <button type="button" className="quiet-button" onClick={onClear}>
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {hasVisibleGroups && (
+        <div className="duplicate-stats">
+          <div className="duplicate-stat">
+            <span className="duplicate-stat-value">{groupViews.length.toLocaleString()}</span>
+            <span className="duplicate-stat-label">Groups</span>
+          </div>
+          <div className="duplicate-stat">
+            <span className="duplicate-stat-value">{totalCopies.toLocaleString()}</span>
+            <span className="duplicate-stat-label">Extra copies</span>
+          </div>
+          <div className="duplicate-stat is-savings">
+            <span className="duplicate-stat-value">{formatBytesSimple(reclaimableBytes)}</span>
+            <span className="duplicate-stat-label">Reclaimable</span>
+          </div>
+          <div className={`duplicate-stat${selected.size > 0 ? " is-selected" : ""}`}>
+            <span className="duplicate-stat-value">{selected.size.toLocaleString()}</span>
+            <span className="duplicate-stat-label">Selected</span>
+          </div>
+        </div>
+      )}
+
+      {hasGroups && (
+        <div className="duplicate-toolbar">
+          <div className="duplicate-filter-tabs" role="tablist" aria-label="Filter by media type">
+            {(Object.keys(KIND_LABELS) as KindFilter[]).map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                role="tab"
+                aria-selected={filterKind === kind}
+                className={[
+                  filterKind === kind ? "is-active" : "",
+                  kindCounts[kind] === 0 ? "is-empty" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                onClick={() => changeFilter(kind)}
+              >
+                {KIND_LABELS[kind]}
+                <span className="duplicate-filter-count">{kindCounts[kind]}</span>
+              </button>
+            ))}
+          </div>
+          <div className="duplicate-toolbar-right">
+            <div className="duplicate-keeper" role="group" aria-label="Default copy to keep">
+              <span className="duplicate-keeper-label">Keep</span>
+              <button
+                type="button"
+                className={keeperMode === "oldest" ? "is-active" : ""}
+                aria-pressed={keeperMode === "oldest"}
+                title="Keep the copy that entered your library first"
+                onClick={() => changeKeeperMode("oldest")}
+              >
+                Oldest
+              </button>
+              <button
+                type="button"
+                className={keeperMode === "newest" ? "is-active" : ""}
+                aria-pressed={keeperMode === "newest"}
+                title="Keep the copy that entered your library last"
+                onClick={() => changeKeeperMode("newest")}
+              >
+                Newest
+              </button>
+            </div>
+            <div className="sort-control" role="group" aria-label="Sort groups">
+              <select
+                aria-label="Sort duplicate groups by"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortBy)}
+              >
+                {(Object.keys(SORT_LABELS) as SortBy[]).map((option) => (
+                  <option key={option} value={option}>
+                    {SORT_LABELS[option]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="layout-switcher" role="group" aria-label="Tile layout">
+              <button
+                type="button"
+                className={viewMode === "grid" ? "selected" : ""}
+                aria-pressed={viewMode === "grid"}
+                title="Grid view"
+                onClick={() => setViewMode("grid")}
+              >
+                <GridIcon size={14} />
+              </button>
+              <button
+                type="button"
+                className={viewMode === "list" ? "selected" : ""}
+                aria-pressed={viewMode === "list"}
+                title="List view"
+                onClick={() => setViewMode("list")}
+              >
+                <ColumnsIcon size={14} />
+              </button>
+            </div>
+            {expandableGroups.length > 0 && (
+              <button type="button" className="quiet-button" onClick={toggleAllGroups}>
+                {allExpanded ? "Collapse all" : "Expand all"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {hasVisibleGroups && (
+        <div className="duplicate-selection-bar">
+          <div className="duplicate-selection-copy">
+            <span>
+              <b>{selected.size.toLocaleString()}</b> of {totalCopies.toLocaleString()} extra copies
+              selected
+            </span>
+            {selected.size > 0 && (
+              <span className="duplicate-selection-savings">
+                {formatBytesSimple(selectedBytes)} reclaimable
+              </span>
+            )}
+          </div>
+          <div className="duplicate-selection-actions">
+            <button
+              type="button"
+              className="quiet-button"
+              disabled={busy || totalCopies === 0 || allCopiesSelected}
+              onClick={selectAllCopies}
+            >
+              Select copies
+            </button>
+            <button
+              type="button"
+              className="quiet-button"
+              disabled={selected.size === 0}
+              onClick={selectNone}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              className="quiet-button"
+              disabled={!canAct}
+              onClick={() => void onHideIds([...selected])}
+            >
+              Hide
+            </button>
+            <button
+              type="button"
+              className="danger-button"
+              disabled={!canAct}
+              onClick={() => onRequestDeleteItems([...selected])}
+            >
+              <TrashIcon size={13} /> Move to Trash
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!hasVisibleGroups ? (
+        <div className={`duplicate-empty${hasGroups && !busy ? " is-compact" : ""}`}>
+          <span className="duplicate-empty-icon" aria-hidden="true">
+            <DuplicatesIcon size={26} />
+          </span>
+          <h2>{busy ? "Scanning your library" : EMPTY_TITLES[hasGroups ? filterKind : "all"]}</h2>
+          <p>
+            {busy
+              ? "Comparing files by content hash. Large libraries can take a moment."
+              : hasGroups
+                ? otherKinds.length > 0
+                  ? `Found ${otherKindsLabel} instead. Use the media tabs above to switch.`
+                  : "Nothing in this scan matches the selected media type."
+                : "Every file in your library is unique by content. Identical-looking photos that differ by even one byte are not flagged."}
+          </p>
+          {!busy &&
+            (hasGroups ? (
+              <button type="button" className="quiet-button" onClick={() => changeFilter("all")}>
+                Show all {groups.length.toLocaleString()} groups
+              </button>
+            ) : (
+              <button type="button" className="primary-button" onClick={onScan}>
+                Scan library
+              </button>
+            ))}
+        </div>
+      ) : (
+        <>
+          <div className="duplicate-groups">
+            {groupViews.slice(0, renderLimit).map((view) => renderGroup(view))}
+          </div>
+          {renderLimit < groupViews.length && (
+            <div className="duplicate-load-more">
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={() =>
+                  setRenderLimit((limit) => Math.min(limit + GROUP_PAGE, groupViews.length))
+                }
+              >
+                Show {Math.min(GROUP_PAGE, groupViews.length - renderLimit).toLocaleString()} more
+                groups
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
-
-// Browser-based media item creation (temporary until the Tauri backend is
-// wired). Items are normalized to the same shape as the native catalog so the
-// browser prototype and the Rust store agree on a single MediaItem layout.
 
 export default DuplicatesScreen;

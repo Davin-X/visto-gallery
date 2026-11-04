@@ -458,6 +458,7 @@ export function AppScreenRouter({
           onScan={library.scanDuplicates}
           onClear={library.clearDuplicates}
           busy={library.busy}
+          progress={library.progress ?? null}
           assetUrl={assetUrl}
           onRequestDeleteItems={(ids: string[]) => {
             itemPendingDeleteRef.current = ids;
@@ -470,6 +471,7 @@ export function AppScreenRouter({
             library.showNotice(`Hidden ${ids.length.toLocaleString()} item(s).`);
             await library.scanDuplicates();
           }}
+          onOpenItem={(id: string) => openViewer(id, "Duplicates")}
         />
       )}
 
