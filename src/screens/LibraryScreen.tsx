@@ -80,6 +80,8 @@ interface LibraryScreenProps {
   onOpenBatch?: (ids?: string[]) => void;
   onOpenEdit: (item: MediaItem) => void;
   onOpenViewer: (id?: string) => void;
+  /** Start a background session for a video without leaving the grid. */
+  onPlayBackground?: (id: string) => void;
   onPlaySlideshow: (ids?: string[]) => void;
   onRequestDeleteItems: (ids: string[]) => void;
   onRequestRemoveFromAlbum?: (albumId: string, itemIds: string[]) => void;
@@ -730,6 +732,14 @@ function LibraryScreen(props: LibraryScreenProps) {
   // membership. The picker itself carries the album list and search.
   const itemContextMenu = (item: any) => [
     { label: "Open", onClick: () => props.onOpenViewer(item.id) },
+    ...(item.kind === "video" && props.onPlayBackground
+      ? [
+          {
+            label: "Play in background",
+            onClick: () => props.onPlayBackground?.(item.id),
+          },
+        ]
+      : []),
     ...(item.kind === "photo"
       ? [
           {
@@ -1600,6 +1610,23 @@ function LibraryScreen(props: LibraryScreenProps) {
                                         <KindBadge kind={item.kind} />
                                       </span>
                                     )}
+                                    {item.kind === "video" &&
+                                      canPlayVideoInApp(item.path, item.name) &&
+                                      props.onPlayBackground && (
+                                        <button
+                                          type="button"
+                                          className="tile-play-background"
+                                          aria-label={`Play ${tileAlt(item)} in background`}
+                                          title="Play in background"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            props.onPlayBackground?.(item.id);
+                                          }}
+                                          onDoubleClick={(event) => event.stopPropagation()}
+                                        >
+                                          <PlayIcon size={16} />
+                                        </button>
+                                      )}
                                     {item.kind === "video" && (
                                       <span className="video-label">
                                         <PlayIcon size={10} />

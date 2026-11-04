@@ -61,6 +61,7 @@ interface AppScreenRouterProps {
   openSmartAlbumMenu: (album: any, e: React.MouseEvent) => void;
   setAlbumRemovePending: (pending: { albumId: string; itemIds: string[] } | null) => void;
   copyTagsToFinderForIds: (ids: string[]) => Promise<void>;
+  playVideoInBackground: (id?: string, scope?: "library" | "hidden") => void;
 }
 
 export function AppScreenRouter({
@@ -108,6 +109,7 @@ export function AppScreenRouter({
   openSmartAlbumMenu,
   setAlbumRemovePending,
   copyTagsToFinderForIds,
+  playVideoInBackground,
 }: AppScreenRouterProps) {
   return (
     <main id="main-content" className="main-content" tabIndex={-1} style={{ position: "relative" }}>
@@ -191,6 +193,7 @@ export function AppScreenRouter({
             setAlbumRemovePending({ albumId, itemIds })
           }
           onOpenViewer={(id?: string) => openViewer(id, "Library")}
+          onPlayBackground={(id: string) => playVideoInBackground(id, "library")}
           onOpenEdit={async (item: any) => {
             if (item?.kind === "video") {
               openViewer(item.id, "Library");
@@ -444,6 +447,7 @@ export function AppScreenRouter({
             setScreen("Edit");
           }}
           onOpenViewer={(id?: string) => openViewer(id, "Hidden", "hidden")}
+          onPlayBackground={(id: string) => playVideoInBackground(id, "hidden")}
         />
       )}
 

@@ -15,6 +15,8 @@ interface HiddenScreenProps {
   onRequestDeleteItems: (ids: string[]) => void;
   onOpenEdit: (item: MediaItem) => void;
   onOpenViewer: (id?: string) => void;
+  /** Start a background session for a video without leaving the grid. */
+  onPlayBackground?: (id: string) => void;
   onPlaySlideshow?: (ids?: string[]) => void;
 }
 
@@ -24,6 +26,7 @@ function HiddenScreen(props: HiddenScreenProps) {
   const query = library.hiddenQuery;
   const [pendingReveal, setPendingReveal] = useState<
     | { kind: "viewer"; id?: string }
+    | { kind: "background"; id: string }
     | { kind: "edit"; item: MediaItem }
     | { kind: "slideshow"; ids: string[] }
     | null
@@ -66,6 +69,7 @@ function HiddenScreen(props: HiddenScreenProps) {
   }, [pendingReveal]);
 
   const requestViewer = (id?: string) => setPendingReveal({ kind: "viewer", id });
+  const requestBackground = (id: string) => setPendingReveal({ kind: "background", id });
   const requestEdit = (item: MediaItem) => setPendingReveal({ kind: "edit", item });
 
   const requestSlideshow = (ids?: string[]) => {
@@ -88,6 +92,10 @@ function HiddenScreen(props: HiddenScreenProps) {
       if (scope.length) props.onPlaySlideshow?.(scope.map((item: any) => item.id));
       return;
     }
+    if (request.kind === "background") {
+      props.onPlayBackground?.(request.id);
+      return;
+    }
     if (request.kind === "edit") {
       props.onOpenEdit(request.item);
       return;
@@ -103,6 +111,13 @@ function HiddenScreen(props: HiddenScreenProps) {
         title: `Play ${count} hidden ${count === 1 ? "item" : "items"}?`,
         body: "They will be visible on screen until you stop the slideshow. Hidden items remain on disk at their original paths and are not encrypted.",
         action: "Play slideshow",
+      };
+    }
+    if (pendingReveal.kind === "background") {
+      return {
+        title: "Play this hidden video?",
+        body: "It will play in the background until you stop it. Hidden items remain on disk at their original paths and are not encrypted.",
+        action: "Play video",
       };
     }
     if (pendingReveal.kind === "edit") {
@@ -185,6 +200,7 @@ function HiddenScreen(props: HiddenScreenProps) {
         onDeleteItems={library.deleteItems}
         onRequestDeleteItems={props.onRequestDeleteItems}
         onOpenViewer={requestViewer}
+        onPlayBackground={props.onPlayBackground ? requestBackground : undefined}
         onOpenEdit={requestEdit}
         onPlaySlideshow={requestSlideshow}
         onCreateAlbum={props.onCreateAlbum}

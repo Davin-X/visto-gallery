@@ -1891,6 +1891,44 @@ body {
   gap: 3px;
 }
 
+/* Play in background, revealed on hover/focus: videos start the session
+   without leaving the grid. */
+.tile-play-background {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0 0 0 2px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.9);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+
+.gallery-tile:hover .tile-play-background,
+.gallery-tile:focus-within .tile-play-background,
+.tile-play-background:focus-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.tile-play-background:hover {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--accent) 65%, rgba(0, 0, 0, 0.7));
+}
+
 .gallery-grid.layout-details .video-label {
   display: none;
 }
