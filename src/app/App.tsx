@@ -1771,16 +1771,21 @@ function App() {
     }
     if (next === "Hidden") {
       // Hidden is its own collection; do not carry a Library selection or an
-      // inspector for a visible item into it.
+      // inspector for a visible item into it. Load hidden items from the
+      // backend (hidden=true) so the Hidden screen has its own collection.
       library.setViewerScope("library");
       library.clearSelection();
       library.inspectItem(null);
+      void library.loadLibrary({ hidden: true });
     } else if (screen === "Hidden") {
       // Leaving Hidden drops the hidden selection and any hidden inspector
       // focus, so the next screen cannot show an item it cannot display.
       library.clearSelection();
       const inspected = library.items.find((i: MediaItem) => i.id === library.inspectedId);
       if (inspected?.hidden) library.inspectItem(null);
+      // Reload without the hidden filter so the normal library shows
+      // non-hidden items again.
+      void library.loadLibrary();
     }
     if (next === "Edit") {
       const selectedItem = library.items.find((i) => i.id === library.inspectedId);
