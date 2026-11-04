@@ -124,7 +124,7 @@ export function AppScreenRouter({
             position: "absolute",
             top: 10,
             right: 10,
-            zIndex: 5,
+            zIndex: 40,
             width: 32,
             height: 32,
             padding: 0,

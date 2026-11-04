@@ -3014,19 +3014,18 @@ body {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  column-gap: 12px;
-  height: 44px;
-  padding: 0 14px;
+  column-gap: 16px;
+  height: 48px;
+  padding: 0 18px;
   border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
   position: sticky;
   top: 0;
-  z-index: 11;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  z-index: 30;
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   user-select: none;
   -webkit-user-select: none;
-  z-index: 10;
 }
 
 /* macOS traffic lights are overlaid on our own topbar (titleBarStyle
@@ -8098,7 +8097,7 @@ body {
 }
 .edit-page > .page-heading {
   position: relative;
-  z-index: 1000;
+  z-index: 10;
 }
 .edit-page > .page-heading > div:first-child {
   min-width: 0;
@@ -8513,6 +8512,7 @@ body {
   margin-bottom: 8px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
 }
 .edit-adjustment-heading {
   display: flex;
@@ -8555,6 +8555,8 @@ body {
   flex: 0 0 auto;
   align-items: center;
   gap: 4px;
+  flex: 0 0 auto;
+  align-items: center;
 }
 .edit-adjustment-actions button {
   display: inline-flex;
@@ -9005,6 +9007,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding-top: 0;
 }
 
 .duplicate-header {
@@ -9012,7 +9015,15 @@ body {
   top: 0;
   z-index: 20;
   padding: 6px 0;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);.duplicates-page .page-subtitle {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+.duplicates-page .page-heading {
+  margin-bottom: 8px;
+  align-items: center;
+}
+
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--line);
@@ -9162,6 +9173,8 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  margin-top: 2px;
+  margin-bottom: 8px;
 }
 
 .duplicate-filter-tabs {
@@ -9350,7 +9363,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--line);
   background: linear-gradient(
     180deg,
@@ -9452,7 +9465,7 @@ body {
 .duplicate-stack {
   position: relative;
   flex: 0 0 auto;
-  width: 44px;
+  width: 64px;
   height: 44px;
 }
 

@@ -649,7 +649,6 @@ function EditScreen(props: EditScreenProps) {
                   </span>
                   <div>
                     <b>Adjustments</b>
-                    <small>Live preview · non-destructive</small>
                   </div>
                 </div>
                 <div className="edit-adjustment-actions">
