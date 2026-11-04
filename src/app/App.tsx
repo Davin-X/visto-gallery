@@ -21,7 +21,6 @@ import VideoThumb from "../design/components/VideoThumb";
 import DuplicatesScreen from "../screens/DuplicatesScreen";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import { KindBadge, KindDot } from "../design/components/KindBadge";
-import { ErrorBoundary } from "./ErrorBoundary";
 
 import { createPortal } from "react-dom";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -64,6 +63,7 @@ import { isWarningNotice } from "./utils/isWarningNotice";
 import { startConfiguredSlideshow } from "./utils/startConfiguredSlideshow";
 import { AppDialogs } from "./AppDialogs";
 import { AppSidebar, AppTopBar } from "./AppNavigation";
+import { AppShell } from "./AppShell";
 import type { Screen } from "./screen";
 
 /**
@@ -2053,14 +2053,12 @@ function App() {
     : null;
 
   return (
-    <ErrorBoundary>
-      <div
-        className={`app-frame ${dark ? "dark" : ""}${!animateTransitions ? " no-transitions" : ""}`}
-        style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
-      >
-        <a className="skip-to-content" href="#main-content">
-          Skip to main content
-        </a>
+    <AppShell
+      dark={dark}
+      animateTransitions={animateTransitions}
+      sidebarWidth={sidebarWidth}
+      sidebarOpen={library.sidebarOpen}
+      topbar={
         <AppTopBar
           screen={screen}
           activeAlbumName={activeAlbumName}
@@ -2082,702 +2080,701 @@ function App() {
           onMouseDown={beginTopbarDrag}
           onDoubleClick={handleTopbarDoubleClick}
         />
-
-        <div className={`app-body ${library.sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
-          <AppSidebar
-            screen={screen}
-            libraryCount={library.items.length - library.hiddenCount}
-            hiddenCount={library.hiddenCount}
-            albumsCount={library.albums.length}
-            folders={library.folders}
-            sourcesSheetOpen={sourcesSheetOpen}
-            stats={libraryStats}
-            updateAvailable={Boolean(updateInfo?.available)}
-            updateVersion={updateInfo?.latestVersion ?? null}
-            appVersion={appVersion}
-            onOpenScreen={openScreen}
-            onOpenSources={() => setSourcesSheetOpen(true)}
-            onOpenUpdate={() => setUpdateDialogOpen(true)}
-          />
-
-          <main
-            id="main-content"
-            className="main-content"
-            tabIndex={-1}
-            style={{ position: "relative" }}
-          >
-            {screenHistory.length > 0 && (
-              <button
-                className="icon-button"
-                type="button"
-                aria-label="Go back"
-                title="Go back"
-                onClick={goBack}
-                style={{
-                  position: "absolute",
-                  top: 10,
-                  right: 10,
-                  zIndex: 5,
-                  width: 32,
-                  height: 32,
-                  padding: 0,
-                  borderRadius: 8,
-                  opacity: 0.8,
-                }}
-              >
-                ←
-              </button>
-            )}
-            {screen === "Library" && (
-              <LibraryScreen
-                items={library.visibleItems}
-                hasItems={library.items.length > 0}
-                inspectedId={library.inspectedId}
-                selectedIds={library.selectedIds}
-                filter={library.filter}
-                query={library.query}
-                layout={library.layout}
-                showInspector={library.showInspector}
-                activeAlbum={library.activeAlbum}
-                albums={library.albums}
-                onInspectItem={library.inspectItem}
-                onToggleSelect={library.toggleSelection}
-                onSelectRange={library.selectRange}
-                onSetSelection={library.setSelectedIds}
-                onToggleSelectAll={library.toggleSelectAll}
-                onClearSelection={library.clearSelection}
-                onOpenBatch={() => exportToBatch()}
-                onChangeFilter={library.setFilter}
-                onChangeQuery={library.setQuery}
-                onChangeLayout={library.setLayout}
-                onToggleInspector={library.toggleInspector}
-                onSetActiveAlbum={library.setActiveAlbum}
-                onOpenAlbums={() => openScreen("Albums")}
-                onAddItems={(albumId: string) => addItemsToAlbum(albumId)}
-                onOpenAlbumPicker={(itemIds?: string[]) => openAlbumPicker(itemIds)}
-                onAlbumMenu={(e: React.MouseEvent) => {
-                  const album = library.albums.find((a: any) => a.id === library.activeAlbum);
-                  if (album) openAlbumMenu(album, e);
-                }}
-                albumDragOver={albumDragOver}
-                onToggleFavorite={library.toggleFavorite}
-                onToggleHidden={library.toggleHidden}
-                onSetFavoriteForIds={library.setFavoriteForIds}
-                onSetHiddenForIds={library.setHiddenForIds}
-                onSetRatingForIds={library.setRatingForIds}
-                onSetColorLabelForIds={library.setColorLabelForIds}
-                minRating={library.minRating}
-                libraryStats={libraryStats}
-                colorLabelFilter={library.colorLabelFilter}
-                dateFrom={library.dateFrom}
-                dateTo={library.dateTo}
-                onSetMinRating={library.setMinRating}
-                onSetColorLabelFilter={library.setColorLabelFilter}
-                onSetDateRange={library.setDateRange}
-                onCreateSmartAlbum={(name: string) => void library.createSmartAlbum(name)}
-                onCopyTagsToFinder={copyTagsToFinderForIds}
-                onUpdateTags={library.updateItemTags}
-                onDeleteItems={library.deleteItems}
-                onRequestDeleteItems={(ids: string[]) => {
-                  itemPendingDeleteRef.current = ids;
-                  setItemPendingDeleteCount(ids.length);
-                }}
-                onRequestRemoveFromAlbum={(albumId: string, itemIds: string[]) =>
-                  setAlbumRemovePending({ albumId, itemIds })
-                }
-                onOpenViewer={(id?: string) => openViewer(id, "Library")}
-                onOpenEdit={async (item: any) => {
-                  if (item?.kind === "video") {
-                    openViewer(item.id, "Library");
-                    return;
-                  }
-                  await edit.saveDraft();
-                  await edit.open(item);
-                  setScreen("Edit");
-                }}
-                onImportFolder={() => importFolder()}
-                onImportFiles={() => importFiles()}
-                onPlaySlideshow={playSlideshow}
-                onCreateAlbum={openAlbumDialog}
-                searchInputRef={searchInputRef}
-                onContextMenu={openContextMenu}
-                busy={library.busy}
-                progress={library.progress}
-                notice={showNotice}
-                assetUrl={assetUrl}
-                hiddenCount={library.hiddenCount}
-              />
-            )}
-
-            {screen === "Albums" && (
-              <AlbumsScreen
-                albums={library.albums}
-                items={library.items}
-                smartAlbums={library.smartAlbums}
-                assetUrl={assetUrl}
-                onCreateAlbum={openAlbumDialog}
-                onAlbumContextMenu={openAlbumMenu}
-                onSmartAlbumContextMenu={openSmartAlbumMenu}
-                onOpenSmartAlbum={(albumId: string) => void openSmartAlbum(albumId)}
-                onOpenAlbum={async (albumId: string) => {
-                  library.setActiveAlbum(albumId);
-                  library.setFilter("All");
-                  library.setQuery("");
-                  await library.loadAlbumItems(albumId);
-                  setScreen("Library");
-                }}
-              />
-            )}
-
-            {screen === "Viewer" && (
-              <ViewerScreen
-                active
-                items={photoViewerItems}
-                selected={library.viewerSelected?.kind === "video" ? null : library.viewerSelected}
-                zoom={viewer.zoom}
-                fitMode={viewer.fitMode}
-                rotation={viewer.rotation}
-                flipX={viewer.flipX}
-                onNavigate={navigateViewer}
-                onSetPhoto={selectViewerItem}
-                onSetZoom={viewer.setZoom}
-                onZoomIn={viewer.zoomIn}
-                onZoomOut={viewer.zoomOut}
-                onResetZoom={viewer.resetZoom}
-                onToggleFitMode={viewer.toggleFitMode}
-                onRotate={viewer.rotate}
-                onToggleFlip={viewer.toggleFlip}
-                onResetTransform={viewer.resetTransform}
-                onToggleFullscreen={viewer.toggleFullscreen}
-                onClose={viewer.close}
-                onToggleFavorite={library.toggleFavorite}
-                onToggleHidden={library.toggleHidden}
-                onOpenEdit={async (item: MediaItem) => {
-                  await edit.saveDraft();
-                  await edit.open(item);
-                  setScreen("Edit");
-                }}
-                onContextMenu={openContextMenu}
-                assetUrl={assetUrl}
-              />
-            )}
-
-            <VideoPlayerScreen
-              active={screen === "Video"}
-              item={playbackItem}
-              queue={videoQueue}
-              queueAutoPlayItemId={queueAutoPlayId}
-              assetUrl={assetUrl}
-              onBack={() => setScreen(viewerOrigin || "Library")}
-              onSelect={selectVideoItem}
-              onPrevious={playPreviousVideo}
-              onNext={playNextVideo}
-            />
-
-            {screen === "Edit" && (
-              <EditScreen
-                item={edit.item}
-                values={edit.values}
-                crop={edit.crop}
-                history={edit.history}
-                historyIndex={edit.historyIndex}
-                onSetValue={edit.setValue}
-                onSetValues={edit.setValues}
-                onReset={edit.reset}
-                onAuto={edit.auto}
-                onRotate={edit.rotate}
-                onFlip={edit.flip}
-                onSetCrop={edit.setCrop}
-                onResetCrop={edit.resetCrop}
-                onUndo={edit.undo}
-                onRedo={edit.redo}
-                canUndo={edit.canUndo}
-                canRedo={edit.canRedo}
-                onClose={edit.close}
-                onSaveDraft={edit.saveDraft}
-                onBack={() => setScreen("Library")}
-                onExport={async (inPlace = false) => {
-                  const item = edit.item;
-                  if (!item) return;
-                  const sourceExtension = String(
-                    item.extension || item.name.split(".").pop() || "",
-                  ).toLowerCase();
-                  if (inPlace) {
-                    if (!["jpg", "jpeg", "png", "webp"].includes(sourceExtension)) {
-                      showNotice(
-                        "Replace original supports JPEG, PNG, and WebP. Save a copy instead.",
-                      );
-                      return;
-                    }
-                  }
-                  try {
-                    const v = edit.values || {};
-                    const crop = edit.crop || {
-                      enabled: false,
-                      x: 0,
-                      y: 0,
-                      width: 1,
-                      height: 1,
-                    };
-
-                    // Build render request for native backend
-                    const request = {
-                      sourcePath: item.path,
-                      edits: v,
-                      outputFormat: (inPlace ? "in_place" : "image/jpeg") as
-                        "jpeg" | "png" | "webp" | "heic" | "avif" | "in_place",
-                      quality: 0.92,
-                      stripMetadata: false,
-                      crop: crop.enabled ? crop : undefined,
-                    };
-
-                    const result = await tauri.editing.render(request);
-
-                    if (!inPlace) {
-                      // For save-copy, backend wrote to temp; now show save dialog
-                      const suggestedName =
-                        String(item.name).replace(/\.[^.]+$/, "") + "_edited.jpg";
-                      const finalPath = await save({
-                        defaultPath: suggestedName,
-                        filters: [{ name: "JPEG image", extensions: ["jpg", "jpeg"] }],
-                      });
-                      if (!finalPath) {
-                        showNotice("Export cancelled");
-                        return;
-                      }
-                      // Move temp file to final destination
-                      await tauri.editing.moveExportedFile(result.outputPath, finalPath);
-                    }
-
-                    clearEditDraft(item.id);
-                    if (inPlace) await library.loadLibrary();
-                    showNotice(inPlace ? "Replaced original" : "Exported edited copy");
-                  } catch (e) {
-                    if (String(e).includes("cancelled")) {
-                      showNotice("Export cancelled");
-                    } else {
-                      showNotice("Export failed: " + String(e));
-                    }
-                  }
-                }}
-                onClearDraft={edit.clearDraft}
-                onNotice={showNotice}
-                assetUrl={assetUrl}
-                items={library.items.filter((i: any) => i.kind === "photo" && !i.hidden)}
-                onOpenEdit={async (item: any) => {
-                  await edit.saveDraft();
-                  await edit.open(item);
-                }}
-              />
-            )}
-
-            {screen === "Batch" && (
-              <BatchScreen
-                items={library.items.filter((i: any) => library.selectedIds.includes(i.id))}
-                selectedIds={library.selectedIds}
-                config={batch}
-                state={batch}
-                onSetPattern={batch.setPattern}
-                onSetFormat={batch.setFormat}
-                onSetQuality={batch.setQuality}
-                onSetStripMetadata={batch.setStripMetadata}
-                onSetMaxDimension={batch.setMaxDimension}
-                onSetStep={batch.setStep}
-                onChooseFolder={async () => {
-                  const folder = await openFileDialog({
-                    directory: true,
-                    multiple: false,
-                    title: "Choose export folder",
-                  });
-                  if (typeof folder === "string") batch.setOutputFolder(folder);
-                }}
-                onOpenFolder={() => {
-                  if (batch.outputFolder) tauri.items.openFolder(batch.outputFolder);
-                }}
-                onExportBatch={batch.exportBatch}
-                onCancelBatch={batch.cancelBatch}
-                onReset={batch.reset}
-                onOpenLibrary={() => setScreen("Library")}
-                onClearSelection={library.clearSelection}
-                onSelectAll={library.selectAll}
-                onSetSelection={library.setSelectedIds}
-                onRemoveItem={library.toggleSelection}
-                busy={batch.busy}
-                cancelRequested={batch.cancelRequested}
-                progress={batch.progress}
-                result={batch.result}
-                error={batch.error}
-                assetUrl={assetUrl}
-              />
-            )}
-
-            {screen === "CameraLens" && (
-              <CameraLensBrowserScreen
-                items={library.items}
-                assetUrl={assetUrl}
-                onBack={() => setScreen("Library")}
-                onOpenViewer={(id?: string) => openViewer(id, "Library")}
-              />
-            )}
-
-            {screen === "Hidden" && (
-              <HiddenScreen
-                assetUrl={assetUrl}
-                searchInputRef={searchInputRef}
-                onContextMenu={openContextMenu}
-                onNavigate={openScreen}
-                onCreateAlbum={openAlbumDialog}
-                onOpenAlbumPicker={(itemIds?: string[]) => openAlbumPicker(itemIds)}
-                onRequestDeleteItems={(ids: string[]) => {
-                  itemPendingDeleteRef.current = ids;
-                  setItemPendingDeleteCount(ids.length);
-                }}
-                onOpenEdit={async (item: any) => {
-                  if (item?.kind === "video") {
-                    openViewer(item.id, "Hidden", "hidden");
-                    return;
-                  }
-                  await edit.saveDraft();
-                  await edit.open(item);
-                  setScreen("Edit");
-                }}
-                onOpenViewer={(id?: string) => openViewer(id, "Hidden", "hidden")}
-              />
-            )}
-
-            {screen === "Duplicates" && (
-              <DuplicatesScreen
-                groups={library.duplicates}
-                items={library.items}
-                onScan={library.scanDuplicates}
-                onClear={library.clearDuplicates}
-                busy={library.busy}
-                assetUrl={assetUrl}
-                onRequestDeleteItems={(ids: string[]) => {
-                  itemPendingDeleteRef.current = ids;
-                  setItemPendingDeleteCount(ids.length);
-                }}
-                onHideIds={async (ids: string[]) => {
-                  if (!ids.length) return;
-                  library.showNotice(`Hiding ${ids.length.toLocaleString()} item(s)…`);
-                  await library.setHiddenForIds(ids, true);
-                  library.showNotice(`Hidden ${ids.length.toLocaleString()} item(s).`);
-                  await library.scanDuplicates();
-                }}
-              />
-            )}
-
-            {screen === "Settings" && (
-              <SettingsScreen
-                onAddFolder={() => importFolder()}
-                onRemoveFolder={(folder: LibraryFolder) => setFolderPendingRemove(folder)}
-                onRescan={() => {
-                  void rescanSources();
-                }}
-                onRescanFolder={(folder) => {
-                  void rescanSource(folder);
-                }}
-                onRemoveAllSources={() => setRemoveAllSourcesDialogOpen(true)}
-              />
-            )}
-          </main>
-        </div>
-
-        {library.busy && library.progress && (
-          <div
-            className={`busy-indicator ${library.progress.phase === "hashing" ? "busy-indicator-hashing" : ""}`}
-            role="status"
-          >
-            <span className="spinner" />
-            {library.progress.phase === "hashing"
-              ? (() => {
-                  const bytesProcessed = library.progress.bytesProcessed ?? 0;
-                  const bytesTotal = library.progress.bytesTotal ?? 0;
-                  const filesProcessed =
-                    library.progress.filesProcessed ?? library.progress.processed;
-                  const filesTotal = library.progress.filesTotal ?? library.progress.total;
-                  const percent =
-                    bytesTotal > 0
-                      ? Math.min(100, Math.round((bytesProcessed / bytesTotal) * 100))
-                      : 0;
-                  return (
-                    <div className="busy-indicator-progress-copy">
-                      <b>
-                        {bytesTotal > 0
-                          ? `Checking duplicates · ${percent}%`
-                          : filesTotal > 0
-                            ? "Hashing candidates…"
-                            : "Finding duplicate candidates…"}
-                      </b>
-                      <small>
-                        {filesProcessed.toLocaleString()} of {filesTotal.toLocaleString()} candidate
-                        files
-                        {bytesTotal > 0 &&
-                          ` · ${formatBytesSimple(bytesProcessed)} of ${formatBytesSimple(bytesTotal)}`}
-                      </small>
-                      <div
-                        className="busy-indicator-progress-track"
-                        role="progressbar"
-                        aria-label="Duplicate scan progress"
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={percent}
-                      >
-                        <span style={{ width: `${percent}%` }} />
-                      </div>
-                      {library.progress.currentFile && (
-                        <small
-                          className="busy-indicator-current-file"
-                          title={library.progress.currentFile}
-                        >
-                          {library.progress.currentFile}
-                        </small>
-                      )}
-                    </div>
-                  );
-                })()
-              : library.progress.phase === "trashing"
+      }
+      sidebar={
+        <AppSidebar
+          screen={screen}
+          libraryCount={library.items.length - library.hiddenCount}
+          hiddenCount={library.hiddenCount}
+          albumsCount={library.albums.length}
+          folders={library.folders}
+          sourcesSheetOpen={sourcesSheetOpen}
+          stats={libraryStats}
+          updateAvailable={Boolean(updateInfo?.available)}
+          updateVersion={updateInfo?.latestVersion ?? null}
+          appVersion={appVersion}
+          onOpenScreen={openScreen}
+          onOpenSources={() => setSourcesSheetOpen(true)}
+          onOpenUpdate={() => setUpdateDialogOpen(true)}
+        />
+      }
+      overlays={
+        <>
+          {library.busy && library.progress && (
+            <div
+              className={`busy-indicator ${library.progress.phase === "hashing" ? "busy-indicator-hashing" : ""}`}
+              role="status"
+            >
+              <span className="spinner" />
+              {library.progress.phase === "hashing"
                 ? (() => {
-                    const processed = library.progress.processed ?? 0;
-                    const total = library.progress.total ?? 0;
+                    const bytesProcessed = library.progress.bytesProcessed ?? 0;
+                    const bytesTotal = library.progress.bytesTotal ?? 0;
+                    const filesProcessed =
+                      library.progress.filesProcessed ?? library.progress.processed;
+                    const filesTotal = library.progress.filesTotal ?? library.progress.total;
                     const percent =
-                      total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+                      bytesTotal > 0
+                        ? Math.min(100, Math.round((bytesProcessed / bytesTotal) * 100))
+                        : 0;
                     return (
                       <div className="busy-indicator-progress-copy">
-                        <b>Moving to Trash · {percent}%</b>
+                        <b>
+                          {bytesTotal > 0
+                            ? `Checking duplicates · ${percent}%`
+                            : filesTotal > 0
+                              ? "Hashing candidates…"
+                              : "Finding duplicate candidates…"}
+                        </b>
                         <small>
-                          {processed.toLocaleString()} of {total.toLocaleString()} files
+                          {filesProcessed.toLocaleString()} of {filesTotal.toLocaleString()}{" "}
+                          candidate files
+                          {bytesTotal > 0 &&
+                            ` · ${formatBytesSimple(bytesProcessed)} of ${formatBytesSimple(bytesTotal)}`}
                         </small>
                         <div
                           className="busy-indicator-progress-track"
                           role="progressbar"
-                          aria-label="Trash progress"
+                          aria-label="Duplicate scan progress"
                           aria-valuemin={0}
                           aria-valuemax={100}
                           aria-valuenow={percent}
                         >
                           <span style={{ width: `${percent}%` }} />
                         </div>
+                        {library.progress.currentFile && (
+                          <small
+                            className="busy-indicator-current-file"
+                            title={library.progress.currentFile}
+                          >
+                            {library.progress.currentFile}
+                          </small>
+                        )}
                       </div>
                     );
                   })()
-                : library.progress.phase === "reading"
-                  ? (() => (
-                      <div className="busy-indicator-progress-copy">
-                        <b>Loading library…</b>
-                        <small>Reading database</small>
-                        <div
-                          className="busy-indicator-progress-track"
-                          role="progressbar"
-                          aria-label="Loading library"
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-valuenow={0}
-                        >
-                          <span style={{ width: "0%" }} />
+                : library.progress.phase === "trashing"
+                  ? (() => {
+                      const processed = library.progress.processed ?? 0;
+                      const total = library.progress.total ?? 0;
+                      const percent =
+                        total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+                      return (
+                        <div className="busy-indicator-progress-copy">
+                          <b>Moving to Trash · {percent}%</b>
+                          <small>
+                            {processed.toLocaleString()} of {total.toLocaleString()} files
+                          </small>
+                          <div
+                            className="busy-indicator-progress-track"
+                            role="progressbar"
+                            aria-label="Trash progress"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={percent}
+                          >
+                            <span style={{ width: `${percent}%` }} />
+                          </div>
                         </div>
-                      </div>
-                    ))()
-                  : library.progress.phase === "scanning"
-                    ? (() => {
-                        // Distinguish source-level vs file-level progress:
-                        // - source-level: total <= number of folders (frontend sets it)
-                        // - file-level: total = files in current folder (backend sets it)
-                        // Heuristic: if currentFile is a directory path, it's source-level.
-                        const isSourceLevel = library.progress.currentFile
-                          ? library.progress.currentFile.endsWith("/") ||
-                            !library.progress.currentFile.includes(".")
-                          : true;
-                        const processed = library.progress.processed ?? 0;
-                        const total = library.progress.total ?? 0;
-                        const percent =
-                          total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+                      );
+                    })()
+                  : library.progress.phase === "reading"
+                    ? (() => (
+                        <div className="busy-indicator-progress-copy">
+                          <b>Loading library…</b>
+                          <small>Reading database</small>
+                          <div
+                            className="busy-indicator-progress-track"
+                            role="progressbar"
+                            aria-label="Loading library"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={0}
+                          >
+                            <span style={{ width: "0%" }} />
+                          </div>
+                        </div>
+                      ))()
+                    : library.progress.phase === "scanning"
+                      ? (() => {
+                          // Distinguish source-level vs file-level progress:
+                          // - source-level: total <= number of folders (frontend sets it)
+                          // - file-level: total = files in current folder (backend sets it)
+                          // Heuristic: if currentFile is a directory path, it's source-level.
+                          const isSourceLevel = library.progress.currentFile
+                            ? library.progress.currentFile.endsWith("/") ||
+                              !library.progress.currentFile.includes(".")
+                            : true;
+                          const processed = library.progress.processed ?? 0;
+                          const total = library.progress.total ?? 0;
+                          const percent =
+                            total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
 
-                        // Extract just the folder/file name from path
-                        const getName = (path: string) => path.split("/").pop() || path;
+                          // Extract just the folder/file name from path
+                          const getName = (path: string) => path.split("/").pop() || path;
 
-                        if (isSourceLevel) {
-                          return (
-                            <div className="busy-indicator-progress-copy">
-                              <b>
-                                Scanning source {processed + 1} of {total} · {percent}%
-                              </b>
-                              <small>
-                                {library.progress.currentFile
-                                  ? getName(library.progress.currentFile)
-                                  : "Preparing…"}
-                              </small>
-                              <div
-                                className="busy-indicator-progress-track"
-                                role="progressbar"
-                                aria-label="Scan progress"
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                                aria-valuenow={percent}
-                              >
-                                <span style={{ width: `${percent}%` }} />
+                          if (isSourceLevel) {
+                            return (
+                              <div className="busy-indicator-progress-copy">
+                                <b>
+                                  Scanning source {processed + 1} of {total} · {percent}%
+                                </b>
+                                <small>
+                                  {library.progress.currentFile
+                                    ? getName(library.progress.currentFile)
+                                    : "Preparing…"}
+                                </small>
+                                <div
+                                  className="busy-indicator-progress-track"
+                                  role="progressbar"
+                                  aria-label="Scan progress"
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-valuenow={percent}
+                                >
+                                  <span style={{ width: `${percent}%` }} />
+                                </div>
                               </div>
-                            </div>
-                          );
-                        } else {
-                          // Show source folder + file progress in two lines
-                          const currentFileName = library.progress.currentFile
-                            ? library.progress.currentFile.split("/").pop() ||
-                              library.progress.currentFile
-                            : "files";
-                          // Extract source folder from current file path
-                          let sourceFolder = "files";
-                          if (library.progress.currentFile) {
-                            const parts = library.progress.currentFile.split("/");
-                            if (parts.length >= 2) {
-                              sourceFolder = parts[parts.length - 2]; // parent folder name
+                            );
+                          } else {
+                            // Show source folder + file progress in two lines
+                            const currentFileName = library.progress.currentFile
+                              ? library.progress.currentFile.split("/").pop() ||
+                                library.progress.currentFile
+                              : "files";
+                            // Extract source folder from current file path
+                            let sourceFolder = "files";
+                            if (library.progress.currentFile) {
+                              const parts = library.progress.currentFile.split("/");
+                              if (parts.length >= 2) {
+                                sourceFolder = parts[parts.length - 2]; // parent folder name
+                              }
                             }
-                          }
-                          return (
-                            <div className="busy-indicator-progress-copy">
-                              <b>
-                                Scanning {sourceFolder} · {processed.toLocaleString()} of{" "}
-                                {total.toLocaleString()} · {percent}%
-                              </b>
-                              <small>{currentFileName}</small>
-                              <div
-                                className="busy-indicator-progress-track"
-                                role="progressbar"
-                                aria-label="File scan progress"
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                                aria-valuenow={percent}
-                              >
-                                <span style={{ width: `${percent}%` }} />
+                            return (
+                              <div className="busy-indicator-progress-copy">
+                                <b>
+                                  Scanning {sourceFolder} · {processed.toLocaleString()} of{" "}
+                                  {total.toLocaleString()} · {percent}%
+                                </b>
+                                <small>{currentFileName}</small>
+                                <div
+                                  className="busy-indicator-progress-track"
+                                  role="progressbar"
+                                  aria-label="File scan progress"
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-valuenow={percent}
+                                >
+                                  <span style={{ width: `${percent}%` }} />
+                                </div>
                               </div>
-                            </div>
-                          );
-                        }
-                      })()
-                    : `${library.progress.phase} ${library.progress.processed}/${library.progress.total}`}
-            <button
-              className="busy-indicator-cancel"
-              type="button"
-              onClick={() => void library.cancelScan()}
-              disabled={library.canceling}
+                            );
+                          }
+                        })()
+                      : `${library.progress.phase} ${library.progress.processed}/${library.progress.total}`}
+              <button
+                className="busy-indicator-cancel"
+                type="button"
+                onClick={() => void library.cancelScan()}
+                disabled={library.canceling}
+              >
+                {library.canceling ? "Cancelling…" : "Cancel"}
+              </button>
+            </div>
+          )}
+
+          {library.notice && (
+            <div
+              className={`toast ${isWarningNotice(library.notice) ? "toast-warning" : ""}`}
+              role={isWarningNotice(library.notice) ? "alert" : "status"}
+              aria-live={isWarningNotice(library.notice) ? "assertive" : "polite"}
+              onClick={() => library.showNotice("")}
             >
-              {library.canceling ? "Cancelling…" : "Cancel"}
-            </button>
-          </div>
-        )}
+              <span aria-hidden="true">{isWarningNotice(library.notice) ? "!" : "✓"}</span>
+              {library.notice}
+            </div>
+          )}
 
-        {library.notice && (
-          <div
-            className={`toast ${isWarningNotice(library.notice) ? "toast-warning" : ""}`}
-            role={isWarningNotice(library.notice) ? "alert" : "status"}
-            aria-live={isWarningNotice(library.notice) ? "assertive" : "polite"}
-            onClick={() => library.showNotice("")}
+          <AppDialogs
+            albumDialogOpen={albumDialogOpen}
+            albumDialogMode={albumDialogMode}
+            albumName={albumName}
+            albumSeedIds={albumSeedIds}
+            creatingAlbum={creatingAlbum}
+            setAlbumDialogOpen={setAlbumDialogOpen}
+            setAlbumDialogMode={setAlbumDialogMode}
+            setAlbumName={setAlbumName}
+            setAlbumSeedIds={setAlbumSeedIds}
+            setRenamingAlbumId={setRenamingAlbumId}
+            setCreatingAlbum={setCreatingAlbum}
+            albumPendingDelete={albumPendingDelete}
+            deletingAlbum={deletingAlbum}
+            setAlbumPendingDelete={setAlbumPendingDelete}
+            setDeletingAlbum={setDeletingAlbum}
+            itemPendingDeleteCount={itemPendingDeleteCount}
+            setItemPendingDeleteCount={setItemPendingDeleteCount}
+            albumRemovePending={albumRemovePending}
+            setAlbumRemovePending={setAlbumRemovePending}
+            albumPickerOpen={albumPickerOpen}
+            albumPickerItemIds={albumPickerItemIds}
+            albumPickerSearch={albumSearch}
+            addingToAlbumId={addingToAlbumId}
+            setAlbumPickerOpen={setAlbumPickerOpen}
+            setAlbumPickerItemIds={setAlbumPickerItemIds}
+            setAlbumPickerSearch={setAlbumSearch}
+            setAddingToAlbumId={setAddingToAlbumId}
+            sourcesSheetOpen={sourcesSheetOpen}
+            setSourcesSheetOpen={setSourcesSheetOpen}
+            removeAllSourcesDialogOpen={removeAllSourcesDialogOpen}
+            setRemoveAllSourcesDialogOpen={setRemoveAllSourcesDialogOpen}
+            folderPendingRemove={folderPendingRemove}
+            removingFolder={removingFolder}
+            setFolderPendingRemove={setFolderPendingRemove}
+            setRemovingFolder={setRemovingFolder}
+            aboutOpen={aboutOpen}
+            setAboutOpen={setAboutOpen}
+            appVersion={appVersion}
+            updateDialogOpen={updateDialogOpen}
+            setUpdateDialogOpen={setUpdateDialogOpen}
+            updateInfo={updateInfo}
+            updateChecking={updateChecking}
+            library={library}
+            setScreen={(screen: string) => setScreen(screen as Screen)}
+            submitAlbum={submitAlbum}
+            closeAlbumDialog={closeAlbumDialog}
+            addPickedItemsToAlbum={addPickedItemsToAlbum}
+            createAlbumFromPicker={createAlbumFromPicker}
+            confirmDeleteAlbum={confirmDeleteAlbum}
+            confirmDeleteItem={confirmDeleteItem}
+            confirmRemoveFromAlbum={confirmRemoveFromAlbum}
+            confirmRemoveFolder={confirmRemoveFolder}
+            removeAllSources={removeAllSources}
+            rescanSources={rescanSources}
+            rescanSource={rescanSource}
+            importFolder={importFolder}
+            checkForUpdates={checkForUpdates}
+            albumDialogRef={albumDialogRef}
+            updateDialogRef={updateDialogRef}
+            aboutDialogRef={aboutDialogRef}
+            deleteAlbumDialogRef={deleteAlbumDialogRef}
+            deleteItemDialogRef={deleteItemDialogRef}
+            removeFolderDialogRef={removeFolderDialogRef}
+            albumInputRef={albumInputRef}
+            albumSearchRef={albumSearchRef}
+            itemPendingDeleteRef={itemPendingDeleteRef}
+          />
+
+          {playbackItem && playbackItemId && screen !== "Video" && (
+            <MiniPlayer
+              onPrevious={playPreviousVideo}
+              onNext={playNextVideo}
+              onExpand={() => {
+                setViewerOrigin(screen);
+                setBackgroundVideo(playbackItem);
+                setScreen("Video");
+              }}
+              onClose={() => {
+                usePlaybackStore.getState().stop();
+                setBackgroundVideo(null);
+                setVideoQueue([]);
+                videoQueuePagingRef.current = null;
+                setQueueAutoPlayId(null);
+              }}
+            />
+          )}
+
+          <SlideshowOverlay assetUrl={assetUrl} />
+
+          {contextMenu && (
+            <ContextMenu
+              items={contextMenu.items}
+              x={contextMenu.x}
+              y={contextMenu.y}
+              onClose={() => setContextMenu(null)}
+            />
+          )}
+        </>
+      }
+    >
+      <main
+        id="main-content"
+        className="main-content"
+        tabIndex={-1}
+        style={{ position: "relative" }}
+      >
+        {screenHistory.length > 0 && (
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Go back"
+            title="Go back"
+            onClick={goBack}
+            style={{
+              position: "absolute",
+              top: 10,
+              right: 10,
+              zIndex: 5,
+              width: 32,
+              height: 32,
+              padding: 0,
+              borderRadius: 8,
+              opacity: 0.8,
+            }}
           >
-            <span aria-hidden="true">{isWarningNotice(library.notice) ? "!" : "✓"}</span>
-            {library.notice}
-          </div>
+            ←
+          </button>
+        )}
+        {screen === "Library" && (
+          <LibraryScreen
+            items={library.visibleItems}
+            hasItems={library.items.length > 0}
+            inspectedId={library.inspectedId}
+            selectedIds={library.selectedIds}
+            filter={library.filter}
+            query={library.query}
+            layout={library.layout}
+            showInspector={library.showInspector}
+            activeAlbum={library.activeAlbum}
+            albums={library.albums}
+            onInspectItem={library.inspectItem}
+            onToggleSelect={library.toggleSelection}
+            onSelectRange={library.selectRange}
+            onSetSelection={library.setSelectedIds}
+            onToggleSelectAll={library.toggleSelectAll}
+            onClearSelection={library.clearSelection}
+            onOpenBatch={() => exportToBatch()}
+            onChangeFilter={library.setFilter}
+            onChangeQuery={library.setQuery}
+            onChangeLayout={library.setLayout}
+            onToggleInspector={library.toggleInspector}
+            onSetActiveAlbum={library.setActiveAlbum}
+            onOpenAlbums={() => openScreen("Albums")}
+            onAddItems={(albumId: string) => addItemsToAlbum(albumId)}
+            onOpenAlbumPicker={(itemIds?: string[]) => openAlbumPicker(itemIds)}
+            onAlbumMenu={(e: React.MouseEvent) => {
+              const album = library.albums.find((a: any) => a.id === library.activeAlbum);
+              if (album) openAlbumMenu(album, e);
+            }}
+            albumDragOver={albumDragOver}
+            onToggleFavorite={library.toggleFavorite}
+            onToggleHidden={library.toggleHidden}
+            onSetFavoriteForIds={library.setFavoriteForIds}
+            onSetHiddenForIds={library.setHiddenForIds}
+            onSetRatingForIds={library.setRatingForIds}
+            onSetColorLabelForIds={library.setColorLabelForIds}
+            minRating={library.minRating}
+            libraryStats={libraryStats}
+            colorLabelFilter={library.colorLabelFilter}
+            dateFrom={library.dateFrom}
+            dateTo={library.dateTo}
+            onSetMinRating={library.setMinRating}
+            onSetColorLabelFilter={library.setColorLabelFilter}
+            onSetDateRange={library.setDateRange}
+            onCreateSmartAlbum={(name: string) => void library.createSmartAlbum(name)}
+            onCopyTagsToFinder={copyTagsToFinderForIds}
+            onUpdateTags={library.updateItemTags}
+            onDeleteItems={library.deleteItems}
+            onRequestDeleteItems={(ids: string[]) => {
+              itemPendingDeleteRef.current = ids;
+              setItemPendingDeleteCount(ids.length);
+            }}
+            onRequestRemoveFromAlbum={(albumId: string, itemIds: string[]) =>
+              setAlbumRemovePending({ albumId, itemIds })
+            }
+            onOpenViewer={(id?: string) => openViewer(id, "Library")}
+            onOpenEdit={async (item: any) => {
+              if (item?.kind === "video") {
+                openViewer(item.id, "Library");
+                return;
+              }
+              await edit.saveDraft();
+              await edit.open(item);
+              setScreen("Edit");
+            }}
+            onImportFolder={() => importFolder()}
+            onImportFiles={() => importFiles()}
+            onPlaySlideshow={playSlideshow}
+            onCreateAlbum={openAlbumDialog}
+            searchInputRef={searchInputRef}
+            onContextMenu={openContextMenu}
+            busy={library.busy}
+            progress={library.progress}
+            notice={showNotice}
+            assetUrl={assetUrl}
+            hiddenCount={library.hiddenCount}
+          />
         )}
 
-        <AppDialogs
-          albumDialogOpen={albumDialogOpen}
-          albumDialogMode={albumDialogMode}
-          albumName={albumName}
-          albumSeedIds={albumSeedIds}
-          creatingAlbum={creatingAlbum}
-          setAlbumDialogOpen={setAlbumDialogOpen}
-          setAlbumDialogMode={setAlbumDialogMode}
-          setAlbumName={setAlbumName}
-          setAlbumSeedIds={setAlbumSeedIds}
-          setRenamingAlbumId={setRenamingAlbumId}
-          setCreatingAlbum={setCreatingAlbum}
-          albumPendingDelete={albumPendingDelete}
-          deletingAlbum={deletingAlbum}
-          setAlbumPendingDelete={setAlbumPendingDelete}
-          setDeletingAlbum={setDeletingAlbum}
-          itemPendingDeleteCount={itemPendingDeleteCount}
-          setItemPendingDeleteCount={setItemPendingDeleteCount}
-          albumRemovePending={albumRemovePending}
-          setAlbumRemovePending={setAlbumRemovePending}
-          albumPickerOpen={albumPickerOpen}
-          albumPickerItemIds={albumPickerItemIds}
-          albumPickerSearch={albumSearch}
-          addingToAlbumId={addingToAlbumId}
-          setAlbumPickerOpen={setAlbumPickerOpen}
-          setAlbumPickerItemIds={setAlbumPickerItemIds}
-          setAlbumPickerSearch={setAlbumSearch}
-          setAddingToAlbumId={setAddingToAlbumId}
-          sourcesSheetOpen={sourcesSheetOpen}
-          setSourcesSheetOpen={setSourcesSheetOpen}
-          removeAllSourcesDialogOpen={removeAllSourcesDialogOpen}
-          setRemoveAllSourcesDialogOpen={setRemoveAllSourcesDialogOpen}
-          folderPendingRemove={folderPendingRemove}
-          removingFolder={removingFolder}
-          setFolderPendingRemove={setFolderPendingRemove}
-          setRemovingFolder={setRemovingFolder}
-          aboutOpen={aboutOpen}
-          setAboutOpen={setAboutOpen}
-          appVersion={appVersion}
-          updateDialogOpen={updateDialogOpen}
-          setUpdateDialogOpen={setUpdateDialogOpen}
-          updateInfo={updateInfo}
-          updateChecking={updateChecking}
-          library={library}
-          setScreen={(screen: string) => setScreen(screen as Screen)}
-          submitAlbum={submitAlbum}
-          closeAlbumDialog={closeAlbumDialog}
-          addPickedItemsToAlbum={addPickedItemsToAlbum}
-          createAlbumFromPicker={createAlbumFromPicker}
-          confirmDeleteAlbum={confirmDeleteAlbum}
-          confirmDeleteItem={confirmDeleteItem}
-          confirmRemoveFromAlbum={confirmRemoveFromAlbum}
-          confirmRemoveFolder={confirmRemoveFolder}
-          removeAllSources={removeAllSources}
-          rescanSources={rescanSources}
-          rescanSource={rescanSource}
-          importFolder={importFolder}
-          checkForUpdates={checkForUpdates}
-          albumDialogRef={albumDialogRef}
-          updateDialogRef={updateDialogRef}
-          aboutDialogRef={aboutDialogRef}
-          deleteAlbumDialogRef={deleteAlbumDialogRef}
-          deleteItemDialogRef={deleteItemDialogRef}
-          removeFolderDialogRef={removeFolderDialogRef}
-          albumInputRef={albumInputRef}
-          albumSearchRef={albumSearchRef}
-          itemPendingDeleteRef={itemPendingDeleteRef}
+        {screen === "Albums" && (
+          <AlbumsScreen
+            albums={library.albums}
+            items={library.items}
+            smartAlbums={library.smartAlbums}
+            assetUrl={assetUrl}
+            onCreateAlbum={openAlbumDialog}
+            onAlbumContextMenu={openAlbumMenu}
+            onSmartAlbumContextMenu={openSmartAlbumMenu}
+            onOpenSmartAlbum={(albumId: string) => void openSmartAlbum(albumId)}
+            onOpenAlbum={async (albumId: string) => {
+              library.setActiveAlbum(albumId);
+              library.setFilter("All");
+              library.setQuery("");
+              await library.loadAlbumItems(albumId);
+              setScreen("Library");
+            }}
+          />
+        )}
+
+        {screen === "Viewer" && (
+          <ViewerScreen
+            active
+            items={photoViewerItems}
+            selected={library.viewerSelected?.kind === "video" ? null : library.viewerSelected}
+            zoom={viewer.zoom}
+            fitMode={viewer.fitMode}
+            rotation={viewer.rotation}
+            flipX={viewer.flipX}
+            onNavigate={navigateViewer}
+            onSetPhoto={selectViewerItem}
+            onSetZoom={viewer.setZoom}
+            onZoomIn={viewer.zoomIn}
+            onZoomOut={viewer.zoomOut}
+            onResetZoom={viewer.resetZoom}
+            onToggleFitMode={viewer.toggleFitMode}
+            onRotate={viewer.rotate}
+            onToggleFlip={viewer.toggleFlip}
+            onResetTransform={viewer.resetTransform}
+            onToggleFullscreen={viewer.toggleFullscreen}
+            onClose={viewer.close}
+            onToggleFavorite={library.toggleFavorite}
+            onToggleHidden={library.toggleHidden}
+            onOpenEdit={async (item: MediaItem) => {
+              await edit.saveDraft();
+              await edit.open(item);
+              setScreen("Edit");
+            }}
+            onContextMenu={openContextMenu}
+            assetUrl={assetUrl}
+          />
+        )}
+
+        <VideoPlayerScreen
+          active={screen === "Video"}
+          item={playbackItem}
+          queue={videoQueue}
+          queueAutoPlayItemId={queueAutoPlayId}
+          assetUrl={assetUrl}
+          onBack={() => setScreen(viewerOrigin || "Library")}
+          onSelect={selectVideoItem}
+          onPrevious={playPreviousVideo}
+          onNext={playNextVideo}
         />
 
-        {playbackItem && playbackItemId && screen !== "Video" && (
-          <MiniPlayer
-            onPrevious={playPreviousVideo}
-            onNext={playNextVideo}
-            onExpand={() => {
-              setViewerOrigin(screen);
-              setBackgroundVideo(playbackItem);
-              setScreen("Video");
+        {screen === "Edit" && (
+          <EditScreen
+            item={edit.item}
+            values={edit.values}
+            crop={edit.crop}
+            history={edit.history}
+            historyIndex={edit.historyIndex}
+            onSetValue={edit.setValue}
+            onSetValues={edit.setValues}
+            onReset={edit.reset}
+            onAuto={edit.auto}
+            onRotate={edit.rotate}
+            onFlip={edit.flip}
+            onSetCrop={edit.setCrop}
+            onResetCrop={edit.resetCrop}
+            onUndo={edit.undo}
+            onRedo={edit.redo}
+            canUndo={edit.canUndo}
+            canRedo={edit.canRedo}
+            onClose={edit.close}
+            onSaveDraft={edit.saveDraft}
+            onBack={() => setScreen("Library")}
+            onExport={async (inPlace = false) => {
+              const item = edit.item;
+              if (!item) return;
+              const sourceExtension = String(
+                item.extension || item.name.split(".").pop() || "",
+              ).toLowerCase();
+              if (inPlace) {
+                if (!["jpg", "jpeg", "png", "webp"].includes(sourceExtension)) {
+                  showNotice("Replace original supports JPEG, PNG, and WebP. Save a copy instead.");
+                  return;
+                }
+              }
+              try {
+                const v = edit.values || {};
+                const crop = edit.crop || {
+                  enabled: false,
+                  x: 0,
+                  y: 0,
+                  width: 1,
+                  height: 1,
+                };
+
+                // Build render request for native backend
+                const request = {
+                  sourcePath: item.path,
+                  edits: v,
+                  outputFormat: (inPlace ? "in_place" : "image/jpeg") as
+                    "jpeg" | "png" | "webp" | "heic" | "avif" | "in_place",
+                  quality: 0.92,
+                  stripMetadata: false,
+                  crop: crop.enabled ? crop : undefined,
+                };
+
+                const result = await tauri.editing.render(request);
+
+                if (!inPlace) {
+                  // For save-copy, backend wrote to temp; now show save dialog
+                  const suggestedName = String(item.name).replace(/\.[^.]+$/, "") + "_edited.jpg";
+                  const finalPath = await save({
+                    defaultPath: suggestedName,
+                    filters: [{ name: "JPEG image", extensions: ["jpg", "jpeg"] }],
+                  });
+                  if (!finalPath) {
+                    showNotice("Export cancelled");
+                    return;
+                  }
+                  // Move temp file to final destination
+                  await tauri.editing.moveExportedFile(result.outputPath, finalPath);
+                }
+
+                clearEditDraft(item.id);
+                if (inPlace) await library.loadLibrary();
+                showNotice(inPlace ? "Replaced original" : "Exported edited copy");
+              } catch (e) {
+                if (String(e).includes("cancelled")) {
+                  showNotice("Export cancelled");
+                } else {
+                  showNotice("Export failed: " + String(e));
+                }
+              }
             }}
-            onClose={() => {
-              usePlaybackStore.getState().stop();
-              setBackgroundVideo(null);
-              setVideoQueue([]);
-              videoQueuePagingRef.current = null;
-              setQueueAutoPlayId(null);
+            onClearDraft={edit.clearDraft}
+            onNotice={showNotice}
+            assetUrl={assetUrl}
+            items={library.items.filter((i: any) => i.kind === "photo" && !i.hidden)}
+            onOpenEdit={async (item: any) => {
+              await edit.saveDraft();
+              await edit.open(item);
             }}
           />
         )}
 
-        <SlideshowOverlay assetUrl={assetUrl} />
-
-        {contextMenu && (
-          <ContextMenu
-            items={contextMenu.items}
-            x={contextMenu.x}
-            y={contextMenu.y}
-            onClose={() => setContextMenu(null)}
+        {screen === "Batch" && (
+          <BatchScreen
+            items={library.items.filter((i: any) => library.selectedIds.includes(i.id))}
+            selectedIds={library.selectedIds}
+            config={batch}
+            state={batch}
+            onSetPattern={batch.setPattern}
+            onSetFormat={batch.setFormat}
+            onSetQuality={batch.setQuality}
+            onSetStripMetadata={batch.setStripMetadata}
+            onSetMaxDimension={batch.setMaxDimension}
+            onSetStep={batch.setStep}
+            onChooseFolder={async () => {
+              const folder = await openFileDialog({
+                directory: true,
+                multiple: false,
+                title: "Choose export folder",
+              });
+              if (typeof folder === "string") batch.setOutputFolder(folder);
+            }}
+            onOpenFolder={() => {
+              if (batch.outputFolder) tauri.items.openFolder(batch.outputFolder);
+            }}
+            onExportBatch={batch.exportBatch}
+            onCancelBatch={batch.cancelBatch}
+            onReset={batch.reset}
+            onOpenLibrary={() => setScreen("Library")}
+            onClearSelection={library.clearSelection}
+            onSelectAll={library.selectAll}
+            onSetSelection={library.setSelectedIds}
+            onRemoveItem={library.toggleSelection}
+            busy={batch.busy}
+            cancelRequested={batch.cancelRequested}
+            progress={batch.progress}
+            result={batch.result}
+            error={batch.error}
+            assetUrl={assetUrl}
           />
         )}
-      </div>
-    </ErrorBoundary>
+
+        {screen === "CameraLens" && (
+          <CameraLensBrowserScreen
+            items={library.items}
+            assetUrl={assetUrl}
+            onBack={() => setScreen("Library")}
+            onOpenViewer={(id?: string) => openViewer(id, "Library")}
+          />
+        )}
+
+        {screen === "Hidden" && (
+          <HiddenScreen
+            assetUrl={assetUrl}
+            searchInputRef={searchInputRef}
+            onContextMenu={openContextMenu}
+            onNavigate={openScreen}
+            onCreateAlbum={openAlbumDialog}
+            onOpenAlbumPicker={(itemIds?: string[]) => openAlbumPicker(itemIds)}
+            onRequestDeleteItems={(ids: string[]) => {
+              itemPendingDeleteRef.current = ids;
+              setItemPendingDeleteCount(ids.length);
+            }}
+            onOpenEdit={async (item: any) => {
+              if (item?.kind === "video") {
+                openViewer(item.id, "Hidden", "hidden");
+                return;
+              }
+              await edit.saveDraft();
+              await edit.open(item);
+              setScreen("Edit");
+            }}
+            onOpenViewer={(id?: string) => openViewer(id, "Hidden", "hidden")}
+          />
+        )}
+
+        {screen === "Duplicates" && (
+          <DuplicatesScreen
+            groups={library.duplicates}
+            items={library.items}
+            onScan={library.scanDuplicates}
+            onClear={library.clearDuplicates}
+            busy={library.busy}
+            assetUrl={assetUrl}
+            onRequestDeleteItems={(ids: string[]) => {
+              itemPendingDeleteRef.current = ids;
+              setItemPendingDeleteCount(ids.length);
+            }}
+            onHideIds={async (ids: string[]) => {
+              if (!ids.length) return;
+              library.showNotice(`Hiding ${ids.length.toLocaleString()} item(s)…`);
+              await library.setHiddenForIds(ids, true);
+              library.showNotice(`Hidden ${ids.length.toLocaleString()} item(s).`);
+              await library.scanDuplicates();
+            }}
+          />
+        )}
+
+        {screen === "Settings" && (
+          <SettingsScreen
+            onAddFolder={() => importFolder()}
+            onRemoveFolder={(folder: LibraryFolder) => setFolderPendingRemove(folder)}
+            onRescan={() => {
+              void rescanSources();
+            }}
+            onRescanFolder={(folder) => {
+              void rescanSource(folder);
+            }}
+            onRemoveAllSources={() => setRemoveAllSourcesDialogOpen(true)}
+          />
+        )}
+      </main>
+    </AppShell>
   );
 }
 
