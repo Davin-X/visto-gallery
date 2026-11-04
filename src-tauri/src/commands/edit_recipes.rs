@@ -681,3 +681,15 @@ fn row_to_edit_preset(row: &sqlx::sqlite::SqliteRow) -> Result<EditPreset, Strin
         updated_at,
     })
 }
+
+/// Vacuum the SQLite library catalog to reclaim disk space and defragment.
+/// Runs `VACUUM` on the catalog database. Original media files are never touched.
+#[tauri::command]
+pub async fn vacuum_catalog(state: State<'_, AppState>) -> Result<(), String> {
+    let db = super::get_db(&state)?;
+    sqlx::query("VACUUM")
+        .execute(&db)
+        .await
+        .map_err(|e| format!("VACUUM failed: {}", e))?;
+    Ok(())
+}

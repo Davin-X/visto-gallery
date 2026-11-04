@@ -214,6 +214,7 @@ pub fn run() {
             list_edit_presets,
             delete_edit_preset,
             apply_edit_preset,
+            vacuum_catalog,
             // Batch
             batch_export,
             cancel_batch_export,

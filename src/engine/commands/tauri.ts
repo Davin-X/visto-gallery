@@ -237,6 +237,8 @@ export const tauri = {
 
     applyPreset: (req: { presetId: string; mediaId: string }) =>
       invoke<EditRecipe>("apply_edit_preset", req),
+
+    vacuumCatalog: () => invoke<void>("vacuum_catalog", {}),
   },
 
   app: {
