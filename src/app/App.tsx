@@ -48,6 +48,7 @@ import type {
 } from "../engine/types/commands";
 import { SlideshowOverlay } from "../design/components/SlideshowOverlay";
 import { ContextMenu } from "../design/components/ContextMenu";
+import { ShortcutsCheatSheet } from "../design/components/ShortcutsCheatSheet";
 
 /** Modifier glyph for the "focus search" hint - Command on macOS, Ctrl elsewhere. */
 function App() {
@@ -131,6 +132,7 @@ function App() {
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [updateChecking, setUpdateChecking] = useState(false);
+  const [shortcutsCheatSheetOpen, setShortcutsCheatSheetOpen] = useState(false);
   // The global keydown handler is mounted once, so it reads the dialog state
   // through a ref rather than a stale closure.
   const updateDialogOpenRef = useRef(false);
@@ -206,6 +208,8 @@ function App() {
     totalSize: 0,
   });
 
+  const statsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     void refreshDraftMeta();
     let cancelled = false;
@@ -221,16 +225,26 @@ function App() {
     let unlisten: (() => void) | null = null;
     events
       .onLibraryChanged(() => {
-        tauri.library
-          .getStats()
-          .then(setLibraryStats)
-          .catch(() => {});
+        if (statsDebounceRef.current) {
+          clearTimeout(statsDebounceRef.current);
+        }
+        statsDebounceRef.current = setTimeout(() => {
+          statsDebounceRef.current = null;
+          tauri.library
+            .getStats()
+            .then(setLibraryStats)
+            .catch(() => {});
+        }, 500);
       })
       .then((u) => {
         unlisten = u;
       });
     return () => {
       cancelled = true;
+      if (statsDebounceRef.current) {
+        clearTimeout(statsDebounceRef.current);
+        statsDebounceRef.current = null;
+      }
       if (unlisten) unlisten();
     };
   }, []);
@@ -662,6 +676,13 @@ function App() {
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
 
+    // ⌘/ / Ctrl+/ toggles the keyboard shortcuts cheat sheet.
+    if (mod && key === "/") {
+      e.preventDefault();
+      setShortcutsCheatSheetOpen((open) => !open);
+      return;
+    }
+
     // A slideshow owns the keyboard while it is open: its overlay handles
     // Escape/arrows/Space itself, and nothing underneath should react.
     if (useSlideshowStore.getState().isOpen) return;
@@ -675,7 +696,8 @@ function App() {
       itemPendingDeleteCount > 0 ||
       folderPendingRemove ||
       sourcesSheetOpen ||
-      updateDialogOpenRef.current
+      updateDialogOpenRef.current ||
+      shortcutsCheatSheetOpen
     )
       return;
 
@@ -2332,6 +2354,12 @@ function App() {
               x={contextMenu.x}
               y={contextMenu.y}
               onClose={() => setContextMenu(null)}
+            />
+          )}
+          {shortcutsCheatSheetOpen && (
+            <ShortcutsCheatSheet
+              open={shortcutsCheatSheetOpen}
+              onClose={() => setShortcutsCheatSheetOpen(false)}
             />
           )}
         </>
