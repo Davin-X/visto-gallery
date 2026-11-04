@@ -2899,6 +2899,7 @@ body {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
+  column-gap: 14px;
   height: 56px;
   padding: 0 20px;
   border-bottom: 1px solid var(--line);
@@ -9158,12 +9159,15 @@ body {
   align-items: center;
   gap: 6px;
   align-self: center;
-  height: 34px;
-  max-width: 230px;
-  padding: 0 6px 0 9px;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  height: 36px;
+  max-width: 260px;
+  padding: 0 7px 0 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 6px 18px rgba(0, 0, 0, 0.28);
   color: var(--text);
   box-sizing: border-box;
 }
