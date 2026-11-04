@@ -36,9 +36,8 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const groups = props.groups || [];
   const items = props.items || [];
 
-  const totalGroups = groups.length;
   const totalCopies = useMemo(
-    () => groups.reduce((sum: number, g: any) => sum + (g.items?.length || 0), 0),
+    () => groups.reduce((sum: number, g: any) => sum + Math.max(0, (g.items?.length || 0) - 1), 0),
     [groups],
   );
   const reclaimableBytes = useMemo(() => {
@@ -60,10 +59,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     return bytes;
   }, [groups, selected]);
 
-  const progress = props.progress;
-  const isScanning = props.busy;
-  const progressPercent =
-    progress && progress.total ? Math.round((progress.processed! / progress.total) * 100) : 0;
+  const progressPercent = props.progress && props.progress.total ? Math.round((props.progress?.processed / props.progress.total) * 100) : 0;
 
   React.useEffect(() => {
     const ids = new Set<string>();
@@ -80,16 +76,6 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     scrollRef.current?.scrollTo({ top: 0 });
   }, [groups]);
 
-  const toggleAllGroups = (expand: boolean) => {
-    if (expand) {
-      const all = new Set<string>();
-      groups.forEach((g: any) => all.add(g.sha256));
-      setExpandedGroups(all);
-    } else {
-      setExpandedGroups(new Set());
-    }
-  };
-
   const toggleSelected = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -99,21 +85,20 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     });
   };
 
-  const toggleGroupSelect = (itemIds: string[]) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      const allSelected = itemIds.every((id) => next.has(id));
-      if (allSelected) {
-        itemIds.forEach((id) => next.delete(id));
-      } else {
-        itemIds.forEach((id) => next.add(id));
-      }
-      return next;
-    });
+  const toggleSelectAll = () => {
+    const allCopyIds = new Set<string>();
+    groups.forEach((g: any) =>
+      (g.items || []).slice(1).forEach((it: any) => allCopyIds.add(it.id)),
+    );
+    if (selected.size === allCopyIds.size) {
+      setSelected(new Set());
+    } else {
+      setSelected(allCopyIds);
+    }
   };
 
   const groupSelectedIds = (group: any) =>
-    (group.items || []).filter((it: any) => selected.has(it.id)).map((it: any) => it.id);
+    (group.items || []).slice(1).filter((it: any) => selected.has(it.id)).map((it: any) => it.id);
 
   const isGroupFullySelected = (group: any) =>
     (group.items || []).slice(1).length > 0 &&
@@ -121,11 +106,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
 
   const isGroupPartiallySelected = (group: any) => {
     const copies = (group.items || []).slice(1);
-    return (
-      copies.length > 0 &&
-      copies.some((it: any) => selected.has(it.id)) &&
-      !isGroupFullySelected(group)
-    );
+    return copies.length > 0 && copies.some((it: any) => selected.has(it.id)) && !isGroupFullySelected(group);
   };
 
   const toggleGroupExpand = (sha256: string) => {
@@ -140,21 +121,15 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const isGroupExpanded = (sha256: string) => expandedGroups.has(sha256);
   const shortHash = (sha: string | undefined) => (sha || "").slice(0, 16);
 
-  const toggleSelectAll = () => {
-    const allCopyIds = new Set<string>();
-    groups.forEach((g: any) =>
-      (g.items || []).slice(1).forEach((it: any) => allCopyIds.add(it.id)),
-    );
-    if (selected.size === allCopyIds.size) {
-      setSelected(new Set());
-    } else {
-      setSelected(allCopyIds);
-    }
+  const visibleItems = (group: any) => {
+    const items = group.items || [];
+    const expanded = isGroupExpanded(group.sha256);
+    return expanded ? items : items.slice(0, 3);
   };
 
-  const toggleGroup = (group: any) => {
-    const copyIds = (group.items || []).slice(1).map((it: any) => it.id);
-    toggleGroupSelect(copyIds);
+  const hasMore = (group: any) => {
+    const items = group.items || [];
+    return !isGroupExpanded(group.sha256) && items.length > 3;
   };
 
   const handleScan = async () => {
@@ -186,25 +161,26 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   return (
     <div className="feature-page duplicates-page">
       <div className="page-heading">
-        <div>
-          <p className="eyebrow">Duplicates</p>
-          <h1>Duplicate Files</h1>
-          <p className="page-subtitle">
-            {groups.length === 0
-              ? "Duplicate scans compare file content (SHA-256), not just names or sizes."
-              : `${groups.length} group${groups.length === 1 ? "" : "s"} · ${totalCopies} copy${groups.length === 1 ? "" : "s"} · ${formatBytesSimple(reclaimableBytes)} reclaimable`}
-          </p>
+        <div className="page-heading-left">
+          <div>
+            <p className="eyebrow">Duplicates</p>
+            <h1>Duplicate Files</h1>
+            <p className="page-subtitle">
+              {groups.length === 0
+                ? "Duplicate scans compare file content (SHA-256), not just names or sizes."
+                : `${groups.length} group${groups.length === 1 ? "" : "s"} · ${totalCopies} copy${groups.length === 1 ? "" : "s"} · ${formatBytesSimple(reclaimableBytes)} reclaimable`}
+            </p>
+          </div>
         </div>
         <div className="page-actions">
           {!props.busy && (
-            <button className="primary-button" type="button" onClick={handleScan}>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={handleScan}
+            >
               <DuplicatesIcon size={16} />
               Scan for Duplicates
-            </button>
-          )}
-          {props.busy && (
-            <button className="danger-button" type="button" disabled={props.busy}>
-              Scanning…
             </button>
           )}
         </div>
@@ -221,9 +197,9 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           </div>
           <div className="duplicate-progress-meta">
             <span className="duplicate-progress-count">
-              {progress?.processed ?? 0} / {progress?.total ?? 0} files
+              {props.progress?.processed ?? 0} / {props.progress.total ?? 0} files
             </span>
-            <span className="duplicate-progress-current">{progress?.currentFile || ""}</span>
+            <span className="duplicate-progress-current">{props.progress?.currentFile || ""}</span>
           </div>
         </div>
       )}
@@ -274,14 +250,10 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
 
           <div className="duplicate-batch-bar">
             <div className="duplicate-batch-summary">
-              <span>
-                {selected.size} of {totalCopies} copies selected
-              </span>
+              <span>{selected.size} of {totalCopies} copies selected</span>
               {selected.size > 0 && (
                 <span className="duplicate-batch-stats">
-                  {formatBytesSimple(selectedBytes)} selected ·{" "}
-                  {formatBytesSimple(selectedBytes > 0 ? selectedBytes : reclaimableBytes)}{" "}
-                  reclaimable
+                  {formatBytesSimple(selectedBytes)} selected · {formatBytesSimple(reclaimableBytes)} reclaimable
                 </span>
               )}
             </div>
@@ -333,16 +305,12 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                       <button
                         type="button"
                         className={`duplicate-group-select ${isGroupFullySelected(group) ? "duplicate-group-select-selected" : ""} ${isGroupPartiallySelected(group) ? "duplicate-group-select-partial" : ""}`}
-                        onClick={(e: React.MouseEvent) => {
+                        onClick={(e) => {
                           e.stopPropagation();
-                          toggleGroup(group);
+                          toggleGroupExpand(group.sha256);
                         }}
                       >
-                        {isGroupFullySelected(group)
-                          ? "✓"
-                          : isGroupPartiallySelected(group)
-                            ? "−"
-                            : "○"}
+                        {isGroupFullySelected(group) ? "✓" : isGroupPartiallySelected(group) ? "−" : "○"}
                       </button>
                     </div>
                     <div className="duplicate-group-meta">
@@ -350,8 +318,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                         {group.items?.length || 0} Identical Copies
                       </span>
                       <span className="duplicate-group-hash">
-                        <span className="duplicate-group-hash-label">SHA-256:</span>
-                        {shortHash(group.sha256)}
+                        <span className="duplicate-group-hash-label">SHA-256:</span>{shortHash(group.sha256)}
                       </span>
                     </div>
                     <div className="duplicate-group-toggle">
@@ -363,9 +330,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                           toggleGroupExpand(group.sha256);
                         }}
                       >
-                        {isGroupExpanded(group.sha256)
-                          ? "Collapse"
-                          : `Show ${group.items?.length || 0} Files`}
+                        {isGroupExpanded(group.sha256) ? "Collapse" : `Show ${group.items?.length || 0} Files`}
                       </button>
                     </div>
                   </div>
@@ -389,96 +354,88 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                   </div>
                 </div>
                 <div className="duplicate-grid">
-                  {(() => {
-                    const items = group.items || [];
-                    const expanded = isGroupExpanded(group.sha256);
-                    const visible = expanded ? items : items.slice(0, 3);
-                    const showMore = !expanded && items.length > 3;
-                    return (
-                      <>
-                        {visible.map((item: any, i: number) => {
-                          const isOriginal = i === 0;
-                          return (
-                            <div
-                              key={item.id}
-                              className={`duplicate-card${selected.has(item.id) ? " duplicate-card-selected" : ""} ${isOriginal ? " duplicate-card-original" : ""}`}
-                              onClick={(e: React.MouseEvent) => {
-                                if (e.target instanceof HTMLInputElement) return;
-                                toggleSelected(item.id);
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                className="duplicate-check"
-                                checked={selected.has(item.id)}
-                                aria-label={i === 0 ? "Keep Original" : `Select Copy ${i + 1}`}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                  e.stopPropagation();
-                                  toggleSelected(item.id);
-                                }}
-                              />
-                              {isOriginal && (
-                                <span className="duplicate-keep-badge" title="Original File">
-                                  Keep Original
-                                </span>
-                              )}
-                              <div className="duplicate-thumbnail">
-                                {item.kind === "photo" ? (
-                                  <CachedThumbnail
-                                    itemId={item.id}
-                                    name={item.name}
-                                    size={128}
-                                    style={draftImageStyle(draftTransforms, item.id)}
-                                  />
-                                ) : item.kind === "video" ? (
-                                  <div className="duplicate-media video-thumb">
-                                    <div className="duplicate-media-icon">🎬</div>
-                                    <div className="duplicate-media-label">Video</div>
-                                  </div>
-                                ) : item.kind === "raw" ? (
-                                  <div className="duplicate-media raw-thumb">
-                                    <div className="duplicate-media-icon">📷</div>
-                                    <div className="duplicate-media-label">RAW</div>
-                                  </div>
-                                ) : (
-                                  <div className="duplicate-media generic-thumb">
-                                    <div className="duplicate-media-icon">📄</div>
-                                    <div className="duplicate-media-label">{item.kind}</div>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="duplicate-card-body">
-                                <div className="duplicate-card-name">{item.name}</div>
-                                <div className="duplicate-card-meta">
-                                  <span>{item.kind}</span>
-                                  <span>•</span>
-                                  <span title={item.path}>{formatBytesSimple(item.size)}</span>
-                                  <span>•</span>
-                                  <span>{item.extension?.toUpperCase()}</span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {showMore && (
-                          <div
-                            className="duplicate-card duplicate-card-showmore"
-                            onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              toggleGroupExpand(group.sha256);
-                            }}
-                          >
-                            <div className="duplicate-card-body">
-                              <span className="duplicate-card-label">Show All</span>
-                              <div className="duplicate-card-meta">
-                                <span>{items.length - 3} more items</span>
-                              </div>
-                            </div>
+                  {visibleItems(group).map((item: any, i: number) => (
+                    <div
+                      key={item.id}
+                      className={`duplicate-card${selected.has(item.id) ? " duplicate-card-selected" : ""} ${i === 0 ? " duplicate-card-original" : ""}`}
+                      onClick={(e: React.MouseEvent) => {
+                        if (e.target instanceof HTMLInputElement) return;
+                        toggleSelected(item.id);
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        className="duplicate-check"
+                        checked={selected.has(item.id)}
+                        aria-label={i === 0 ? "Keep Original" : `Select Copy ${i + 1}`}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          e.stopPropagation();
+                          toggleSelected(item.id);
+                        }}
+                      />
+                      {i === 0 && (
+                        <span className="duplicate-keep-badge" title="Original File">
+                          Keep Original
+                        </span>
+                      )}
+                      <div className="duplicate-thumbnail">
+                        {item.kind === "photo" ? (
+                          <CachedThumbnail
+                            itemId={item.id}
+                            name={item.name}
+                            size={128}
+                            style={draftImageStyle(draftTransforms, item.id)}
+                          />
+                        ) : item.kind === "video" ? (
+                          <div className="duplicate-media video-thumb">
+                            <div className="duplicate-media-icon">🎬</div>
+                            <div className="duplicate-media-label">Video</div>
+                          </div>
+                        ) : item.kind === "raw" ? (
+                          <div className="duplicate-media raw-thumb">
+                            <div className="duplicate-media-icon">📷</div>
+                            <div className="duplicate-media-label">RAW</div>
+                          </div>
+                        ) : (
+                          <div className="duplicate-media generic-thumb">
+                            <div className="duplicate-media-icon">📄</div>
+                            <div className="duplicate-media-label">{item.kind}</div>
                           </div>
                         )}
-                      </>
-                    );
-                  })()}
+                      </div>
+                      <div className="duplicate-card-body">
+                        <div className="duplicate-card-name">{item.name}</div>
+                        <div className="duplicate-card-meta">
+                          <span>{item.kind}</span>
+                          <span>•</span>
+                          <span title={item.path}>{formatBytesSimple(item.size)}</span>
+                          <span>•</span>
+                          <span>{item.extension?.toUpperCase()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {!isGroupExpanded(group.sha256) && items.length > 3 && (
+                    <div
+                      className="duplicate-card duplicate-card-showmore"
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        toggleGroupExpand(group.sha256);
+                      }}
+                    >
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        toggleGroupExpand(group.sha256);
+                      }}
+                    >
+                      <div className="duplicate-card-body">
+                        <span className="duplicate-card-label">Show All</span>
+                        <div className="duplicate-card-meta">
+                          <span>{group.items.length - 3} more items</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </section>
             ))}
