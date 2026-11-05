@@ -417,6 +417,23 @@ pub async fn read_exif(path: String, state: State<'_, AppState>) -> Result<ExifD
     Ok(data)
 }
 
+/// In-place edits re-encode the source and atomically replace it. Only
+/// formats we can round-trip safely are eligible; anything else (HEIC, TIFF,
+/// AVIF, …) would lose data silently, so it must go through "Save a copy".
+pub(crate) fn validate_in_place_format(source_path: &str) -> Result<(), String> {
+    let ext = source_path
+        .rsplit('.')
+        .next()
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+    if matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp") {
+        return Ok(());
+    }
+    Err(format!(
+        "In-place export supports JPEG, PNG and WebP (refusing .{ext}). Use \"Save a copy\" to keep the original untouched."
+    ))
+}
+
 #[tauri::command]
 pub async fn render_edited(
     request: RenderRequest,
@@ -434,6 +451,9 @@ pub async fn render_edited(
     }
 
     let in_place = request.output_format == "in_place";
+    if in_place {
+        validate_in_place_format(&request.source_path)?;
+    }
     let source_path = request.source_path.clone();
 
     // Offload CPU-intensive image processing to blocking pool
@@ -1175,4 +1195,32 @@ pub async fn backfill_metadata(state: State<'_, AppState>) -> Result<i64, String
         updated += 1;
     }
     Ok(updated)
+}
+
+#[cfg(test)]
+mod in_place_format_tests {
+    use super::validate_in_place_format;
+
+    #[test]
+    fn writable_formats_pass() {
+        for path in ["a.jpg", "b.JPEG", "c.png", "d.webp", "/photos/e.Jpg"] {
+            assert!(validate_in_place_format(path).is_ok(), "{path} should pass");
+        }
+    }
+
+    #[test]
+    fn unsupported_formats_are_rejected_with_save_a_copy_guidance() {
+        for path in ["a.heic", "b.HEIC", "c.tif", "d.tiff", "e.avif", "f.bmp", "/x/g.unknown"] {
+            let err = validate_in_place_format(path).expect_err("should be rejected");
+            assert!(
+                err.contains("Save a copy"),
+                "error for {path} should mention Save a copy, got: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn files_without_extension_are_rejected() {
+        assert!(validate_in_place_format("no_extension").is_err());
+    }
 }

@@ -62,8 +62,8 @@ mod thumbnail_cache_tests {
 
     #[test]
     fn requested_size_changes_cache_identity() {
-        let small = thumbnail_cache_key("photo-1", 100, 2_000, 64, "photo");
-        let large = thumbnail_cache_key("photo-1", 100, 2_000, 1024, "photo");
+        let small = thumbnail_cache_key("photo-1", 100, 2_000, 64, "photo", 78);
+        let large = thumbnail_cache_key("photo-1", 100, 2_000, 1024, "photo", 78);
 
         assert_ne!(small, large);
         assert!(small.contains(":64:"));
@@ -71,13 +71,26 @@ mod thumbnail_cache_tests {
     }
 
     #[test]
+    fn requested_quality_changes_cache_identity() {
+        let standard = thumbnail_cache_key("photo-1", 100, 2_000, 128, "photo", 78);
+        let high = thumbnail_cache_key("photo-1", 100, 2_000, 128, "photo", 92);
+        let low = thumbnail_cache_key("photo-1", 100, 2_000, 128, "photo", 60);
+
+        assert_ne!(standard, high);
+        assert_ne!(standard, low);
+        assert_ne!(high, low);
+        assert!(standard.ends_with(":q78"));
+        assert!(high.ends_with(":q92"));
+    }
+
+    #[test]
     fn video_thumbnail_cache_is_invalidated_for_frame_extraction() {
-        let photo = thumbnail_cache_key("item-1", 100, 2_000, 128, "photo");
-        let video = thumbnail_cache_key("item-1", 100, 2_000, 128, "video");
+        let photo = thumbnail_cache_key("item-1", 100, 2_000, 128, "photo", 78);
+        let video = thumbnail_cache_key("item-1", 100, 2_000, 128, "video", 78);
 
         assert_ne!(photo, video);
-        assert!(photo.ends_with(":v1"));
-        assert!(video.ends_with(":v2"));
+        assert!(photo.contains(":v1"));
+        assert!(video.contains(":v2"));
     }
 
     #[cfg(target_os = "macos")]
