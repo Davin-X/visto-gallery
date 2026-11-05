@@ -220,9 +220,6 @@ interface AppSidebarProps {
 
 export function AppSidebar({
   screen,
-  libraryCount,
-  hiddenCount,
-  albumsCount,
   folders,
   sourcesSheetOpen,
   stats,
@@ -233,8 +230,6 @@ export function AppSidebar({
   onOpenSources,
   onOpenUpdate,
 }: AppSidebarProps) {
-  const folderCount = folders.length;
-  const folderItems = folders.reduce((total, folder) => total + folder.itemCount, 0);
 
   return (
     <aside className="sidebar">
@@ -243,14 +238,6 @@ export function AppSidebar({
           <div className="sidebar-label">WORKSPACE</div>
           <nav className="primary-nav" aria-label="Main navigation">
             {NAV_ITEMS.map(({ label, Icon, screen: target }) => {
-              const badge =
-                label === "Library"
-                  ? libraryCount
-                  : label === "Albums"
-                    ? albumsCount
-                    : label === "Hidden"
-                      ? hiddenCount
-                      : 0;
               return (
                 <button
                   key={label}
@@ -259,13 +246,11 @@ export function AppSidebar({
                   aria-label={label}
                   title={label}
                   aria-current={screen === target ? "page" : undefined}
-                  onClick={() => onOpenScreen(target)}
                 >
                   <span className="nav-icon">
                     <Icon size={18} />
                   </span>
                   <span>{label}</span>
-                  {badge > 0 ? <span className="nav-badge">{badge}</span> : null}
                 </button>
               );
             })}
@@ -288,11 +273,6 @@ export function AppSidebar({
             </span>
             <span className="sources-entry-text">
               <span className="sources-entry-name">Sources</span>
-              <span className="sources-entry-count">
-                {folderCount === 0
-                  ? "No sources yet"
-                  : `${folderCount.toLocaleString()} folder${folderCount === 1 ? "" : "s"} · ${folderItems.toLocaleString()} items`}
-              </span>
             </span>
             <span className="sources-entry-action">
               <span className="sources-entry-chevron" aria-hidden="true">
