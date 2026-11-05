@@ -227,6 +227,8 @@ export function AppSidebar({
   onOpenSources,
   onOpenUpdate,
 }: AppSidebarProps) {
+  const folderCount = folders.length;
+  const folderItems = folders.reduce((total, folder) => total + folder.itemCount, 0);
 
   return (
     <aside className="sidebar">
@@ -271,6 +273,11 @@ export function AppSidebar({
             </span>
             <span className="sources-entry-text">
               <span className="sources-entry-name">Sources</span>
+              <span className="sources-entry-count">
+                {folderCount === 0
+                  ? "No sources yet"
+                  : `${folderCount.toLocaleString()} folder${folderCount === 1 ? "" : "s"} · ${folderItems.toLocaleString()} items`}
+              </span>
             </span>
             <span className="sources-entry-action">
               <span className="sources-entry-chevron" aria-hidden="true">
