@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach, act } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import { render } from "@testing-library/react";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
@@ -104,7 +104,6 @@ function renderHiddenScreen(storeOverrides: Partial<ReturnType<typeof defaultSto
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedLibraryScreen.mockReturnValue(null);
 });
 
 afterEach(() => {
