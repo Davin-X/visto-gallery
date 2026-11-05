@@ -154,6 +154,7 @@ pub fn run() {
             cancel_find_duplicates,
             import_files,
             get_library_items,
+            get_hidden_items,
             get_albums,
             get_album_overviews,
             get_album_items,

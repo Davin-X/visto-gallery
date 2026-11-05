@@ -1919,9 +1919,9 @@ function LibraryScreen(props: LibraryScreenProps) {
 
       {props.showInspector && (
         <aside className="photo-inspector">
-          {props.inspectedId && library.items.find((i: any) => i.id === props.inspectedId) ? (
+            {props.inspectedId && (props.hiddenView ? library.hiddenItems : library.items).find((i: any) => i.id === props.inspectedId) ? (
             (() => {
-              const sel = library.items.find((i: any) => i.id === props.inspectedId);
+              const sel = (props.hiddenView ? library.hiddenItems : library.items).find((i: any) => i.id === props.inspectedId);
               if (!sel) return null;
               // Inspection is independent of selection: the Inspector always
               // shows the inspected item, even when a larger multi-selection
