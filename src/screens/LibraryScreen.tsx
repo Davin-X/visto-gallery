@@ -2039,7 +2039,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                     )}
                   </span>
                   <div className="inspector-actions">
-                    {sel.kind === "video" && props.onPlayBackground && (
+                    {sel.kind === "video" ? (
                       <button
                         className="inspector-action primary"
                         onClick={() => toggleBackground(sel)}
@@ -2056,6 +2056,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                           <PlayIcon size={14} />
                         )}
                         <span>{playingId === sel.id && isPlaying ? "Pause" : "Play"}</span>
+                      </button>
+                    ) : (
+                      <button
+                        className="inspector-action primary"
+                        onClick={() => props.onOpenViewer(sel.id)}
+                        title="View item"
+                      >
+                        <PlayIcon size={14} />
+                        <span>View</span>
                       </button>
                     )}
                     <button
