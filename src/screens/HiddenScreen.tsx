@@ -63,6 +63,12 @@ function HiddenScreen(props: HiddenScreenProps) {
       updateItemTags: s.updateItemTags,
     })),
   );
+  const hiddenLibraryStats = useMemo(() => ({
+    photos: library.hiddenItems.filter((i: MediaItem) => i.kind === "photo").length,
+    videos: library.hiddenItems.filter((i: MediaItem) => i.kind === "video").length,
+    raws: library.hiddenItems.filter((i: MediaItem) => i.kind === "raw").length,
+    favorites: library.hiddenItems.filter((i: MediaItem) => i.favorite).length,
+  }), [library.hiddenItems]);
   const filter = library.hiddenFilter;
   const query = library.hiddenQuery;
   const [pendingReveal, setPendingReveal] = useState<
@@ -75,7 +81,7 @@ function HiddenScreen(props: HiddenScreenProps) {
 
   const items = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    return library.items.filter((item: MediaItem) => {
+    return library.hiddenItems.filter((item: MediaItem) => {
       if (filter === "Photos" && item.kind !== "photo") return false;
       if (filter === "Videos" && item.kind !== "video") return false;
       if (filter === "RAW" && item.kind !== "raw") return false;
@@ -85,7 +91,7 @@ function HiddenScreen(props: HiddenScreenProps) {
         .toLowerCase()
         .includes(normalized);
     });
-  }, [library.items, filter, query]);
+  }, [library.hiddenItems, filter, query]);
 
   useEffect(() => {
     const onOpenHidden = (event: Event) => {
@@ -210,7 +216,8 @@ function HiddenScreen(props: HiddenScreenProps) {
         showInspector={library.showInspector}
         activeAlbum={null}
         albums={library.albums}
-        hiddenCount={library.hiddenCount}
+         hiddenCount={library.hiddenCount}
+         libraryStats={hiddenLibraryStats}
         onInspectItem={library.inspectItem}
         onToggleSelect={library.toggleSelection}
         onSelectRange={selectRange}
