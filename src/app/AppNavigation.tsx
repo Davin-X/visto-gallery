@@ -204,9 +204,6 @@ export function AppTopBar({
 
 interface AppSidebarProps {
   screen: Screen;
-  libraryCount: number;
-  hiddenCount: number;
-  albumsCount: number;
   folders: LibraryFolder[];
   sourcesSheetOpen: boolean;
   stats: LibraryStats;
@@ -246,6 +243,7 @@ export function AppSidebar({
                   aria-label={label}
                   title={label}
                   aria-current={screen === target ? "page" : undefined}
+                  onClick={() => onOpenScreen(target)}
                 >
                   <span className="nav-icon">
                     <Icon size={18} />
