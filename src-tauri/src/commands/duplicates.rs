@@ -196,7 +196,10 @@ pub async fn find_duplicates(
                     prefix,
                     shared_bytes,
                 )
-            }).await.ok().flatten();
+            })
+            .await
+            .ok()
+            .flatten();
             Some((index, id, hash, size))
         });
     }
@@ -319,7 +322,9 @@ fn hash_file_content(
     // If we have a prefix from quick fingerprint, use it and skip those bytes
     if let Some(prefix) = &prefix {
         ctx.update(prefix);
-        let _ = file.seek(std::io::SeekFrom::Start(prefix.len() as u64)).ok();
+        let _ = file
+            .seek(std::io::SeekFrom::Start(prefix.len() as u64))
+            .ok();
     }
 
     // 1MB buffer for sequential throughput on SSD/NVMe.
