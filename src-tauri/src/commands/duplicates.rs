@@ -7,7 +7,6 @@ use std::io::{Read, Seek};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tauri::{Emitter, State, Window};
-use tokio::sync::Semaphore;
 
 #[tauri::command]
 pub async fn cancel_find_duplicates() -> Result<(), String> {
@@ -114,17 +113,9 @@ pub async fn find_duplicates(
         .collect();
 
     // Phase 2: Full SHA-256 only for files that share a quick fingerprint.
-    // Use controlled concurrency (max 2 at a time) to avoid I/O saturation.
-    use std::sync::Arc;
+    // Use controlled concurrency (1 at a time — hashing is CPU-bound,
+    // so more concurrent tasks just pin more cores and freeze the UI).
     use tokio::sync::Semaphore;
-
-    let total = full_hash_candidates.len() as u64;
-
-    let semaphore = Arc::new(Semaphore::new(2));
-    let quick_prefixes = Arc::new(quick_prefixes);
-    let mut hash_updates: Vec<(String, String)> = Vec::with_capacity(full_hash_candidates.len());
-    let mut bytes_completed = 0u64;
-    let mut processed = 0u64;
 
     // Emit progress for full hash phase start
     let _ = window.emit(
@@ -136,9 +127,6 @@ pub async fn find_duplicates(
             "currentFile": "Computing full SHA-256…",
         }),
     );
-
-    // Process with controlled concurrency (1 at a time — hashing is CPU-bound,
-    // so more concurrent tasks just pin more cores and freeze the UI).
 
     let total = full_hash_candidates.len() as u64;
 
@@ -208,7 +196,7 @@ pub async fn find_duplicates(
         if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
             break;
         }
-        if let Ok(Some((index, id, hash, size))) = result {
+        if let Ok(Some((index, id, hash, _size))) = result {
             if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
                 break;
             }
@@ -300,19 +288,18 @@ fn compute_quick_fingerprint(path: &str, size: u64) -> Option<(String, Vec<u8>)>
 /// this inside `tokio::task::spawn_blocking` so the tokio executor stays free
 /// to process Tauri/frontend events. Accepts an optional prefix (first 64KB)
 /// from the quick fingerprint phase to avoid re-reading the beginning of the file.
+#[allow(clippy::too_many_arguments)]
 fn hash_file_content(
     path: String,
     name: String,
     file_size: u64,
-    bytes_before_file: u64,
+    _bytes_before_file: u64,
     file_number: u64,
     total_files: u64,
     window: Window,
     prefix: Option<Vec<u8>>,
     shared_bytes: Arc<AtomicU64>,
 ) -> Option<String> {
-    use std::io::Read;
-
     let mut file = match std::fs::File::open(&path) {
         Ok(f) => f,
         Err(_) => return None,
