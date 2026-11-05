@@ -934,6 +934,43 @@ kbd {
   color: var(--muted);
   font-size: 13px;
 }
+.info-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.info-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.info-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  min-width: 70px;
+}
+.info-value {
+  color: var(--text);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.inspector-hidden-note {
+  padding: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.04);
+}
 .inspector-section {
   padding-top: 12px;
   border-top: 1px solid var(--line);
