@@ -617,10 +617,10 @@ function LibraryScreen(props: LibraryScreenProps) {
       ".gallery-grid.layout-grid .gallery-tile, .gallery-grid.layout-overview .gallery-tile",
     );
     const height = tile?.getBoundingClientRect().height;
-    if (height && Math.abs((measuredTileHeight ?? 0) - height) > 1) {
+    if (height && (measuredTileHeight === null || Math.abs(measuredTileHeight - height) > 1)) {
       setMeasuredTileHeight(height);
     }
-  }, [measuredTileHeight, props.layout, supportsGridVirtualization, virtualGrid.items.length]);
+  }, [props.layout, thumbnailSize, gridViewport.width, supportsGridVirtualization]);
   const selectedIdSet = useMemo(() => new Set(props.selectedIds), [props.selectedIds]);
 
   // Timeline groups use the photo's capture date when available, with file
