@@ -650,7 +650,7 @@ async fn upsert_media_batch(
             .push_bind(&item.color_label);
     });
     query.push(
-        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END, updated_at = excluded.updated_at, favorite = excluded.favorite, hidden = excluded.hidden, rating = COALESCE(excluded.rating, media_items.rating), color_label = COALESCE(excluded.color_label, media_items.color_label)",
+        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END, updated_at = excluded.updated_at, favorite = media_items.favorite, hidden = media_items.hidden, rating = COALESCE(excluded.rating, media_items.rating), color_label = COALESCE(excluded.color_label, media_items.color_label)",
     );
     query.build().execute(db).await.map_err(|e| e.to_string())?;
     Ok(())
@@ -1440,5 +1440,57 @@ mod finder_tag_merge_tests {
         let merged = merge_finder_tag_values(&[], &["Albums".into()]);
         assert_eq!(merged, vec![raw("Albums")]);
         assert_eq!(finder_tag_name(&merged[0]), "Albums");
+    }
+}
+
+#[cfg(test)]
+mod rescan_preservation_tests {
+    use super::upsert_media_batch;
+    use crate::models::MediaItem;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn media_db() -> sqlx::SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory database");
+        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, sha256 TEXT, rating INTEGER, color_label TEXT)")
+            .execute(&db)
+            .await
+            .expect("create media_items");
+        db
+    }
+
+    #[tokio::test]
+    async fn forced_rescan_preserves_favorite_and_hidden() {
+        let db = media_db().await;
+        let path = "/tmp/rescan-preserve.jpg".to_string();
+        let item = MediaItem::new(path.clone(), "photo.jpg".into(), "jpg".into(), "photo".into(), 10, 1000);
+        upsert_media_batch(&db, &[(item.clone(), Some(800), Some(600))])
+            .await
+            .expect("initial upsert");
+
+        // The user curates the item.
+        sqlx::query("UPDATE media_items SET favorite = 1, hidden = 1 WHERE id = ?")
+            .bind(&item.id)
+            .execute(&db)
+            .await
+            .expect("curate");
+
+        // A forced rescan re-upserts the same row.
+        let rescanned = MediaItem::new(path, "photo.jpg".into(), "jpg".into(), "photo".into(), 10, 1000);
+        upsert_media_batch(&db, &[(rescanned, Some(800), Some(600))])
+            .await
+            .expect("rescan upsert");
+
+        let (favorite, hidden): (i64, i64) =
+            sqlx::query_as("SELECT favorite, hidden FROM media_items WHERE id = ?")
+                .bind(&item.id)
+                .fetch_one(&db)
+                .await
+                .expect("read back");
+        assert_eq!(favorite, 1, "favorite must survive a forced rescan");
+        assert_eq!(hidden, 1, "hidden must survive a forced rescan");
     }
 }
