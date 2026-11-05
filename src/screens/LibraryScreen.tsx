@@ -2061,10 +2061,10 @@ function LibraryScreen(props: LibraryScreenProps) {
                       <button
                         className="inspector-action primary"
                         onClick={() => props.onOpenViewer(sel.id)}
-                        title="Open in viewer"
+                        title="View item"
                       >
                         <PlayIcon size={14} />
-                        <span>Open</span>
+                        <span>View</span>
                       </button>
                     )}
                     <button
