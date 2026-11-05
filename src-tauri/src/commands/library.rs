@@ -736,7 +736,14 @@ pub async fn get_item_thumbnail(
     tokio::fs::create_dir_all(&cache_root)
         .await
         .map_err(|error| error.to_string())?;
-    let cache_key = thumbnail_cache_key(&request.item_id, item.2, item.3, request.size, &item.1, quality);
+    let cache_key = thumbnail_cache_key(
+        &request.item_id,
+        item.2,
+        item.3,
+        request.size,
+        &item.1,
+        quality,
+    );
     let digest = ring::digest::digest(&ring::digest::SHA256, cache_key.as_bytes());
     let cache_path = cache_root.join(format!("{}.jpg", hex::encode(digest.as_ref())));
 

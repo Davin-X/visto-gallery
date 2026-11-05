@@ -1210,7 +1210,15 @@ mod in_place_format_tests {
 
     #[test]
     fn unsupported_formats_are_rejected_with_save_a_copy_guidance() {
-        for path in ["a.heic", "b.HEIC", "c.tif", "d.tiff", "e.avif", "f.bmp", "/x/g.unknown"] {
+        for path in [
+            "a.heic",
+            "b.HEIC",
+            "c.tif",
+            "d.tiff",
+            "e.avif",
+            "f.bmp",
+            "/x/g.unknown",
+        ] {
             let err = validate_in_place_format(path).expect_err("should be rejected");
             assert!(
                 err.contains("Save a copy"),

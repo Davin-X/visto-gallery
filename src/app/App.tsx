@@ -2069,9 +2069,6 @@ function App() {
       sidebar={
         <AppSidebar
           screen={screen}
-          libraryCount={library.items.length - library.hiddenCount}
-          hiddenCount={library.hiddenCount}
-          albumsCount={library.albums.length}
           folders={library.folders}
           sourcesSheetOpen={sourcesSheetOpen}
           stats={libraryStats}

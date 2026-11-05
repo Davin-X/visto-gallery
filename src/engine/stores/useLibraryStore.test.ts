@@ -424,3 +424,38 @@ test("cancelScan routes the library-scan phase to the library cancel command", a
   expect(tauri.library.cancelScan).toHaveBeenCalledOnce();
   expect(tauri.duplicates.cancel).not.toHaveBeenCalled();
 });
+
+test("inspectItem accepts hidden item IDs", () => {
+  const visible = makeItem("visible", "photo.jpg");
+  const hidden = makeItem("hidden", "secret.jpg", false, "photo");
+  hidden.hidden = true;
+  useLibraryStore.setState({ items: [visible], hiddenItems: [hidden] });
+
+  // Hidden ID is accepted
+  useLibraryStore.getState().inspectItem(hidden.id);
+  expect(useLibraryStore.getState().inspectedId).toBe(hidden.id);
+
+  // Visible ID still works
+  useLibraryStore.getState().inspectItem(visible.id);
+  expect(useLibraryStore.getState().inspectedId).toBe(visible.id);
+
+  // Unknown ID is ignored
+  useLibraryStore.getState().inspectItem("unknown");
+  expect(useLibraryStore.getState().inspectedId).toBe(visible.id);
+
+  // null clears
+  useLibraryStore.getState().inspectItem(null);
+  expect(useLibraryStore.getState().inspectedId).toBeNull();
+});
+
+test("hiddenItems and hiddenCount are derived from hidden items", () => {
+  const hidden = makeItem("hidden", "secret.jpg", false, "photo");
+  hidden.hidden = true;
+  useLibraryStore.setState({ hiddenItems: [hidden] });
+  useLibraryStore.getState().refreshDerived();
+
+  const state = useLibraryStore.getState();
+  expect(state.hiddenItems).toHaveLength(1);
+  expect(state.hiddenCount).toBe(1);
+  expect(state.hiddenItems[0].id).toBe("hidden");
+});

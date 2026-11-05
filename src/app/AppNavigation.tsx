@@ -204,9 +204,6 @@ export function AppTopBar({
 
 interface AppSidebarProps {
   screen: Screen;
-  libraryCount: number;
-  hiddenCount: number;
-  albumsCount: number;
   folders: LibraryFolder[];
   sourcesSheetOpen: boolean;
   stats: LibraryStats;
@@ -220,9 +217,6 @@ interface AppSidebarProps {
 
 export function AppSidebar({
   screen,
-  libraryCount,
-  hiddenCount,
-  albumsCount,
   folders,
   sourcesSheetOpen,
   stats,
@@ -243,14 +237,6 @@ export function AppSidebar({
           <div className="sidebar-label">WORKSPACE</div>
           <nav className="primary-nav" aria-label="Main navigation">
             {NAV_ITEMS.map(({ label, Icon, screen: target }) => {
-              const badge =
-                label === "Library"
-                  ? libraryCount
-                  : label === "Albums"
-                    ? albumsCount
-                    : label === "Hidden"
-                      ? hiddenCount
-                      : 0;
               return (
                 <button
                   key={label}
@@ -265,7 +251,6 @@ export function AppSidebar({
                     <Icon size={18} />
                   </span>
                   <span>{label}</span>
-                  {badge > 0 ? <span className="nav-badge">{badge}</span> : null}
                 </button>
               );
             })}
