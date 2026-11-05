@@ -1466,7 +1466,14 @@ mod rescan_preservation_tests {
     async fn forced_rescan_preserves_favorite_and_hidden() {
         let db = media_db().await;
         let path = "/tmp/rescan-preserve.jpg".to_string();
-        let item = MediaItem::new(path.clone(), "photo.jpg".into(), "jpg".into(), "photo".into(), 10, 1000);
+        let item = MediaItem::new(
+            path.clone(),
+            "photo.jpg".into(),
+            "jpg".into(),
+            "photo".into(),
+            10,
+            1000,
+        );
         upsert_media_batch(&db, &[(item.clone(), Some(800), Some(600))])
             .await
             .expect("initial upsert");
@@ -1479,7 +1486,14 @@ mod rescan_preservation_tests {
             .expect("curate");
 
         // A forced rescan re-upserts the same row.
-        let rescanned = MediaItem::new(path, "photo.jpg".into(), "jpg".into(), "photo".into(), 10, 1000);
+        let rescanned = MediaItem::new(
+            path,
+            "photo.jpg".into(),
+            "jpg".into(),
+            "photo".into(),
+            10,
+            1000,
+        );
         upsert_media_batch(&db, &[(rescanned, Some(800), Some(600))])
             .await
             .expect("rescan upsert");
