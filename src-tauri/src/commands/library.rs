@@ -714,7 +714,7 @@ pub async fn get_item_thumbnail(
     tokio::fs::create_dir_all(&cache_root)
         .await
         .map_err(|error| error.to_string())?;
-    let cache_key = thumbnail_cache_key(&request.item_id, item.2, item.3, request.size, &item.1);
+    let cache_key = thumbnail_cache_key(&request.item_id, item.2, item.3, request.size, &item.1, quality);
     let digest = ring::digest::digest(&ring::digest::SHA256, cache_key.as_bytes());
     let cache_path = cache_root.join(format!("{}.jpg", hex::encode(digest.as_ref())));
 
@@ -763,16 +763,18 @@ pub async fn get_item_thumbnail(
 }
 
 /// Cache identity must include every input that changes the rendered image.
-/// Thumbnails for the same photo at different sizes are distinct files.
+/// Thumbnails for the same photo at different sizes or JPEG qualities are
+/// distinct files.
 pub(crate) fn thumbnail_cache_key(
     item_id: &str,
     modified_at: i64,
     source_size: i64,
     thumbnail_size: u32,
     kind: &str,
+    quality: u8,
 ) -> String {
     let version = if kind == "video" { "v2" } else { "v1" };
-    format!("{item_id}:{modified_at}:{source_size}:{thumbnail_size}:{version}")
+    format!("{item_id}:{modified_at}:{source_size}:{thumbnail_size}:{version}:q{quality}")
 }
 
 /// Keep the cache bounded without making every thumbnail request pay for a
