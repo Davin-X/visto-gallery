@@ -257,9 +257,6 @@ function App() {
   // The player keeps its own selection while the photo viewer has an
   // independent cursor.
   const [backgroundVideo, setBackgroundVideo] = useState<MediaItem | null>(null);
-  // The video whose Now Playing session the user explicitly ended. Sidebar
-  // “Viewer” must not resurrect that session from a stale inspector.
-  const backgroundVideoDismissedRef = useRef<string | null>(null);
   // Locked video queue: captured when playback starts so switching filters
   // mid-playback never changes what plays next.
   const [videoQueue, setVideoQueue] = useState<MediaItem[]>([]);
@@ -1246,7 +1243,6 @@ function App() {
               loading: false,
             }
           : null;
-      backgroundVideoDismissedRef.current = null;
       setBackgroundVideo(item);
     },
     [library],
@@ -1759,14 +1755,12 @@ function App() {
         library.viewerSelected ??
         library.viewerItems.find((item) => item.kind !== "video") ??
         null;
-      // A video whose Now Playing session was closed with its X stays closed:
-      // fall back to the nearest photo instead of reopening the player.
-      if (target?.kind === "video" && backgroundVideoDismissedRef.current === target.id) {
-        target = library.viewerItems.find((item) => item.kind !== "video") ?? null;
-      }
+      // Navigation must never implicitly start playback. If the target is a
+      // video, fall back to the nearest viewable photo (or the empty viewer
+      // state); videos only start from explicit actions — the grid's play
+      // button, double-click, or Now Playing.
       if (target?.kind === "video") {
-        openViewer(target.id, "Library");
-        return;
+        target = library.viewerItems.find((item) => item.kind !== "video") ?? null;
       }
       viewer.open(target?.id);
     }
@@ -2049,7 +2043,6 @@ function App() {
             void playNextVideo();
           }}
           onNowPlayingStop={() => {
-            if (playbackItem) backgroundVideoDismissedRef.current = playbackItem.id;
             usePlaybackStore.getState().stop();
             setBackgroundVideo(null);
             setVideoQueue([]);

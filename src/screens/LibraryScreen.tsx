@@ -149,8 +149,8 @@ function LibraryScreen(props: LibraryScreenProps) {
   }, [library.refreshingLibrary]);
   const draftTransforms = useDraftTransforms();
   const thumbnailSize = useThumbnailSize();
-  const settingsStore = useSettingsStore();
-  const showExtensions = settingsStore.showExtensions;
+  const showExtensions = useSettingsStore((s) => s.showExtensions);
+  const updateSettings = useSettingsStore((s) => s.update);
   const sortDirectionLabel =
     library.sortBy === "capturedAt" || library.sortBy === "modifiedAt"
       ? library.sortOrder === "asc"
@@ -1146,7 +1146,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                               : "Large thumbnails"
                         }
                         aria-pressed={thumbnailSize === s}
-                        onClick={() => settingsStore.update("thumbnailSize", s)}
+                        onClick={() => updateSettings("thumbnailSize", s)}
                         title={
                           s === "small"
                             ? "Small thumbnails"

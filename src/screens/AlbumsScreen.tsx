@@ -18,8 +18,7 @@ interface AlbumsScreenProps {
 }
 
 function AlbumsScreen(props: AlbumsScreenProps) {
-  const library = useLibraryStore();
-  const overviews = library.albumOverviews;
+  const overviews = useLibraryStore((s) => s.albumOverviews);
 
   // Opening Albums must not fetch every album's full membership. The overview
   // query returns counts plus at most four cover candidates per album; the

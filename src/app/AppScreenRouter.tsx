@@ -241,7 +241,7 @@ export function AppScreenRouter({
         <ViewerScreen
           active
           items={photoViewerItems}
-          selected={library.viewerSelected?.kind === "video" ? null : library.viewerSelected}
+          selected={library.viewerSelected}
           zoom={viewer.zoom}
           fitMode={viewer.fitMode}
           rotation={viewer.rotation}
