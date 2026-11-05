@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
+import { useShallow } from "zustand/react/shallow";
 import type { EditValues, MediaItem } from "../types/media";
 import { defaultEdits } from "../commands/tauri";
 import { tauri } from "../commands/tauri";
@@ -516,4 +517,4 @@ export const useEditItem = () => useEditStore((s) => s.item);
 export const useEditValues = () => useEditStore((s) => s.values);
 export const useEditCrop = () => useEditStore((s) => s.crop);
 export const useEditHistory = () =>
-  useEditStore((s) => ({ canUndo: s.canUndo, canRedo: s.canRedo }));
+  useEditStore(useShallow((s) => ({ canUndo: s.canUndo, canRedo: s.canRedo })));

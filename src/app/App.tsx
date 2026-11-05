@@ -390,6 +390,11 @@ function App() {
       );
       if (backgroundVideo && !nextQueue.some((item) => item.id === backgroundVideo.id))
         nextQueue.unshift(backgroundVideo);
+      // Leave the queue empty when this scope has no playable videos yet:
+      // writing a fresh [] reference would retrigger this effect through
+      // its own `videoQueue` dependency until React throws #185. The queue
+      // is rebuilt once `viewerItems` gains a playable video.
+      if (nextQueue.length === 0) return;
       setVideoQueue(nextQueue);
       if (!videoQueuePagingRef.current && state.viewerScope === "library") {
         videoQueuePagingRef.current = {

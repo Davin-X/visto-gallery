@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
+import { useShallow } from "zustand/react/shallow";
 import type {
   MediaItem,
   Album,
@@ -1532,8 +1533,10 @@ export const useInspectedItem = () =>
   useLibraryStore((s) => s.items.find((i) => i.id === s.inspectedId) || null);
 export const useSelectedItems = () =>
   useLibraryStore(
-    (s) =>
-      s.selectedIds.map((id) => s.items.find((i) => i.id === id)).filter(Boolean) as MediaItem[],
+    useShallow(
+      (s) =>
+        s.selectedIds.map((id) => s.items.find((i) => i.id === id)).filter(Boolean) as MediaItem[],
+    ),
   );
 export const useSelectionCount = () => useLibraryStore((s) => s.selectedIds.length);
 // Backwards-compatible alias: the "selected item" is the inspected one.
