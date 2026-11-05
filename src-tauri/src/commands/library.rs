@@ -363,6 +363,28 @@ pub async fn get_library_items(
     get_library_items_page(&db, f).await
 }
 
+/// Return every hidden item (`hidden = 1`) for the Hidden gallery.
+/// Unlike `get_library_items`, this does not paginate — the Hidden screen is
+/// a secondary view over a typically small set.
+#[tauri::command]
+pub async fn get_hidden_items(state: State<'_, AppState>) -> Result<LibraryItemsPage, String> {
+    let db = super::get_db(&state)?;
+    let mut items: Vec<MediaItem> = sqlx::query_as(
+        "SELECT * FROM media_items WHERE hidden = 1 ORDER BY COALESCE(captured_at, modified_at) DESC",
+    )
+    .fetch_all(&db)
+    .await
+    .map_err(|e| e.to_string())?;
+    hydrate_relations(&db, &mut items).await?;
+    let total_count = items.len() as i64;
+    Ok(LibraryItemsPage {
+        items,
+        has_more: false,
+        next_cursor: None,
+        total_count,
+    })
+}
+
 fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterDTO) {
     if let Some(kind) = &f.kind {
         qb.push(" AND kind = ").push_bind(kind.clone());

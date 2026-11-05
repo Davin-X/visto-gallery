@@ -138,6 +138,7 @@ interface LibraryState {
   loadLibrary: (filter?: LibraryFilter) => Promise<void>;
   loadItemsPage: (filter?: LibraryFilter) => Promise<void>;
   loadCatalogMetadata: () => Promise<void>;
+  loadHiddenItems: () => Promise<void>;
   loadNextPage: () => Promise<void>;
   loadFolders: () => Promise<void>;
   removeFolder: (path: string, deleteFiles?: boolean) => Promise<number>;
@@ -395,8 +396,8 @@ function computeDerived(state: LibraryState) {
     viewerSelected,
     currentIndex,
     viewerIndex,
-    hiddenItems: [],
-    hiddenCount: 0,
+    hiddenItems: state.hiddenItems,
+    hiddenCount: state.hiddenItems.length,
   };
 }
 
@@ -569,7 +570,33 @@ export const useLibraryStore = create<LibraryState>()(
       loadLibrary: async (filter?: LibraryFilter) => {
         await get().loadItemsPage(filter);
         await get().loadCatalogMetadata();
+        await get().loadHiddenItems();
         get().refreshDerived();
+      },
+
+      // Load hidden items separately since the main items query always
+      // filters hidden = false. These power the Hidden screen.
+      loadHiddenItems: async () => {
+        const generation = libraryLoadGeneration;
+        const isTauri =
+          typeof window !== "undefined" &&
+          ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+        if (!isTauri) {
+          set({ hiddenItems: [], hiddenCount: 0 });
+          return;
+        }
+        try {
+          const pageResult = await tauri.library.getHiddenItems();
+          if (generation !== libraryLoadGeneration) return;
+          const page: LibraryItemsPage = Array.isArray(pageResult)
+            ? { items: pageResult, hasMore: false, totalCount: pageResult.length }
+            : pageResult;
+          set({ hiddenItems: page.items, hiddenCount: page.totalCount ?? page.items.length });
+        } catch (e) {
+          if (generation !== libraryLoadGeneration) return;
+          if (import.meta.env.DEV) console.error("loadHiddenItems failed:", e);
+          set({ hiddenItems: [], hiddenCount: 0 });
+        }
       },
 
       loadNextPage: async () => {

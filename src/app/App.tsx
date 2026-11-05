@@ -832,6 +832,9 @@ function App() {
 
     // Opening the saved catalog is cheap; source scans are always user-started.
     liveRef.current.library.loadLibrary();
+    // Hidden items are filtered out of the main query, so load them
+    // separately to power the Hidden screen's counts and grid.
+    void liveRef.current.library.loadHiddenItems();
     liveRef.current.settings.hydrate();
 
     // Fetch the canonical list of supported extensions from the backend so the
@@ -1766,12 +1769,13 @@ function App() {
     }
     if (next === "Hidden") {
       // Hidden is its own collection; do not carry a Library selection or an
-      // inspector for a visible item into it. Load hidden items from the
-      // backend (hidden=true) so the Hidden screen has its own collection.
+      // inspector for a visible item into it. Load hidden items separately
+      // so the Hidden screen has its own collection without polluting the
+      // main items array.
       library.setViewerScope("library");
       library.clearSelection();
       library.inspectItem(null);
-      void library.loadLibrary({ hidden: true });
+      await library.loadHiddenItems();
     } else if (screen === "Hidden") {
       // Leaving Hidden drops the hidden selection and any hidden inspector
       // focus, so the next screen cannot show an item it cannot display.
