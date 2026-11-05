@@ -711,7 +711,7 @@ export const useLibraryStore = create<LibraryState>()(
       inspectItem: (id) => {
         const state = get();
         if (id === state.inspectedId) return;
-        if (id !== null && !state.items.some((i) => i.id === id)) return;
+        if (id !== null && !state.items.some((i) => i.id === id) && !state.hiddenItems.some((i) => i.id === id)) return;
         const next = { ...state, inspectedId: id };
         set({ inspectedId: id, ...computeInspectionDerived(next) });
       },
