@@ -1489,7 +1489,11 @@ export const useLibraryStore = create<LibraryState>()(
       cancelScan: async () => {
         set({ canceling: true });
         try {
-          await tauri.library.cancelScan();
+          // Duplicate scanning reports its phase as "hashing"; route its
+          // cancellation to the duplicates command instead of the scanner's.
+          const phase = get().progress?.phase;
+          if (phase === "hashing") await tauri.duplicates.cancel();
+          else await tauri.library.cancelScan();
         } catch (e) {
           set({
             canceling: false,

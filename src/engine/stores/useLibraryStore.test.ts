@@ -28,6 +28,11 @@ vi.mock("../commands/tauri", () => ({
       }),
       getFolders: vi.fn().mockResolvedValue([]),
       getRoots: vi.fn().mockResolvedValue([]),
+      cancelScan: vi.fn().mockResolvedValue(undefined),
+    },
+    duplicates: {
+      scan: vi.fn().mockResolvedValue([]),
+      cancel: vi.fn().mockResolvedValue(undefined),
     },
     smartAlbums: {
       get: vi.fn().mockResolvedValue([]),
@@ -404,4 +409,18 @@ test("loadLibrary is non-blocking and shows a quiet refresh state instead", asyn
   expect(useLibraryStore.getState().refreshingLibrary).toBe(false);
   expect(useLibraryStore.getState().busy).toBe(false);
   expect(useLibraryStore.getState().progress).toBeNull();
+});
+
+test("cancelScan routes the duplicate-hash phase to cancel_find_duplicates", async () => {
+  useLibraryStore.setState({ progress: { phase: "hashing", processed: 10, total: 100 } });
+  await useLibraryStore.getState().cancelScan();
+  expect(tauri.duplicates.cancel).toHaveBeenCalledOnce();
+  expect(tauri.library.cancelScan).not.toHaveBeenCalled();
+});
+
+test("cancelScan routes the library-scan phase to the library cancel command", async () => {
+  useLibraryStore.setState({ progress: { phase: "scanning", processed: 10, total: 100 } });
+  await useLibraryStore.getState().cancelScan();
+  expect(tauri.library.cancelScan).toHaveBeenCalledOnce();
+  expect(tauri.duplicates.cancel).not.toHaveBeenCalled();
 });
