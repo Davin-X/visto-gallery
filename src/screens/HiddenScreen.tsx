@@ -3,6 +3,7 @@ import { EyeOffIcon, ImageOffIcon } from "../design/components/icons";
 import { BrandMark } from "../design/components/BrandMark";
 import LibraryScreen from "./LibraryScreen";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
+import { useShallow } from "zustand/react/shallow";
 import type { MediaItem } from "../engine/types/media";
 
 interface HiddenScreenProps {
@@ -21,7 +22,47 @@ interface HiddenScreenProps {
 }
 
 function HiddenScreen(props: HiddenScreenProps) {
-  const library = useLibraryStore();
+  const library = useLibraryStore(
+    useShallow((s) => ({
+      albums: s.albums,
+      busy: s.busy,
+      clearSelection: s.clearSelection,
+      colorLabelFilter: s.colorLabelFilter,
+      dateFrom: s.dateFrom,
+      dateTo: s.dateTo,
+      deleteItems: s.deleteItems,
+      hiddenCount: s.hiddenCount,
+      hiddenFilter: s.hiddenFilter,
+      hiddenItems: s.hiddenItems,
+      hiddenQuery: s.hiddenQuery,
+      inspectItem: s.inspectItem,
+      inspectedId: s.inspectedId,
+      items: s.items,
+      layout: s.layout,
+      minRating: s.minRating,
+      progress: s.progress,
+      selectedIds: s.selectedIds,
+      setActiveAlbum: s.setActiveAlbum,
+      setColorLabelFilter: s.setColorLabelFilter,
+      setColorLabelForIds: s.setColorLabelForIds,
+      setDateRange: s.setDateRange,
+      setFavoriteForIds: s.setFavoriteForIds,
+      setHiddenFilter: s.setHiddenFilter,
+      setHiddenForIds: s.setHiddenForIds,
+      setHiddenQuery: s.setHiddenQuery,
+      setLayout: s.setLayout,
+      setMinRating: s.setMinRating,
+      setRatingForIds: s.setRatingForIds,
+      setSelectedIds: s.setSelectedIds,
+      showInspector: s.showInspector,
+      showNotice: s.showNotice,
+      toggleFavorite: s.toggleFavorite,
+      toggleHidden: s.toggleHidden,
+      toggleInspector: s.toggleInspector,
+      toggleSelection: s.toggleSelection,
+      updateItemTags: s.updateItemTags,
+    })),
+  );
   const filter = library.hiddenFilter;
   const query = library.hiddenQuery;
   const [pendingReveal, setPendingReveal] = useState<

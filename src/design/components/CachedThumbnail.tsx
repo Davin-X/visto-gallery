@@ -24,6 +24,20 @@ function currentQuality(): number {
   return useSettingsStore.getState().thumbnailQuality;
 }
 
+// Shared state so one quality change clears the shared cache once, not once
+// per mounted tile.
+let lastClearedQuality: number | null = null;
+
+function clearCacheForQuality(quality: number): void {
+  if (lastClearedQuality === quality) return;
+  lastClearedQuality = quality;
+  if (thumbnailCache.size > 0) {
+    thumbnailCache.clear();
+    thumbnailByteSizes.clear();
+    cachedBytes = 0;
+  }
+}
+
 function cacheKey(itemId: string, size: CachedThumbnailSize): string {
   return `${itemId}:${size}:${currentQuality()}`;
 }
@@ -114,21 +128,21 @@ function CachedThumbnail({
   const [loaded, setLoaded] = useState<{ key: string; src: string } | null>(null);
   const [failedKey, setFailedKey] = useState<string | null>(null);
   const [nearViewport, setNearViewport] = useState(false);
+  // Subscribe so a quality change clears the shared cache exactly once,
+  // instead of every mounted tile clearing it on mount.
+  const thumbnailQuality = useSettingsStore((s) => s.thumbnailQuality);
   const requestKey = cacheKey(itemId, size);
   // Never paint a thumbnail for a previous item or size while the new request
   // is in flight (e.g. switching the grid density or layout).
   const src = loaded?.key === requestKey ? loaded.src : null;
   const failed = failedKey === requestKey;
 
-  // Clear the cache when quality changes so stale thumbnails are not served.
+  // Clear the shared cache when quality actually changes so stale thumbnails
+  // are not served. Subscribes to the setting instead of reading it once, and
+  // clears exactly once per change (not once per mounted tile).
   useEffect(() => {
-    const q = currentQuality();
-    if (thumbnailCache.size > 0) {
-      thumbnailCache.clear();
-      thumbnailByteSizes.clear();
-      cachedBytes = 0;
-    }
-  }, [currentQuality()]);
+    clearCacheForQuality(thumbnailQuality);
+  }, [thumbnailQuality]);
 
   useEffect(() => {
     if (eager) {

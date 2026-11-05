@@ -51,6 +51,9 @@ interface ViewerScreenProps {
 function ViewerScreen(props: ViewerScreenProps) {
   const items = useMemo(() => props.items.filter((item) => item.kind !== "video"), [props.items]);
   const photoItems = useMemo(() => items.filter((item) => item.kind === "photo"), [items]);
+  // Was the inspected item a video? The Viewer only shows photos — give the
+  // user a real answer instead of the generic empty state.
+  const inspectedVideo = props.selected?.kind === "video";
   const selected = props.selected?.kind === "video" ? null : props.selected;
   const draftTransforms = useDraftTransforms();
   // Folder context: the pill shows the containing folder, the subtle line the
@@ -212,8 +215,20 @@ function ViewerScreen(props: ViewerScreenProps) {
         <div className="first-run-art">
           <ViewerIcon size={30} />
         </div>
-        <h2>No viewable media yet</h2>
-        <p>Import photos or videos to start viewing.</p>
+        {inspectedVideo ? (
+          <>
+            <h2>Videos don’t open in the Viewer</h2>
+            <p>
+              The item you’re inspecting is a video. Press the play button on its tile (or the
+              Now Playing chip) to watch it.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2>No viewable media yet</h2>
+            <p>This view has no photos. Import photos or RAW files, or open a video from its tile.</p>
+          </>
+        )}
       </div>
     );
 

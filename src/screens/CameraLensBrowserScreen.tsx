@@ -23,8 +23,12 @@ interface LensGroup {
 }
 
 function CameraLensBrowserScreen(props: CameraLensBrowserScreenProps) {
-  const library = useLibraryStore();
-  const { setMinRating, setColorLabelFilter, setActiveAlbum, setQuery } = library;
+  // Actions only: subscribe individually so state changes elsewhere don't
+  // re-render this screen.
+  const setMinRating = useLibraryStore((s) => s.setMinRating);
+  const setColorLabelFilter = useLibraryStore((s) => s.setColorLabelFilter);
+  const setActiveAlbum = useLibraryStore((s) => s.setActiveAlbum);
+  const setQuery = useLibraryStore((s) => s.setQuery);
 
   const cameraGroups = useMemo<CameraGroup[]>(() => {
     const byCamera = new Map<string, MediaItem[]>();
