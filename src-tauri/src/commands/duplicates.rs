@@ -290,7 +290,7 @@ async fn compute_full_sha256_with_progress(
             .ok()?;
     }
 
-    // 1MB buffer for sequential throughput on SSD/NVMe (reduced from 64MB)
+    // 1MB buffer for sequential throughput on SSD/NVMe.
     let mut buf = vec![0u8; 1024 * 1024];
     let mut file_bytes = 0u64;
     let mut last_reported_bytes = 0u64;
@@ -304,10 +304,22 @@ async fn compute_full_sha256_with_progress(
         if n == 0 {
             break;
         }
-        ctx.update(&buf[..n]);
+        // Copy the slice so the blocking closure owns its data; `buf` stays
+        // available for the next async read.
+        let data = buf[..n].to_vec();
+        // Offload CPU-intensive SHA-256 update to the blocking pool so the
+        // tokio executor stays free to process Tauri/frontend events. This
+        // keeps the UI responsive while hashing large files.
+        ctx = match tokio::task::spawn_blocking(move || {
+            ctx.update(&data);
+            ctx
+        }).await {
+            Ok(c) => c,
+            Err(_) => return None,
+        };
         file_bytes = file_bytes.saturating_add(n as u64);
         let should_report = file_bytes.saturating_sub(last_reported_bytes) >= 64 * 1024 * 1024
-            || last_reported_at.elapsed() >= std::time::Duration::from_millis(500);
+            || last_reported_at.elapsed() >= std::time::Duration::from_millis(200);
         if should_report {
             let _ = window.emit(
                 "import-progress",
