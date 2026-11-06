@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
   EditIcon,
   EyeOffIcon,
   FlipIcon,
@@ -374,7 +376,7 @@ function ViewerScreen(props: ViewerScreenProps) {
           onClick={() => props.onNavigate(-1)}
           aria-label="Previous"
         >
-          ‹
+          <ChevronLeftIcon size={21} strokeWidth={2.1} />
         </button>
         {selected.kind === "photo" ? (
           <>
@@ -477,7 +479,7 @@ function ViewerScreen(props: ViewerScreenProps) {
           onClick={() => props.onNavigate(1)}
           aria-label="Next"
         >
-          ›
+          <ChevronRightIcon size={21} strokeWidth={2.1} />
         </button>
         <div
           className={`viewer-overlay-top${hintsVisible ? "" : " hidden"}`}

@@ -4088,8 +4088,7 @@ body {
   background: rgba(18, 22, 28, 0.72);
   backdrop-filter: blur(10px);
   color: rgba(255, 255, 255, 0.92);
-  font-size: 22px;
-  line-height: 1;
+  line-height: 0;
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -10397,8 +10396,7 @@ body {
   min-height: 32px;
 }
 
-.video-player-back,
-.video-player-queue-controls button {
+.video-player-back {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
@@ -10409,8 +10407,7 @@ body {
   border-radius: 9px;
   background: var(--surface-2);
   color: var(--text);
-  font-size: 20px;
-  line-height: 1;
+  line-height: 0;
   cursor: pointer;
   transition:
     transform 140ms ease,
@@ -10418,40 +10415,20 @@ body {
     border-color 140ms ease;
 }
 
-.video-player-back:hover,
-.video-player-queue-controls button:hover,
-.video-player-nav-button:hover {
+.video-player-back:hover {
   transform: translateY(-1px);
   border-color: var(--line-strong);
   background: var(--surface-3);
 }
 
-.video-player-nav {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
-  margin-left: auto;
+.video-player-back:active {
+  transform: translateY(0) scale(0.97);
+  background: var(--surface-3);
 }
 
-.video-player-nav-button {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--surface-2);
-  color: var(--text);
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    transform 140ms ease,
-    background 140ms ease,
-    border-color 140ms ease;
+.video-player-back:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
 }
 
 .video-player-title {
@@ -10460,15 +10437,6 @@ body {
   gap: 10px;
   min-width: 0;
   flex: 1 1 auto;
-}
-
-.video-player-title .eyebrow,
-.video-player-queue-heading .eyebrow {
-  margin: 0;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
 }
 
 .video-player-title h1 {
@@ -10492,10 +10460,6 @@ body {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-}
-
-.video-player-mode-label {
-  display: none;
 }
 
 .video-player-stage {
@@ -10684,15 +10648,6 @@ body {
   min-height: 0;
 }
 
-.video-player-queue-heading .eyebrow {
-  display: none;
-}
-
-.video-player-queue-controls {
-  display: flex;
-  gap: 4px;
-}
-
 .video-player-queue-summary {
   display: flex;
   align-items: baseline;
@@ -10705,13 +10660,6 @@ body {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.01em;
-}
-
-.video-player-queue-controls button {
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  font-size: 20px;
 }
 
 .video-player-queue-strip {
@@ -10995,10 +10943,6 @@ body {
   .video-player-back {
     width: 34px;
     height: 34px;
-  }
-
-  .video-player-mode-label {
-    display: none;
   }
 
   .video-player-stage {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import VideoPlayer from "../design/components/VideoPlayer";
+import { ChevronLeftIcon, ChevronRightIcon } from "../design/components/icons";
 import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { formatDuration } from "../engine/utils/time";
 import type { MediaItem } from "../engine/types/media";
@@ -104,7 +105,7 @@ export default function VideoPlayerScreen({
           aria-label="Back to previous screen"
           title="Back to previous screen"
         >
-          ‹
+          <ChevronLeftIcon size={17} strokeWidth={2.1} />
         </button>
         <div className="video-player-title">
           <h1 title={item.name}>{item.name}</h1>
@@ -112,26 +113,6 @@ export default function VideoPlayerScreen({
             {formatDuration(time)} / {formatDuration(duration || item.duration || 0)}
             {currentIndex >= 0 ? ` · ${currentIndex + 1} of ${queue.length}` : ""}
           </span>
-        </div>
-        <div className="video-player-nav" role="group" aria-label="Video navigation">
-          <button
-            type="button"
-            className="video-player-nav-button"
-            onClick={onPrevious}
-            aria-label="Previous video"
-            title="Previous video"
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            className="video-player-nav-button"
-            onClick={() => void onNext()}
-            aria-label="Next video"
-            title="Next video"
-          >
-            ›
-          </button>
         </div>
       </header>
 
@@ -143,7 +124,7 @@ export default function VideoPlayerScreen({
           aria-label="Previous video"
           title="Previous video"
         >
-          ‹
+          <ChevronLeftIcon size={21} strokeWidth={2.1} />
         </button>
         <VideoPlayer
           itemId={item.id}
@@ -165,7 +146,7 @@ export default function VideoPlayerScreen({
           aria-label="Next video"
           title="Next video"
         >
-          ›
+          <ChevronRightIcon size={21} strokeWidth={2.1} />
         </button>
       </div>
 
@@ -177,14 +158,6 @@ export default function VideoPlayerScreen({
               {queue.length === 1 ? "1 video" : `${queue.length} videos`}
               {queueHasMore ? " · scroll for more" : ""}
             </span>
-          </div>
-          <div className="video-player-queue-controls">
-            <button type="button" onClick={onPrevious} aria-label="Previous video">
-              ‹
-            </button>
-            <button type="button" onClick={() => void onNext()} aria-label="Next video">
-              ›
-            </button>
           </div>
         </div>
         <div
