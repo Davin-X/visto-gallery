@@ -887,6 +887,10 @@ function App() {
         // are deliberately presentation-only: flipping busy per event made
         // the global overlay flash between Trash batches and exposed controls
         // while Finder was still moving files.
+        // Don't let scan/import progress overwrite an active trash operation,
+        // otherwise the overlay would show "Scanning…" while files are being
+        // trashed and the Cancel button would target the wrong operation.
+        if (liveRef.current.library.progress?.phase === "trashing") return;
         liveRef.current.library.setProgress({
           phase,
           processed,
