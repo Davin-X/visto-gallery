@@ -3213,7 +3213,16 @@ body {
 }
 
 .app-body {
-  transition: grid-template-columns 0.22s ease;
+  transition: grid-template-columns 0.26s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Honor the "reduce motion" setting. */
+.app-frame.no-transitions,
+.app-frame.no-transitions *,
+.app-frame.no-transitions *::before,
+.app-frame.no-transitions *::after {
+  transition: none !important;
+  animation: none !important;
 }
 
 .app-body.sidebar-closed .sidebar {
@@ -3224,31 +3233,30 @@ body {
 .sidebar-collapse-toggle {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   margin-left: auto;
   padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface-2);
-  color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--faint);
   cursor: pointer;
   flex: 0 0 auto;
   transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease,
-    transform 0.15s ease;
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    transform 0.12s ease;
 }
 
 .sidebar-collapse-toggle:hover {
   background: var(--surface-3);
-  border-color: var(--line-strong);
   color: var(--text);
 }
 
 .sidebar-collapse-toggle:active {
-  transform: scale(0.94);
+  transform: scale(0.9);
 }
 
 .sidebar-collapse-toggle:focus-visible {
@@ -3257,19 +3265,39 @@ body {
 }
 
 .sidebar-collapse-toggle[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
   background: var(--blue-soft);
   color: var(--accent-text);
+}
+
+.sidebar-collapse-toggle[aria-pressed="true"]:hover {
+  background: var(--blue-soft);
+  border-color: color-mix(in srgb, var(--accent) 46%, transparent);
+}
+
+/* Icons ease their rail-mode scale in both directions during the toggle. */
+.nav-icon,
+.sources-entry-icon {
+  transition: transform 0.26s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /* Rail mode: the sidebar shrinks to icons instead of disappearing.
    Scoped above the tablet breakpoint, where the sidebar is an overlay. */
 @media (min-width: 901px) {
   .app-body.sidebar-collapsed {
-    grid-template-columns: 60px minmax(0, 1fr);
+    grid-template-columns: 62px minmax(0, 1fr);
   }
   .app-body.sidebar-collapsed .sidebar {
-    padding: 25px 8px 13px;
+    /* Clip label text during the column animation instead of letting it
+       wrap or overflow into the content pane. */
+    overflow: hidden;
+    padding: 25px 9px 13px;
+  }
+  /* Keep labels on one line so they never wrap mid-transition. */
+  .app-body.sidebar-collapsed .nav-item,
+  .app-body.sidebar-collapsed .sources-entry,
+  .app-body.sidebar-collapsed .sidebar-label {
+    white-space: nowrap;
   }
   .app-body.sidebar-collapsed .sidebar-label {
     justify-content: center;
@@ -3281,21 +3309,33 @@ body {
   .app-body.sidebar-collapsed .sidebar-collapse-toggle {
     margin-left: 0;
   }
-  /* Nav: icon-only items with their existing titles as tooltips. */
+  /* Nav: square icon-only buttons, slightly larger glyph, tooltips via title. */
   .app-body.sidebar-collapsed .nav-item {
     grid-template-columns: 1fr;
     justify-items: center;
     gap: 0;
-    padding: 9px 6px;
+    width: 40px;
+    margin: 0 auto;
+    padding: 8px 0;
+    border-radius: 9px;
+  }
+  .app-body.sidebar-collapsed .nav-icon {
+    transform: scale(1.08);
   }
   .app-body.sidebar-collapsed .nav-item > span:last-child {
     display: none;
   }
-  /* Sources entry: folder icon only. */
+  /* Sources entry: square icon-only button with its accent tint. */
   .app-body.sidebar-collapsed .sources-entry {
     grid-template-columns: 1fr;
     justify-items: center;
-    padding: 9px;
+    width: 40px;
+    margin: 0 auto;
+    padding: 8px 0;
+    border-radius: 9px;
+  }
+  .app-body.sidebar-collapsed .sources-entry-icon {
+    transform: scale(1.05);
   }
   .app-body.sidebar-collapsed .sources-entry-text,
   .app-body.sidebar-collapsed .sources-entry-action {
