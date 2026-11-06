@@ -14,6 +14,7 @@ import {
   FolderIcon,
   InspectorIcon,
   EyeOffIcon,
+  PanelLeftIcon,
 } from "../design/components/icons";
 import { ACCENT_PALETTE } from "../engine/stores";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
@@ -134,7 +135,7 @@ export function AppTopBar({
           title={sidebarOpen ? "Hide sidebar (⌥⌘S)" : "Show sidebar (⌥⌘S)"}
           onClick={onToggleSidebar}
         >
-          <LibraryIcon size={18} />
+          <PanelLeftIcon size={18} />
         </button>
         <button
           className="icon-button"
@@ -210,6 +211,8 @@ interface AppSidebarProps {
   updateAvailable: boolean;
   updateVersion: string | null;
   appVersion: string;
+  sidebarCollapsed: boolean;
+  onToggleCollapse: () => void;
   onOpenScreen: (screen: Screen) => void;
   onOpenSources: () => void;
   onOpenUpdate: () => void;
@@ -223,6 +226,8 @@ export function AppSidebar({
   updateAvailable,
   updateVersion,
   appVersion,
+  sidebarCollapsed,
+  onToggleCollapse,
   onOpenScreen,
   onOpenSources,
   onOpenUpdate,
@@ -234,7 +239,19 @@ export function AppSidebar({
     <aside className="sidebar">
       <div className="sidebar-scroll">
         <div className="sidebar-header">
-          <div className="sidebar-label">WORKSPACE</div>
+          <div className="sidebar-label">
+            <span className="sidebar-label-text">WORKSPACE</span>
+            <button
+              type="button"
+              className="sidebar-collapse-toggle"
+              onClick={onToggleCollapse}
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-pressed={sidebarCollapsed}
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <PanelLeftIcon size={14} strokeWidth={2} />
+            </button>
+          </div>
           <nav className="primary-nav" aria-label="Main navigation">
             {NAV_ITEMS.map(({ label, Icon, screen: target }) => {
               return (

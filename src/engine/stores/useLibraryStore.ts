@@ -71,6 +71,9 @@ interface LibraryState {
   sortOrder: "asc" | "desc";
   showInspector: boolean;
   sidebarOpen: boolean;
+  // Rail mode collapses the sidebar to icons while it stays visible.
+  // Distinct from `sidebarOpen`, which hides the sidebar entirely.
+  sidebarCollapsed: boolean;
   activeAlbum: string | null;
   activeSmartAlbum: string | null;
   // Source filter (a library folder path). Independent of `filter`, which is
@@ -180,6 +183,7 @@ interface LibraryState {
   getCurrentLibraryFilter: () => LibraryFilterDTO;
   toggleInspector: () => void;
   toggleSidebar: () => void;
+  toggleSidebarCollapsed: () => void;
   setActiveAlbum: (albumId: string | null) => void;
 
   // Actions - Items
@@ -447,6 +451,7 @@ export const useLibraryStore = create<LibraryState>()(
       sortOrder: "desc",
       showInspector: true,
       sidebarOpen: true,
+      sidebarCollapsed: false,
       activeAlbum: null,
       activeSmartAlbum: null,
       activeSource: null,
@@ -955,6 +960,7 @@ export const useLibraryStore = create<LibraryState>()(
       getCurrentLibraryFilter: () => currentLibraryFilter(get()),
       toggleInspector: () => set((s) => ({ showInspector: !s.showInspector })),
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+      toggleSidebarCollapsed: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 
       setActiveAlbum: (albumId) => {
         set({

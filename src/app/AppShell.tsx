@@ -6,6 +6,7 @@ interface AppShellProps {
   animateTransitions: boolean;
   sidebarWidth: number;
   sidebarOpen: boolean;
+  sidebarCollapsed: boolean;
   topbar: ReactNode;
   sidebar: ReactNode;
   overlays?: ReactNode;
@@ -17,6 +18,7 @@ export function AppShell({
   animateTransitions,
   sidebarWidth,
   sidebarOpen,
+  sidebarCollapsed,
   topbar,
   sidebar,
   overlays,
@@ -32,7 +34,11 @@ export function AppShell({
           Skip to main content
         </a>
         {topbar}
-        <div className={`app-body ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
+        <div
+          className={`app-body ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}${
+            sidebarCollapsed ? " sidebar-collapsed" : ""
+          }`}
+        >
           {sidebar}
           {children}
         </div>

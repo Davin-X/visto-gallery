@@ -3212,8 +3212,120 @@ body {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.app-body {
+  transition: grid-template-columns 0.22s ease;
+}
+
 .app-body.sidebar-closed .sidebar {
   display: none;
+}
+
+/* Inline expand/collapse toggle for the left sidebar. */
+.sidebar-collapse-toggle {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.sidebar-collapse-toggle:hover {
+  background: var(--surface-3);
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.sidebar-collapse-toggle:active {
+  transform: scale(0.94);
+}
+
+.sidebar-collapse-toggle:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.sidebar-collapse-toggle[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  background: var(--blue-soft);
+  color: var(--accent-text);
+}
+
+/* Rail mode: the sidebar shrinks to icons instead of disappearing.
+   Scoped above the tablet breakpoint, where the sidebar is an overlay. */
+@media (min-width: 901px) {
+  .app-body.sidebar-collapsed {
+    grid-template-columns: 60px minmax(0, 1fr);
+  }
+  .app-body.sidebar-collapsed .sidebar {
+    padding: 25px 8px 13px;
+  }
+  .app-body.sidebar-collapsed .sidebar-label {
+    justify-content: center;
+    padding: 0;
+  }
+  .app-body.sidebar-collapsed .sidebar-label-text {
+    display: none;
+  }
+  .app-body.sidebar-collapsed .sidebar-collapse-toggle {
+    margin-left: 0;
+  }
+  /* Nav: icon-only items with their existing titles as tooltips. */
+  .app-body.sidebar-collapsed .nav-item {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 0;
+    padding: 9px 6px;
+  }
+  .app-body.sidebar-collapsed .nav-item > span:last-child {
+    display: none;
+  }
+  /* Sources entry: folder icon only. */
+  .app-body.sidebar-collapsed .sources-entry {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    padding: 9px;
+  }
+  .app-body.sidebar-collapsed .sources-entry-text,
+  .app-body.sidebar-collapsed .sources-entry-action {
+    display: none;
+  }
+  /* LIBRARY stats block is hidden in rail mode. */
+  .app-body.sidebar-collapsed .sidebar-section {
+    display: none;
+  }
+  /* Footer: health dot and update dot only. */
+  .app-body.sidebar-collapsed .sidebar-footer {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 8px;
+  }
+  .app-body.sidebar-collapsed .sidebar-health {
+    font-size: 0;
+    gap: 0;
+  }
+  .app-body.sidebar-collapsed .sidebar-version {
+    display: none;
+  }
+  .app-body.sidebar-collapsed .sidebar-version-group {
+    gap: 0;
+  }
+  .app-body.sidebar-collapsed .update-badge {
+    font-size: 0;
+    gap: 0;
+  }
 }
 
 .sidebar-label {
@@ -4964,7 +5076,8 @@ body {
      sidebar modifier is included in the selector. */
   .app-body,
   .app-body.sidebar-open,
-  .app-body.sidebar-closed {
+  .app-body.sidebar-closed,
+  .app-body.sidebar-collapsed {
     grid-template-columns: minmax(0, 1fr);
   }
   .sidebar {
@@ -4982,6 +5095,9 @@ body {
   }
   .app-body.sidebar-closed .sidebar {
     transform: translateX(-100%);
+  }
+  .sidebar-collapse-toggle {
+    display: none;
   }
   .library-layout.with-inspector {
     grid-template-columns: minmax(0, 1fr);

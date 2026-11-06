@@ -2053,6 +2053,7 @@ function App() {
       animateTransitions={animateTransitions}
       sidebarWidth={sidebarWidth}
       sidebarOpen={library.sidebarOpen}
+      sidebarCollapsed={library.sidebarCollapsed}
       topbar={
         <AppTopBar
           screen={screen}
@@ -2117,6 +2118,8 @@ function App() {
           onOpenScreen={openScreen}
           onOpenSources={() => setSourcesSheetOpen(true)}
           onOpenUpdate={() => setUpdateDialogOpen(true)}
+          sidebarCollapsed={library.sidebarCollapsed}
+          onToggleCollapse={library.toggleSidebarCollapsed}
         />
       }
       overlays={
