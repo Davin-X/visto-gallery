@@ -2,9 +2,71 @@ use super::*;
 use crate::AppState;
 use image::{DynamicImage, ImageEncoder};
 use serde_json::json;
+use std::collections::HashSet;
 use std::io::Write;
 use std::path::PathBuf;
 use tauri::{State, Window};
+
+/// Load the subset of `paths` that currently exist as catalog rows.
+async fn cataloged_paths(
+    db: &sqlx::SqlitePool,
+    paths: &[String],
+) -> Result<HashSet<String>, String> {
+    let mut found = HashSet::new();
+    // Keep the IN list below SQLite's default parameter limit.
+    for chunk in paths.chunks(400) {
+        let mut query =
+            sqlx::QueryBuilder::<sqlx::Sqlite>::new("SELECT path FROM media_items WHERE path IN (");
+        {
+            let mut separated = query.separated(", ");
+            for path in chunk {
+                separated.push_bind(path);
+            }
+        }
+        query.push(")");
+        let rows: Vec<String> = query
+            .build_query_scalar()
+            .fetch_all(db)
+            .await
+            .map_err(|e| e.to_string())?;
+        found.extend(rows);
+    }
+    Ok(found)
+}
+
+/// Decide whether a single path may be moved to Trash.
+///
+/// A path is eligible only when it is a regular file (never a symlink) and it
+/// is either a catalog row or canonically inside one of the registered library
+/// folders. This stops a renderer bug or a compromised webview from trashing
+/// arbitrary user files through a single IPC call.
+fn validate_trash_path(
+    path: &str,
+    cataloged: &HashSet<String>,
+    registered: &[String],
+) -> Result<(), String> {
+    let metadata = std::fs::symlink_metadata(path)
+        .map_err(|_| "File no longer exists on disk.".to_string())?;
+    if metadata.file_type().is_symlink() {
+        return Err("Refusing to move a symbolic link to Trash.".to_string());
+    }
+    if !metadata.is_file() {
+        return Err("Only regular files can be moved to Trash.".to_string());
+    }
+    if cataloged.contains(path) {
+        return Ok(());
+    }
+    if registered.is_empty() {
+        return Err(
+            "File is not in the catalog and no library folders are registered.".to_string(),
+        );
+    }
+    if is_path_under_registered_roots(path, registered) {
+        Ok(())
+    } else {
+        Err("Path is outside registered library folders and not in the catalog.".to_string())
+    }
+}
 
 #[tauri::command]
 pub async fn move_to_trash(
@@ -15,15 +77,31 @@ pub async fn move_to_trash(
     super::TRASH_CANCEL.store(false, Ordering::SeqCst);
 
     let db = super::get_db(&state)?;
+    let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
+        .fetch_all(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    let cataloged = cataloged_paths(&db, &paths).await?;
 
-    // Only trash paths that exist on disk. Files not in the catalog can still be
-    // trashed if they exist (e.g. imported outside the app).
-    let paths: Vec<String> = paths
-        .into_iter()
-        .filter(|p| std::path::Path::new(p).exists())
-        .collect();
+    // Take ownership of the request before shadowing `paths` with the
+    // validated subset.
+    let requested = paths;
+
+    // Never silently drop a requested path: every rejected path is reported
+    // back to the caller so the UI can explain what did not happen.
+    let mut failed = Vec::new();
+    let mut paths: Vec<String> = Vec::with_capacity(requested.len());
+    for path in requested {
+        match validate_trash_path(&path, &cataloged, &registered) {
+            Ok(()) => paths.push(path),
+            Err(error) => failed.push(TrashError { path, error }),
+        }
+    }
     if paths.is_empty() {
-        return Err("Selected items no longer exist on disk.".to_string());
+        return Ok(TrashResult {
+            trashed: Vec::new(),
+            failed,
+        });
     }
 
     let _ = window.emit(
@@ -36,7 +114,6 @@ pub async fn move_to_trash(
     );
 
     let mut trashed = Vec::new();
-    let mut failed = Vec::new();
 
     // Trash in chunks using trash::delete_all, which moves many files in a
     // single OS-level operation (much faster than one-by-one). Fall back to
@@ -1230,5 +1307,116 @@ mod in_place_format_tests {
     #[test]
     fn files_without_extension_are_rejected() {
         assert!(validate_in_place_format("no_extension").is_err());
+    }
+}
+
+#[cfg(test)]
+mod trash_validation_tests {
+    use super::validate_trash_path;
+    use std::collections::HashSet;
+    use std::path::{Path, PathBuf};
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("visto-trash-test-{label}-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&path).expect("create temp dir");
+        path
+    }
+
+    fn write_file(path: &Path) {
+        std::fs::write(path, b"data").expect("write file");
+    }
+
+    fn cataloged(paths: &[&Path]) -> HashSet<String> {
+        paths
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn cataloged_file_is_allowed_even_outside_roots() {
+        let dir = temp_dir("cataloged");
+        let file = dir.join("a.jpg");
+        write_file(&file);
+        let registered = vec!["/some/other/root".to_string()];
+
+        assert!(
+            validate_trash_path(file.to_str().unwrap(), &cataloged(&[&file]), &registered).is_ok()
+        );
+    }
+
+    #[test]
+    fn uncataloged_file_inside_registered_root_is_allowed() {
+        let dir = temp_dir("inside-root");
+        let file = dir.join("a.jpg");
+        write_file(&file);
+        let registered = vec![dir.to_string_lossy().into_owned()];
+
+        assert!(validate_trash_path(file.to_str().unwrap(), &HashSet::new(), &registered).is_ok());
+    }
+
+    #[test]
+    fn uncataloged_file_outside_registered_root_is_rejected() {
+        let root = temp_dir("root");
+        let outside = temp_dir("outside");
+        let file = outside.join("a.jpg");
+        write_file(&file);
+        let registered = vec![root.to_string_lossy().into_owned()];
+
+        let error = validate_trash_path(file.to_str().unwrap(), &HashSet::new(), &registered)
+            .expect_err("outside root should be rejected");
+        assert!(error.contains("outside registered library folders"));
+    }
+
+    #[test]
+    fn path_traversal_cannot_escape_a_root() {
+        let root = temp_dir("traversal-root");
+        let outside = temp_dir("traversal-outside");
+        let file = outside.join("a.jpg");
+        write_file(&file);
+        let registered = vec![root.to_string_lossy().into_owned()];
+        let escaped = root
+            .join("..")
+            .join(outside.file_name().unwrap())
+            .join("a.jpg");
+
+        assert!(
+            validate_trash_path(escaped.to_str().unwrap(), &HashSet::new(), &registered).is_err()
+        );
+    }
+
+    #[test]
+    fn missing_file_is_rejected() {
+        let dir = temp_dir("missing");
+        let file = dir.join("gone.jpg");
+
+        let error = validate_trash_path(file.to_str().unwrap(), &HashSet::new(), &[])
+            .expect_err("missing file should be rejected");
+        assert!(error.contains("no longer exists"));
+    }
+
+    #[test]
+    fn symlinks_are_rejected() {
+        let dir = temp_dir("symlink");
+        let target = dir.join("target.jpg");
+        write_file(&target);
+        let link = dir.join("link.jpg");
+        std::os::unix::fs::symlink(&target, &link).expect("create symlink");
+        let registered = vec![dir.to_string_lossy().into_owned()];
+
+        let error = validate_trash_path(link.to_str().unwrap(), &HashSet::new(), &registered)
+            .expect_err("symlink should be rejected");
+        assert!(error.contains("symbolic link"));
+    }
+
+    #[test]
+    fn directories_are_rejected() {
+        let dir = temp_dir("directories");
+        let registered = vec![dir.to_string_lossy().into_owned()];
+
+        let error = validate_trash_path(dir.to_str().unwrap(), &HashSet::new(), &registered)
+            .expect_err("directory should be rejected");
+        assert!(error.contains("Only regular files"));
     }
 }
