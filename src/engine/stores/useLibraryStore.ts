@@ -218,7 +218,6 @@ interface LibraryState {
   // Actions - UI
   setBusy: (busy: boolean) => void;
   setProgress: (progress: LibraryState["progress"]) => void;
-  setBusyProgress: (busy: boolean, progress: LibraryState["progress"] | null) => void;
   showNotice: (text: string) => void;
 }
 
@@ -1573,8 +1572,6 @@ export const useLibraryStore = create<LibraryState>()(
       // UI
       setBusy: (busy) => set({ busy, ...(busy ? {} : { canceling: false }) }),
       setProgress: (progress) => set({ progress }),
-      setBusyProgress: (busy, progress) =>
-        set({ busy, progress, ...(busy ? {} : { canceling: false }) }),
       showNotice: (text) => {
         set({ notice: text });
         if (text) {

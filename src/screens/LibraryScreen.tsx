@@ -137,7 +137,7 @@ interface LibraryScreenProps {
   onToggleInspector: () => void;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
-  onDeleteItems: (ids: string[]) => void | Promise<unknown>;
+  onDeleteItems: (ids: string[]) => void | Promise<{ trashed: number; failed: number; error?: string }>;
   onUpdateTags: (id: string, tags: string[]) => void | Promise<void>;
   query: string;
   minRating: number | null;
