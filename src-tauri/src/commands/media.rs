@@ -141,6 +141,17 @@ fn escape_applescript_string(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+/// AppleScript reports a refused Automation permission as `-1743`
+/// (errAEEventNotPermitted) or with one of these messages. Nothing has moved at
+/// that point, so it is safe to retry the batch through a non-AppleScript path.
+#[cfg(target_os = "macos")]
+fn is_apple_events_denied(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    message.contains("-1743")
+        || lower.contains("not authorized to send apple events")
+        || lower.contains("not allowed to send apple events")
+}
+
 #[cfg(target_os = "macos")]
 fn trash_via_finder(paths: &[String]) -> Result<(), String> {
     // One osascript call tells Finder to delete every path in this batch.
@@ -178,7 +189,21 @@ impl TrashSink for OsTrash {
     fn delete_all(&self, paths: &[String]) -> Result<(), String> {
         #[cfg(target_os = "macos")]
         {
-            trash_via_finder(paths)
+            match trash_via_finder(paths) {
+                Ok(()) => Ok(()),
+                // Finder Automation is a TCC permission the user can refuse, and
+                // it is the only path that supports "Put Back". Falling back to
+                // NSFileManager keeps deleting working instead of failing every
+                // batch (and the per-file retry) with a permission error.
+                Err(error) if is_apple_events_denied(&error) => {
+                    eprintln!(
+                        "Finder automation is unavailable ({}); trashing with NSFileManager instead.",
+                        error.trim()
+                    );
+                    trash::delete_all(paths).map_err(|e| e.to_string())
+                }
+                Err(error) => Err(error),
+            }
         }
         #[cfg(not(target_os = "macos"))]
         {
@@ -232,11 +257,9 @@ where
             chunk.first().map(|(_, path)| path.as_str()),
         );
 
-        let chunk_paths: Vec<String> = chunk.iter().map(|(_, path)| path.clone()).collect();
         let batch_sink = Arc::clone(&sink);
-        let batch_paths = chunk_paths.clone();
-        let result =
-            tokio::task::spawn_blocking(move || batch_sink.delete_all(&batch_paths)).await;
+        let batch_paths: Vec<String> = chunk.iter().map(|(_, path)| path.clone()).collect();
+        let result = tokio::task::spawn_blocking(move || batch_sink.delete_all(&batch_paths)).await;
 
         match result {
             Ok(Ok(())) => {
@@ -255,8 +278,10 @@ where
                     }
                     let single_sink = Arc::clone(&sink);
                     let single_path = path.clone();
-                    match tokio::task::spawn_blocking(move || single_sink.delete_all(&[single_path]))
-                        .await
+                    match tokio::task::spawn_blocking(move || {
+                        single_sink.delete_all(&[single_path])
+                    })
+                    .await
                     {
                         Ok(Ok(())) => trashed.push(id.clone()),
                         Ok(Err(e)) => failed.push(TrashError {
@@ -271,10 +296,16 @@ where
                 }
             }
             Err(e) => {
-                failed.push(TrashError {
-                    id: chunk.first().map(|(id, _)| id.clone()).unwrap_or_default(),
-                    error: format!("Trash task failed: {}", e),
-                });
+                // The blocking task panicked or was cancelled mid-batch, so we
+                // cannot claim any of these files moved. Report every id in the
+                // chunk: dropping them would leave rows that the UI believes
+                // are still deletable attached to files that may be gone.
+                for (id, _) in chunk {
+                    failed.push(TrashError {
+                        id: id.clone(),
+                        error: format!("Trash task failed: {}", e),
+                    });
+                }
             }
         }
 
@@ -283,33 +314,62 @@ where
 
     progress(total, total, None);
 
+    // The files are already in the Trash at this point, so a catalog failure
+    // must be reported as a warning rather than an error: returning Err would
+    // tell the user the delete failed while their files are gone, and the UI
+    // would keep rows that can no longer be trashed.
+    let mut catalog_error = None;
     if !trashed.is_empty() {
-        let mut transaction = db.begin().await.map_err(|e| e.to_string())?;
-        let mut backup_files = Vec::new();
-        for id in &trashed {
-            // Collect journaled originals before the FK cascade removes their
-            // rows, so the files do not linger in app data forever.
-            let backups: Vec<String> =
-                sqlx::query_scalar("SELECT backup_path FROM edit_backups WHERE media_id = ?")
-                    .bind(id)
-                    .fetch_all(&mut *transaction)
-                    .await
-                    .map_err(|e| e.to_string())?;
-            backup_files.extend(backups);
-
-            sqlx::query("DELETE FROM media_items WHERE id = ?")
-                .bind(id)
-                .execute(&mut *transaction)
-                .await
-                .map_err(|e| e.to_string())?;
-        }
-        transaction.commit().await.map_err(|e| e.to_string())?;
-        for backup in backup_files {
-            let _ = std::fs::remove_file(backup);
+        match remove_trashed_rows(db, &trashed).await {
+            Ok(backup_files) => {
+                for backup in backup_files {
+                    let _ = std::fs::remove_file(backup);
+                }
+            }
+            Err(error) => catalog_error = Some(error),
         }
     }
 
-    Ok(TrashResult { trashed, failed })
+    Ok(TrashResult {
+        trashed,
+        failed,
+        catalog_error,
+    })
+}
+
+/// Delete the catalog rows for `trashed` ids in one transaction, returning the
+/// journaled edit originals that were attached to them.
+async fn remove_trashed_rows(
+    db: &sqlx::SqlitePool,
+    trashed: &[String],
+) -> Result<Vec<String>, String> {
+    let mut transaction = db
+        .begin()
+        .await
+        .map_err(|e| format!("could not update the catalog: {}", e))?;
+    let mut backup_files = Vec::new();
+    for id in trashed {
+        // Collect journaled originals before the FK cascade removes their rows,
+        // so the files do not linger in app data forever.
+        let backups: Vec<String> =
+            sqlx::query_scalar("SELECT backup_path FROM edit_backups WHERE media_id = ?")
+                .bind(id)
+                .fetch_all(&mut *transaction)
+                .await
+                .map_err(|e| format!("could not read edit backups: {}", e))?;
+        backup_files.extend(backups);
+
+        sqlx::query("DELETE FROM media_items WHERE id = ?")
+            .bind(id)
+            .execute(&mut *transaction)
+            .await
+            .map_err(|e| format!("could not delete catalog row: {}", e))?;
+    }
+    transaction
+        .commit()
+        .await
+        .map_err(|e| format!("could not commit the catalog update: {}", e))?;
+    Ok(backup_files)
 }
 
 #[tauri::command]
@@ -331,6 +391,7 @@ pub async fn move_to_trash(
         return Ok(TrashResult {
             trashed: Vec::new(),
             failed,
+            catalog_error: None,
         });
     }
 
@@ -378,6 +439,7 @@ pub async fn move_to_trash(
     Ok(TrashResult {
         trashed: outcome.trashed,
         failed,
+        catalog_error: outcome.catalog_error,
     })
 }
 
@@ -2012,6 +2074,95 @@ mod trash_flow_tests {
         assert_eq!(outcome.failed[0].id, "bad");
         assert!(outcome.failed[0].error.contains("permission denied"));
         assert_eq!(catalog_ids(&db).await, vec!["bad"]);
+    }
+
+    /// A panicking sink makes `spawn_blocking` return a JoinError. Every id in
+    /// that chunk must be reported, otherwise the rows stay in the catalog
+    /// while the UI believes nothing happened to them.
+    struct PanickingTrash;
+
+    impl TrashSink for PanickingTrash {
+        fn delete_all(&self, _paths: &[String]) -> Result<(), String> {
+            panic!("trash backend panicked");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_panicking_trash_reports_every_id_in_the_chunk() {
+        let db = test_db().await;
+        let dir = temp_dir("panic");
+        let mut targets = Vec::new();
+        for name in ["a", "b", "c"] {
+            let path = dir.join(format!("{name}.jpg"));
+            write_file(&path);
+            insert_item(&db, name, &path).await;
+            targets.push((name.to_string(), path.to_string_lossy().into_owned()));
+        }
+
+        let sink: Arc<dyn TrashSink> = Arc::new(PanickingTrash);
+        let outcome = execute_trash(&db, targets, sink, |_, _, _| {})
+            .await
+            .expect("trash targets");
+
+        assert!(outcome.trashed.is_empty());
+        let ids: Vec<&str> = outcome.failed.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(ids, vec!["a", "b", "c"], "every id must be reported");
+        assert!(outcome.failed[0].error.contains("Trash task failed"));
+        // Nothing was reported as trashed, so every row must still be there.
+        assert_eq!(catalog_ids(&db).await, vec!["a", "b", "c"]);
+    }
+
+    /// The files are already in the Trash when the catalog update runs, so a
+    /// failure there is a warning, not a failed delete.
+    #[tokio::test]
+    async fn a_catalog_failure_is_a_warning_not_a_failed_delete() {
+        let db = test_db().await;
+        let dir = temp_dir("catalog");
+        let a = dir.join("a.jpg");
+        write_file(&a);
+        insert_item(&db, "a", &a).await;
+        sqlx::query("DROP TABLE edit_backups")
+            .execute(&db)
+            .await
+            .expect("drop edit_backups");
+
+        let sink: Arc<dyn TrashSink> = Arc::new(FakeTrash::default());
+        let outcome = execute_trash(
+            &db,
+            vec![("a".to_string(), a.to_string_lossy().into_owned())],
+            sink,
+            |_, _, _| {},
+        )
+        .await
+        .expect("a catalog failure must not fail the delete");
+
+        assert_eq!(outcome.trashed, vec!["a".to_string()]);
+        let warning = outcome.catalog_error.expect("catalog warning expected");
+        assert!(
+            warning.contains("could not"),
+            "warning should explain the failure: {warning}"
+        );
+    }
+
+    /// The fallback decision depends on this classifier: only a refused
+    /// Automation permission means no file has moved yet.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn apple_events_denials_are_recognised() {
+        use super::is_apple_events_denied;
+
+        assert!(is_apple_events_denied(
+            "execution error: Not authorized to send Apple events to Finder. (-1743)"
+        ));
+        assert!(is_apple_events_denied(
+            "0:67: execution error: Finder got an error: Not allowed to send Apple events to Finder. (-1743)"
+        ));
+        assert!(is_apple_events_denied("osascript: error -1743"));
+        // A missing file must keep its error so the per-file retry can report
+        // the real reason instead of silently re-trashing the batch.
+        assert!(!is_apple_events_denied(
+            "execution error: Finder got an error: Can’t get POSIX file \"/tmp/gone.jpg\". (-1728)"
+        ));
     }
 }
 

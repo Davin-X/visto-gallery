@@ -20,7 +20,9 @@ const MAX_FIELD = 1500;
 
 function truncate(value: string | null | undefined, max: number): string | null {
   if (!value) return null;
-  return value.length > max ? `${value.slice(0, max)}\n… (truncated ${value.length - max} characters)` : value;
+  return value.length > max
+    ? `${value.slice(0, max)}\n… (truncated ${value.length - max} characters)`
+    : value;
 }
 
 export function buildCrashReport(

@@ -9009,6 +9009,10 @@ body {
 /* ===== Duplicate finder ===== */
 
 .duplicates-page {
+  /* components.css reads --control-height for quiet/primary/danger buttons.
+     Keep duplicates-page action controls aligned with the 32px toolbar row
+     (heading, selection bar, group actions). */
+  --control-height: 32px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -9020,14 +9024,15 @@ body {
   top: 0;
   z-index: 20;
   padding: 6px 0;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);.duplicates-page .page-subtitle {
-  margin: 2px 0 0;
-  font-size: 12px;
-}
-.duplicates-page .page-heading {
-  margin-bottom: 8px;
-  align-items: center;
-}
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  .duplicates-page .page-subtitle {
+    margin: 2px 0 0;
+    font-size: 12px;
+  }
+  .duplicates-page .page-heading {
+    margin-bottom: 8px;
+    align-items: center;
+  }
 
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -9042,80 +9047,6 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-/* Scan progress ------------------------------------------------------- */
-
-.duplicate-scan {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-2);
-}
-
-.duplicate-scan-pip {
-  flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: pulse 1.4s ease-in-out infinite;
-}
-
-.duplicate-scan-copy {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
-.duplicate-scan-title {
-  color: var(--ink);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.duplicate-scan-file {
-  overflow: hidden;
-  color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
-  font-size: 10px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.duplicate-scan-track {
-  height: 4px;
-  margin-top: 6px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--surface-3);
-}
-
-.duplicate-scan-fill {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--accent);
-  transition: width 220ms ease;
-}
-
-.duplicate-scan-track.is-indeterminate .duplicate-scan-fill {
-  width: 35%;
-  animation: duplicate-scan-slide 1.4s ease-in-out infinite;
-}
-
-@keyframes duplicate-scan-slide {
-  from {
-    transform: translateX(-120%);
-  }
-  to {
-    transform: translateX(320%);
-  }
 }
 
 /* Overview metrics ---------------------------------------------------- */
@@ -9246,9 +9177,55 @@ body {
   gap: 6px;
 }
 
-.duplicate-toolbar .sort-control {
+/* One control height for the whole toolbar, and one nested control height for
+   what sits inside those boxes. The shared .sort-control (40px),
+   .layout-switcher (38px) and .quiet-button (36px) otherwise leave the row
+   ragged next to the 32px filter tabs and keeper picker. */
+/* `.app-frame :is(.layout-switcher, …, .sort-control)` later in the cascade
+   pins those two to 38px, so these overrides have to carry the .app-frame
+   prefix to win without important. */
+.app-frame .duplicate-toolbar .sort-control,
+.app-frame .duplicate-toolbar .layout-switcher,
+.app-frame .duplicate-toolbar .quiet-button {
+  box-sizing: border-box;
   height: 32px;
+  min-height: 32px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.app-frame .duplicate-toolbar .sort-control {
+  padding: 3px;
   margin-left: 0;
+}
+
+.app-frame .duplicate-toolbar .sort-control select {
+  height: 24px;
+  font-size: 11px;
+}
+
+.app-frame .duplicate-toolbar .layout-switcher {
+  align-items: center;
+  padding: 2px;
+}
+
+.app-frame .duplicate-toolbar .layout-switcher button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  align-self: center;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.app-frame .duplicate-toolbar .quiet-button {
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .duplicate-keeper {
@@ -9307,7 +9284,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 4px 8px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface) 92%, transparent);
@@ -9348,6 +9325,14 @@ body {
   gap: 5px;
 }
 
+.duplicates-page .duplicate-selection-bar :is(.quiet-button, .danger-button) {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 /* Group cards --------------------------------------------------------- */
 
 .duplicate-groups {
@@ -9365,10 +9350,12 @@ body {
 
 .duplicate-group-head {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 16px;
+  gap: 14px;
+  min-height: 72px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--line);
   background: linear-gradient(
     180deg,
@@ -9381,13 +9368,15 @@ body {
   display: flex;
   flex: 1 1 auto;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   min-width: 0;
-  margin: -4px;
-  padding: 4px;
+  min-height: 0;
+  padding: 2px;
   border: 0;
   border-radius: 10px;
   background: transparent;
+  color: inherit;
+  font: inherit;
   text-align: left;
   cursor: pointer;
 }
@@ -9403,34 +9392,45 @@ body {
 
 .duplicate-group-copy {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 
 .duplicate-group-title {
   color: var(--ink);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
   transition: color 140ms ease;
 }
 
 .duplicate-group-sub {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
+  line-height: 1.3;
 }
 
 .duplicate-group-sub b {
   color: var(--green);
+  font-size: inherit;
   font-weight: 650;
 }
 
 .duplicate-group-hash {
+  align-self: flex-start;
+  max-width: 100%;
   overflow: hidden;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--surface-3);
   color: var(--faint);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
   font-size: 10px;
+  line-height: 1.5;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -9439,6 +9439,7 @@ body {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
+  margin-left: auto;
   color: var(--faint);
   transition: transform 180ms ease;
 }
@@ -9450,10 +9451,18 @@ body {
 .duplicate-group-actions {
   display: flex;
   flex: 0 0 auto;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
+}
+
+.duplicates-page .duplicate-group-actions .quiet-button,
+.duplicates-page .duplicate-header .page-heading-actions :is(.quiet-button, .primary-button) {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .duplicate-group-note {
@@ -9470,20 +9479,56 @@ body {
 .duplicate-stack {
   position: relative;
   flex: 0 0 auto;
-  width: 64px;
-  height: 44px;
+  width: 76px;
+  height: 54px;
+  /* Room for the fan's rotation and the count badge, so neither is clipped
+     by the group card's overflow. */
+  margin: 0 8px 4px 0;
 }
 
 .duplicate-stack-sheet {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  border: 3px solid var(--surface-2);
-  border-radius: 8px;
-  background: var(--surface-3);
-  box-shadow: 0 3px 8px rgba(12, 18, 26, 0.16);
-  transform: translateX(var(--stack-x, 0px)) rotate(var(--stack-r, 0deg));
+  border-radius: 7px;
   transition: transform 180ms ease;
+}
+
+/* Blank plates behind the keeper's thumbnail. */
+/* The copies behind the keeper show their own thumbnail, dimmed by a surface
+   veil so the fan reads as depth instead of a doubled image. */
+.duplicate-stack-sheet.is-back {
+  border: 1px solid var(--line-strong);
+  background: var(--surface-3);
+  box-shadow: 0 1px 2px rgba(12, 18, 26, 0.12);
+}
+
+.duplicate-stack-sheet.is-back::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--surface) 30%, transparent);
+}
+
+.duplicate-stack-sheet.is-back-near {
+  z-index: 1;
+  transform: translate(-9px, 3px) rotate(-7deg) scale(0.96);
+}
+
+.duplicate-stack-sheet.is-back-far {
+  z-index: 2;
+  transform: translate(-17px, 6px) rotate(-13deg) scale(0.92);
+}
+
+.duplicate-stack-sheet.is-back-far::after {
+  background: color-mix(in srgb, var(--surface) 48%, transparent);
+}
+
+.duplicate-stack-sheet.is-front {
+  z-index: 3;
+  border: 1px solid var(--line);
+  background: var(--surface-3);
+  box-shadow: 0 2px 7px rgba(12, 18, 26, 0.16);
 }
 
 .duplicate-stack-sheet img,
@@ -9495,30 +9540,47 @@ body {
 }
 
 .duplicate-stack-raw {
+  display: grid;
+  place-items: center;
   background: linear-gradient(135deg, var(--surface-3), var(--surface-2));
 }
 
-.duplicate-group-summary:hover .duplicate-stack-sheet {
-  transform: translateX(calc(var(--stack-x, 0px) * 1.45)) rotate(calc(var(--stack-r, 0deg) * 1.3));
+.duplicate-stack-raw .kind-badge {
+  padding: 1px 5px;
+  font-size: 9px;
+}
+
+.duplicate-group-summary:hover .duplicate-stack-sheet.is-back-near {
+  transform: translate(-13px, 3px) rotate(-10deg) scale(0.96);
+}
+
+.duplicate-group-summary:hover .duplicate-stack-sheet.is-back-far {
+  transform: translate(-23px, 7px) rotate(-17deg) scale(0.92);
 }
 
 .duplicate-stack-count {
   position: absolute;
-  right: -6px;
-  bottom: -6px;
-  z-index: 4;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
+  right: -9px;
+  bottom: -7px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
   border: 2px solid var(--surface-2);
   border-radius: 999px;
   background: var(--accent);
   color: var(--accent-contrast);
-  font-size: 10px;
+  font-family: inherit;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  line-height: 14px;
-  text-align: center;
+  letter-spacing: 0;
+  line-height: 1;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
 }
 
 /* Copy tiles ---------------------------------------------------------- */
@@ -9534,7 +9596,7 @@ body {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
   margin: 0;
 }
@@ -9607,17 +9669,21 @@ body {
   place-items: center;
   width: 18px;
   height: 18px;
-  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  /* Overlay chrome lives on top of photos, so it is built from theme tokens
+     instead of a fixed dark scrim: it inverts with the theme and the checked
+     state follows --accent-contrast. */
+  border: 1.5px solid color-mix(in srgb, var(--surface) 88%, transparent);
   border-radius: 50%;
-  background: rgba(10, 14, 20, 0.45);
-  color: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  background: color-mix(in srgb, var(--ink) 34%, transparent);
+  color: var(--surface);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--ink) 22%, transparent);
   pointer-events: none;
 }
 
 .duplicate-tile-check.is-on {
   border-color: var(--accent);
   background: var(--accent);
+  color: var(--accent-contrast);
 }
 
 .duplicate-tile-role {
@@ -9627,18 +9693,22 @@ body {
   z-index: 3;
   padding: 2px 7px;
   border-radius: 999px;
-  background: rgba(10, 14, 20, 0.58);
-  color: #fff;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 50%, transparent);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--ink);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 20%, transparent);
   pointer-events: none;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(8px);
 }
 
 .duplicate-tile-role.is-keeper {
+  border-color: transparent;
   background: var(--accent);
   color: var(--accent-contrast);
+  backdrop-filter: none;
 }
 
 .duplicate-tile-kind {
@@ -9652,7 +9722,7 @@ body {
 .duplicate-tile-caption {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
   padding: 0 2px;
 }
@@ -9679,41 +9749,62 @@ body {
   display: none;
 }
 
+/* Tools live over the photo instead of stealing width from the file name. */
 .duplicate-tile-tools {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  z-index: 4;
   display: flex;
-  flex: 0 0 auto;
-  gap: 2px;
-  opacity: 0.45;
-  transition: opacity 140ms ease;
+  gap: 3px;
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
 }
 
 .duplicate-tile:hover .duplicate-tile-tools,
 .duplicate-tile:focus-within .duplicate-tile-tools {
   opacity: 1;
+  transform: none;
 }
 
 .duplicate-tile-tool {
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
   width: 22px;
   height: 22px;
-  border: 0;
+  min-height: 22px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 50%, transparent);
   border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--ink);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 20%, transparent);
+  line-height: 0;
   cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.duplicate-tile-tool > svg {
+  display: block;
+  flex: 0 0 auto;
 }
 
 .duplicate-tile-tool:hover {
-  background: var(--surface-3);
-  color: var(--accent-text);
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 
 .duplicate-tile-meta {
   overflow: hidden;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
+  line-height: 1.35;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -9723,6 +9814,7 @@ body {
   color: var(--faint);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
   font-size: 10px;
+  line-height: 1.35;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -9915,6 +10007,332 @@ body {
     height: 46px;
   }
   .duplicate-selection-copy {
+    flex-wrap: wrap;
+  }
+}
+
+/* Compare overlay ------------------------------------------------------ */
+
+.compare-backdrop {
+  z-index: 320;
+}
+
+.compare-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(1120px, 100%);
+  max-height: min(92vh, 900px);
+  overflow: hidden;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+  animation: dialog-pop 0.15s ease;
+}
+
+.compare-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.compare-head h2 {
+  margin: 3px 0 0;
+  color: var(--ink);
+  font-family: "Manrope", sans-serif;
+  font-size: 19px;
+  letter-spacing: -0.03em;
+}
+
+.compare-head-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.compare-diff-count {
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--orange) 40%, var(--line));
+  border-radius: 999px;
+  background: var(--orange-soft);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.compare-diff-count.is-clean {
+  border-color: color-mix(in srgb, var(--green) 40%, var(--line));
+  background: color-mix(in srgb, var(--green) 14%, var(--surface));
+  color: var(--ink);
+}
+
+.compare-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.compare-copy-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.compare-copy-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.compare-copy-tab {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.compare-copy-tab.is-active {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.compare-arrow {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.compare-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.compare-zoom {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.compare-zoom input[type="range"] {
+  width: 120px;
+  accent-color: var(--accent);
+}
+
+.compare-zoom-button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.compare-zoom-value {
+  min-width: 40px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.compare-reset {
+  padding: 3px 9px;
+  font-size: 11px;
+}
+
+.compare-stage {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+  touch-action: none;
+}
+
+.compare-stage.is-zoomed {
+  cursor: grab;
+}
+
+.compare-stage.is-dragging {
+  cursor: grabbing;
+}
+
+.compare-pane {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+}
+
+.compare-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: clamp(200px, 34vh, 380px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-3);
+}
+
+.compare-image {
+  /* Absolute so the image's intrinsic size can't stretch the fixed-height
+     grid row and then get clipped by the frame. */
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform-origin: center center;
+  transition: transform 60ms linear;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.compare-stage.is-dragging .compare-image {
+  transition: none;
+}
+
+.compare-raw {
+  display: grid;
+  gap: 8px;
+  place-items: center;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.compare-caption {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.compare-role {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.compare-role.is-keeper {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.compare-name {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 650;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.compare-meta {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-table-wrap {
+  /* Takes whatever height the stage leaves, then scrolls internally instead of
+     pushing the dialog past its max height. */
+  flex: 1 1 auto;
+  min-height: 96px;
+  margin-top: 12px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.compare-table thead th {
+  position: sticky;
+  top: 0;
+  padding: 7px 12px;
+  background: var(--surface-2);
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.compare-table tbody th,
+.compare-table tbody td {
+  padding: 6px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--text);
+  text-align: left;
+  vertical-align: top;
+}
+
+.compare-table tbody th {
+  width: 110px;
+  color: var(--faint);
+  font-weight: 600;
+}
+
+.compare-table tbody td {
+  overflow-wrap: anywhere;
+}
+
+.compare-table tbody tr.is-diff {
+  background: color-mix(in srgb, var(--orange) 8%, transparent);
+}
+
+.compare-table tbody tr.is-diff td {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+@media (max-width: 760px) {
+  .compare-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .compare-toolbar {
     flex-wrap: wrap;
   }
 }

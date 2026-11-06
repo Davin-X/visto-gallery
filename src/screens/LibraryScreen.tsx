@@ -44,7 +44,7 @@ import { useThumbnailSize } from "../engine/stores/useSettingsStore";
 import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple, canPlayVideoInApp } from "../engine/utils/mediaTypes";
 import type { MediaItem, Album, Filter, LayoutMode } from "../engine/types/media";
-import type { LibraryFolder } from "../engine/types/commands";
+import type { DeleteItemsOutcome, LibraryFolder } from "../engine/types/commands";
 
 const GALLERY_PAGE_SIZE = 180;
 const VIRTUAL_GRID_OVERSCAN_ROWS = 6;
@@ -62,30 +62,21 @@ export function calculateVirtualGridWindow(
 ) {
   const totalRows = Math.ceil(itemCount / columns);
   const firstVisibleRow = Math.max(0, Math.floor(scrollTop / rowStride));
-  const lastVisibleRow = Math.min(
-    totalRows,
-    Math.ceil((scrollTop + viewportHeight) / rowStride),
-  );
+  const lastVisibleRow = Math.min(totalRows, Math.ceil((scrollTop + viewportHeight) / rowStride));
   const startRow = Math.max(0, firstVisibleRow - VIRTUAL_GRID_OVERSCAN_ROWS);
   const requestedEndRow = Math.min(
     totalRows,
     Math.max(lastVisibleRow + VIRTUAL_GRID_OVERSCAN_ROWS, startRow + 1),
   );
   // Cap the DOM even on very wide monitors with many grid columns.
-  const maxWindowRows = Math.max(
-    1,
-    Math.floor(MAX_VIRTUAL_GRID_ITEMS / columns),
-  );
+  const maxWindowRows = Math.max(1, Math.floor(MAX_VIRTUAL_GRID_ITEMS / columns));
   const endRow = Math.min(requestedEndRow, startRow + maxWindowRows);
 
   return {
     startIndex: startRow * columns,
     endIndex: Math.min(itemCount, endRow * columns),
     topSpacer: startRow ? Math.max(0, startRow * rowStride - gap) : 0,
-    bottomSpacer:
-      endRow < totalRows
-        ? Math.max(0, (totalRows - endRow) * rowStride - gap)
-        : 0,
+    bottomSpacer: endRow < totalRows ? Math.max(0, (totalRows - endRow) * rowStride - gap) : 0,
   };
 }
 
@@ -137,7 +128,7 @@ interface LibraryScreenProps {
   onToggleInspector: () => void;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
-  onDeleteItems: (ids: string[]) => void | Promise<{ trashed: number; failed: number; error?: string }>;
+  onDeleteItems: (ids: string[]) => void | Promise<DeleteItemsOutcome>;
   onUpdateTags: (id: string, tags: string[]) => void | Promise<void>;
   query: string;
   minRating: number | null;
@@ -1963,9 +1954,14 @@ function LibraryScreen(props: LibraryScreenProps) {
 
       {props.showInspector && (
         <aside className="photo-inspector">
-            {props.inspectedId && (props.hiddenView ? library.hiddenItems : library.items).find((i: any) => i.id === props.inspectedId) ? (
+          {props.inspectedId &&
+          (props.hiddenView ? library.hiddenItems : library.items).find(
+            (i: any) => i.id === props.inspectedId,
+          ) ? (
             (() => {
-              const sel = (props.hiddenView ? library.hiddenItems : library.items).find((i: any) => i.id === props.inspectedId);
+              const sel = (props.hiddenView ? library.hiddenItems : library.items).find(
+                (i: any) => i.id === props.inspectedId,
+              );
               if (!sel) return null;
               // Inspection is independent of selection: the Inspector always
               // shows the inspected item, even when a larger multi-selection

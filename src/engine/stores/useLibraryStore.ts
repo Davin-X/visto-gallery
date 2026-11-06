@@ -14,6 +14,7 @@ import type {
 } from "../types/media";
 import type {
   AlbumOverview,
+  DeleteItemsOutcome,
   LibraryFolder,
   LibraryFilterDTO,
   LibraryItemsPage,
@@ -191,7 +192,7 @@ interface LibraryState {
   setRatingForIds: (ids: string[], rating: number) => Promise<void>;
   setColorLabelForIds: (ids: string[], colorLabel: string) => Promise<void>;
   updateItemTags: (id: string, tags: string[]) => Promise<void>;
-  deleteItems: (ids: string[]) => Promise<{ trashed: number; failed: number; error?: string }>;
+  deleteItems: (ids: string[]) => Promise<DeleteItemsOutcome>;
 
   cancelDelete: () => Promise<void>;
 
@@ -308,9 +309,31 @@ function getSortedItems(
   return state._sortedCache;
 }
 
+function findKnownItem(state: LibraryState, id: string): MediaItem | null {
+  const direct =
+    state.items.find((item) => item.id === id) ||
+    state.hiddenItems.find((item) => item.id === id);
+  if (direct) return direct;
+  for (const group of state.duplicates) {
+    const match = group.items.find((item) => item.id === id);
+    if (match) return match;
+  }
+  return null;
+}
+
+function resolveInspectedItem(state: LibraryState, viewerItems: MediaItem[]) {
+  if (state.inspectedId) {
+    return (
+      viewerItems.find((item) => item.id === state.inspectedId) ||
+      findKnownItem(state, state.inspectedId) ||
+      null
+    );
+  }
+  return viewerItems[0] || null;
+}
+
 function computeInspectionDerived(state: LibraryState) {
-  const viewerSelected =
-    state.viewerItems.find((item) => item.id === state.inspectedId) || state.viewerItems[0] || null;
+  const viewerSelected = resolveInspectedItem(state, state.viewerItems);
   return {
     viewerSelected,
     currentIndex: Math.max(
@@ -380,8 +403,7 @@ function computeDerived(state: LibraryState) {
     if (state.filter === "Favorites" && !item.favorite) return false;
     return true;
   });
-  const viewerSelected =
-    viewerItems.find((item) => item.id === inspectedId) || viewerItems[0] || null;
+  const viewerSelected = resolveInspectedItem({ ...state, inspectedId }, viewerItems);
   const currentIndex = Math.max(
     0,
     playable.findIndex((item) => item.id === inspectedId),
@@ -713,12 +735,7 @@ export const useLibraryStore = create<LibraryState>()(
       inspectItem: (id) => {
         const state = get();
         if (id === state.inspectedId) return;
-        if (
-          id !== null &&
-          !state.items.some((i) => i.id === id) &&
-          !state.hiddenItems.some((i) => i.id === id)
-        )
-          return;
+        if (id !== null && !findKnownItem(state, id)) return;
         const next = { ...state, inspectedId: id };
         set({ inspectedId: id, ...computeInspectionDerived(next) });
       },
@@ -1114,8 +1131,25 @@ export const useLibraryStore = create<LibraryState>()(
         // page. Sending paths from renderer state silently missed those.
         const uniqueIds = [...new Set(ids)].filter(Boolean);
         if (uniqueIds.length === 0) {
-          return { trashed: 0, failed: 0 };
+          return { status: "done", trashed: 0, failed: 0, bytes: 0, failures: [] };
         }
+        // Sizes have to be read before the rows are dropped, and duplicates /
+        // hidden items can reference rows outside the loaded library page.
+        const sizeById = new Map<string, number>();
+        const state = get();
+        const rememberSize = (item: { id: string; size: number }) => {
+          if (!sizeById.has(item.id)) sizeById.set(item.id, item.size);
+        };
+        state.items.forEach(rememberSize);
+        state.hiddenItems.forEach(rememberSize);
+        state.duplicates.forEach((group) => group.items.forEach(rememberSize));
+        const bytesFor = (trashed: Set<string>) => {
+          let total = 0;
+          trashed.forEach((id) => {
+            total += sizeById.get(id) ?? 0;
+          });
+          return total;
+        };
         set({
           busy: true,
           canceling: false,
@@ -1128,12 +1162,17 @@ export const useLibraryStore = create<LibraryState>()(
           set({ busy: false, canceling: false, progress: null });
           set((s) => {
             const remainingHidden = s.hiddenItems.filter((i) => !trashedIds.has(i.id));
+            // Hidden rows were never part of the library total, so subtracting
+            // every trashed id over-counted the removal (and left the footer
+            // short whenever the delete came from the hidden screen).
+            const hiddenTrashed = s.hiddenItems.filter((i) => trashedIds.has(i.id)).length;
+            const libraryTrashed = trashedIds.size - hiddenTrashed;
             return {
               items: s.items.filter((i) => !trashedIds.has(i.id)),
               hiddenItems: remainingHidden,
-              hiddenCount: remainingHidden.length,
+              hiddenCount: Math.max(0, s.hiddenCount - hiddenTrashed),
               selectedIds: s.selectedIds.filter((id) => !trashedIds.has(id)),
-              totalCount: Math.max(0, s.totalCount - trashedIds.size),
+              totalCount: Math.max(0, s.totalCount - libraryTrashed),
               inspectedId: s.inspectedId && trashedIds.has(s.inspectedId) ? null : s.inspectedId,
               duplicates: s.duplicates
                 .map((g) => ({
@@ -1144,19 +1183,25 @@ export const useLibraryStore = create<LibraryState>()(
             };
           });
           get().refreshDerived();
-          // Detect a user cancel: every failure is "Operation cancelled".
-          // Don't dump every cancelled id into the error message — summarize.
-          const allFailuresCancelled =
+          // A cancel is only a cancel when nothing moved; a partial stop is a
+          // real (smaller) delete and the caller should say so.
+          const cancelled =
+            trashedIds.size === 0 &&
             result.failed.length > 0 &&
             result.failed.every((f) => f.error?.includes("cancelled"));
+          if (cancelled) {
+            return { status: "cancelled", trashed: 0, failed: result.failed.length };
+          }
+          if (trashedIds.size === 0) {
+            return { status: "failed", failures: result.failed };
+          }
           return {
+            status: "done",
             trashed: trashedIds.size,
             failed: result.failed.length,
-            error: allFailuresCancelled
-              ? "Deletion cancelled."
-              : result.failed.length > 0
-                ? result.failed.map((f) => `${f.id}: ${f.error}`).join("; ")
-                : undefined,
+            bytes: bytesFor(trashedIds),
+            failures: result.failed,
+            catalogWarning: result.catalogError ?? undefined,
           };
         } catch (e) {
           set({ busy: false, canceling: false, progress: null });

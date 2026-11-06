@@ -7,10 +7,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- Side-by-side duplicate comparison with synced zoom/pan and a metadata table that flags every field the two files disagree on
+- Delete confirmations report the space reclaimed, not just the number of items moved
+- Journaled edit originals: the true original of an edited photo is verified by size and SHA-256 before a revert, instead of relying on a single `.bak` file that a second edit overwrote
+- "Move to Trash" goes through Finder, so deleted items appear in Trash with a working Put Back, and requests are sent as catalog ids that the backend resolves and validates itself
+- Duplicates screen can pick the keeper by best quality (RAW > TIFF > PNG > JPEG/HEIC, then pixel count), oldest, or newest
 
 ### Changed
+- Duplicate grouping and keeper selection moved out of the screen into `src/engine/duplicates/grouping.ts` with unit tests
+- Trash refusals are reported per item instead of filtering missing paths out of the request
 
 ### Fixed
+- Deleting from the duplicates or hidden screen no longer fails for items outside the loaded library page
+- A failed trash chunk reports every id it covered, so rows never linger for files that may already have moved
+- A catalog failure after the files reached the Trash is reported as a rescan warning instead of a failed delete
+- Hidden items no longer shrink the library total count when deleted
+- Import progress no longer freezes at 0: an import is titled `importing` locally while the backend reports `scanning`, so phase equality dropped every event
+- Duplicate selection is pruned when copies are trashed or hidden, so the action bar stops counting items that are gone
 
 ## [0.3.0] - 2026-11-04
 

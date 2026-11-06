@@ -210,6 +210,9 @@ pub struct TrashResult {
     /// Catalog ids that were moved to Trash.
     pub trashed: Vec<String>,
     pub failed: Vec<TrashError>,
+    /// Set when the files reached the Trash but the catalog could not be
+    /// updated. The move succeeded; the rows are stale until a rescan.
+    pub catalog_error: Option<String>,
 }
 
 #[derive(Serialize, Debug)]

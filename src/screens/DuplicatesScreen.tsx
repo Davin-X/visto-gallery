@@ -15,6 +15,8 @@ import { KindBadge } from "../design/components/KindBadge";
 import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { DuplicateGroup, MediaItem } from "../engine/types/media";
+import { buildGroupViews, type GroupView, type KeeperMode } from "../engine/duplicates/grouping";
+import { CompareOverlay } from "../design/components/CompareOverlay";
 
 interface DuplicatesScreenProps {
   groups: DuplicateGroup[];
@@ -42,7 +44,6 @@ const GROUP_PAGE = 40;
 const INLINE_COPIES = 4;
 
 type ViewMode = "grid" | "list";
-type KeeperMode = "best" | "oldest" | "newest";
 type KindFilter = "all" | "photo" | "video" | "raw";
 type SortBy = "saving" | "copies" | "newest" | "name";
 
@@ -67,53 +68,6 @@ const SORT_LABELS: Record<SortBy, string> = {
   name: "Name",
 };
 
-/** Newest-first ordering is expressed as a negative "oldest" timestamp. */
-function copyOrderValue(item: MediaItem): number {
-  return item.createdAt || item.modifiedAt || 0;
-}
-
-/** Prefer the least-lossy, highest-detail source before considering age. */
-function keeperQuality(item: MediaItem): [number, number, number] {
-  const extension = item.extension.toLowerCase();
-  const format =
-    item.kind === "raw"
-      ? 5
-      : extension === "tif" || extension === "tiff"
-        ? 4
-        : extension === "png"
-          ? 3
-          : extension === "jpg" || extension === "jpeg" || extension === "heic"
-            ? 2
-            : 1;
-  const pixels = Math.max(0, item.width ?? 0) * Math.max(0, item.height ?? 0);
-  return [format, pixels, item.size];
-}
-
-/**
- * The backend stores hash groups in query order, so the first item is not
- * necessarily the original file. Order every group explicitly: the keeper
- * first (oldest or newest import), then the rest by path so the list is
- * stable between scans.
- */
-function orderGroup(items: MediaItem[], keeperMode: KeeperMode): MediaItem[] {
-  const direction = keeperMode === "oldest" ? 1 : -1;
-  return [...items].sort((a, b) => {
-    if (keeperMode === "best") {
-      const left = keeperQuality(a);
-      const right = keeperQuality(b);
-      for (let index = 0; index < left.length; index += 1) {
-        if (left[index] !== right[index]) return right[index] - left[index];
-      }
-    }
-    const byAge = (copyOrderValue(a) - copyOrderValue(b)) * direction;
-    if (byAge !== 0) return byAge;
-    if (a.path.length !== b.path.length) return a.path.length - b.path.length;
-    const byName = a.name.localeCompare(b.name);
-    if (byName !== 0) return byName;
-    return a.id.localeCompare(b.id);
-  });
-}
-
 function parentFolder(path: string): string {
   const index = path.lastIndexOf("/");
   return index > 0 ? path.slice(0, index) : path;
@@ -122,16 +76,6 @@ function parentFolder(path: string): string {
 function formatDate(timestamp?: number): string {
   if (!timestamp) return "";
   return new Date(timestamp).toLocaleDateString();
-}
-
-interface GroupView {
-  group: DuplicateGroup;
-  /** Keeper first, then every other copy. */
-  ordered: MediaItem[];
-  keeper: MediaItem;
-  copies: MediaItem[];
-  reclaimable: number;
-  newest: number;
 }
 
 function DuplicatesScreen(props: DuplicatesScreenProps) {
@@ -154,6 +98,9 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const [keeperMode, setKeeperMode] = useState<KeeperMode>("best");
   const [filterKind, setFilterKind] = useState<KindFilter>("all");
   const [sortBy, setSortBy] = useState<SortBy>("saving");
+  // Which copy is open in the side-by-side inspector, addressed by group so a
+  // rescan that reorders groups can't point the overlay at the wrong pair.
+  const [compare, setCompare] = useState<{ sha: string; copyId: string } | null>(null);
   const pageRef = useRef<HTMLDivElement>(null);
 
   const groups = useMemo(() => groupsProp ?? [], [groupsProp]);
@@ -189,38 +136,18 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     return `${otherKinds.slice(0, -1).join(", ")} and ${otherKinds[otherKinds.length - 1]}`;
   }, [otherKinds]);
 
-  const groupViews = useMemo<GroupView[]>(() => {
-    const views: GroupView[] = [];
-    groups.forEach((group) => {
-      if (filterKind !== "all" && !group.items.some((item) => item.kind === filterKind)) return;
-      const ordered = orderGroup(group.items, keeperMode);
-      const copies = ordered.slice(1);
-      views.push({
-        group,
-        ordered,
-        keeper: ordered[0],
-        copies,
-        reclaimable: copies.reduce((sum, item) => sum + item.size, 0),
-        newest: group.items.reduce((latest, item) => Math.max(latest, copyOrderValue(item)), 0),
-      });
-    });
-    views.sort((a, b) => {
-      if (sortBy === "copies")
-        return b.ordered.length - a.ordered.length || b.reclaimable - a.reclaimable;
-      if (sortBy === "newest") return b.newest - a.newest;
-      if (sortBy === "name") return a.keeper.name.localeCompare(b.keeper.name);
-      return b.reclaimable - a.reclaimable;
-    });
-    return views;
-  }, [groups, filterKind, keeperMode, sortBy]);
+  const groupViews = useMemo<GroupView[]>(
+    () => buildGroupViews(groups, { filterKind, keeperMode, sortBy }),
+    [groups, filterKind, keeperMode, sortBy],
+  );
 
   const totalCopies = useMemo(
     () => groupViews.reduce((sum, view) => sum + view.copies.length, 0),
     [groupViews],
   );
-  const reclaimableBytes = useMemo(
-    () => groupViews.reduce((sum, view) => sum + view.reclaimable, 0),
-    [groupViews],
+  const compareView = useMemo(
+    () => (compare ? groupViews.find((view) => view.group.sha256 === compare.sha) : undefined),
+    [compare, groupViews],
   );
   const selectedBytes = useMemo(() => {
     let total = 0;
@@ -244,8 +171,25 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
 
   useEffect(() => {
     setRenderLimit(GROUP_PAGE);
-    pageRef.current?.scrollTo({ top: 0 });
+    // Optional call: instant scrolling is not implemented everywhere.
+    pageRef.current?.scrollTo?.({ top: 0 });
   }, [filterKind, sortBy, keeperMode]);
+
+  // Copies disappear from `groups` when they are trashed or hidden. Prune the
+  // selection with them, otherwise the action bar counts ids that no longer
+  // exist and "every copy selected" can be true for a group of one.
+  useEffect(() => {
+    const live = new Set<string>();
+    groups.forEach((group) => group.items.forEach((item) => live.add(item.id)));
+    setSelected((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (live.has(id)) next.add(id);
+      });
+      return next.size === prev.size ? prev : next;
+    });
+  }, [groups]);
 
   const toggleItem = useCallback((id: string) => {
     setSelected((prev) => {
@@ -349,19 +293,6 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     void tauri.items.revealInFinder(path);
   };
 
-  const stackPose = (count: number, index: number) => {
-    if (count <= 1) return { x: 0, r: 0, z: 1 };
-    if (count === 2) {
-      return index === 0 ? { x: -5, r: -7, z: 1 } : { x: 5, r: 4, z: 2 };
-    }
-    const poses = [
-      { x: -11, r: -9, z: 1 },
-      { x: 11, r: 8, z: 2 },
-      { x: 0, r: -1, z: 3 },
-    ];
-    return poses[index] ?? poses[2];
-  };
-
   const renderTile = (view: GroupView, item: MediaItem) => {
     const isKeeper = item.id === view.keeper.id;
     const isSelected = selected.has(item.id);
@@ -403,6 +334,39 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               <KindBadge kind="video" />
             </span>
           )}
+          <span className="duplicate-tile-tools">
+            {!isKeeper && view.copies.length > 0 && (
+              <button
+                type="button"
+                className="duplicate-tile-tool"
+                title="Compare with keeper"
+                aria-label={`Compare ${item.name} with the keeper`}
+                onClick={() => setCompare({ sha: view.group.sha256, copyId: item.id })}
+              >
+                <ColumnsIcon size={13} />
+              </button>
+            )}
+            {onOpenItem && (
+              <button
+                type="button"
+                className="duplicate-tile-tool"
+                title="Open in viewer"
+                aria-label={`Open ${item.name}`}
+                onClick={() => onOpenItem(item.id)}
+              >
+                <EyeIcon size={13} />
+              </button>
+            )}
+            <button
+              type="button"
+              className="duplicate-tile-tool"
+              title="Reveal in Finder"
+              aria-label={`Reveal ${item.name} in Finder`}
+              onClick={() => revealItem(item.path)}
+            >
+              <FolderIcon size={13} />
+            </button>
+          </span>
         </div>
         <figcaption className="duplicate-tile-caption">
           <span className="duplicate-tile-head">
@@ -411,28 +375,6 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
             </span>
             <span className="duplicate-tile-name" title={item.path}>
               {item.name}
-            </span>
-            <span className="duplicate-tile-tools">
-              {onOpenItem && (
-                <button
-                  type="button"
-                  className="duplicate-tile-tool"
-                  title="Open in viewer"
-                  aria-label={`Open ${item.name}`}
-                  onClick={() => onOpenItem(item.id)}
-                >
-                  <EyeIcon size={13} />
-                </button>
-              )}
-              <button
-                type="button"
-                className="duplicate-tile-tool"
-                title="Reveal in Finder"
-                aria-label={`Reveal ${item.name} in Finder`}
-                onClick={() => revealItem(item.path)}
-              >
-                <FolderIcon size={13} />
-              </button>
             </span>
           </span>
           <span className="duplicate-tile-meta">
@@ -449,6 +391,15 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
       </figure>
     );
   };
+
+  const renderStackThumb = (item: MediaItem) =>
+    item.kind === "raw" ? (
+      <span className="duplicate-stack-raw">
+        <KindBadge kind="raw" />
+      </span>
+    ) : (
+      <CachedThumbnail itemId={item.id} name="" size={128} />
+    );
 
   const renderGroup = (view: GroupView) => {
     const { group } = view;
@@ -469,32 +420,23 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
             aria-expanded={expanded}
             onClick={() => toggleGroupExpand(group.sha256)}
           >
-            <span
-              className={`duplicate-stack${stackItems.length === 1 ? " is-single" : ""}`}
-              aria-hidden="true"
-            >
-              {stackItems.map((item, index) => {
-                const pose = stackPose(stackItems.length, index);
-                return (
-                  <span
-                    key={item.id}
-                    className="duplicate-stack-sheet"
-                    style={
-                      {
-                        "--stack-x": `${pose.x}px`,
-                        "--stack-r": `${pose.r}deg`,
-                        zIndex: pose.z,
-                      } as React.CSSProperties
-                    }
-                  >
-                    {item.kind === "raw" ? (
-                      <span className="duplicate-stack-raw" />
-                    ) : (
-                      <CachedThumbnail itemId={item.id} name="" size={128} />
-                    )}
-                  </span>
-                );
-              })}
+            <span className="duplicate-stack" aria-hidden="true">
+              {/* The keeper sits on top; the copies behind it are the same
+                  image dimmed, so the fan shows real thumbnails and still
+                  reads as depth rather than noise. */}
+              {view.copies.slice(0, 2).map((item, index) => (
+                <span
+                  key={item.id}
+                  className={`duplicate-stack-sheet is-back ${
+                    index === 0 ? "is-back-near" : "is-back-far"
+                  }`}
+                >
+                  {renderStackThumb(item)}
+                </span>
+              ))}
+              <span className="duplicate-stack-sheet is-front">
+                {renderStackThumb(view.keeper)}
+              </span>
               <span className="duplicate-stack-count">{view.ordered.length}</span>
             </span>
             <span className="duplicate-group-copy">
@@ -577,7 +519,13 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           </button>
         )}
         <button type="button" className="primary-button" onClick={onScan} disabled={busy}>
-          {isTrashing ? "Moving to Trash…" : isDuplicateScan ? "Scanning…" : hasGroups ? "Rescan" : "Scan library"}
+          {isTrashing
+            ? "Moving to Trash…"
+            : isDuplicateScan
+              ? "Scanning…"
+              : hasGroups
+                ? "Rescan"
+                : "Scan library"}
         </button>
       </div>
     </div>
@@ -738,9 +686,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           )}
         </header>
       ) : (
-        <>
-          {pageHeading}
-        </>
+        <>{pageHeading}</>
       )}
       {!hasVisibleGroups ? (
         <div className={`duplicate-empty${hasGroups && !busy ? " is-compact" : ""}`}>
@@ -758,12 +704,12 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
             {isTrashing
               ? "The selected copies are being moved to Finder Trash. You can use Put Back in Finder if needed."
               : isDuplicateScan
-              ? "Comparing files by content hash. Large libraries can take a moment."
-              : hasGroups
-                ? otherKinds.length > 0
-                  ? `Found ${otherKindsLabel} instead. Use the media tabs above to switch.`
-                  : "Nothing in this scan matches the selected media type."
-                : "Every file in your library is unique by content. Identical-looking photos that differ by even one byte are not flagged."}
+                ? "Comparing files by content hash. Large libraries can take a moment."
+                : hasGroups
+                  ? otherKinds.length > 0
+                    ? `Found ${otherKindsLabel} instead. Use the media tabs above to switch.`
+                    : "Nothing in this scan matches the selected media type."
+                  : "Every file in your library is unique by content. Identical-looking photos that differ by even one byte are not flagged."}
           </p>
           {!busy &&
             (hasGroups ? (
@@ -797,6 +743,16 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           )}
         </>
       )}
+
+      {compareView && compareView.copies.length > 0 ? (
+        <CompareOverlay
+          keeper={compareView.keeper}
+          copies={compareView.copies}
+          initialCopyId={compare?.copyId}
+          assetUrl={assetUrl}
+          onClose={() => setCompare(null)}
+        />
+      ) : null}
     </div>
   );
 }

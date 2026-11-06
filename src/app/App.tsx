@@ -30,6 +30,7 @@ import { navigateToBatchExport } from "./exportFlow";
 import { getAdjacentVideo } from "./backgroundVideo";
 import { createAutoImportController, syncFolderWatchers } from "../engine/utils/folderWatcher";
 import { copyTagsToFinder } from "../engine/utils/finderTags";
+import { progressBelongsToOperation } from "../engine/progressPhases";
 import { describeError } from "./utils/describeError";
 import { isWarningNotice } from "./utils/isWarningNotice";
 import { startConfiguredSlideshow } from "./utils/startConfiguredSlideshow";
@@ -276,10 +277,14 @@ function App() {
     [library.items, playbackItemId],
   );
   const playbackItem = backgroundVideo ?? storedPlaybackItem;
-  const photoViewerItems = useMemo(
-    () => library.viewerItems.filter((item) => item.kind !== "video"),
-    [library.viewerItems],
-  );
+  const photoViewerItems = useMemo(() => {
+    const items = library.viewerItems.filter((item) => item.kind !== "video");
+    const selected = library.viewerSelected;
+    if (selected && selected.kind !== "video" && !items.some((item) => item.id === selected.id)) {
+      return [selected, ...items];
+    }
+    return items;
+  }, [library.viewerItems, library.viewerSelected]);
   // Video queue: built from the current browsing scope when playback starts,
   // skipping photos and RAW. Locked during playback so switching filters
   // never changes what plays next.
@@ -883,12 +888,13 @@ function App() {
       // Listen for native import progress events from scan/import commands.
       const unlistenImportProgress = await events.onImportProgress((progress) => {
         const { phase, processed, total } = progress;
-        const currentPhase = liveRef.current.library.progress?.phase;
+        const currentPhase = liveRef.current.library.progress?.phase ?? "";
         // The command that started an operation owns `busy` and `progress`.
         // Progress events are presentation-only: don't let a scan/import
         // event flip the overlay away from an active operation (e.g. trash).
-        // Conversely, allow the active operation's own events to update it.
-        if (currentPhase && phase !== currentPhase) return;
+        // Conversely, allow the active operation's own events to update it —
+        // which needs the phase mapping, because an import reports `scanning`.
+        if (!progressBelongsToOperation(currentPhase, phase)) return;
         liveRef.current.library.setProgress({
           phase,
           processed,
@@ -1253,24 +1259,27 @@ function App() {
 
   const openViewer = useCallback(
     (id?: string, origin: Screen = "Library", scope: "library" | "hidden" = "library") => {
-      const targetId = id ?? library.inspectedId;
+      const lib = useLibraryStore.getState();
+      const targetId = id ?? lib.inspectedId;
       const item =
-        library.items.find((candidate) => candidate.id === targetId) ??
-        library.hiddenItems.find((candidate) => candidate.id === targetId) ??
+        lib.items.find((candidate) => candidate.id === targetId) ??
+        lib.hiddenItems.find((candidate) => candidate.id === targetId) ??
+        lib.duplicates.flatMap((g) => g.items).find((candidate) => candidate.id === targetId) ??
         null;
       if (!item) return;
       setViewerOrigin(origin);
+      const viewerState = useViewerStore.getState();
       if (item.kind === "video") {
         beginVideoSession(item, scope);
-        viewer.close();
+        viewerState.close();
         setScreen("Video");
       } else {
-        library.setViewerScope(scope);
-        viewer.open(item.id);
+        lib.setViewerScope(scope);
+        viewerState.open(item.id);
         setScreen("Viewer");
       }
     },
-    [library, viewer, beginVideoSession],
+    [beginVideoSession],
   );
 
   // Start a video session without leaving the current screen; the Now
@@ -1476,21 +1485,38 @@ function App() {
     void (async () => {
       try {
         const result = await library.deleteItems(ids);
+        const moved = result.status === "failed" ? 0 : result.trashed;
         // The duplicate manager can remove rows that are outside the loaded
         // page, so refresh canonical source/library totals after the native
         // transaction rather than estimating them from rendered tiles.
-        if (result.trashed > 0) {
-          void tauri.library.getStats().then(setLibraryStats).catch(() => {});
+        if (moved > 0) {
+          void tauri.library
+            .getStats()
+            .then(setLibraryStats)
+            .catch(() => {});
         }
-        if (result.error === "Deletion cancelled.") {
+        if (result.status === "cancelled") {
           showNotice("Deletion cancelled.");
-        } else if (result.trashed > 0) {
-          const suffix = result.failed ? ` ${result.failed} item(s) could not be moved.` : "";
+        } else if (result.status === "failed") {
           showNotice(
-            `Moved ${result.trashed.toLocaleString()} item${result.trashed === 1 ? "" : "s"} to Trash.${suffix}`,
+            `Could not move items to Trash: ${result.failures[0]?.error ?? "unknown error"}`,
           );
-        } else if (result.error) {
-          showNotice(`Could not move items to Trash: ${result.error}`);
+          if (result.failures.length > 1) {
+            console.warn("Trash refusals", result.failures);
+          }
+        } else if (moved > 0) {
+          const suffix = result.failed ? ` ${result.failed} item(s) could not be moved.` : "";
+          const warning = result.catalogWarning
+            ? " The catalog could not be updated; rescan to refresh the library."
+            : "";
+          // Lead with the space that is actually gone from the disk, which is
+          // the number people care about after a duplicate cleanup.
+          const reclaimed =
+            result.bytes > 0 ? ` — ${formatBytesSimple(result.bytes)} reclaimed` : "";
+          showNotice(
+            `Moved ${moved.toLocaleString()} item${moved === 1 ? "" : "s"} to Trash${reclaimed}.${suffix}${warning}`,
+          );
+          if (result.failures.length > 0) console.warn("Trash refusals", result.failures);
         }
       } catch (error) {
         const msg = String(error);

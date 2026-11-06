@@ -8,14 +8,7 @@ test("the virtual grid window never mounts more than 480 items", () => {
   // plausible column counts. The DOM cap must not depend on viewport width.
   for (const columns of [1, 3, 8, 16, 32]) {
     for (const scrollTop of [0, 20_000, 5_000_000]) {
-      const window = calculateVirtualGridWindow(
-        itemCount,
-        columns,
-        240,
-        16,
-        scrollTop,
-        1_800,
-      );
+      const window = calculateVirtualGridWindow(itemCount, columns, 240, 16, scrollTop, 1_800);
       expect(window.endIndex - window.startIndex).toBeLessThanOrEqual(480);
       expect(window.startIndex).toBeGreaterThanOrEqual(0);
       expect(window.endIndex).toBeLessThanOrEqual(itemCount);

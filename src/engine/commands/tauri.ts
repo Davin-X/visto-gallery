@@ -34,7 +34,6 @@ import type {
   EditRecipe,
   EditPreset,
   TrashResult,
-  TrashError,
   UpdateCheckResult,
   LibraryStats,
   ExternalPlayer,
@@ -53,8 +52,7 @@ export const tauri = {
     getItems: (filter: LibraryFilterDTO): Promise<LibraryItemsPage> =>
       invoke("get_library_items", { filter }),
 
-    getHiddenItems: (): Promise<LibraryItemsPage> =>
-      invoke("get_hidden_items"),
+    getHiddenItems: (): Promise<LibraryItemsPage> => invoke("get_hidden_items"),
 
     getThumbnail: (request: ThumbnailRequest): Promise<ThumbnailResponse> =>
       invoke("get_item_thumbnail", { request }),

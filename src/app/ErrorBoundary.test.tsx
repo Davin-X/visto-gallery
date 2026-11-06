@@ -68,7 +68,9 @@ describe("ErrorBoundary", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /report on github/i }));
     expect(mocks.openExternal).toHaveBeenCalledOnce();
-    expect(mocks.openExternal.mock.calls[0][0]).toContain("github.com/Davin-X/visto-gallery/issues/new");
+    expect(mocks.openExternal.mock.calls[0][0]).toContain(
+      "github.com/Davin-X/visto-gallery/issues/new",
+    );
     expect(mocks.openExternal.mock.calls[0][0]).toContain("boom");
     consoleError.mockRestore();
   });

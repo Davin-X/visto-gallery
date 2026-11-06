@@ -243,12 +243,40 @@ export interface TrashResult {
   /** Catalog ids that were moved to Trash. */
   trashed: string[];
   failed: TrashError[];
+  /**
+   * Set when the files reached the Trash but the catalog rows could not be
+   * removed. The delete itself succeeded; a rescan clears the stale rows.
+   */
+  catalogError?: string | null;
 }
 
 export interface TrashError {
   id: string;
   error: string;
 }
+
+/** Phases the Rust backend emits on the `import-progress` event. */
+export type BackendProgressPhase =
+  "scanning" | "reading" | "hashing" | "indexing" | "trashing" | "complete";
+
+/**
+ * Outcome of a trash request, as the store reports it to the UI. Status is
+ * explicit so callers never have to compare error strings.
+ */
+export type DeleteItemsOutcome =
+  | {
+      status: "done";
+      trashed: number;
+      failed: number;
+      /** Per-item refusals, for diagnostics rather than user-facing copy. */
+      failures: TrashError[];
+      /** Bytes those files occupied, for the "space reclaimed" result. */
+      bytes: number;
+      /** Files moved, catalog not updated: a rescan is needed. */
+      catalogWarning?: string;
+    }
+  | { status: "cancelled"; trashed: number; failed: number }
+  | { status: "failed"; failures: TrashError[] };
 
 export interface LibraryChangedEvent {
   type: "added" | "updated" | "removed" | "reindexed";
@@ -258,7 +286,7 @@ export interface LibraryChangedEvent {
 
 export interface ImportProgressEvent {
   sessionId: string;
-  phase: "scanning" | "reading" | "hashing" | "indexing" | "trashing" | "complete";
+  phase: BackendProgressPhase;
   processed: number;
   total: number;
   currentFile?: string;

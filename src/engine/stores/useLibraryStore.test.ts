@@ -486,10 +486,61 @@ test("deleteItems sends hidden ids and clears the hidden collection", async () =
   const result = await useLibraryStore.getState().deleteItems([hidden.id]);
 
   expect(tauri.items.moveToTrash).toHaveBeenCalledWith([hidden.id]);
-  expect(result).toEqual({ trashed: 1, failed: 0, error: undefined });
+  expect(result).toEqual({ status: "done", trashed: 1, failed: 0, bytes: 100, failures: [] });
   expect(useLibraryStore.getState().hiddenItems).toEqual([]);
   expect(useLibraryStore.getState().hiddenCount).toBe(0);
   expect(useLibraryStore.getState().items).toEqual([visible]);
+});
+
+test("deleteItems reports the bytes reclaimed, including rows outside the loaded page", async () => {
+  const onPage = makeItem("on-page", "on-page.jpg");
+  const offPage = makeItem("off-page", "off-page.jpg");
+  offPage.size = 2_000;
+  useLibraryStore.setState({
+    items: [onPage],
+    duplicates: [{ id: "g1", sha256: "abc", size: 2_000, items: [offPage, onPage] }],
+  });
+  vi.mocked(tauri.items.moveToTrash).mockResolvedValueOnce({
+    trashed: [onPage.id, offPage.id],
+    failed: [],
+  });
+
+  const result = await useLibraryStore.getState().deleteItems([onPage.id, offPage.id]);
+
+  expect(result).toMatchObject({ status: "done", trashed: 2, bytes: 2_100 });
+});
+
+test("deleting a hidden item does not shrink the library total", async () => {
+  const hidden = makeItem("hidden-copy", "hidden-copy.jpg");
+  hidden.hidden = true;
+  useLibraryStore.setState({
+    items: [],
+    hiddenItems: [hidden],
+    hiddenCount: 1,
+    totalCount: 12,
+  });
+  vi.mocked(tauri.items.moveToTrash).mockResolvedValueOnce({
+    trashed: [hidden.id],
+    failed: [],
+  });
+
+  await useLibraryStore.getState().deleteItems([hidden.id]);
+
+  // Hidden rows were never counted in totalCount.
+  expect(useLibraryStore.getState().totalCount).toBe(12);
+});
+
+test("deleting a visible item shrinks the library total by one", async () => {
+  const visible = makeItem("visible", "visible.jpg");
+  useLibraryStore.setState({ items: [visible], hiddenItems: [], totalCount: 12 });
+  vi.mocked(tauri.items.moveToTrash).mockResolvedValueOnce({
+    trashed: [visible.id],
+    failed: [],
+  });
+
+  await useLibraryStore.getState().deleteItems([visible.id]);
+
+  expect(useLibraryStore.getState().totalCount).toBe(11);
 });
 
 test("deleteItems works for a duplicate outside the loaded library page", async () => {
@@ -510,7 +561,7 @@ test("deleteItems works for a duplicate outside the loaded library page", async 
   // The renderer only sends ids; the backend resolves the path, so the copy
   // does not have to be present in paginated `items`.
   expect(tauri.items.moveToTrash).toHaveBeenCalledWith([copy.id]);
-  expect(result.trashed).toBe(1);
+  expect(result).toMatchObject({ status: "done", trashed: 1 });
   expect(useLibraryStore.getState().duplicates).toEqual([]);
 });
 
@@ -539,11 +590,58 @@ test("deleteItems reports an id that the backend refused instead of claiming suc
 
   const result = await useLibraryStore.getState().deleteItems([hidden.id]);
 
-  expect(result.trashed).toBe(0);
-  expect(result.failed).toBe(1);
-  expect(result.error).toContain("no longer exists");
+  expect(result.status).toBe("failed");
+  expect(result).toMatchObject({
+    failures: [{ error: expect.stringContaining("no longer exists") }],
+  });
   // A refused file must not be dropped from the catalog view.
   expect(useLibraryStore.getState().hiddenItems).toEqual([hidden]);
+});
+
+test("a fully cancelled delete reports cancellation, not failure", async () => {
+  const visible = makeItem("visible", "visible.jpg");
+  useLibraryStore.setState({ items: [visible] });
+  vi.mocked(tauri.items.moveToTrash).mockResolvedValueOnce({
+    trashed: [],
+    failed: [{ id: visible.id, error: "Operation cancelled" }],
+  });
+
+  const result = await useLibraryStore.getState().deleteItems([visible.id]);
+
+  expect(result).toEqual({ status: "cancelled", trashed: 0, failed: 1 });
+});
+
+test("a partial cancel keeps the moved items and reports the rest", async () => {
+  const a = makeItem("a", "a.jpg");
+  const b = makeItem("b", "b.jpg");
+  useLibraryStore.setState({ items: [a, b], totalCount: 2 });
+  vi.mocked(tauri.items.moveToTrash).mockResolvedValueOnce({
+    trashed: [a.id],
+    failed: [{ id: b.id, error: "Operation cancelled" }],
+  });
+
+  const result = await useLibraryStore.getState().deleteItems([a.id, b.id]);
+
+  expect(result).toMatchObject({ status: "done", trashed: 1, failed: 1 });
+  expect(useLibraryStore.getState().items).toEqual([b]);
+});
+
+test("a catalog warning is surfaced without turning the delete into a failure", async () => {
+  const visible = makeItem("visible", "visible.jpg");
+  useLibraryStore.setState({ items: [visible], totalCount: 1 });
+  vi.mocked(tauri.items.moveToTrash).mockResolvedValueOnce({
+    trashed: [visible.id],
+    failed: [],
+    catalogError: "could not commit the catalog update: disk I/O error",
+  });
+
+  const result = await useLibraryStore.getState().deleteItems([visible.id]);
+
+  expect(result.status).toBe("done");
+  expect(result).toMatchObject({
+    status: "done",
+    catalogWarning: expect.stringContaining("catalog"),
+  });
 });
 
 test("cancelDelete keeps the stable operation overlay in its cancelling state", async () => {

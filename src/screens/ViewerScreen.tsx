@@ -219,14 +219,16 @@ function ViewerScreen(props: ViewerScreenProps) {
           <>
             <h2>Videos don’t open in the Viewer</h2>
             <p>
-              The item you’re inspecting is a video. Press the play button on its tile (or the
-              Now Playing chip) to watch it.
+              The item you’re inspecting is a video. Press the play button on its tile (or the Now
+              Playing chip) to watch it.
             </p>
           </>
         ) : (
           <>
             <h2>No viewable media yet</h2>
-            <p>This view has no photos. Import photos or RAW files, or open a video from its tile.</p>
+            <p>
+              This view has no photos. Import photos or RAW files, or open a video from its tile.
+            </p>
           </>
         )}
       </div>
