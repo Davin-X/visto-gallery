@@ -2448,6 +2448,8 @@ function App() {
         selectVideoItem={selectVideoItem}
         playPreviousVideo={playPreviousVideo}
         playNextVideo={playNextVideo}
+        queueHasMore={Boolean(videoQueuePagingRef.current?.hasMore)}
+        onLoadMoreQueue={loadNextVideoPage}
         playSlideshow={playSlideshow}
         openAlbumMenu={openAlbumMenu}
         openSmartAlbum={openSmartAlbum}

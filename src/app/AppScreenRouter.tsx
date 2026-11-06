@@ -55,6 +55,8 @@ interface AppScreenRouterProps {
   selectVideoItem: (id: string) => void;
   playPreviousVideo: () => boolean;
   playNextVideo: () => Promise<boolean>;
+  queueHasMore: boolean;
+  onLoadMoreQueue: () => unknown;
   playSlideshow: (ids?: string[]) => void;
   openAlbumMenu: (album: any, e: React.MouseEvent) => void;
   openSmartAlbum: (albumId: string) => Promise<void>;
@@ -103,6 +105,8 @@ export function AppScreenRouter({
   selectVideoItem,
   playPreviousVideo,
   playNextVideo,
+  queueHasMore,
+  onLoadMoreQueue,
   playSlideshow,
   openAlbumMenu,
   openSmartAlbum,
@@ -280,6 +284,8 @@ export function AppScreenRouter({
         onSelect={selectVideoItem}
         onPrevious={playPreviousVideo}
         onNext={playNextVideo}
+        queueHasMore={queueHasMore}
+        onLoadMoreQueue={onLoadMoreQueue}
       />
 
       {screen === "Edit" && (

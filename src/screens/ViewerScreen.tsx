@@ -238,7 +238,6 @@ function ViewerScreen(props: ViewerScreenProps) {
     <div className="viewer-screen">
       <div className="page-heading viewer-heading">
         <div className="viewer-title-block">
-          <p className="eyebrow">PHOTO VIEWER</p>
           <h1 title={selected.name}>{selected.name}</h1>
           <div className="viewer-meta">
             <div className="meta-row">
