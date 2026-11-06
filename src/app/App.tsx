@@ -1235,6 +1235,15 @@ function App() {
   const beginVideoSession = useCallback(
     (item: MediaItem, scope: "library" | "hidden" = "library") => {
       library.setViewerScope(scope);
+      // Silence every other <video> surface (slideshow, compare, inspector)
+      // before this session starts, so the same file can't sound from two
+      // players at once. The inspector preview and thumbnails are muted, so
+      // this only ever hits the slideshow and stale players.
+      document.querySelectorAll("video").forEach((video) => {
+        try {
+          video.pause();
+        } catch {}
+      });
       const libraryState = useLibraryStore.getState();
       const scopedVideos = libraryState.viewerItems.filter(
         (candidate) =>
