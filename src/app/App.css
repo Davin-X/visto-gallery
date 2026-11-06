@@ -9041,7 +9041,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-top: 0;
+  /* Match the .feature-page top margin of the other screens; the sticky
+     sub-header still docks flush at top: 0 while scrolling. */
+  padding-top: 16px;
 }
 
 .duplicate-header {
