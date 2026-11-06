@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import VideoPlayer from "../design/components/VideoPlayer";
-import { ChevronLeftIcon, ChevronRightIcon, FilmstripIcon } from "../design/components/icons";
+import { ChevronLeftIcon, FilmstripIcon } from "../design/components/icons";
 import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { formatDuration } from "../engine/utils/time";
 import type { MediaItem } from "../engine/types/media";
@@ -138,15 +138,6 @@ export default function VideoPlayerScreen({
       </header>
 
       <div className="video-player-stage" ref={stageRef}>
-        <button
-          type="button"
-          className="viewer-arrow left video-stage-arrow"
-          onClick={onPrevious}
-          aria-label="Previous video"
-          title="Previous video"
-        >
-          <ChevronLeftIcon size={21} strokeWidth={2.1} />
-        </button>
         <VideoPlayer
           itemId={item.id}
           active={active}
@@ -159,16 +150,8 @@ export default function VideoPlayerScreen({
           forceAutoPlay={queueAutoPlayItemId === item.id}
           onFullscreen={() => void toggleFullscreen()}
           onNext={onNext}
+          onPrevious={onPrevious}
         />
-        <button
-          type="button"
-          className="viewer-arrow right video-stage-arrow"
-          onClick={() => void onNext()}
-          aria-label="Next video"
-          title="Next video"
-        >
-          <ChevronRightIcon size={21} strokeWidth={2.1} />
-        </button>
       </div>
 
       <footer className="video-player-queue">
