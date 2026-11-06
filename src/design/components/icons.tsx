@@ -63,23 +63,27 @@ export function MoonIcon({ size = 18, className = "", strokeWidth = 1.9 }: IconP
 /* ===== Sidebar navigation ===== */
 
 /** The standard "left panel" glyph (Finder/VS Code/Linear) for toggling the
- *  sidebar, instead of a generic chevron that reads as back/forward. */
-export function PanelLeftIcon({ size = 18, className = "", strokeWidth = 1.8 }: IconProps) {
+ *  sidebar, instead of a generic chevron that reads as back/forward.
+ *  A small chevron in the main pane shows the collapse direction so the
+ *  narrow left panel no longer reads as a stray stripe. */
+export function PanelLeftIcon({ size = 18, className = "", strokeWidth = 2 }: IconProps) {
   return (
     <Svg size={size} className={className} strokeWidth={strokeWidth}>
       <rect x="3.4" y="4.4" width="17.2" height="15.2" rx="2.4" />
-      <path d="M9.7 4.4v15.2" />
+      <path d="M10.4 4.4v15.2" />
+      <path d="M15.6 10.1l-2.3 1.9 2.3 1.9" />
     </Svg>
   );
 }
 
 /** Mirror of PanelLeftIcon for the right-hand inspector toggle, so the two
  *  top-bar panel buttons read as a matched pair. */
-export function PanelRightIcon({ size = 18, className = "", strokeWidth = 1.8 }: IconProps) {
+export function PanelRightIcon({ size = 18, className = "", strokeWidth = 2 }: IconProps) {
   return (
     <Svg size={size} className={className} strokeWidth={strokeWidth}>
       <rect x="3.4" y="4.4" width="17.2" height="15.2" rx="2.4" />
-      <path d="M14.3 4.4v15.2" />
+      <path d="M13.6 4.4v15.2" />
+      <path d="M8.4 10.1l2.3 1.9-2.3 1.9" />
     </Svg>
   );
 }
