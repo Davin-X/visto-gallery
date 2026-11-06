@@ -73,6 +73,17 @@ export function PanelLeftIcon({ size = 18, className = "", strokeWidth = 1.8 }: 
   );
 }
 
+/** Mirror of PanelLeftIcon for the right-hand inspector toggle, so the two
+ *  top-bar panel buttons read as a matched pair. */
+export function PanelRightIcon({ size = 18, className = "", strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <rect x="3.4" y="4.4" width="17.2" height="15.2" rx="2.4" />
+      <path d="M14.3 4.4v15.2" />
+    </Svg>
+  );
+}
+
 export function LibraryIcon({ size = 18, className = "", strokeWidth = 1.8 }: IconProps) {
   return (
     <Svg size={size} className={className} strokeWidth={strokeWidth}>

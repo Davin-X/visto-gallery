@@ -12,9 +12,9 @@ import {
   EditIcon,
   BatchIcon,
   FolderIcon,
-  InspectorIcon,
   EyeOffIcon,
   PanelLeftIcon,
+  PanelRightIcon,
 } from "../design/components/icons";
 import { ACCENT_PALETTE } from "../engine/stores";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
@@ -158,7 +158,7 @@ export function AppTopBar({
           }
           onClick={onToggleInspector}
         >
-          <InspectorIcon size={18} />
+          <PanelRightIcon size={18} />
         </button>
         <button
           className="icon-button"
