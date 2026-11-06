@@ -3656,6 +3656,20 @@ kbd {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
   font-size: 12px;
 }
+.busy-indicator-cancel {
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--text-muted);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  margin-left: auto;
+}
+.busy-indicator-cancel:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
 .spinner {
   width: 12px;
   height: 12px;

@@ -93,7 +93,7 @@ export const tauri = {
     updateTags: (itemId: string, tags: string[]): Promise<void> =>
       invoke("update_item_tags", { itemId, tags }),
 
-    moveToTrash: (paths: string[]): Promise<TrashResult> => invoke("move_to_trash", { paths }),
+    moveToTrash: (ids: string[]): Promise<TrashResult> => invoke("move_to_trash", { ids }),
 
     cancelMoveToTrash: (): Promise<void> => invoke("cancel_move_to_trash"),
 

@@ -881,9 +881,12 @@ function App() {
       }
 
       // Listen for native import progress events from scan/import commands.
-      await events.onImportProgress((progress) => {
+      const unlistenImportProgress = await events.onImportProgress((progress) => {
         const { phase, processed, total } = progress;
-        liveRef.current.library.setBusy(true);
+        // The command that started an operation owns `busy`. Progress events
+        // are deliberately presentation-only: flipping busy per event made
+        // the global overlay flash between Trash batches and exposed controls
+        // while Finder was still moving files.
         liveRef.current.library.setProgress({
           phase,
           processed,
@@ -894,13 +897,8 @@ function App() {
           filesTotal: progress.filesTotal,
           currentFile: progress.currentFile,
         });
-        // Hashing still has a short database/grouping step after the final
-        // progress event; keep its controls disabled until the command returns.
-        if (processed >= total && total > 0 && phase !== "hashing") {
-          liveRef.current.library.setBusy(false);
-          liveRef.current.library.setProgress(null);
-        }
       });
+      unlisteners.push(unlistenImportProgress);
       autoImportControllerRef.current = createAutoImportController({
         isEnabled: () => useSettingsStore.getState().autoImport,
         scan: async (path) => {
@@ -1475,10 +1473,23 @@ function App() {
     // Run delete in background
     void (async () => {
       try {
-        await library.deleteItems(ids);
-        showNotice(
-          `Moved ${ids.length.toLocaleString()} item${ids.length === 1 ? "" : "s"} to Trash.`,
-        );
+        const result = await library.deleteItems(ids);
+        // The duplicate manager can remove rows that are outside the loaded
+        // page, so refresh canonical source/library totals after the native
+        // transaction rather than estimating them from rendered tiles.
+        if (result.trashed > 0) {
+          void tauri.library.getStats().then(setLibraryStats).catch(() => {});
+        }
+        if (result.error === "Deletion cancelled.") {
+          showNotice("Deletion cancelled.");
+        } else if (result.trashed > 0) {
+          const suffix = result.failed ? ` ${result.failed} item(s) could not be moved.` : "";
+          showNotice(
+            `Moved ${result.trashed.toLocaleString()} item${result.trashed === 1 ? "" : "s"} to Trash.${suffix}`,
+          );
+        } else if (result.error) {
+          showNotice(`Could not move items to Trash: ${result.error}`);
+        }
       } catch (error) {
         const msg = String(error);
         if (msg !== "Cancelled") {
@@ -2257,7 +2268,11 @@ function App() {
               <button
                 className="busy-indicator-cancel"
                 type="button"
-                onClick={() => void library.cancelScan()}
+                onClick={() =>
+                  void (library.progress?.phase === "trashing"
+                    ? library.cancelDelete()
+                    : library.cancelScan())
+                }
                 disabled={library.canceling}
               >
                 {library.canceling ? "Cancelling…" : "Cancel"}

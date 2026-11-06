@@ -51,6 +51,44 @@ const VIRTUAL_GRID_OVERSCAN_ROWS = 6;
 const MAX_VIRTUAL_GRID_ITEMS = 480;
 const GRID_HORIZONTAL_PADDING = 40;
 
+/** Pure row-window calculation for the fixed-height grid and overview cards. */
+export function calculateVirtualGridWindow(
+  itemCount: number,
+  columns: number,
+  rowStride: number,
+  gap: number,
+  scrollTop: number,
+  viewportHeight: number,
+) {
+  const totalRows = Math.ceil(itemCount / columns);
+  const firstVisibleRow = Math.max(0, Math.floor(scrollTop / rowStride));
+  const lastVisibleRow = Math.min(
+    totalRows,
+    Math.ceil((scrollTop + viewportHeight) / rowStride),
+  );
+  const startRow = Math.max(0, firstVisibleRow - VIRTUAL_GRID_OVERSCAN_ROWS);
+  const requestedEndRow = Math.min(
+    totalRows,
+    Math.max(lastVisibleRow + VIRTUAL_GRID_OVERSCAN_ROWS, startRow + 1),
+  );
+  // Cap the DOM even on very wide monitors with many grid columns.
+  const maxWindowRows = Math.max(
+    1,
+    Math.floor(MAX_VIRTUAL_GRID_ITEMS / columns),
+  );
+  const endRow = Math.min(requestedEndRow, startRow + maxWindowRows);
+
+  return {
+    startIndex: startRow * columns,
+    endIndex: Math.min(itemCount, endRow * columns),
+    topSpacer: startRow ? Math.max(0, startRow * rowStride - gap) : 0,
+    bottomSpacer:
+      endRow < totalRows
+        ? Math.max(0, (totalRows - endRow) * rowStride - gap)
+        : 0,
+  };
+}
+
 interface LibraryScreenProps {
   activeAlbum: string | null;
   albumDragOver?: boolean;
@@ -99,7 +137,7 @@ interface LibraryScreenProps {
   onToggleInspector: () => void;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
-  onDeleteItems: (ids: string[]) => void | Promise<void>;
+  onDeleteItems: (ids: string[]) => void | Promise<unknown>;
   onUpdateTags: (id: string, tags: string[]) => void | Promise<void>;
   query: string;
   minRating: number | null;
@@ -573,31 +611,19 @@ function LibraryScreen(props: LibraryScreenProps) {
     const estimatedTileHeight = tileWidth * (overview ? 10 / 16 : 1) + 58;
     const rowHeight = measuredTileHeight ?? estimatedTileHeight;
     const rowStride = rowHeight + gap;
-    const totalRows = Math.ceil(renderedItems.length / columns);
-    const firstVisibleRow = Math.max(0, Math.floor(gridViewport.scrollTop / rowStride));
-    const lastVisibleRow = Math.min(
-      totalRows,
-      Math.ceil((gridViewport.scrollTop + gridViewport.height) / rowStride),
+    const window = calculateVirtualGridWindow(
+      renderedItems.length,
+      columns,
+      rowStride,
+      gap,
+      gridViewport.scrollTop,
+      gridViewport.height,
     );
-    const startRow = Math.max(0, firstVisibleRow - VIRTUAL_GRID_OVERSCAN_ROWS);
-    const requestedEndRow = Math.min(
-      totalRows,
-      Math.max(lastVisibleRow + VIRTUAL_GRID_OVERSCAN_ROWS, startRow + 1),
-    );
-    // A very wide monitor can have many columns. Cap the mounted item count
-    // regardless of viewport dimensions so scrolling a 100k library never
-    // recreates the unbounded-DOM problem this window is solving.
-    const maxWindowRows = Math.max(1, Math.floor(MAX_VIRTUAL_GRID_ITEMS / columns));
-    const endRow = Math.min(requestedEndRow, startRow + maxWindowRows);
-    const startIndex = startRow * columns;
-    const endIndex = Math.min(renderedItems.length, endRow * columns);
 
     return {
-      items: renderedItems.slice(startIndex, endIndex),
-      // CSS grid contributes one gap after a spacer, so exclude it from the
-      // spacer's own height to preserve each row's original document offset.
-      topSpacer: startRow ? Math.max(0, startRow * rowStride - gap) : 0,
-      bottomSpacer: endRow < totalRows ? Math.max(0, (totalRows - endRow) * rowStride - gap) : 0,
+      items: renderedItems.slice(window.startIndex, window.endIndex),
+      topSpacer: window.topSpacer,
+      bottomSpacer: window.bottomSpacer,
     };
   }, [
     gridViewport.height,

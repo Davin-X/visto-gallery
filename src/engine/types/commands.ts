@@ -240,12 +240,13 @@ export interface BatchExportResult {
 }
 
 export interface TrashResult {
+  /** Catalog ids that were moved to Trash. */
   trashed: string[];
-  failed: Array<{ path: string; error: string }>;
+  failed: TrashError[];
 }
 
 export interface TrashError {
-  path: string;
+  id: string;
   error: string;
 }
 
@@ -257,7 +258,7 @@ export interface LibraryChangedEvent {
 
 export interface ImportProgressEvent {
   sessionId: string;
-  phase: "scanning" | "reading" | "hashing" | "indexing" | "complete";
+  phase: "scanning" | "reading" | "hashing" | "indexing" | "trashing" | "complete";
   processed: number;
   total: number;
   currentFile?: string;

@@ -191,7 +191,9 @@ interface LibraryState {
   setRatingForIds: (ids: string[], rating: number) => Promise<void>;
   setColorLabelForIds: (ids: string[], colorLabel: string) => Promise<void>;
   updateItemTags: (id: string, tags: string[]) => Promise<void>;
-  deleteItems: (ids: string[]) => Promise<void>;
+  deleteItems: (ids: string[]) => Promise<{ trashed: number; failed: number; error?: string }>;
+
+  cancelDelete: () => Promise<void>;
 
   // Actions - Albums
   createAlbum: (name: string, itemIds?: string[]) => Promise<void>;
@@ -216,6 +218,7 @@ interface LibraryState {
   // Actions - UI
   setBusy: (busy: boolean) => void;
   setProgress: (progress: LibraryState["progress"]) => void;
+  setBusyProgress: (busy: boolean, progress: LibraryState["progress"] | null) => void;
   showNotice: (text: string) => void;
 }
 
@@ -711,7 +714,12 @@ export const useLibraryStore = create<LibraryState>()(
       inspectItem: (id) => {
         const state = get();
         if (id === state.inspectedId) return;
-        if (id !== null && !state.items.some((i) => i.id === id) && !state.hiddenItems.some((i) => i.id === id)) return;
+        if (
+          id !== null &&
+          !state.items.some((i) => i.id === id) &&
+          !state.hiddenItems.some((i) => i.id === id)
+        )
+          return;
         const next = { ...state, inspectedId: id };
         set({ inspectedId: id, ...computeInspectionDerived(next) });
       },
@@ -1102,43 +1110,59 @@ export const useLibraryStore = create<LibraryState>()(
       },
 
       deleteItems: async (ids) => {
-        const paths = get()
-          .items.filter((i) => ids.includes(i.id))
-          .map((i) => i.path);
+        // The backend resolves catalog ids to paths itself, so this works for
+        // duplicates and hidden items that are outside the loaded library
+        // page. Sending paths from renderer state silently missed those.
+        const uniqueIds = [...new Set(ids)].filter(Boolean);
+        if (uniqueIds.length === 0) {
+          return { trashed: 0, failed: 0 };
+        }
         set({
           busy: true,
           canceling: false,
-          progress: { phase: "trashing", processed: 0, total: paths.length },
+          progress: { phase: "trashing", processed: 0, total: uniqueIds.length },
         });
         try {
-          const result = await tauri.items.moveToTrash(paths);
-          // Only remove items that were successfully trashed
-          const trashedIds = new Set(
-            get()
-              .items.filter((i) => result.trashed.includes(i.path))
-              .map((i) => i.id),
-          );
-          if (result.failed.length > 0) {
-            const errors = result.failed.map((f) => `${f.path}: ${f.error}`).join("; ");
-            get().showNotice(`Failed to trash ${result.failed.length} item(s): ${errors}`);
-          }
+          const result = await tauri.items.moveToTrash(uniqueIds);
+          // Only remove items the backend confirms it moved to Trash.
+          const trashedIds = new Set(result.trashed);
           set({ busy: false, canceling: false, progress: null });
-          set((s) => ({
-            items: s.items.filter((i) => !trashedIds.has(i.id)),
-            selectedIds: s.selectedIds.filter((id) => !trashedIds.has(id)),
-            inspectedId: s.inspectedId && trashedIds.has(s.inspectedId) ? null : s.inspectedId,
-            duplicates: s.duplicates
-              .map((g) => ({
-                ...g,
-                items: g.items.filter((i) => !trashedIds.has(i.id)),
-              }))
-              .filter((g) => (g.items?.length || 0) > 1),
-          }));
+          set((s) => {
+            const remainingHidden = s.hiddenItems.filter((i) => !trashedIds.has(i.id));
+            return {
+              items: s.items.filter((i) => !trashedIds.has(i.id)),
+              hiddenItems: remainingHidden,
+              hiddenCount: remainingHidden.length,
+              selectedIds: s.selectedIds.filter((id) => !trashedIds.has(id)),
+              totalCount: Math.max(0, s.totalCount - trashedIds.size),
+              inspectedId: s.inspectedId && trashedIds.has(s.inspectedId) ? null : s.inspectedId,
+              duplicates: s.duplicates
+                .map((g) => ({
+                  ...g,
+                  items: g.items.filter((i) => !trashedIds.has(i.id)),
+                }))
+                .filter((g) => (g.items?.length || 0) > 1),
+            };
+          });
+          get().refreshDerived();
+          // Detect a user cancel: every failure is "Operation cancelled".
+          // Don't dump every cancelled id into the error message — summarize.
+          const allFailuresCancelled =
+            result.failed.length > 0 &&
+            result.failed.every((f) => f.error?.includes("cancelled"));
+          return {
+            trashed: trashedIds.size,
+            failed: result.failed.length,
+            error: allFailuresCancelled
+              ? "Deletion cancelled."
+              : result.failed.length > 0
+                ? result.failed.map((f) => `${f.id}: ${f.error}`).join("; ")
+                : undefined,
+          };
         } catch (e) {
           set({ busy: false, canceling: false, progress: null });
           throw e;
         }
-        get().refreshDerived();
       },
 
       // Albums
@@ -1532,11 +1556,25 @@ export const useLibraryStore = create<LibraryState>()(
         }
       },
 
+      cancelDelete: async () => {
+        set({ canceling: true });
+        try {
+          await tauri.items.cancelMoveToTrash();
+        } catch (e) {
+          set({
+            canceling: false,
+            notice: `Could not cancel deletion: ${String(e)}`,
+          });
+        }
+      },
+
       clearDuplicates: () => set({ duplicates: [] }),
 
       // UI
       setBusy: (busy) => set({ busy, ...(busy ? {} : { canceling: false }) }),
       setProgress: (progress) => set({ progress }),
+      setBusyProgress: (busy, progress) =>
+        set({ busy, progress, ...(busy ? {} : { canceling: false }) }),
       showNotice: (text) => {
         set({ notice: text });
         if (text) {

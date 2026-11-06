@@ -42,7 +42,7 @@ const GROUP_PAGE = 40;
 const INLINE_COPIES = 4;
 
 type ViewMode = "grid" | "list";
-type KeeperMode = "oldest" | "newest";
+type KeeperMode = "best" | "oldest" | "newest";
 type KindFilter = "all" | "photo" | "video" | "raw";
 type SortBy = "saving" | "copies" | "newest" | "name";
 
@@ -72,6 +72,23 @@ function copyOrderValue(item: MediaItem): number {
   return item.createdAt || item.modifiedAt || 0;
 }
 
+/** Prefer the least-lossy, highest-detail source before considering age. */
+function keeperQuality(item: MediaItem): [number, number, number] {
+  const extension = item.extension.toLowerCase();
+  const format =
+    item.kind === "raw"
+      ? 5
+      : extension === "tif" || extension === "tiff"
+        ? 4
+        : extension === "png"
+          ? 3
+          : extension === "jpg" || extension === "jpeg" || extension === "heic"
+            ? 2
+            : 1;
+  const pixels = Math.max(0, item.width ?? 0) * Math.max(0, item.height ?? 0);
+  return [format, pixels, item.size];
+}
+
 /**
  * The backend stores hash groups in query order, so the first item is not
  * necessarily the original file. Order every group explicitly: the keeper
@@ -81,6 +98,13 @@ function copyOrderValue(item: MediaItem): number {
 function orderGroup(items: MediaItem[], keeperMode: KeeperMode): MediaItem[] {
   const direction = keeperMode === "oldest" ? 1 : -1;
   return [...items].sort((a, b) => {
+    if (keeperMode === "best") {
+      const left = keeperQuality(a);
+      const right = keeperQuality(b);
+      for (let index = 0; index < left.length; index += 1) {
+        if (left[index] !== right[index]) return right[index] - left[index];
+      }
+    }
     const byAge = (copyOrderValue(a) - copyOrderValue(b)) * direction;
     if (byAge !== 0) return byAge;
     if (a.path.length !== b.path.length) return a.path.length - b.path.length;
@@ -127,7 +151,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [renderLimit, setRenderLimit] = useState(GROUP_PAGE);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
-  const [keeperMode, setKeeperMode] = useState<KeeperMode>("oldest");
+  const [keeperMode, setKeeperMode] = useState<KeeperMode>("best");
   const [filterKind, setFilterKind] = useState<KindFilter>("all");
   const [sortBy, setSortBy] = useState<SortBy>("saving");
   const pageRef = useRef<HTMLDivElement>(null);
@@ -295,11 +319,6 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
       setRenderLimit((limit) => Math.min(limit + GROUP_PAGE, groupViews.length));
     }
   }, [groupViews.length, renderLimit]);
-
-  const scanPercent = useMemo(() => {
-    if (!progress?.total || !progress.processed) return null;
-    return Math.max(0, Math.min(100, Math.round((progress.processed / progress.total) * 100)));
-  }, [progress]);
 
   useKeyboard([
     useCallback(
@@ -535,6 +554,8 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
 
   const hasGroups = groups.length > 0;
   const hasVisibleGroups = groupViews.length > 0;
+  const isDuplicateScan = busy && progress?.phase === "hashing";
+  const isTrashing = busy && progress?.phase === "trashing";
   const canAct = !busy && selected.size > 0;
   const allCopiesSelected = totalCopies > 0 && selected.size >= totalCopies;
 
@@ -556,42 +577,17 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           </button>
         )}
         <button type="button" className="primary-button" onClick={onScan} disabled={busy}>
-          {busy ? "Scanning…" : hasGroups ? "Rescan" : "Scan library"}
+          {isTrashing ? "Moving to Trash…" : isDuplicateScan ? "Scanning…" : hasGroups ? "Rescan" : "Scan library"}
         </button>
       </div>
     </div>
   );
-
-  const scanBar = busy ? (
-    <div className="duplicate-scan" role="status" aria-live="polite">
-      <span className="duplicate-scan-pip" aria-hidden="true" />
-      <div className="duplicate-scan-copy">
-        <span className="duplicate-scan-title">
-          {progress?.phase === "hashing" ? "Comparing file contents" : "Finding candidates"}
-          {scanPercent !== null ? ` · ${scanPercent}%` : ""}
-        </span>
-        <span className="duplicate-scan-file" title={progress?.currentFile}>
-          {progress?.currentFile || "Reading file fingerprints…"}
-        </span>
-        <div className={`duplicate-scan-track${scanPercent === null ? " is-indeterminate" : ""}`}>
-          <span
-            className="duplicate-scan-fill"
-            style={scanPercent !== null ? { width: `${scanPercent}%` } : undefined}
-          />
-        </div>
-      </div>
-      <button type="button" className="quiet-button" onClick={onClear}>
-        Cancel
-      </button>
-    </div>
-  ) : null;
 
   return (
     <div className="feature-page duplicates-page" ref={pageRef} onScroll={handleScroll}>
       {hasGroups ? (
         <header className="duplicate-header">
           {pageHeading}
-          {scanBar}
 
           {hasGroups && (
             <div className="duplicate-toolbar">
@@ -622,6 +618,15 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               <div className="duplicate-toolbar-right">
                 <div className="duplicate-keeper" role="group" aria-label="Default copy to keep">
                   <span className="duplicate-keeper-label">Keep</span>
+                  <button
+                    type="button"
+                    className={keeperMode === "best" ? "is-active" : ""}
+                    aria-pressed={keeperMode === "best"}
+                    title="Keep the highest-quality copy: RAW or TIFF first, then resolution and file size"
+                    onClick={() => changeKeeperMode("best")}
+                  >
+                    Best quality
+                  </button>
                   <button
                     type="button"
                     className={keeperMode === "oldest" ? "is-active" : ""}
@@ -735,7 +740,6 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
       ) : (
         <>
           {pageHeading}
-          {scanBar}
         </>
       )}
       {!hasVisibleGroups ? (
@@ -743,9 +747,17 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           <span className="duplicate-empty-icon" aria-hidden="true">
             <DuplicatesIcon size={26} />
           </span>
-          <h2>{busy ? "Scanning your library" : EMPTY_TITLES[hasGroups ? filterKind : "all"]}</h2>
+          <h2>
+            {isTrashing
+              ? "Moving selected files to Trash"
+              : isDuplicateScan
+                ? "Scanning your library"
+                : EMPTY_TITLES[hasGroups ? filterKind : "all"]}
+          </h2>
           <p>
-            {busy
+            {isTrashing
+              ? "The selected copies are being moved to Finder Trash. You can use Put Back in Finder if needed."
+              : isDuplicateScan
               ? "Comparing files by content hash. Large libraries can take a moment."
               : hasGroups
                 ? otherKinds.length > 0

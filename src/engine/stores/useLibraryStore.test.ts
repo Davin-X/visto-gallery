@@ -9,7 +9,11 @@ vi.mock("@tauri-apps/api/window", () => ({
 
 vi.mock("../commands/tauri", () => ({
   tauri: {
-    items: { toggleFavorite: vi.fn().mockResolvedValue(undefined) },
+    items: {
+      toggleFavorite: vi.fn().mockResolvedValue(undefined),
+      moveToTrash: vi.fn().mockResolvedValue({ trashed: [], failed: [] }),
+      cancelMoveToTrash: vi.fn().mockResolvedValue(undefined),
+    },
     albums: {
       create: vi.fn().mockResolvedValue({ id: "album-1", name: "Trip", itemCount: 0 }),
       delete: vi.fn().mockResolvedValue(undefined),
@@ -22,6 +26,11 @@ vi.mock("../commands/tauri", () => ({
     },
     library: {
       getItems: vi.fn().mockResolvedValue({
+        items: [],
+        hasMore: false,
+        totalCount: 0,
+      }),
+      getHiddenItems: vi.fn().mockResolvedValue({
         items: [],
         hasMore: false,
         totalCount: 0,
@@ -458,4 +467,90 @@ test("hiddenItems and hiddenCount are derived from hidden items", () => {
   expect(state.hiddenItems).toHaveLength(1);
   expect(state.hiddenCount).toBe(1);
   expect(state.hiddenItems[0].id).toBe("hidden");
+});
+
+test("deleteItems sends hidden ids and clears the hidden collection", async () => {
+  const visible = makeItem("visible", "visible.jpg");
+  const hidden = makeItem("hidden-copy", "hidden-copy.jpg");
+  hidden.hidden = true;
+  useLibraryStore.setState({
+    items: [visible],
+    hiddenItems: [hidden],
+    hiddenCount: 1,
+  });
+  vi.mocked(tauri.items.moveToTrash).mockResolvedValueOnce({
+    trashed: [hidden.id],
+    failed: [],
+  });
+
+  const result = await useLibraryStore.getState().deleteItems([hidden.id]);
+
+  expect(tauri.items.moveToTrash).toHaveBeenCalledWith([hidden.id]);
+  expect(result).toEqual({ trashed: 1, failed: 0, error: undefined });
+  expect(useLibraryStore.getState().hiddenItems).toEqual([]);
+  expect(useLibraryStore.getState().hiddenCount).toBe(0);
+  expect(useLibraryStore.getState().items).toEqual([visible]);
+});
+
+test("deleteItems works for a duplicate outside the loaded library page", async () => {
+  const copy = makeItem("copy", "copy.jpg");
+  const keeper = makeItem("keeper", "keeper.jpg");
+  useLibraryStore.setState({
+    items: [],
+    hiddenItems: [],
+    duplicates: [{ id: "group-1", sha256: "abc", size: copy.size, items: [keeper, copy] }],
+  });
+  vi.mocked(tauri.items.moveToTrash).mockResolvedValueOnce({
+    trashed: [copy.id],
+    failed: [],
+  });
+
+  const result = await useLibraryStore.getState().deleteItems([copy.id]);
+
+  // The renderer only sends ids; the backend resolves the path, so the copy
+  // does not have to be present in paginated `items`.
+  expect(tauri.items.moveToTrash).toHaveBeenCalledWith([copy.id]);
+  expect(result.trashed).toBe(1);
+  expect(useLibraryStore.getState().duplicates).toEqual([]);
+});
+
+test("deleteItems deduplicates ids before calling the backend", async () => {
+  const hidden = makeItem("hidden-copy", "hidden-copy.jpg");
+  hidden.hidden = true;
+  useLibraryStore.setState({ hiddenItems: [hidden], hiddenCount: 1 });
+  vi.mocked(tauri.items.moveToTrash).mockResolvedValueOnce({
+    trashed: [hidden.id],
+    failed: [],
+  });
+
+  await useLibraryStore.getState().deleteItems([hidden.id, hidden.id]);
+
+  expect(tauri.items.moveToTrash).toHaveBeenCalledWith([hidden.id]);
+});
+
+test("deleteItems reports an id that the backend refused instead of claiming success", async () => {
+  const hidden = makeItem("hidden-copy", "hidden-copy.jpg");
+  hidden.hidden = true;
+  useLibraryStore.setState({ hiddenItems: [hidden], hiddenCount: 1 });
+  vi.mocked(tauri.items.moveToTrash).mockResolvedValueOnce({
+    trashed: [],
+    failed: [{ id: hidden.id, error: "File no longer exists on disk." }],
+  });
+
+  const result = await useLibraryStore.getState().deleteItems([hidden.id]);
+
+  expect(result.trashed).toBe(0);
+  expect(result.failed).toBe(1);
+  expect(result.error).toContain("no longer exists");
+  // A refused file must not be dropped from the catalog view.
+  expect(useLibraryStore.getState().hiddenItems).toEqual([hidden]);
+});
+
+test("cancelDelete keeps the stable operation overlay in its cancelling state", async () => {
+  await useLibraryStore.getState().cancelDelete();
+
+  expect(tauri.items.cancelMoveToTrash).toHaveBeenCalledOnce();
+  // deleteItems clears this only after the native command returns its final
+  // result, so the user sees a truthful Cancelling… state between batches.
+  expect(useLibraryStore.getState().canceling).toBe(true);
 });

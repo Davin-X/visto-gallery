@@ -204,17 +204,18 @@ pub struct BatchExportError {
     pub error: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TrashResult {
+    /// Catalog ids that were moved to Trash.
     pub trashed: Vec<String>,
     pub failed: Vec<TrashError>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TrashError {
-    pub path: String,
+    pub id: String,
     pub error: String,
 }
 
