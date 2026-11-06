@@ -3290,10 +3290,10 @@ body {
   .app-body.sidebar-open.sidebar-collapsed {
     grid-template-columns: 64px minmax(0, 1fr);
   }
-  /* Clip the label text during the column shrink so it never spills. */
-  .app-body.sidebar-collapsed .sidebar {
-    overflow: hidden;
-  }
+  /* The LIBRARY stats popup is portaled to .app-frame (see AppNavigation.tsx)
+     so it escapes both .sidebar's and .sidebar-scroll's overflow clipping
+     and paints above .main-content. No overflow override is needed — the
+     sidebar keeps its normal scroll containment. */
   /* WORKSPACE hides on collapse; the toggle takes its slot on the left at
      the same height, so the nav list in the header never shifts. */
   .app-body.sidebar-collapsed .sidebar-label-text {
@@ -3331,10 +3331,90 @@ body {
   .app-body.sidebar-collapsed .sources-entry-action {
     display: none;
   }
-  /* LIBRARY stats block is hidden in rail mode; the Sources entry
-     (.sources-entry-section) is an action button and stays visible. */
+  /* Library stats live behind a button in rail mode so the details stay
+     reachable without taking sidebar room. Hidden while expanded. */
+  .sidebar-stats-entry {
+    display: none;
+  }
   .app-body.sidebar-collapsed .sidebar-section:not(.sources-entry-section) {
     display: none;
+  }
+  .app-body.sidebar-collapsed .sidebar-stats-entry {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    position: relative;
+  }
+  /* Same accent identity as .sources-entry: default / hover / open steps. */
+  .app-body.sidebar-collapsed .sidebar-stats-button {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--blue-soft) 30%, var(--surface));
+    color: var(--accent-text);
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
+  }
+  .sidebar-stats-button:hover {
+    border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+    background: color-mix(in srgb, var(--blue-soft) 52%, var(--surface));
+    color: var(--accent-text);
+  }
+  .sidebar-stats-button[aria-expanded="true"] {
+    border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+    background: color-mix(in srgb, var(--blue-soft) 58%, var(--surface));
+    color: var(--accent-text);
+  }
+  .sidebar-stats-button:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+  /* Portaled to .app-frame (see AppNavigation.tsx): fixed positioning with
+     top/left set inline from the button rect. An absolute popup inside the
+     rail would be clipped by .sidebar-scroll and paint under .main-content.
+     z-index 200 sits above the sticky library header (10) and back button
+     (40) but below dialog backdrops (300).
+     Styled as the Sources entry's open state (accent border + blue-soft
+     tint) so the button, popup and Sources share one accent identity. */
+  .sidebar-stats-popup {
+    position: fixed;
+    z-index: 200;
+    width: 230px;
+    padding: 12px;
+    border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--line));
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--blue-soft) 58%, var(--surface));
+    box-shadow:
+      0 12px 32px rgba(0, 0, 0, 0.22),
+      0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .sidebar-stats-popup .sidebar-section-label {
+    margin: 0 2px 8px;
+    color: var(--accent-text);
+  }
+  .sidebar-stats-popup .library-stats {
+    border-color: color-mix(in srgb, var(--accent) 20%, var(--line));
+    background: color-mix(in srgb, var(--accent) 20%, var(--line));
+  }
+  .sidebar-stats-popup .stat-row {
+    background: color-mix(in srgb, var(--blue-soft) 30%, var(--surface));
+  }
+  .sidebar-stats-popup .stat-row:hover {
+    background: color-mix(in srgb, var(--blue-soft) 52%, var(--surface));
+  }
+  .sidebar-stats-popup .stat-row.size {
+    border-top-color: color-mix(in srgb, var(--accent) 20%, var(--line));
+    background: color-mix(in srgb, var(--blue-soft) 52%, var(--surface));
+  }
+  .sidebar-stats-popup .stat-row.size .stat-value {
+    color: var(--accent-text);
   }
   /* Footer: health dot and update dot only, both pinned to the left. */
   .app-body.sidebar-collapsed .sidebar-footer {

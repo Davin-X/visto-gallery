@@ -541,6 +541,15 @@ export function DownloadIcon({ size = 16, className = "", strokeWidth = 1.8 }: I
   );
 }
 
+export function ChartIcon({ size = 18, className = "", strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <path d="M3 20h18" />
+      <path d="M7 20v-5.5M12 20V9M17 20v-8.5" />
+    </Svg>
+  );
+}
+
 export function InfoIcon({ size = 16, className = "", strokeWidth = 1.8 }: IconProps) {
   return (
     <Svg size={size} className={className} strokeWidth={strokeWidth}>
