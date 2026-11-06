@@ -1229,39 +1229,23 @@ function LibraryScreen(props: LibraryScreenProps) {
 
           <div className="filter-cluster" role="group" aria-label="Filter by media type">
             <span className="smart-label">TYPE</span>
-            {(["All", "Photos", "Videos", "RAW", "Favorites"] as string[]).map((f) => {
-              let count: number;
-              if (props.activeAlbum && props.items) {
-                // When viewing an album, describe the album's items, not the
-                // whole library stats (which would show thousands of items).
-                count =
-                  f === "All"
-                    ? props.items.length
-                    : f === "Photos"
-                      ? props.items.filter((i: any) => i.kind === "photo").length
-                      : f === "Videos"
-                        ? props.items.filter((i: any) => i.kind === "video").length
-                        : f === "RAW"
-                          ? props.items.filter((i: any) => i.kind === "raw").length
-                          : f === "Favorites"
-                            ? props.items.filter((i: any) => i.favorite).length
-                            : 0;
-              } else {
-                count =
-                  f === "All"
-                    ? (props.libraryStats?.photos ?? 0) +
-                      (props.libraryStats?.videos ?? 0) +
-                      (props.libraryStats?.raws ?? 0)
-                    : f === "Photos"
-                      ? (props.libraryStats?.photos ?? 0)
-                      : f === "Videos"
-                        ? (props.libraryStats?.videos ?? 0)
-                        : f === "RAW"
-                          ? (props.libraryStats?.raws ?? 0)
-                          : f === "Favorites"
-                            ? (props.libraryStats?.favorites ?? 0)
-                            : 0;
-              }
+            {(["All", "Photos", "Videos", "RAW", "Favorites"] as const).map((f) => {
+              // Album/collection counts must come from the full collection on
+              // screen, not the type-filtered `props.items` (selecting "Photos"
+              // in an album with no photos would zero every count).
+              const count = props.activeAlbum
+                ? filterCounts[f]
+                : f === "All"
+                  ? (props.libraryStats?.photos ?? 0) +
+                    (props.libraryStats?.videos ?? 0) +
+                    (props.libraryStats?.raws ?? 0)
+                  : f === "Photos"
+                    ? (props.libraryStats?.photos ?? 0)
+                    : f === "Videos"
+                      ? (props.libraryStats?.videos ?? 0)
+                      : f === "RAW"
+                        ? (props.libraryStats?.raws ?? 0)
+                        : (props.libraryStats?.favorites ?? 0);
               return (
                 <button
                   key={f}
