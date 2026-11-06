@@ -3284,12 +3284,10 @@ body {
 }
 
 /* Rail mode: the sidebar shrinks to icons instead of disappearing.
-   Scoped above the tablet breakpoint, where the sidebar is an overlay.
-   Children keep the exact x-axis they have when expanded (icon at 24px in
-   every state); only the labels disappear and the accent pills animate to
-   their 40px footprint, so nothing moves horizontally on collapse. */
+   Scoped to open+collapsed so a hidden sidebar can't reserve its stripe
+   column and squeeze the main pane into the leftover blank track. */
 @media (min-width: 901px) {
-  .app-body.sidebar-collapsed {
+  .app-body.sidebar-open.sidebar-collapsed {
     grid-template-columns: 64px minmax(0, 1fr);
   }
   /* Clip the label text during the column shrink so it never spills. */
