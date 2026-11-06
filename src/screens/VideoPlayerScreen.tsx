@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import VideoPlayer from "../design/components/VideoPlayer";
-import { ChevronLeftIcon, ChevronRightIcon } from "../design/components/icons";
+import { ChevronLeftIcon, ChevronRightIcon, FilmstripIcon } from "../design/components/icons";
 import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { formatDuration } from "../engine/utils/time";
 import type { MediaItem } from "../engine/types/media";
@@ -110,8 +110,29 @@ export default function VideoPlayerScreen({
         <div className="video-player-title">
           <h1 title={item.name}>{item.name}</h1>
           <span className="video-player-meta">
-            {formatDuration(time)} / {formatDuration(duration || item.duration || 0)}
-            {currentIndex >= 0 ? ` · ${currentIndex + 1} of ${queue.length}` : ""}
+            <span
+              className="video-player-meta-chip video-player-meta-chip-time"
+              title="Elapsed / total duration"
+            >
+              <span>{formatDuration(time)}</span>
+              <span className="video-player-meta-sep" aria-hidden="true">
+                /
+              </span>
+              <span>{formatDuration(duration || item.duration || 0)}</span>
+            </span>
+            {currentIndex >= 0 && (
+              <span
+                className="video-player-meta-chip"
+                title={`Video ${currentIndex + 1} of ${queue.length.toLocaleString()} in this queue`}
+              >
+                <FilmstripIcon size={11} strokeWidth={2} />
+                <span>{currentIndex + 1}</span>
+                <span className="video-player-meta-sep" aria-hidden="true">
+                  of
+                </span>
+                <span>{queue.length.toLocaleString()}</span>
+              </span>
+            )}
           </span>
         </div>
       </header>
