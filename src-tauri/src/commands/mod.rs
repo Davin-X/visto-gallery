@@ -113,6 +113,9 @@ pub struct ExifData {
 #[serde(rename_all = "camelCase")]
 pub struct RenderRequest {
     pub source_path: String,
+    /// Catalog id of the item. Required for in-place edits so the original can
+    /// be journaled under a stable key.
+    pub media_id: Option<String>,
     pub edits: EditValues,
     pub output_format: String,
     pub quality: f32,

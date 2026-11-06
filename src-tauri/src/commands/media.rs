@@ -5,7 +5,7 @@ use serde_json::json;
 use std::collections::HashSet;
 use std::io::Write;
 use std::path::PathBuf;
-use tauri::{State, Window};
+use tauri::{Manager, State, Window};
 
 /// Load the subset of `paths` that currently exist as catalog rows.
 async fn cataloged_paths(
@@ -194,7 +194,20 @@ pub async fn move_to_trash(
 
     if !trashed.is_empty() {
         let mut transaction = db.begin().await.map_err(|e| e.to_string())?;
+        let mut backup_files = Vec::new();
         for path in &trashed {
+            // Collect journaled originals before the FK cascade removes their
+            // rows, so the files do not linger in app data forever.
+            let backups: Vec<String> = sqlx::query_scalar(
+                "SELECT b.backup_path FROM edit_backups b \
+                 JOIN media_items m ON m.id = b.media_id WHERE m.path = ?",
+            )
+            .bind(path)
+            .fetch_all(&mut *transaction)
+            .await
+            .map_err(|e| e.to_string())?;
+            backup_files.extend(backups);
+
             sqlx::query("DELETE FROM media_items WHERE path = ?")
                 .bind(path)
                 .execute(&mut *transaction)
@@ -202,6 +215,9 @@ pub async fn move_to_trash(
                 .map_err(|e| e.to_string())?;
         }
         transaction.commit().await.map_err(|e| e.to_string())?;
+        for backup in backup_files {
+            let _ = std::fs::remove_file(backup);
+        }
     }
 
     Ok(TrashResult { trashed, failed })
@@ -511,9 +527,111 @@ pub(crate) fn validate_in_place_format(source_path: &str) -> Result<(), String> 
     ))
 }
 
+/// Journal the original bytes of `source_path` before an in-place edit.
+///
+/// The first call copies the file into `backup_dir` and records it in
+/// `edit_backups`. Later calls reuse that record without overwriting it, so
+/// editing twice can never replace the true original with the first edit.
+async fn ensure_edit_backup_in_dir(
+    db: &sqlx::SqlitePool,
+    backup_dir: &std::path::Path,
+    media_id: &str,
+    source_path: &str,
+) -> Result<PathBuf, String> {
+    if let Some(row) = sqlx::query("SELECT backup_path FROM edit_backups WHERE media_id = ?")
+        .bind(media_id)
+        .fetch_optional(db)
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        let recorded: String = row.get("backup_path");
+        if std::path::Path::new(&recorded).is_file() {
+            return Ok(PathBuf::from(recorded));
+        }
+        return Err(
+            "The journaled original for this item is missing; use \"Save a copy\" instead of replacing it."
+                .to_string(),
+        );
+    }
+
+    std::fs::create_dir_all(backup_dir).map_err(|e| {
+        format!(
+            "Could not create the edit backup folder {}: {e}",
+            backup_dir.display()
+        )
+    })?;
+
+    // `validate_in_place_format` guarantees a supported extension. Including
+    // it keeps the backup openable by external tools.
+    let extension = std::path::Path::new(source_path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_lowercase())
+        .unwrap_or_else(|| "bin".to_string());
+    let backup_path = backup_dir.join(format!("{media_id}.{extension}"));
+
+    let source = source_path.to_string();
+    let destination = backup_path.clone();
+    tokio::task::spawn_blocking(move || std::fs::copy(&source, &destination))
+        .await
+        .map_err(|e| format!("Backup task failed: {e}"))?
+        .map_err(|e| format!("Failed to journal the original before editing: {e}"))?;
+
+    let size = std::fs::metadata(&backup_path)
+        .map_err(|e| format!("Could not read the journaled original: {e}"))?
+        .len() as i64;
+    let hash_path = backup_path.clone();
+    let hash = tokio::task::spawn_blocking(move || compute_sha256(&hash_path))
+        .await
+        .map_err(|e| format!("Hash task failed: {e}"))?;
+
+    sqlx::query(
+        "INSERT INTO edit_backups (media_id, original_path, backup_path, size, sha256, created_at) \
+         VALUES (?, ?, ?, ?, ?, ?) \
+         ON CONFLICT(media_id) DO NOTHING",
+    )
+    .bind(media_id)
+    .bind(source_path)
+    .bind(backup_path.to_string_lossy().into_owned())
+    .bind(size)
+    .bind(&hash)
+    .bind(super::now_ms())
+    .execute(db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // If a concurrent edit won the race, keep its record and drop our copy.
+    let recorded: String =
+        sqlx::query_scalar("SELECT backup_path FROM edit_backups WHERE media_id = ?")
+            .bind(media_id)
+            .fetch_one(db)
+            .await
+            .map_err(|e| e.to_string())?;
+    if recorded != backup_path.to_string_lossy() {
+        let _ = std::fs::remove_file(&backup_path);
+        return Ok(PathBuf::from(recorded));
+    }
+
+    Ok(backup_path)
+}
+
+async fn ensure_edit_backup(
+    app: &tauri::AppHandle,
+    db: &sqlx::SqlitePool,
+    media_id: &str,
+    source_path: &str,
+) -> Result<PathBuf, String> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Could not locate the app data folder: {e}"))?;
+    ensure_edit_backup_in_dir(db, &app_dir.join("edit-originals"), media_id, source_path).await
+}
+
 #[tauri::command]
 pub async fn render_edited(
     request: RenderRequest,
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<ExportResult, String> {
     // Validate the source path against registered library folders before doing
@@ -528,15 +646,43 @@ pub async fn render_edited(
     }
 
     let in_place = request.output_format == "in_place";
-    if in_place {
+    let backup_path = if in_place {
         validate_in_place_format(&request.source_path)?;
-    }
+        let media_id = request
+            .media_id
+            .clone()
+            .ok_or_else(|| "In-place edits require a media id.".to_string())?;
+        let catalog_path: Option<String> =
+            sqlx::query_scalar("SELECT path FROM media_items WHERE id = ?")
+                .bind(&media_id)
+                .fetch_optional(&db)
+                .await
+                .map_err(|e| e.to_string())?;
+        match catalog_path {
+            Some(path) if path == request.source_path => {}
+            Some(_) => {
+                return Err(
+                    "The requested file does not match the catalog entry for this item."
+                        .to_string(),
+                )
+            }
+            None => {
+                return Err(
+                    "Item is not in the catalog; in-place edits are not allowed.".to_string(),
+                )
+            }
+        }
+        Some(ensure_edit_backup(&app, &db, &media_id, &request.source_path).await?)
+    } else {
+        None
+    };
     let source_path = request.source_path.clone();
 
     // Offload CPU-intensive image processing to blocking pool
-    let result = tauri::async_runtime::spawn_blocking(move || render_edited_blocking(request))
-        .await
-        .map_err(|e| format!("Task failed: {}", e))??;
+    let result =
+        tauri::async_runtime::spawn_blocking(move || render_edited_blocking(request, backup_path))
+            .await
+            .map_err(|e| format!("Task failed: {}", e))??;
 
     // After a successful in-place replace, refresh the catalog row so the
     // thumbnail cache key (which includes modified_at) changes and the stale
@@ -566,7 +712,10 @@ pub async fn render_edited(
 }
 
 /// Core image editing pipeline - runs in blocking pool
-fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String> {
+fn render_edited_blocking(
+    request: RenderRequest,
+    backup_path: Option<PathBuf>,
+) -> Result<ExportResult, String> {
     use std::path::PathBuf;
 
     let source_path = PathBuf::from(&request.source_path);
@@ -645,12 +794,10 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
 
     // 8. Determine output path
     let output_path = if request.output_format == "in_place" {
-        // In-place: back up the original, write to temp next to source,
-        // then atomic rename. Fail closed if the backup cannot be made.
-        let backup_path = source_path.with_extension("bak");
-        if source_path.exists() {
-            std::fs::copy(&source_path, &backup_path)
-                .map_err(|e| format!("Failed to create backup before in-place edit: {}", e))?;
+        // In-place: the original was already journaled by the caller. Write to
+        // a temp file next to the source, then atomically replace it.
+        if backup_path.is_none() {
+            return Err("Missing journaled original for in-place edit.".to_string());
         }
 
         let tmp_path = source_path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
@@ -665,13 +812,10 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
             &exif_data,
         )?;
 
-        // Atomic rename
+        // Atomic rename. If it fails, the source is untouched; keep the
+        // journaled original intact for a later revert.
         std::fs::rename(&tmp_path, &source_path).map_err(|e| {
-            // Try to restore from backup on failure
             let _ = std::fs::remove_file(&tmp_path);
-            if backup_path.exists() {
-                let _ = std::fs::rename(&backup_path, &source_path);
-            }
             format!("Failed to replace original: {}", e)
         })?;
 
@@ -1418,5 +1562,100 @@ mod trash_validation_tests {
         let error = validate_trash_path(dir.to_str().unwrap(), &HashSet::new(), &registered)
             .expect_err("directory should be rejected");
         assert!(error.contains("Only regular files"));
+    }
+}
+
+#[cfg(test)]
+mod edit_backup_tests {
+    use super::ensure_edit_backup_in_dir;
+    use sqlx::sqlite::SqlitePoolOptions;
+    use std::path::PathBuf;
+
+    async fn test_db() -> sqlx::SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory database");
+        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL)")
+            .execute(&db)
+            .await
+            .expect("create media_items");
+        sqlx::query(
+            "CREATE TABLE edit_backups (media_id TEXT PRIMARY KEY, original_path TEXT NOT NULL, backup_path TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT, created_at INTEGER NOT NULL)",
+        )
+        .execute(&db)
+        .await
+        .expect("create edit_backups");
+        db
+    }
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "visto-edit-backup-{label}-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
+
+    #[tokio::test]
+    async fn first_edit_journals_the_original_only_once() {
+        let db = test_db().await;
+        let dir = temp_dir("once");
+        let source = dir.join("photo.jpg");
+        std::fs::write(&source, b"original-bytes").unwrap();
+        sqlx::query("INSERT INTO media_items (id, path) VALUES ('item-1', ?)")
+            .bind(source.to_string_lossy().into_owned())
+            .execute(&db)
+            .await
+            .unwrap();
+
+        let backup_dir = dir.join("originals");
+        let backup =
+            ensure_edit_backup_in_dir(&db, &backup_dir, "item-1", source.to_str().unwrap())
+                .await
+                .expect("journal original");
+        assert_eq!(std::fs::read(&backup).unwrap(), b"original-bytes");
+
+        // A second edit must keep the true original, not the first edit.
+        std::fs::write(&source, b"first-edit").unwrap();
+        let reused =
+            ensure_edit_backup_in_dir(&db, &backup_dir, "item-1", source.to_str().unwrap())
+                .await
+                .expect("reuse journal");
+        assert_eq!(reused, backup);
+        assert_eq!(std::fs::read(&backup).unwrap(), b"original-bytes");
+    }
+
+    #[tokio::test]
+    async fn missing_journaled_original_fails_closed() {
+        let db = test_db().await;
+        let dir = temp_dir("missing");
+        let source = dir.join("photo.jpg");
+        std::fs::write(&source, b"edited-bytes").unwrap();
+        sqlx::query("INSERT INTO media_items (id, path) VALUES ('item-2', ?)")
+            .bind(source.to_string_lossy().into_owned())
+            .execute(&db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO edit_backups (media_id, original_path, backup_path, size, sha256, created_at) VALUES ('item-2', ?, ?, 1, NULL, 1)",
+        )
+        .bind(source.to_string_lossy().into_owned())
+        .bind(dir.join("originals").join("missing.jpg").to_string_lossy().into_owned())
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let error = ensure_edit_backup_in_dir(
+            &db,
+            &dir.join("originals"),
+            "item-2",
+            source.to_str().unwrap(),
+        )
+        .await
+        .expect_err("missing original should fail closed");
+        assert!(error.contains("missing"));
     }
 }

@@ -119,6 +119,7 @@ export interface ExifData {
 
 export interface RenderRequest {
   sourcePath: string;
+  mediaId?: string;
   edits: EditValues;
   outputFormat: "jpeg" | "png" | "webp" | "heic" | "avif";
   quality: number;

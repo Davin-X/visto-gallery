@@ -181,6 +181,8 @@ export interface ExifData {
 
 export interface RenderRequest {
   sourcePath: string;
+  /** Catalog id; required for in-place edits so the original can be journaled. */
+  mediaId?: string;
   edits: EditValues;
   outputFormat: "jpeg" | "png" | "webp" | "heic" | "avif" | "in_place";
   quality: number;

@@ -329,6 +329,7 @@ export function AppScreenRouter({
               // Build render request for native backend
               const request = {
                 sourcePath: item.path,
+                mediaId: item.id,
                 edits: v,
                 outputFormat: (inPlace ? "in_place" : "image/jpeg") as
                   "jpeg" | "png" | "webp" | "heic" | "avif" | "in_place",
