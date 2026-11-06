@@ -3229,7 +3229,9 @@ body {
   display: none;
 }
 
-/* Inline expand/collapse toggle for the left sidebar. */
+/* Inline expand/collapse toggle for the left sidebar. Sits in the sidebar's
+   WORKSPACE row: right of the label when expanded, and in the label's own
+   slot (left) when collapsed, so the nav list never moves vertically. */
 .sidebar-collapse-toggle {
   display: grid;
   place-items: center;
@@ -3282,94 +3284,47 @@ body {
 }
 
 /* Rail mode: the sidebar shrinks to icons instead of disappearing.
-   Scoped above the tablet breakpoint, where the sidebar is an overlay. */
+   Scoped above the tablet breakpoint, where the sidebar is an overlay.
+   Children keep the exact x-axis they have when expanded (icon at 24px in
+   every state); only the labels disappear and the accent pills animate to
+   their 40px footprint, so nothing moves horizontally on collapse. */
 @media (min-width: 901px) {
   .app-body.sidebar-collapsed {
-    grid-template-columns: 68px minmax(0, 1fr);
+    grid-template-columns: 64px minmax(0, 1fr);
   }
-  /* Vertical-only padding; every control (toggle, nav item, sources entry)
-     shares the same 40px centered footprint on a shared rhythm. */
+  /* Clip the label text during the column shrink so it never spills. */
   .app-body.sidebar-collapsed .sidebar {
-    /* Clip label text during the column animation so it never spills. */
     overflow: hidden;
-    padding: 14px 0 12px;
   }
-  .app-body.sidebar-collapsed .sidebar-scroll {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 14px;
-    padding: 0;
-    min-height: 0;
+  /* WORKSPACE hides on collapse; the toggle takes its slot on the left at
+     the same height, so the nav list in the header never shifts. */
+  .app-body.sidebar-collapsed .sidebar-label-text {
+    display: none;
   }
-  .app-body.sidebar-collapsed .sidebar-header {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    padding: 0 0 12px;
-    border-bottom: 1px solid var(--line);
-  }
-  /* Hairline dividers match the button width. */
-  .app-body.sidebar-collapsed .sidebar-divider {
-    width: 40px;
-    margin: 0;
+  .app-body.sidebar-collapsed .sidebar-collapse-toggle {
+    margin-left: 0;
   }
   .app-body.sidebar-collapsed .nav-item,
   .app-body.sidebar-collapsed .sources-entry,
   .app-body.sidebar-collapsed .sidebar-label {
     white-space: nowrap;
   }
-  .app-body.sidebar-collapsed .sidebar-label {
-    justify-content: center;
-    padding: 0;
-  }
-  .app-body.sidebar-collapsed .sidebar-label-text {
-    display: none;
-  }
-  .app-body.sidebar-collapsed .sidebar-collapse-toggle {
-    margin-left: 0;
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-  }
-  .app-body.sidebar-collapsed .primary-nav {
-    gap: 4px;
-    margin-top: 0;
-    width: 100%;
-    align-items: center;
-  }
-  /* 40x40 square icon-only buttons; existing title attrs are the tooltips. */
-  .app-body.sidebar-collapsed .nav-item {
-    grid-template-columns: 1fr;
-    justify-items: center;
-    gap: 0;
-    width: 40px;
-    height: 40px;
-    margin: 0 auto;
-    padding: 0;
-    border-radius: 10px;
-  }
-  .app-body.sidebar-collapsed .nav-icon {
-    transform: scale(1.13); /* 18px glyph -> ~20px, optically centered */
-  }
   .app-body.sidebar-collapsed .nav-item > span:last-child {
     display: none;
   }
-  .app-body.sidebar-collapsed .sources-entry-section {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    padding: 0;
-  }
-  /* Sources entry: 40x40 icon-only button with its accent identity. */
-  .app-body.sidebar-collapsed .sources-entry {
-    grid-template-columns: 1fr;
-    justify-items: center;
+  /* Same padding as expanded (9px 10px) and same 19px icon track, so the
+     glyph stays put while the pill animates to a 40px square. */
+  .app-body.sidebar-collapsed .nav-item {
     width: 40px;
-    height: 40px;
-    margin: 0;
-    padding: 0;
-    border-radius: 10px;
+    border-radius: 9px;
+  }
+  .app-body.sidebar-collapsed .nav-icon {
+    transform: scale(1.13); /* 18px glyph -> ~20px */
+  }
+  /* Sources entry: same anchored footprint, accent identity preserved. */
+  .app-body.sidebar-collapsed .sources-entry {
+    width: 40px;
+    border-radius: 9px;
   }
   .app-body.sidebar-collapsed .sources-entry-icon {
     transform: scale(1.15);
@@ -3383,13 +3338,10 @@ body {
   .app-body.sidebar-collapsed .sidebar-section:not(.sources-entry-section) {
     display: none;
   }
-  /* Footer: health dot and update dot only, centered on the same rail. */
+  /* Footer: health dot and update dot only, both pinned to the left. */
   .app-body.sidebar-collapsed .sidebar-footer {
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    padding: 12px 0 4px;
+    justify-content: flex-start;
+    gap: 14px;
   }
   .app-body.sidebar-collapsed .sidebar-health {
     font-size: 0;
@@ -3399,7 +3351,7 @@ body {
     display: none;
   }
   .app-body.sidebar-collapsed .sidebar-version-group {
-    gap: 0;
+    gap: 8px;
   }
   .app-body.sidebar-collapsed .update-badge {
     font-size: 0;
@@ -3411,6 +3363,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* Fixed row height in both states so the nav list below never shifts
+     up or down when WORKSPACE hides and the toggle takes its place. */
+  height: 26px;
+  min-height: 26px;
   padding: 0 12px;
   color: var(--faint);
   font-size: 12px;
