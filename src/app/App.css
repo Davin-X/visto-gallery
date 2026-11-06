@@ -3285,15 +3285,35 @@ body {
    Scoped above the tablet breakpoint, where the sidebar is an overlay. */
 @media (min-width: 901px) {
   .app-body.sidebar-collapsed {
-    grid-template-columns: 62px minmax(0, 1fr);
+    grid-template-columns: 68px minmax(0, 1fr);
   }
+  /* Vertical-only padding; every control (toggle, nav item, sources entry)
+     shares the same 40px centered footprint on a shared rhythm. */
   .app-body.sidebar-collapsed .sidebar {
-    /* Clip label text during the column animation instead of letting it
-       wrap or overflow into the content pane. */
+    /* Clip label text during the column animation so it never spills. */
     overflow: hidden;
-    padding: 25px 9px 13px;
+    padding: 14px 0 12px;
   }
-  /* Keep labels on one line so they never wrap mid-transition. */
+  .app-body.sidebar-collapsed .sidebar-scroll {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 0;
+    min-height: 0;
+  }
+  .app-body.sidebar-collapsed .sidebar-header {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    padding: 0 0 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  /* Hairline dividers match the button width. */
+  .app-body.sidebar-collapsed .sidebar-divider {
+    width: 40px;
+    margin: 0;
+  }
   .app-body.sidebar-collapsed .nav-item,
   .app-body.sidebar-collapsed .sources-entry,
   .app-body.sidebar-collapsed .sidebar-label {
@@ -3308,49 +3328,68 @@ body {
   }
   .app-body.sidebar-collapsed .sidebar-collapse-toggle {
     margin-left: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
   }
-  /* Nav: square icon-only buttons, slightly larger glyph, tooltips via title. */
+  .app-body.sidebar-collapsed .primary-nav {
+    gap: 4px;
+    margin-top: 0;
+    width: 100%;
+    align-items: center;
+  }
+  /* 40x40 square icon-only buttons; existing title attrs are the tooltips. */
   .app-body.sidebar-collapsed .nav-item {
     grid-template-columns: 1fr;
     justify-items: center;
     gap: 0;
     width: 40px;
+    height: 40px;
     margin: 0 auto;
-    padding: 8px 0;
-    border-radius: 9px;
+    padding: 0;
+    border-radius: 10px;
   }
   .app-body.sidebar-collapsed .nav-icon {
-    transform: scale(1.08);
+    transform: scale(1.13); /* 18px glyph -> ~20px, optically centered */
   }
   .app-body.sidebar-collapsed .nav-item > span:last-child {
     display: none;
   }
-  /* Sources entry: square icon-only button with its accent tint. */
+  .app-body.sidebar-collapsed .sources-entry-section {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 0;
+  }
+  /* Sources entry: 40x40 icon-only button with its accent identity. */
   .app-body.sidebar-collapsed .sources-entry {
     grid-template-columns: 1fr;
     justify-items: center;
     width: 40px;
-    margin: 0 auto;
-    padding: 8px 0;
-    border-radius: 9px;
+    height: 40px;
+    margin: 0;
+    padding: 0;
+    border-radius: 10px;
   }
   .app-body.sidebar-collapsed .sources-entry-icon {
-    transform: scale(1.05);
+    transform: scale(1.15);
   }
   .app-body.sidebar-collapsed .sources-entry-text,
   .app-body.sidebar-collapsed .sources-entry-action {
     display: none;
   }
-  /* LIBRARY stats block is hidden in rail mode. */
-  .app-body.sidebar-collapsed .sidebar-section {
+  /* LIBRARY stats block is hidden in rail mode; the Sources entry
+     (.sources-entry-section) is an action button and stays visible. */
+  .app-body.sidebar-collapsed .sidebar-section:not(.sources-entry-section) {
     display: none;
   }
-  /* Footer: health dot and update dot only. */
+  /* Footer: health dot and update dot only, centered on the same rail. */
   .app-body.sidebar-collapsed .sidebar-footer {
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 12px;
-    padding: 14px 8px;
+    padding: 12px 0 4px;
   }
   .app-body.sidebar-collapsed .sidebar-health {
     font-size: 0;
