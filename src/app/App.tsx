@@ -883,14 +883,12 @@ function App() {
       // Listen for native import progress events from scan/import commands.
       const unlistenImportProgress = await events.onImportProgress((progress) => {
         const { phase, processed, total } = progress;
-        // The command that started an operation owns `busy`. Progress events
-        // are deliberately presentation-only: flipping busy per event made
-        // the global overlay flash between Trash batches and exposed controls
-        // while Finder was still moving files.
-        // Don't let scan/import progress overwrite an active trash operation,
-        // otherwise the overlay would show "Scanning…" while files are being
-        // trashed and the Cancel button would target the wrong operation.
-        if (liveRef.current.library.progress?.phase === "trashing") return;
+        const currentPhase = liveRef.current.library.progress?.phase;
+        // The command that started an operation owns `busy` and `progress`.
+        // Progress events are presentation-only: don't let a scan/import
+        // event flip the overlay away from an active operation (e.g. trash).
+        // Conversely, allow the active operation's own events to update it.
+        if (currentPhase && phase !== currentPhase) return;
         liveRef.current.library.setProgress({
           phase,
           processed,
