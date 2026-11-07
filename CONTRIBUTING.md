@@ -85,6 +85,18 @@ Please read and follow our [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md).
 
 ---
 
+## Issue labels (maintainers)
+
+To keep Dependabot PRs working smoothly, ensure these labels exist in the repository (create them under **Issues → Labels** if missing):
+
+- `dependencies`
+- `npm`
+- `rust`
+
+If you want to open the project to external contributors, consider adding and using labels like `good first issue` and `help wanted` on small, well-scoped tasks.
+
+---
+
 ## Questions?
 
 Open a discussion or an issue. We're happy to help you get started.
