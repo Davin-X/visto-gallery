@@ -150,10 +150,16 @@ async fn revert_edit_recipe_inner(db: &SqlitePool, media_id: &str) -> Result<boo
     } else {
         let backup_path = Path::new(&source_path).with_extension("bak");
         if !backup_path.is_file() {
-            return Err(format!(
-                "No backup found for {}. Nothing to revert.",
-                media_id
-            ));
+            // The file was never replaced in place — only a draft/edit
+            // recipe exists. That is not an error: drop the stale recipe
+            // so Revert can reset the draft, and report "nothing to revert"
+            // via Ok(false) so the UI can discard adjustments instead of
+            // showing a failure toast.
+            let _ = sqlx::query("DELETE FROM edit_recipes WHERE media_id = ?")
+                .bind(media_id)
+                .execute(db)
+                .await;
+            return Ok(false);
         }
         (backup_path, None, None)
     };
@@ -774,6 +780,31 @@ mod tests {
         assert!(revert_edit_recipe_inner(&db, "item-4").await.unwrap());
         assert_eq!(std::fs::read(&source).unwrap(), b"original-bytes");
         assert!(!backup.exists());
+    }
+
+    #[tokio::test]
+    async fn test_revert_with_no_backup_returns_false_and_clears_recipe() {
+        let db = test_db().await;
+        let dir = temp_dir("no-backup");
+        let source = dir.join("photo.jpg");
+        std::fs::write(&source, b"original-bytes").unwrap();
+
+        insert_media(&db, "item-5", &source).await;
+        sqlx::query(
+            "INSERT INTO edit_recipes (media_id, edits, crop, history, history_index, created_at, updated_at) VALUES ('item-5', '{}', NULL, '[]', 0, 1, 1)",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+
+        assert!(!revert_edit_recipe_inner(&db, "item-5").await.unwrap());
+        assert_eq!(std::fs::read(&source).unwrap(), b"original-bytes");
+        let recipes: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM edit_recipes WHERE media_id = 'item-5'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(recipes, 0);
     }
 }
 

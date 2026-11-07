@@ -90,20 +90,20 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       const report = this.state.crashReport ?? readCrashReport();
       return (
         <div
-          role="alert"
-          style={{
-            position: "fixed",
-            inset: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "var(--surface, #ffffff)",
-            color: "var(--text, #000000)",
-            zIndex: 10000,
-            padding: 24,
-            textAlign: "center",
-          }}
+          role="alert"            style={{
+              position: "fixed",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "light-dark(#ffffff, #111827)",
+              color: "light-dark(#111827, #f9fafb)",
+              colorScheme: "light dark",
+              zIndex: 10000,
+              padding: 24,
+              textAlign: "center",
+            }}
         >
           <h2 style={{ marginBottom: 12 }}>VistoGallery encountered an error</h2>
           <p style={{ marginBottom: 16, maxWidth: 420, opacity: 0.85 }}>
@@ -124,7 +124,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 style={{
                   maxHeight: 200,
                   overflow: "auto",
-                  background: "var(--surface-2, rgba(127,127,127,0.12))",
+                  background: "light-dark(rgba(17,24,39,0.06), rgba(249,250,251,0.08))",
+                  color: "inherit",
                   padding: 8,
                   borderRadius: 6,
                   whiteSpace: "pre-wrap",
@@ -165,8 +166,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 padding: "8px 16px",
                 cursor: "pointer",
                 background: "transparent",
-                color: "var(--text, #000000)",
-                border: "1px solid var(--border, rgba(127,127,127,0.4))",
+                color: "inherit",
+                border: "1px solid light-dark(rgba(17,24,39,0.25), rgba(249,250,251,0.28))",
                 borderRadius: 6,
                 fontSize: 14,
               }}
@@ -180,8 +181,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 padding: "8px 16px",
                 cursor: "pointer",
                 background: "transparent",
-                color: "var(--text, #000000)",
-                border: "1px solid var(--border, rgba(127,127,127,0.4))",
+                color: "inherit",
+                border: "1px solid light-dark(rgba(17,24,39,0.25), rgba(249,250,251,0.28))",
                 borderRadius: 6,
                 fontSize: 14,
               }}

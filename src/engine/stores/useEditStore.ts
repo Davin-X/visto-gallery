@@ -120,6 +120,11 @@ export async function clearEditDraft(itemId: string) {
   try {
     await tauri.edit.deleteRecipe(itemId);
   } catch {}
+  // Drop the id from the metadata store synchronously. A following
+  // saveDraft() reads this set as its "draft exists" guard, and the async
+  // refresh triggered below may not have completed yet — without this it can
+  // re-persist a neutral draft right after a discard/revert.
+  removeDraftMeta(itemId);
   notifyDraftChanged();
 }
 function subscribeDraft(listener: () => void) {
@@ -197,6 +202,17 @@ export const useDraftMetaStore = create<DraftMetaState>((set) => ({
 subscribeDraft(() => {
   void useDraftMetaStore.getState().refresh();
 });
+
+/** Remove a draft id from the metadata store without waiting for a refresh. */
+function removeDraftMeta(itemId: string) {
+  const { ids, transforms } = useDraftMetaStore.getState();
+  if (!ids.has(itemId) && !transforms.has(itemId)) return;
+  const nextIds = new Set(ids);
+  nextIds.delete(itemId);
+  const nextTransforms = new Map(transforms);
+  nextTransforms.delete(itemId);
+  useDraftMetaStore.setState({ ids: nextIds, transforms: nextTransforms });
+}
 
 // Refresh on module load so drafts and transforms are available immediately on startup.
 if (typeof window !== "undefined") {

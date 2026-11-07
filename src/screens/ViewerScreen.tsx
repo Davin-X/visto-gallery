@@ -381,9 +381,11 @@ function ViewerScreen(props: ViewerScreenProps) {
         {selected.kind === "photo" ? (
           <>
             <img
-              key={selected.id}
+              key={`${selected.id}-${selected.size}-${selected.modifiedAt}`}
               className={`photo-viewer-image${photoStatus === "loaded" ? " is-loaded" : ""}`}
-              src={props.assetUrl(selected.path)}
+              src={
+                props.assetUrl(selected.path) + `?v=${selected.modifiedAt}-${selected.size}`
+              }
               alt={selected.name}
               decoding="async"
               onLoad={() => setPhotoLoadState({ id: selected.id, status: "loaded" })}

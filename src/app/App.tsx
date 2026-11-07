@@ -1835,11 +1835,11 @@ function App() {
       void library.loadLibrary();
     }
     if (next === "Edit") {
-      const selectedItem = library.items.find((i) => i.id === library.inspectedId);
-      if (selectedItem && selectedItem.kind === "photo") {
-        await edit.saveDraft();
-        await edit.open(selectedItem);
-      }
+      // Show the draft picker / empty edit screen. Saving first preserves any
+      // in-progress work; explicit edit actions (Library/Viewer "Edit") still
+      // open a specific item by calling edit.open() and setScreen("Edit").
+      await edit.saveDraft();
+      await edit.close();
     }
     if (next !== screen) {
       setScreenHistory((prev) => [...prev, screen]);
