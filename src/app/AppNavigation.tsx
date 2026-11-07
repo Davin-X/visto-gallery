@@ -18,6 +18,7 @@ import {
   PanelLeftIcon,
   PanelRightIcon,
   ChartIcon,
+  ChevronLeftIcon,
 } from "../design/components/icons";
 import { ACCENT_PALETTE } from "../engine/stores";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
@@ -219,6 +220,8 @@ interface AppSidebarProps {
   onOpenScreen: (screen: Screen) => void;
   onOpenSources: () => void;
   onOpenUpdate: () => void;
+  canGoBack?: boolean;
+  onGoBack?: () => void;
 }
 
 export function AppSidebar({
@@ -234,6 +237,8 @@ export function AppSidebar({
   onOpenScreen,
   onOpenSources,
   onOpenUpdate,
+  canGoBack,
+  onGoBack,
 }: AppSidebarProps) {
   const folderCount = folders.length;
   const folderItems = folders.reduce((total, folder) => total + folder.itemCount, 0);
@@ -396,6 +401,20 @@ export function AppSidebar({
               <PanelLeftIcon size={14} strokeWidth={2} />
             </button>
           </div>
+          {canGoBack && onGoBack && (
+            <button
+              type="button"
+              className={`sidebar-back-button${sidebarCollapsed ? " is-collapsed" : ""}`}
+              onClick={onGoBack}
+              aria-label="Go back"
+              title="Go back"
+            >
+              <span className="sidebar-back-icon">
+                <ChevronLeftIcon size={16} strokeWidth={2} />
+              </span>
+              {!sidebarCollapsed && <span>Back</span>}
+            </button>
+          )}
           <nav className="primary-nav" aria-label="Main navigation">
             {NAV_ITEMS.map(({ label, Icon, screen: target }) => {
               return (

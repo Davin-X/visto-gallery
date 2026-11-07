@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-11-07
+
+### Changed
+- Moved the global “Go back” control into the left sidebar for easier access without overlapping screen headers; hidden on the Video screen where the player has its own back control.
+
+### Fixed
+- Restored the main content positioning context so the Video player screen no longer overlaps the visible sidebar.
+- Improved collapsed sidebar spacing/alignment for the toggle and back controls.
+
 ## [0.3.2] - 2026-11-07
 
 ### Added
