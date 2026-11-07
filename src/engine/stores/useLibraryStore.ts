@@ -1065,6 +1065,11 @@ export const useLibraryStore = create<LibraryState>()(
           };
         });
         get().refreshDerived();
+        // Keep both collections authoritative: hidden view reflects changes
+        // immediately after optimistic update, and unhiding restores items to
+        // the filtered library page.
+        void get().loadHiddenItems();
+        if (!hidden) void get().loadItemsPage();
       },
 
       toggleHidden: async (id) => {
