@@ -119,28 +119,6 @@ export function AppScreenRouter({
 }: AppScreenRouterProps) {
   return (
     <main id="main-content" className="main-content" tabIndex={-1} style={{ position: "relative" }}>
-      {screenHistory.length > 0 && (
-        <button
-          className="icon-button"
-          type="button"
-          aria-label="Go back"
-          title="Go back"
-          onClick={goBack}
-          style={{
-            position: "absolute",
-            top: 10,
-            right: 10,
-            zIndex: 40,
-            width: 32,
-            height: 32,
-            padding: 0,
-            borderRadius: 8,
-            opacity: 0.8,
-          }}
-        >
-          ←
-        </button>
-      )}
       {screen === "Library" && (
         <LibraryScreen
           items={library.visibleItems}

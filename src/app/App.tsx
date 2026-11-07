@@ -2164,6 +2164,9 @@ function App() {
           onOpenUpdate={() => setUpdateDialogOpen(true)}
           sidebarCollapsed={library.sidebarCollapsed}
           onToggleCollapse={library.toggleSidebarCollapsed}
+          // Video player has its own back control; avoid redundant sidebar back.
+          canGoBack={screenHistory.length > 0 && screen !== "Video"}
+          onGoBack={goBack}
         />
       }
       overlays={
