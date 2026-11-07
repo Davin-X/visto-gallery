@@ -209,18 +209,26 @@ export function applyTheme(settings: Pick<AppSettings, "appearance" | "accentCol
 // The accent palette. Each accent has a light-mode and a dark-mode value so
 // the swatch shown in Settings matches the color that will actually be applied
 // to the running theme.
+//
+// Label constraint: an accent fill carries one label color, chosen by
+// `contrastOn`. Every light accent is dark enough to clear 4.5:1 against white,
+// so light mode always labels accents in white; every dark accent is a pastel
+// that clears 4.5:1 against near-black, so dark mode labels them in near-black.
+// Keep those invariants when editing hexes (accentPalette.test.ts enforces
+// them) — otherwise a single hue flips its label and looks broken next to the
+// others, which is what a mid-tone orange (#dd6b16) used to do.
 export const ACCENT_PALETTE: {
   id: string;
   label: string;
   light: string;
   dark: string;
 }[] = [
-  { id: "blue", label: "Blue", light: "#3474d4", dark: "#3b82f6" },
-  { id: "purple", label: "Purple", light: "#8254ea", dark: "#b79bff" },
-  { id: "green", label: "Green", light: "#27845f", dark: "#6bc69a" },
-  { id: "orange", label: "Orange", light: "#dd6b16", dark: "#f0a45c" },
-  { id: "pink", label: "Pink", light: "#db2777", dark: "#f489b8" },
-  { id: "red", label: "Red", light: "#dc2626", dark: "#f28585" },
+  { id: "blue", label: "Blue", light: "#2f6ac4", dark: "#3b82f6" },
+  { id: "purple", label: "Purple", light: "#7440dd", dark: "#b79bff" },
+  { id: "green", label: "Green", light: "#22795a", dark: "#6bc69a" },
+  { id: "orange", label: "Orange", light: "#b85400", dark: "#f0a45c" },
+  { id: "pink", label: "Pink", light: "#c9246c", dark: "#f489b8" },
+  { id: "red", label: "Red", light: "#c81e1e", dark: "#f28585" },
 ];
 
 // Resolve a single accent into its light / dark surface palette value.

@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
   EditIcon,
   EyeOffIcon,
   FlipIcon,
@@ -219,14 +221,16 @@ function ViewerScreen(props: ViewerScreenProps) {
           <>
             <h2>Videos don’t open in the Viewer</h2>
             <p>
-              The item you’re inspecting is a video. Press the play button on its tile (or the
-              Now Playing chip) to watch it.
+              The item you’re inspecting is a video. Press the play button on its tile (or the Now
+              Playing chip) to watch it.
             </p>
           </>
         ) : (
           <>
             <h2>No viewable media yet</h2>
-            <p>This view has no photos. Import photos or RAW files, or open a video from its tile.</p>
+            <p>
+              This view has no photos. Import photos or RAW files, or open a video from its tile.
+            </p>
           </>
         )}
       </div>
@@ -236,7 +240,6 @@ function ViewerScreen(props: ViewerScreenProps) {
     <div className="viewer-screen">
       <div className="page-heading viewer-heading">
         <div className="viewer-title-block">
-          <p className="eyebrow">PHOTO VIEWER</p>
           <h1 title={selected.name}>{selected.name}</h1>
           <div className="viewer-meta">
             <div className="meta-row">
@@ -373,14 +376,16 @@ function ViewerScreen(props: ViewerScreenProps) {
           onClick={() => props.onNavigate(-1)}
           aria-label="Previous"
         >
-          ‹
+          <ChevronLeftIcon size={21} strokeWidth={2.1} />
         </button>
         {selected.kind === "photo" ? (
           <>
             <img
-              key={selected.id}
+              key={`${selected.id}-${selected.size}-${selected.modifiedAt}`}
               className={`photo-viewer-image${photoStatus === "loaded" ? " is-loaded" : ""}`}
-              src={props.assetUrl(selected.path)}
+              src={
+                props.assetUrl(selected.path) + `?v=${selected.modifiedAt}-${selected.size}`
+              }
               alt={selected.name}
               decoding="async"
               onLoad={() => setPhotoLoadState({ id: selected.id, status: "loaded" })}
@@ -476,7 +481,7 @@ function ViewerScreen(props: ViewerScreenProps) {
           onClick={() => props.onNavigate(1)}
           aria-label="Next"
         >
-          ›
+          <ChevronRightIcon size={21} strokeWidth={2.1} />
         </button>
         <div
           className={`viewer-overlay-top${hintsVisible ? "" : " hidden"}`}

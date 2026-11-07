@@ -2,6 +2,8 @@ import type { MutableRefObject, RefObject } from "react";
 import { open as openFileDialog, save } from "@tauri-apps/plugin-dialog";
 import { tauri } from "../engine/commands/tauri";
 import { clearEditDraft } from "../engine/stores";
+import { useLibraryStore } from "../engine/stores/useLibraryStore";
+import { invalidateThumbnailCache } from "../design/components/CachedThumbnail";
 import HiddenScreen from "../screens/HiddenScreen";
 import LibraryScreen from "../screens/LibraryScreen";
 import EditScreen from "../screens/EditScreen";
@@ -55,6 +57,8 @@ interface AppScreenRouterProps {
   selectVideoItem: (id: string) => void;
   playPreviousVideo: () => boolean;
   playNextVideo: () => Promise<boolean>;
+  queueHasMore: boolean;
+  onLoadMoreQueue: () => unknown;
   playSlideshow: (ids?: string[]) => void;
   openAlbumMenu: (album: any, e: React.MouseEvent) => void;
   openSmartAlbum: (albumId: string) => Promise<void>;
@@ -103,6 +107,8 @@ export function AppScreenRouter({
   selectVideoItem,
   playPreviousVideo,
   playNextVideo,
+  queueHasMore,
+  onLoadMoreQueue,
   playSlideshow,
   openAlbumMenu,
   openSmartAlbum,
@@ -280,6 +286,8 @@ export function AppScreenRouter({
         onSelect={selectVideoItem}
         onPrevious={playPreviousVideo}
         onNext={playNextVideo}
+        queueHasMore={queueHasMore}
+        onLoadMoreQueue={onLoadMoreQueue}
       />
 
       {screen === "Edit" && (
@@ -301,7 +309,10 @@ export function AppScreenRouter({
           onRedo={edit.redo}
           canUndo={edit.canUndo}
           canRedo={edit.canRedo}
-          onClose={edit.close}
+          onClose={async () => {
+            await edit.close();
+            setScreen("Library");
+          }}
           onSaveDraft={edit.saveDraft}
           onBack={() => setScreen("Library")}
           onExport={async (inPlace = false) => {
@@ -329,6 +340,7 @@ export function AppScreenRouter({
               // Build render request for native backend
               const request = {
                 sourcePath: item.path,
+                mediaId: item.id,
                 edits: v,
                 outputFormat: (inPlace ? "in_place" : "image/jpeg") as
                   "jpeg" | "png" | "webp" | "heic" | "avif" | "in_place",
@@ -354,9 +366,29 @@ export function AppScreenRouter({
                 await tauri.editing.moveExportedFile(result.outputPath, finalPath);
               }
 
-              clearEditDraft(item.id);
-              if (inPlace) await library.loadLibrary();
-              showNotice(inPlace ? "Replaced original" : "Exported edited copy");
+              if (inPlace) {
+                invalidateThumbnailCache(item.id);
+                // Replace bakes current edits into the file bytes. Clear the
+                // draft and reopen neutral against the refreshed item so the
+                // preview shows the newly baked file without double-applying
+                // adjustment filters (which can look like the edit reverted).
+                await edit.clearDraft();
+                await library.loadLibrary();
+                const fresh =
+                  useLibraryStore.getState().items.find((i: any) => i.id === item.id) ??
+                  ({
+                    ...item,
+                    modifiedAt: Date.now(),
+                  } as any);
+                await edit.open(fresh);
+              } else {
+                clearEditDraft(item.id);
+              }
+              showNotice(
+                inPlace
+                  ? "Replaced original file — preview shows the saved edit"
+                  : "Exported edited copy",
+              );
             } catch (e) {
               if (String(e).includes("cancelled")) {
                 showNotice("Export cancelled");
@@ -367,11 +399,15 @@ export function AppScreenRouter({
           }}
           onClearDraft={edit.clearDraft}
           onNotice={showNotice}
+          onReloadLibrary={library.loadLibrary}
           assetUrl={assetUrl}
           items={library.items.filter((i: any) => i.kind === "photo" && !i.hidden)}
           onOpenEdit={async (item: any) => {
             await edit.saveDraft();
-            await edit.open(item);
+            // Prefer freshest library metadata (size/modifiedAt) after file ops.
+            const fresh =
+              useLibraryStore.getState().items.find((i: any) => i.id === item.id) ?? item;
+            await edit.open(fresh);
           }}
         />
       )}

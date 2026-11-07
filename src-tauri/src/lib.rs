@@ -32,6 +32,16 @@ pub fn run() {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .try_init();
     tauri::Builder::default()
+        // A second launch (common after a crash/relaunch) focuses the existing
+        // instance instead of spawning a duplicate process that plays the same
+        // media at the same time.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
         .setup(|app| {

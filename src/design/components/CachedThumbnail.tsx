@@ -28,6 +28,23 @@ function currentQuality(): number {
 // per mounted tile.
 let lastClearedQuality: number | null = null;
 
+/**
+ * Drop every cached rendering for `itemId` so the next mount re-requests
+ * from the backend (whose key includes `modified_at`). Call after an
+ * in-place replace or a revert restores bytes at the same path — without
+ * this the Map serves the stale data URL indefinitely.
+ */
+export function invalidateThumbnailCache(itemId: string): void {
+  for (const key of [...thumbnailCache.keys()]) {
+    if (key.startsWith(`${itemId}:`)) {
+      const bytes = thumbnailByteSizes.get(key) ?? 0;
+      thumbnailCache.delete(key);
+      thumbnailByteSizes.delete(key);
+      cachedBytes -= bytes;
+    }
+  }
+}
+
 function clearCacheForQuality(quality: number): void {
   if (lastClearedQuality === quality) return;
   lastClearedQuality = quality;

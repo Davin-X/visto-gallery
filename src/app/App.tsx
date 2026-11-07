@@ -30,6 +30,7 @@ import { navigateToBatchExport } from "./exportFlow";
 import { getAdjacentVideo } from "./backgroundVideo";
 import { createAutoImportController, syncFolderWatchers } from "../engine/utils/folderWatcher";
 import { copyTagsToFinder } from "../engine/utils/finderTags";
+import { progressBelongsToOperation } from "../engine/progressPhases";
 import { describeError } from "./utils/describeError";
 import { isWarningNotice } from "./utils/isWarningNotice";
 import { startConfiguredSlideshow } from "./utils/startConfiguredSlideshow";
@@ -276,10 +277,14 @@ function App() {
     [library.items, playbackItemId],
   );
   const playbackItem = backgroundVideo ?? storedPlaybackItem;
-  const photoViewerItems = useMemo(
-    () => library.viewerItems.filter((item) => item.kind !== "video"),
-    [library.viewerItems],
-  );
+  const photoViewerItems = useMemo(() => {
+    const items = library.viewerItems.filter((item) => item.kind !== "video");
+    const selected = library.viewerSelected;
+    if (selected && selected.kind !== "video" && !items.some((item) => item.id === selected.id)) {
+      return [selected, ...items];
+    }
+    return items;
+  }, [library.viewerItems, library.viewerSelected]);
   // Video queue: built from the current browsing scope when playback starts,
   // skipping photos and RAW. Locked during playback so switching filters
   // never changes what plays next.
@@ -881,25 +886,61 @@ function App() {
       }
 
       // Listen for native import progress events from scan/import commands.
-      await events.onImportProgress((progress) => {
-        const { phase, processed, total } = progress;
-        liveRef.current.library.setBusy(true);
+      let lastProgressApplyAt = 0;
+      let progressTimer: ReturnType<typeof setTimeout> | null = null;
+      let pendingProgress: any = null;
+      const applyProgress = (p: any) => {
+        const { phase, processed, total } = p;
+        const currentPhase = liveRef.current.library.progress?.phase ?? "";
+        // The command that started an operation owns `busy` and `progress`.
+        // Progress events are presentation-only: don't let a scan/import
+        // event flip the overlay away from an active operation (e.g. trash).
+        // Conversely, allow the active operation's own events to update it —
+        // which needs the phase mapping, because an import reports `scanning`.
+        if (!progressBelongsToOperation(currentPhase, phase)) return;
         liveRef.current.library.setProgress({
           phase,
           processed,
           total,
-          bytesProcessed: progress.bytesProcessed,
-          bytesTotal: progress.bytesTotal,
-          filesProcessed: progress.filesProcessed,
-          filesTotal: progress.filesTotal,
-          currentFile: progress.currentFile,
+          bytesProcessed: p.bytesProcessed,
+          bytesTotal: p.bytesTotal,
+          filesProcessed: p.filesProcessed,
+          filesTotal: p.filesTotal,
+          currentFile: p.currentFile,
         });
-        // Hashing still has a short database/grouping step after the final
-        // progress event; keep its controls disabled until the command returns.
-        if (processed >= total && total > 0 && phase !== "hashing") {
-          liveRef.current.library.setBusy(false);
-          liveRef.current.library.setProgress(null);
+      };
+      const unlistenImportProgress = await events.onImportProgress((progress) => {
+        const now = Date.now();
+        const minIntervalMs = 200;
+        // Always apply terminal/first updates promptly; throttle rapid progress.
+        if (
+          progress.processed === progress.total ||
+          now - lastProgressApplyAt >= minIntervalMs
+        ) {
+          lastProgressApplyAt = now;
+          if (progressTimer) {
+            clearTimeout(progressTimer);
+            progressTimer = null;
+          }
+          pendingProgress = null;
+          applyProgress(progress);
+          return;
         }
+        pendingProgress = progress;
+        if (!progressTimer) {
+          progressTimer = setTimeout(() => {
+            progressTimer = null;
+            if (pendingProgress) {
+              lastProgressApplyAt = Date.now();
+              applyProgress(pendingProgress);
+              pendingProgress = null;
+            }
+          }, minIntervalMs - (now - lastProgressApplyAt));
+        }
+      });
+      unlisteners.push(() => {
+        if (progressTimer) clearTimeout(progressTimer);
+        unlistenImportProgress();
       });
       autoImportControllerRef.current = createAutoImportController({
         isEnabled: () => useSettingsStore.getState().autoImport,
@@ -1229,6 +1270,15 @@ function App() {
   const beginVideoSession = useCallback(
     (item: MediaItem, scope: "library" | "hidden" = "library") => {
       library.setViewerScope(scope);
+      // Silence every other <video> surface (slideshow, compare, inspector)
+      // before this session starts, so the same file can't sound from two
+      // players at once. The inspector preview and thumbnails are muted, so
+      // this only ever hits the slideshow and stale players.
+      document.querySelectorAll("video").forEach((video) => {
+        try {
+          video.pause();
+        } catch {}
+      });
       const libraryState = useLibraryStore.getState();
       const scopedVideos = libraryState.viewerItems.filter(
         (candidate) =>
@@ -1253,24 +1303,27 @@ function App() {
 
   const openViewer = useCallback(
     (id?: string, origin: Screen = "Library", scope: "library" | "hidden" = "library") => {
-      const targetId = id ?? library.inspectedId;
+      const lib = useLibraryStore.getState();
+      const targetId = id ?? lib.inspectedId;
       const item =
-        library.items.find((candidate) => candidate.id === targetId) ??
-        library.hiddenItems.find((candidate) => candidate.id === targetId) ??
+        lib.items.find((candidate) => candidate.id === targetId) ??
+        lib.hiddenItems.find((candidate) => candidate.id === targetId) ??
+        lib.duplicates.flatMap((g) => g.items).find((candidate) => candidate.id === targetId) ??
         null;
       if (!item) return;
       setViewerOrigin(origin);
+      const viewerState = useViewerStore.getState();
       if (item.kind === "video") {
         beginVideoSession(item, scope);
-        viewer.close();
+        viewerState.close();
         setScreen("Video");
       } else {
-        library.setViewerScope(scope);
-        viewer.open(item.id);
+        lib.setViewerScope(scope);
+        viewerState.open(item.id);
         setScreen("Viewer");
       }
     },
-    [library, viewer, beginVideoSession],
+    [beginVideoSession],
   );
 
   // Start a video session without leaving the current screen; the Now
@@ -1475,10 +1528,40 @@ function App() {
     // Run delete in background
     void (async () => {
       try {
-        await library.deleteItems(ids);
-        showNotice(
-          `Moved ${ids.length.toLocaleString()} item${ids.length === 1 ? "" : "s"} to Trash.`,
-        );
+        const result = await library.deleteItems(ids);
+        const moved = result.status === "failed" ? 0 : result.trashed;
+        // The duplicate manager can remove rows that are outside the loaded
+        // page, so refresh canonical source/library totals after the native
+        // transaction rather than estimating them from rendered tiles.
+        if (moved > 0) {
+          void tauri.library
+            .getStats()
+            .then(setLibraryStats)
+            .catch(() => {});
+        }
+        if (result.status === "cancelled") {
+          showNotice("Deletion cancelled.");
+        } else if (result.status === "failed") {
+          showNotice(
+            `Could not move items to Trash: ${result.failures[0]?.error ?? "unknown error"}`,
+          );
+          if (result.failures.length > 1) {
+            console.warn("Trash refusals", result.failures);
+          }
+        } else if (moved > 0) {
+          const suffix = result.failed ? ` ${result.failed} item(s) could not be moved.` : "";
+          const warning = result.catalogWarning
+            ? " The catalog could not be updated; rescan to refresh the library."
+            : "";
+          // Lead with the space that is actually gone from the disk, which is
+          // the number people care about after a duplicate cleanup.
+          const reclaimed =
+            result.bytes > 0 ? ` — ${formatBytesSimple(result.bytes)} reclaimed` : "";
+          showNotice(
+            `Moved ${moved.toLocaleString()} item${moved === 1 ? "" : "s"} to Trash${reclaimed}.${suffix}${warning}`,
+          );
+          if (result.failures.length > 0) console.warn("Trash refusals", result.failures);
+        }
       } catch (error) {
         const msg = String(error);
         if (msg !== "Cancelled") {
@@ -1787,11 +1870,11 @@ function App() {
       void library.loadLibrary();
     }
     if (next === "Edit") {
-      const selectedItem = library.items.find((i) => i.id === library.inspectedId);
-      if (selectedItem && selectedItem.kind === "photo") {
-        await edit.saveDraft();
-        await edit.open(selectedItem);
-      }
+      // Show the draft picker / empty edit screen. Saving first preserves any
+      // in-progress work; explicit edit actions (Library/Viewer "Edit") still
+      // open a specific item by calling edit.open() and setScreen("Edit").
+      await edit.saveDraft();
+      await edit.close();
     }
     if (next !== screen) {
       setScreenHistory((prev) => [...prev, screen]);
@@ -2014,6 +2097,7 @@ function App() {
       animateTransitions={animateTransitions}
       sidebarWidth={sidebarWidth}
       sidebarOpen={library.sidebarOpen}
+      sidebarCollapsed={library.sidebarCollapsed}
       topbar={
         <AppTopBar
           screen={screen}
@@ -2078,6 +2162,8 @@ function App() {
           onOpenScreen={openScreen}
           onOpenSources={() => setSourcesSheetOpen(true)}
           onOpenUpdate={() => setUpdateDialogOpen(true)}
+          sidebarCollapsed={library.sidebarCollapsed}
+          onToggleCollapse={library.toggleSidebarCollapsed}
         />
       }
       overlays={
@@ -2257,7 +2343,11 @@ function App() {
               <button
                 className="busy-indicator-cancel"
                 type="button"
-                onClick={() => void library.cancelScan()}
+                onClick={() =>
+                  void (library.progress?.phase === "trashing"
+                    ? library.cancelDelete()
+                    : library.cancelScan())
+                }
                 disabled={library.canceling}
               >
                 {library.canceling ? "Cancelling…" : "Cancel"}
@@ -2405,6 +2495,8 @@ function App() {
         selectVideoItem={selectVideoItem}
         playPreviousVideo={playPreviousVideo}
         playNextVideo={playNextVideo}
+        queueHasMore={Boolean(videoQueuePagingRef.current?.hasMore)}
+        onLoadMoreQueue={loadNextVideoPage}
         playSlideshow={playSlideshow}
         openAlbumMenu={openAlbumMenu}
         openSmartAlbum={openSmartAlbum}

@@ -239,6 +239,7 @@ async fn restore_backup_into_catalog(db: &SqlitePool, path: &str) -> Result<(), 
 
         // Clear dependent rows first. Foreign keys are enabled on this pool.
         for statement in [
+            "DELETE FROM edit_backups",
             "DELETE FROM edit_recipes",
             "DELETE FROM smart_albums",
             "DELETE FROM media_tags",
@@ -327,6 +328,21 @@ async fn restore_backup_into_catalog(db: &SqlitePool, path: &str) -> Result<(), 
                 &mut tx,
                 "smart_albums",
                 &["id", "name", "filter_json", "created_at", "updated_at"],
+            )
+            .await?;
+        }
+        if table_exists(&mut tx, "restore_src", "edit_backups").await? {
+            copy_table(
+                &mut tx,
+                "edit_backups",
+                &[
+                    "media_id",
+                    "original_path",
+                    "backup_path",
+                    "size",
+                    "sha256",
+                    "created_at",
+                ],
             )
             .await?;
         }
@@ -470,6 +486,10 @@ mod tests {
         .await
         .unwrap();
         sqlx::query("CREATE TABLE edit_recipes (media_id TEXT PRIMARY KEY, edits TEXT NOT NULL, crop TEXT, history TEXT NOT NULL, history_index INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)")
+            .execute(&db)
+            .await
+            .unwrap();
+        sqlx::query("CREATE TABLE edit_backups (media_id TEXT PRIMARY KEY, original_path TEXT NOT NULL, backup_path TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT, created_at INTEGER NOT NULL)")
             .execute(&db)
             .await
             .unwrap();

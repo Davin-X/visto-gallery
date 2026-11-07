@@ -44,8 +44,7 @@
   color: var(--text);
 }
 
-.app-frame
-  :is(.quiet-button, .secondary-button, .outline-button):hover:not(:disabled) {
+.app-frame :is(.quiet-button, .secondary-button, .outline-button):hover:not(:disabled) {
   border-color: var(--accent);
   background: var(--surface-2);
   color: var(--accent-text);
@@ -116,15 +115,13 @@
   background: var(--surface-2);
 }
 
-.app-frame
-  :is(.layout-switcher button, .zoom-control button, .sort-control button) {
+.app-frame :is(.layout-switcher button, .zoom-control button, .sort-control button) {
   min-height: 30px;
   border-radius: 7px;
   color: var(--muted);
 }
 
-.app-frame
-  :is(.layout-switcher button.selected, .zoom-control button.selected) {
+.app-frame :is(.layout-switcher button.selected, .zoom-control button.selected) {
   background: var(--surface);
   color: var(--accent-text);
   box-shadow:

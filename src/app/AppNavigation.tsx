@@ -1,3 +1,5 @@
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { BrandMark } from "../design/components/BrandMark";
 import { KindDot } from "../design/components/KindBadge";
 import { NowPlaying } from "../design/components/NowPlaying";
@@ -12,8 +14,10 @@ import {
   EditIcon,
   BatchIcon,
   FolderIcon,
-  InspectorIcon,
   EyeOffIcon,
+  PanelLeftIcon,
+  PanelRightIcon,
+  ChartIcon,
 } from "../design/components/icons";
 import { ACCENT_PALETTE } from "../engine/stores";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
@@ -134,7 +138,7 @@ export function AppTopBar({
           title={sidebarOpen ? "Hide sidebar (⌥⌘S)" : "Show sidebar (⌥⌘S)"}
           onClick={onToggleSidebar}
         >
-          <LibraryIcon size={18} />
+          <PanelLeftIcon size={18} />
         </button>
         <button
           className="icon-button"
@@ -157,7 +161,7 @@ export function AppTopBar({
           }
           onClick={onToggleInspector}
         >
-          <InspectorIcon size={18} />
+          <PanelRightIcon size={18} />
         </button>
         <button
           className="icon-button"
@@ -210,6 +214,8 @@ interface AppSidebarProps {
   updateAvailable: boolean;
   updateVersion: string | null;
   appVersion: string;
+  sidebarCollapsed: boolean;
+  onToggleCollapse: () => void;
   onOpenScreen: (screen: Screen) => void;
   onOpenSources: () => void;
   onOpenUpdate: () => void;
@@ -223,18 +229,173 @@ export function AppSidebar({
   updateAvailable,
   updateVersion,
   appVersion,
+  sidebarCollapsed,
+  onToggleCollapse,
   onOpenScreen,
   onOpenSources,
   onOpenUpdate,
 }: AppSidebarProps) {
   const folderCount = folders.length;
   const folderItems = folders.reduce((total, folder) => total + folder.itemCount, 0);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [statsPos, setStatsPos] = useState({ top: 0, left: 0 });
+  const statsWrapRef = useRef<HTMLDivElement>(null);
+  const statsButtonRef = useRef<HTMLButtonElement>(null);
+  const statsPopupRef = useRef<HTMLDivElement>(null);
+  // The popup must escape the rail: .sidebar (overflow hidden) and
+  // .sidebar-scroll (overflow-y auto / overflow-x hidden) clip anything
+  // rendered inside them, and the sibling .main-content paints over
+  // whatever overflows the sidebar. Portaling into .app-frame with fixed
+  // positioning — like FilterDropdown / ContextMenu — is the only way to
+  // paint above the main pane without giving up sidebar scrolling.
+  // .app-frame (not body) so the panel inherits the theme tokens.
+  const portalRoot =
+    typeof document === "undefined"
+      ? null
+      : (document.querySelector<HTMLElement>(".app-frame") ?? document.body);
+
+  // The popup only makes sense in rail mode; expanding or hiding the
+  // sidebar should close it, and Escape/outside clicks dismiss it.
+  useEffect(() => {
+    if (!statsOpen) return;
+    if (!sidebarCollapsed) {
+      setStatsOpen(false);
+      return;
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      // The popup is portaled outside statsWrapRef, so clicks inside it
+      // would look like outside clicks unless it is checked too.
+      if (
+        !(statsWrapRef.current?.contains(target) ?? false) &&
+        !(statsPopupRef.current?.contains(target) ?? false)
+      ) {
+        setStatsOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setStatsOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [statsOpen, sidebarCollapsed]);
+
+  // Anchor the portaled popup to the chart button and keep it inside the
+  // viewport (mirrors FilterDropdown's positioning). Re-run on resize and
+  // on any scroll — .sidebar-scroll scrolling moves the button.
+  useLayoutEffect(() => {
+    if (!statsOpen) return;
+    const positionPopup = () => {
+      const button = statsButtonRef.current;
+      const panel = statsPopupRef.current;
+      if (!button || !panel) return;
+      const buttonRect = button.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const padding = 8;
+      const gap = 10;
+      let left = buttonRect.right + gap;
+      let top = buttonRect.top;
+      left = Math.max(padding, Math.min(left, window.innerWidth - panelRect.width - padding));
+      if (top + panelRect.height > window.innerHeight - padding) {
+        top = window.innerHeight - panelRect.height - padding;
+      }
+      if (top < padding) top = padding;
+      setStatsPos((prev) => (prev.top === top && prev.left === left ? prev : { top, left }));
+    };
+    positionPopup();
+    window.addEventListener("resize", positionPopup);
+    window.addEventListener("scroll", positionPopup, true);
+    return () => {
+      window.removeEventListener("resize", positionPopup);
+      window.removeEventListener("scroll", positionPopup, true);
+    };
+  }, [statsOpen]);
+
+  const libraryStatsRows = (
+    <>
+      <div className="stat-row">
+        <KindDot kind="photo" />
+        <span className="stat-label">Photos</span>
+        <span className="stat-value">
+          {stats.photos.toLocaleString()}
+          <span className="stat-size">· {formatBytesSimple(stats.photoSize)}</span>
+        </span>
+      </div>
+      <div className="stat-row">
+        <KindDot kind="video" />
+        <span className="stat-label">Videos</span>
+        <span className="stat-value">
+          {stats.videos.toLocaleString()}
+          <span className="stat-size">· {formatBytesSimple(stats.videoSize)}</span>
+        </span>
+      </div>
+      <div className="stat-row">
+        <KindDot kind="raw" />
+        <span className="stat-label">RAW</span>
+        <span className="stat-value">
+          {stats.raws.toLocaleString()}
+          <span className="stat-size">· {formatBytesSimple(stats.rawSize)}</span>
+        </span>
+      </div>
+      <div className="stat-row">
+        <KindDot kind="photo" />
+        <span className="stat-label">Favorites</span>
+        <span className="stat-value">
+          {stats.favorites.toLocaleString()}
+          <span className="stat-size">· {formatBytesSimple(stats.favoriteSize)}</span>
+        </span>
+      </div>
+      <div className="stat-row">
+        <KindDot kind="photo" />
+        <span className="stat-label">Uncategorized</span>
+        <span className="stat-value">
+          {stats.uncategorized.toLocaleString()}
+          <span className="stat-size">· {formatBytesSimple(stats.uncategorizedSize)}</span>
+        </span>
+      </div>
+      <div className="stat-row hidden">
+        <KindDot kind="photo" />
+        <span className="stat-label">Hidden</span>
+        <span className="stat-value">
+          {stats.hidden.toLocaleString()}
+          <span className="stat-size">· {formatBytesSimple(stats.hiddenSize)}</span>
+        </span>
+      </div>
+      <div className="stat-row size">
+        <span className="stat-label">Total</span>
+        <span className="stat-value">
+          {(stats.photos + stats.videos + stats.raws + stats.uncategorized).toLocaleString()} ·{" "}
+          {formatBytesSimple(stats.totalSize)}
+        </span>
+      </div>
+    </>
+  );
+
+  // (No separate pointerdown opener: it would fire before the click
+  // toggle and the pair would open-then-close. The dismissal effect is
+  // only attached while open, so the opening gesture can't close it.)
 
   return (
     <aside className="sidebar">
       <div className="sidebar-scroll">
         <div className="sidebar-header">
-          <div className="sidebar-label">WORKSPACE</div>
+          <div className="sidebar-label">
+            <span className="sidebar-label-text">WORKSPACE</span>
+            <button
+              type="button"
+              className="sidebar-collapse-toggle"
+              onClick={onToggleCollapse}
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-pressed={sidebarCollapsed}
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <PanelLeftIcon size={14} strokeWidth={2} />
+            </button>
+          </div>
           <nav className="primary-nav" aria-label="Main navigation">
             {NAV_ITEMS.map(({ label, Icon, screen: target }) => {
               return (
@@ -287,67 +448,50 @@ export function AppSidebar({
           </button>
         </div>
 
+        <div className="sidebar-stats-entry" ref={statsWrapRef}>
+          <button
+            ref={statsButtonRef}
+            type="button"
+            className="sidebar-stats-button"
+            onClick={() => {
+              if (!statsOpen) {
+                // Seed the fixed position before the portal mounts so the
+                // panel doesn't flash at the viewport origin; the layout
+                // effect above then clamps it to the viewport.
+                const rect = statsButtonRef.current?.getBoundingClientRect();
+                if (rect) setStatsPos({ top: rect.top, left: rect.right + 10 });
+              }
+              setStatsOpen((value) => !value);
+            }}
+            aria-label="Library stats"
+            aria-haspopup="dialog"
+            aria-expanded={statsOpen}
+            title="Library stats"
+          >
+            <ChartIcon size={18} />
+          </button>
+          {statsOpen &&
+            portalRoot &&
+            createPortal(
+              <div
+                ref={statsPopupRef}
+                className="sidebar-stats-popup"
+                role="dialog"
+                aria-label="Library stats"
+                style={{ position: "fixed", top: statsPos.top, left: statsPos.left, zIndex: 200 }}
+              >
+                <div className="sidebar-section-label">LIBRARY</div>
+                <div className="library-stats">{libraryStatsRows}</div>
+              </div>,
+              portalRoot,
+            )}
+        </div>
+
         <div className="sidebar-divider" aria-hidden="true" />
 
         <div className="sidebar-section">
           <div className="sidebar-section-label">LIBRARY</div>
-          <div className="library-stats">
-            <div className="stat-row">
-              <KindDot kind="photo" />
-              <span className="stat-label">Photos</span>
-              <span className="stat-value">
-                {stats.photos.toLocaleString()}
-                <span className="stat-size">· {formatBytesSimple(stats.photoSize)}</span>
-              </span>
-            </div>
-            <div className="stat-row">
-              <KindDot kind="video" />
-              <span className="stat-label">Videos</span>
-              <span className="stat-value">
-                {stats.videos.toLocaleString()}
-                <span className="stat-size">· {formatBytesSimple(stats.videoSize)}</span>
-              </span>
-            </div>
-            <div className="stat-row">
-              <KindDot kind="raw" />
-              <span className="stat-label">RAW</span>
-              <span className="stat-value">
-                {stats.raws.toLocaleString()}
-                <span className="stat-size">· {formatBytesSimple(stats.rawSize)}</span>
-              </span>
-            </div>
-            <div className="stat-row">
-              <KindDot kind="photo" />
-              <span className="stat-label">Favorites</span>
-              <span className="stat-value">
-                {stats.favorites.toLocaleString()}
-                <span className="stat-size">· {formatBytesSimple(stats.favoriteSize)}</span>
-              </span>
-            </div>
-            <div className="stat-row">
-              <KindDot kind="photo" />
-              <span className="stat-label">Uncategorized</span>
-              <span className="stat-value">
-                {stats.uncategorized.toLocaleString()}
-                <span className="stat-size">· {formatBytesSimple(stats.uncategorizedSize)}</span>
-              </span>
-            </div>
-            <div className="stat-row hidden">
-              <KindDot kind="photo" />
-              <span className="stat-label">Hidden</span>
-              <span className="stat-value">
-                {stats.hidden.toLocaleString()}
-                <span className="stat-size">· {formatBytesSimple(stats.hiddenSize)}</span>
-              </span>
-            </div>
-            <div className="stat-row size">
-              <span className="stat-label">Total</span>
-              <span className="stat-value">
-                {(stats.photos + stats.videos + stats.raws + stats.uncategorized).toLocaleString()}{" "}
-                · {formatBytesSimple(stats.totalSize)}
-              </span>
-            </div>
-          </div>
+          <div className="library-stats">{libraryStatsRows}</div>
         </div>
       </div>
       <div className="sidebar-footer">

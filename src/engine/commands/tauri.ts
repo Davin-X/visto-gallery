@@ -34,7 +34,6 @@ import type {
   EditRecipe,
   EditPreset,
   TrashResult,
-  TrashError,
   UpdateCheckResult,
   LibraryStats,
   ExternalPlayer,
@@ -53,8 +52,7 @@ export const tauri = {
     getItems: (filter: LibraryFilterDTO): Promise<LibraryItemsPage> =>
       invoke("get_library_items", { filter }),
 
-    getHiddenItems: (): Promise<LibraryItemsPage> =>
-      invoke("get_hidden_items"),
+    getHiddenItems: (): Promise<LibraryItemsPage> => invoke("get_hidden_items"),
 
     getThumbnail: (request: ThumbnailRequest): Promise<ThumbnailResponse> =>
       invoke("get_item_thumbnail", { request }),
@@ -93,7 +91,7 @@ export const tauri = {
     updateTags: (itemId: string, tags: string[]): Promise<void> =>
       invoke("update_item_tags", { itemId, tags }),
 
-    moveToTrash: (paths: string[]): Promise<TrashResult> => invoke("move_to_trash", { paths }),
+    moveToTrash: (ids: string[]): Promise<TrashResult> => invoke("move_to_trash", { ids }),
 
     cancelMoveToTrash: (): Promise<void> => invoke("cancel_move_to_trash"),
 

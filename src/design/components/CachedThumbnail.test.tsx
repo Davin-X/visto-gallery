@@ -78,18 +78,14 @@ describe("CachedThumbnail", () => {
 
     render(<CachedThumbnail itemId="quality-item" name="quality.mp4" size={128} eager />);
     await waitFor(() =>
-      expect(mocks.getThumbnail).toHaveBeenCalledWith(
-        expect.objectContaining({ quality: 78 }),
-      ),
+      expect(mocks.getThumbnail).toHaveBeenCalledWith(expect.objectContaining({ quality: 78 })),
     );
 
     mocks.settings.thumbnailQuality = 92;
     mocks.getThumbnail.mockClear();
     render(<CachedThumbnail itemId="quality-item-2" name="quality2.mp4" size={128} eager />);
     await waitFor(() =>
-      expect(mocks.getThumbnail).toHaveBeenCalledWith(
-        expect.objectContaining({ quality: 92 }),
-      ),
+      expect(mocks.getThumbnail).toHaveBeenCalledWith(expect.objectContaining({ quality: 92 })),
     );
   });
 });

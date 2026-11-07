@@ -157,8 +157,19 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
   useEffect(() => {
     const video = videoRef.current;
     if (!video || item?.kind !== "video") return;
-    if (playing) void video.play().catch(() => {});
-    else video.pause();
+    if (playing) {
+      // Pause every other audible surface (e.g. the background player) so a
+      // slideshow video never shares audio with another <video> element.
+      document.querySelectorAll("video").forEach((other) => {
+        if (other === video) return;
+        try {
+          other.pause();
+        } catch {}
+      });
+      void video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
     return () => video.pause();
   }, [item?.id, item?.kind, playing]);
 

@@ -103,11 +103,9 @@
    -------------------------------------------------------------------------- */
 
 .app-frame
-  :is(
-    .edit-tabs button,
-    .canvas-actions button,
-    .edit-more-controls button
-  ):not(.active):hover:not(:disabled) {
+  :is(.edit-tabs button, .canvas-actions button, .edit-more-controls button):not(.active):hover:not(
+    :disabled
+  ) {
   background-color: var(--i-tint);
   color: var(--ink);
 }
@@ -126,11 +124,9 @@
 
 /* Inline "view all" style links read as links on hover. */
 .app-frame
-  :is(
-    .date-group-heading > button,
-    .inspector-section-head button,
-    .finder-tags button
-  ):hover:not(:disabled) {
+  :is(.date-group-heading > button, .inspector-section-head button, .finder-tags button):hover:not(
+    :disabled
+  ) {
   background: transparent;
   color: var(--accent-text);
   text-decoration: underline;
@@ -144,8 +140,7 @@
 }
 
 /* Nav + album rows already tint; make the unselected one react on press too. */
-.app-frame
-  :is(.nav-item, .album-nav button):not(.active):active:not(:disabled) {
+.app-frame :is(.nav-item, .album-nav button):not(.active):active:not(:disabled) {
   background-color: var(--i-tint);
 }
 
@@ -277,13 +272,7 @@
       did not already cover.
    -------------------------------------------------------------------------- */
 
-.app-frame
-  :is(
-    a,
-    summary,
-    [role="button"],
-    [tabindex]:not(.context-menu-item)
-  ):focus-visible {
+.app-frame :is(a, summary, [role="button"], [tabindex]:not(.context-menu-item)):focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
 }

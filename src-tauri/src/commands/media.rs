@@ -2,53 +2,248 @@ use super::*;
 use crate::AppState;
 use image::{DynamicImage, ImageEncoder};
 use serde_json::json;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::PathBuf;
-use tauri::{State, Window};
+use std::sync::Arc;
+use tauri::{Manager, State, Window};
 
-#[tauri::command]
-pub async fn move_to_trash(
-    paths: Vec<String>,
-    state: State<'_, AppState>,
-    window: Window,
-) -> Result<TrashResult, String> {
-    super::TRASH_CANCEL.store(false, Ordering::SeqCst);
+/// Resolve catalog ids to their on-disk paths.
+///
+/// The renderer never supplies a path to `move_to_trash`; it supplies ids.
+/// That makes the operation independent of however many rows the UI happens
+/// to have paged into memory, and it means a compromised webview cannot ask
+/// the backend to trash an arbitrary file.
+async fn catalog_paths_by_id(
+    db: &sqlx::SqlitePool,
+    ids: &[String],
+) -> Result<HashMap<String, String>, String> {
+    let mut found = HashMap::new();
+    // Keep the IN list below SQLite's default parameter limit.
+    for chunk in ids.chunks(400) {
+        let mut query = sqlx::QueryBuilder::<sqlx::Sqlite>::new(
+            "SELECT id, path FROM media_items WHERE id IN (",
+        );
+        {
+            let mut separated = query.separated(", ");
+            for id in chunk {
+                separated.push_bind(id);
+            }
+        }
+        query.push(")");
+        let rows: Vec<(String, String)> = query
+            .build_query_as::<(String, String)>()
+            .fetch_all(db)
+            .await
+            .map_err(|e| e.to_string())?;
+        found.extend(rows);
+    }
+    Ok(found)
+}
 
-    let db = super::get_db(&state)?;
+/// Decide whether a single path may be moved to Trash.
+///
+/// A path is eligible only when it is a regular file (never a symlink) and it
+/// is either a catalog row or canonically inside one of the registered library
+/// folders. This stops a renderer bug or a compromised webview from trashing
+/// arbitrary user files through a single IPC call.
+fn validate_trash_path(
+    path: &str,
+    cataloged: &HashSet<String>,
+    registered: &[String],
+) -> Result<(), String> {
+    let metadata = std::fs::symlink_metadata(path)
+        .map_err(|_| "File no longer exists on disk.".to_string())?;
+    if metadata.file_type().is_symlink() {
+        return Err("Refusing to move a symbolic link to Trash.".to_string());
+    }
+    if !metadata.is_file() {
+        return Err("Only regular files can be moved to Trash.".to_string());
+    }
+    if cataloged.contains(path) {
+        return Ok(());
+    }
+    if registered.is_empty() {
+        return Err(
+            "File is not in the catalog and no library folders are registered.".to_string(),
+        );
+    }
+    if is_path_under_registered_roots(path, registered) {
+        Ok(())
+    } else {
+        Err("Path is outside registered library folders and not in the catalog.".to_string())
+    }
+}
 
-    // Only trash paths that exist on disk. Files not in the catalog can still be
-    // trashed if they exist (e.g. imported outside the app).
-    let paths: Vec<String> = paths
+/// Resolve requested catalog ids into validated `(id, path)` targets.
+///
+/// This is deliberately independent of any UI page: the renderer sends ids,
+/// and the database is the single source of truth for paths. Rejected ids are
+/// returned as failures instead of being silently dropped, so the UI can
+/// explain exactly what did not happen.
+async fn resolve_trash_targets(
+    db: &sqlx::SqlitePool,
+    ids: Vec<String>,
+    registered: &[String],
+) -> Result<(Vec<(String, String)>, Vec<TrashError>), String> {
+    // De-duplicate ids while preserving caller order.
+    let mut seen = HashSet::new();
+    let requested: Vec<String> = ids
         .into_iter()
-        .filter(|p| std::path::Path::new(p).exists())
+        .filter(|id| !id.is_empty())
+        .filter(|id| seen.insert(id.clone()))
         .collect();
-    if paths.is_empty() {
-        return Err("Selected items no longer exist on disk.".to_string());
+    if requested.is_empty() {
+        return Ok((Vec::new(), Vec::new()));
     }
 
-    let _ = window.emit(
-        "import-progress",
-        json!({
-            "phase": "trashing",
-            "processed": 0,
-            "total": paths.len(),
-        }),
+    let resolved = catalog_paths_by_id(db, &requested).await?;
+
+    let mut failed = Vec::new();
+    let cataloged: HashSet<String> = resolved.values().cloned().collect();
+    let mut targets: Vec<(String, String)> = Vec::with_capacity(requested.len());
+    for id in requested {
+        let Some(path) = resolved.get(&id) else {
+            failed.push(TrashError {
+                id,
+                error: "Item is no longer in the catalog.".to_string(),
+            });
+            continue;
+        };
+        match validate_trash_path(path, &cataloged, registered) {
+            Ok(()) => targets.push((id, path.clone())),
+            Err(error) => failed.push(TrashError { id, error }),
+        }
+    }
+    Ok((targets, failed))
+}
+
+/// The OS-level Trash operation, behind a trait so tests can drive the whole
+/// flow without moving real user files.
+trait TrashSink: Send + Sync {
+    /// Trashes multiple paths in a single OS operation where possible.
+    /// On macOS this is one AppleScript `tell Finder delete` call per batch —
+    /// Finder's native Trash supports "Put Back" and a single invocation
+    /// avoids per-file deletion sounds.
+    fn delete_all(&self, paths: &[String]) -> Result<(), String>;
+}
+
+struct OsTrash;
+
+impl OsTrash {
+    fn new() -> Self {
+        Self
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn escape_applescript_string(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// AppleScript reports a refused Automation permission as `-1743`
+/// (errAEEventNotPermitted) or with one of these messages. Nothing has moved at
+/// that point, so it is safe to retry the batch through a non-AppleScript path.
+#[cfg(target_os = "macos")]
+fn is_apple_events_denied(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    message.contains("-1743")
+        || lower.contains("not authorized to send apple events")
+        || lower.contains("not allowed to send apple events")
+}
+
+#[cfg(target_os = "macos")]
+fn trash_via_finder(paths: &[String]) -> Result<(), String> {
+    // One osascript call tells Finder to delete every path in this batch.
+    // Finder's native Trash supports "Put Back", and batching many paths in
+    // one AppleScript invocation means one sound for the whole batch instead
+    // of one sound per file.
+    let items: Vec<String> = paths
+        .iter()
+        .map(|p| format!("POSIX file \"{}\"", escape_applescript_string(p)))
+        .collect();
+    let script = format!(
+        "tell application \"Finder\"\ndelete {{{}}}\nend tell",
+        items.join(", ")
     );
 
-    let mut trashed = Vec::new();
-    let mut failed = Vec::new();
+    let output = std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .output()
+        .map_err(|e| format!("osascript failed: {}", e))?;
 
-    // Trash in chunks using trash::delete_all, which moves many files in a
-    // single OS-level operation (much faster than one-by-one). Fall back to
-    // per-file deletes if a chunk fails so partial results are still reported.
-    const TRASH_CHUNK: usize = 50;
-    let total = paths.len();
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn trash_via_finder(_paths: &[String]) -> Result<(), String> {
+    Err("Finder trash is only available on macOS.".to_string())
+}
+
+impl TrashSink for OsTrash {
+    fn delete_all(&self, paths: &[String]) -> Result<(), String> {
+        #[cfg(target_os = "macos")]
+        {
+            match trash_via_finder(paths) {
+                Ok(()) => Ok(()),
+                // Finder Automation is a TCC permission the user can refuse, and
+                // it is the only path that supports "Put Back". Falling back to
+                // NSFileManager keeps deleting working instead of failing every
+                // batch (and the per-file retry) with a permission error.
+                Err(error) if is_apple_events_denied(&error) => {
+                    eprintln!(
+                        "Finder automation is unavailable ({}); trashing with NSFileManager instead.",
+                        error.trim()
+                    );
+                    trash::delete_all(paths).map_err(|e| e.to_string())
+                }
+                Err(error) => Err(error),
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            trash::delete_all(paths).map_err(|e| e.to_string())
+        }
+    }
+}
+
+/// Move validated targets to Trash, then remove their catalog rows (and the
+/// journaled edit originals that only existed for those rows).
+///
+/// Files are trashed in batches via one AppleScript `tell Finder delete`
+/// call per batch on macOS — Finder's native Trash supports "Put Back" and a
+/// single invocation per batch means one sound per batch instead of one per
+/// file. `TRASH_CANCEL` is checked between batches so Cancel is responsive.
+async fn execute_trash<P>(
+    db: &sqlx::SqlitePool,
+    targets: Vec<(String, String)>,
+    sink: Arc<dyn TrashSink>,
+    progress: P,
+) -> Result<TrashResult, String>
+where
+    P: Fn(usize, usize, Option<&str>),
+{
+    let mut trashed: Vec<String> = Vec::new();
+    let mut failed = Vec::new();
+    let total = targets.len();
     let mut processed = 0usize;
-    for chunk in paths.chunks(TRASH_CHUNK) {
+
+    // One AppleScript call per batch keeps the sound count low while still
+    // allowing Cancel between batches. 50 paths per AppleScript call means
+    // Cancel is checked every ~50 files — responsive enough for 4000+ file
+    // operations without excessive Finder sounds.
+    const TRASH_BATCH: usize = 50;
+
+    for chunk in targets.chunks(TRASH_BATCH) {
         if super::TRASH_CANCEL.load(Ordering::SeqCst) {
-            for p in chunk {
+            for (id, _) in chunk {
                 failed.push(TrashError {
-                    path: p.clone(),
+                    id: id.clone(),
                     error: "Operation cancelled".to_string(),
                 });
             }
@@ -56,49 +251,60 @@ pub async fn move_to_trash(
             continue;
         }
 
-        let _ = window.emit(
-            "import-progress",
-            json!({
-                "phase": "trashing",
-                "processed": processed,
-                "total": total,
-                "currentFile": chunk.first().cloned().unwrap_or_default(),
-            }),
+        progress(
+            processed,
+            total,
+            chunk.first().map(|(_, path)| path.as_str()),
         );
 
-        let chunk_paths: Vec<String> = chunk.to_vec();
-        let result = tokio::task::spawn_blocking(move || trash::delete_all(&chunk_paths)).await;
+        let batch_sink = Arc::clone(&sink);
+        let batch_paths: Vec<String> = chunk.iter().map(|(_, path)| path.clone()).collect();
+        let result = tokio::task::spawn_blocking(move || batch_sink.delete_all(&batch_paths)).await;
 
         match result {
             Ok(Ok(())) => {
-                trashed.extend(chunk.iter().cloned());
+                trashed.extend(chunk.iter().map(|(id, _)| id.clone()));
             }
-            _ => {
-                // Fallback: try each file individually so partial successes count.
-                for path in chunk {
+            Ok(Err(_batch_err)) => {
+                // Batch failed: try each file individually so partial
+                // successes still count and failures are reported per-id.
+                for (id, path) in chunk {
                     if super::TRASH_CANCEL.load(Ordering::SeqCst) {
                         failed.push(TrashError {
-                            path: path.clone(),
+                            id: id.clone(),
                             error: "Operation cancelled".to_string(),
                         });
                         continue;
                     }
-                    match tokio::task::spawn_blocking({
-                        let path = path.clone();
-                        move || trash::delete(&path)
+                    let single_sink = Arc::clone(&sink);
+                    let single_path = path.clone();
+                    match tokio::task::spawn_blocking(move || {
+                        single_sink.delete_all(&[single_path])
                     })
                     .await
                     {
-                        Ok(Ok(())) => trashed.push(path.clone()),
+                        Ok(Ok(())) => trashed.push(id.clone()),
                         Ok(Err(e)) => failed.push(TrashError {
-                            path: path.clone(),
+                            id: id.clone(),
                             error: format!("Could not move to Trash: {}", e),
                         }),
                         Err(e) => failed.push(TrashError {
-                            path: path.clone(),
+                            id: id.clone(),
                             error: format!("Trash task failed: {}", e),
                         }),
                     }
+                }
+            }
+            Err(e) => {
+                // The blocking task panicked or was cancelled mid-batch, so we
+                // cannot claim any of these files moved. Report every id in the
+                // chunk: dropping them would leave rows that the UI believes
+                // are still deletable attached to files that may be gone.
+                for (id, _) in chunk {
+                    failed.push(TrashError {
+                        id: id.clone(),
+                        error: format!("Trash task failed: {}", e),
+                    });
                 }
             }
         }
@@ -106,28 +312,135 @@ pub async fn move_to_trash(
         processed += chunk.len();
     }
 
+    progress(total, total, None);
+
+    // The files are already in the Trash at this point, so a catalog failure
+    // must be reported as a warning rather than an error: returning Err would
+    // tell the user the delete failed while their files are gone, and the UI
+    // would keep rows that can no longer be trashed.
+    let mut catalog_error = None;
+    if !trashed.is_empty() {
+        match remove_trashed_rows(db, &trashed).await {
+            Ok(backup_files) => {
+                for backup in backup_files {
+                    let _ = std::fs::remove_file(backup);
+                }
+            }
+            Err(error) => catalog_error = Some(error),
+        }
+    }
+
+    Ok(TrashResult {
+        trashed,
+        failed,
+        catalog_error,
+    })
+}
+
+/// Delete the catalog rows for `trashed` ids in one transaction, returning the
+/// journaled edit originals that were attached to them.
+async fn remove_trashed_rows(
+    db: &sqlx::SqlitePool,
+    trashed: &[String],
+) -> Result<Vec<String>, String> {
+    let mut transaction = db
+        .begin()
+        .await
+        .map_err(|e| format!("could not update the catalog: {}", e))?;
+    let mut backup_files = Vec::new();
+    for id in trashed {
+        // Collect journaled originals before the FK cascade removes their rows,
+        // so the files do not linger in app data forever.
+        let backups: Vec<String> =
+            sqlx::query_scalar("SELECT backup_path FROM edit_backups WHERE media_id = ?")
+                .bind(id)
+                .fetch_all(&mut *transaction)
+                .await
+                .map_err(|e| format!("could not read edit backups: {}", e))?;
+        backup_files.extend(backups);
+
+        sqlx::query("DELETE FROM media_items WHERE id = ?")
+            .bind(id)
+            .execute(&mut *transaction)
+            .await
+            .map_err(|e| format!("could not delete catalog row: {}", e))?;
+    }
+    transaction
+        .commit()
+        .await
+        .map_err(|e| format!("could not commit the catalog update: {}", e))?;
+    Ok(backup_files)
+}
+
+#[tauri::command]
+pub async fn move_to_trash(
+    ids: Vec<String>,
+    state: State<'_, AppState>,
+    window: Window,
+) -> Result<TrashResult, String> {
+    super::TRASH_CANCEL.store(false, Ordering::SeqCst);
+
+    let db = super::get_db(&state)?;
+    let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
+        .fetch_all(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let (targets, mut failed) = resolve_trash_targets(&db, ids, &registered).await?;
+    if targets.is_empty() {
+        return Ok(TrashResult {
+            trashed: Vec::new(),
+            failed,
+            catalog_error: None,
+        });
+    }
+
     let _ = window.emit(
         "import-progress",
         json!({
             "phase": "trashing",
-            "processed": paths.len(),
-            "total": paths.len(),
+            "processed": 0,
+            "total": targets.len(),
         }),
     );
 
-    if !trashed.is_empty() {
-        let mut transaction = db.begin().await.map_err(|e| e.to_string())?;
-        for path in &trashed {
-            sqlx::query("DELETE FROM media_items WHERE path = ?")
-                .bind(path)
-                .execute(&mut *transaction)
-                .await
-                .map_err(|e| e.to_string())?;
-        }
-        transaction.commit().await.map_err(|e| e.to_string())?;
+    let outcome = execute_trash(
+        &db,
+        targets,
+        Arc::new(OsTrash::new()),
+        |processed, total, current| {
+            let mut payload = json!({
+                "phase": "trashing",
+                "processed": processed,
+                "total": total,
+            });
+            if let Some(current) = current {
+                payload["currentFile"] = json!(current);
+            }
+            let _ = window.emit("import-progress", payload);
+        },
+    )
+    .await?;
+
+    failed.extend(outcome.failed);
+
+    // Notify the frontend that catalog rows were removed so stats and views
+    // refresh (e.g. library counts after trash).
+    if !outcome.trashed.is_empty() {
+        let _ = window.emit(
+            "library-changed",
+            serde_json::json!({
+                "type": "removed",
+                "itemIds": outcome.trashed,
+            }),
+        );
     }
 
-    Ok(TrashResult { trashed, failed })
+    Ok(TrashResult {
+        trashed: outcome.trashed,
+        failed,
+        catalog_error: outcome.catalog_error,
+    })
 }
 
 #[tauri::command]
@@ -434,9 +747,111 @@ pub(crate) fn validate_in_place_format(source_path: &str) -> Result<(), String> 
     ))
 }
 
+/// Journal the original bytes of `source_path` before an in-place edit.
+///
+/// The first call copies the file into `backup_dir` and records it in
+/// `edit_backups`. Later calls reuse that record without overwriting it, so
+/// editing twice can never replace the true original with the first edit.
+async fn ensure_edit_backup_in_dir(
+    db: &sqlx::SqlitePool,
+    backup_dir: &std::path::Path,
+    media_id: &str,
+    source_path: &str,
+) -> Result<PathBuf, String> {
+    if let Some(row) = sqlx::query("SELECT backup_path FROM edit_backups WHERE media_id = ?")
+        .bind(media_id)
+        .fetch_optional(db)
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        let recorded: String = row.get("backup_path");
+        if std::path::Path::new(&recorded).is_file() {
+            return Ok(PathBuf::from(recorded));
+        }
+        return Err(
+            "The journaled original for this item is missing; use \"Save a copy\" instead of replacing it."
+                .to_string(),
+        );
+    }
+
+    std::fs::create_dir_all(backup_dir).map_err(|e| {
+        format!(
+            "Could not create the edit backup folder {}: {e}",
+            backup_dir.display()
+        )
+    })?;
+
+    // `validate_in_place_format` guarantees a supported extension. Including
+    // it keeps the backup openable by external tools.
+    let extension = std::path::Path::new(source_path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_lowercase())
+        .unwrap_or_else(|| "bin".to_string());
+    let backup_path = backup_dir.join(format!("{media_id}.{extension}"));
+
+    let source = source_path.to_string();
+    let destination = backup_path.clone();
+    tokio::task::spawn_blocking(move || std::fs::copy(&source, &destination))
+        .await
+        .map_err(|e| format!("Backup task failed: {e}"))?
+        .map_err(|e| format!("Failed to journal the original before editing: {e}"))?;
+
+    let size = std::fs::metadata(&backup_path)
+        .map_err(|e| format!("Could not read the journaled original: {e}"))?
+        .len() as i64;
+    let hash_path = backup_path.clone();
+    let hash = tokio::task::spawn_blocking(move || compute_sha256(&hash_path))
+        .await
+        .map_err(|e| format!("Hash task failed: {e}"))?;
+
+    sqlx::query(
+        "INSERT INTO edit_backups (media_id, original_path, backup_path, size, sha256, created_at) \
+         VALUES (?, ?, ?, ?, ?, ?) \
+         ON CONFLICT(media_id) DO NOTHING",
+    )
+    .bind(media_id)
+    .bind(source_path)
+    .bind(backup_path.to_string_lossy().into_owned())
+    .bind(size)
+    .bind(&hash)
+    .bind(super::now_ms())
+    .execute(db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // If a concurrent edit won the race, keep its record and drop our copy.
+    let recorded: String =
+        sqlx::query_scalar("SELECT backup_path FROM edit_backups WHERE media_id = ?")
+            .bind(media_id)
+            .fetch_one(db)
+            .await
+            .map_err(|e| e.to_string())?;
+    if recorded != backup_path.to_string_lossy() {
+        let _ = std::fs::remove_file(&backup_path);
+        return Ok(PathBuf::from(recorded));
+    }
+
+    Ok(backup_path)
+}
+
+async fn ensure_edit_backup(
+    app: &tauri::AppHandle,
+    db: &sqlx::SqlitePool,
+    media_id: &str,
+    source_path: &str,
+) -> Result<PathBuf, String> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Could not locate the app data folder: {e}"))?;
+    ensure_edit_backup_in_dir(db, &app_dir.join("edit-originals"), media_id, source_path).await
+}
+
 #[tauri::command]
 pub async fn render_edited(
     request: RenderRequest,
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<ExportResult, String> {
     // Validate the source path against registered library folders before doing
@@ -451,15 +866,43 @@ pub async fn render_edited(
     }
 
     let in_place = request.output_format == "in_place";
-    if in_place {
+    let backup_path = if in_place {
         validate_in_place_format(&request.source_path)?;
-    }
+        let media_id = request
+            .media_id
+            .clone()
+            .ok_or_else(|| "In-place edits require a media id.".to_string())?;
+        let catalog_path: Option<String> =
+            sqlx::query_scalar("SELECT path FROM media_items WHERE id = ?")
+                .bind(&media_id)
+                .fetch_optional(&db)
+                .await
+                .map_err(|e| e.to_string())?;
+        match catalog_path {
+            Some(path) if path == request.source_path => {}
+            Some(_) => {
+                return Err(
+                    "The requested file does not match the catalog entry for this item."
+                        .to_string(),
+                )
+            }
+            None => {
+                return Err(
+                    "Item is not in the catalog; in-place edits are not allowed.".to_string(),
+                )
+            }
+        }
+        Some(ensure_edit_backup(&app, &db, &media_id, &request.source_path).await?)
+    } else {
+        None
+    };
     let source_path = request.source_path.clone();
 
     // Offload CPU-intensive image processing to blocking pool
-    let result = tauri::async_runtime::spawn_blocking(move || render_edited_blocking(request))
-        .await
-        .map_err(|e| format!("Task failed: {}", e))??;
+    let result =
+        tauri::async_runtime::spawn_blocking(move || render_edited_blocking(request, backup_path))
+            .await
+            .map_err(|e| format!("Task failed: {}", e))??;
 
     // After a successful in-place replace, refresh the catalog row so the
     // thumbnail cache key (which includes modified_at) changes and the stale
@@ -489,7 +932,10 @@ pub async fn render_edited(
 }
 
 /// Core image editing pipeline - runs in blocking pool
-fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String> {
+fn render_edited_blocking(
+    request: RenderRequest,
+    backup_path: Option<PathBuf>,
+) -> Result<ExportResult, String> {
     use std::path::PathBuf;
 
     let source_path = PathBuf::from(&request.source_path);
@@ -568,12 +1014,10 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
 
     // 8. Determine output path
     let output_path = if request.output_format == "in_place" {
-        // In-place: back up the original, write to temp next to source,
-        // then atomic rename. Fail closed if the backup cannot be made.
-        let backup_path = source_path.with_extension("bak");
-        if source_path.exists() {
-            std::fs::copy(&source_path, &backup_path)
-                .map_err(|e| format!("Failed to create backup before in-place edit: {}", e))?;
+        // In-place: the original was already journaled by the caller. Write to
+        // a temp file next to the source, then atomically replace it.
+        if backup_path.is_none() {
+            return Err("Missing journaled original for in-place edit.".to_string());
         }
 
         let tmp_path = source_path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
@@ -588,13 +1032,10 @@ fn render_edited_blocking(request: RenderRequest) -> Result<ExportResult, String
             &exif_data,
         )?;
 
-        // Atomic rename
+        // Atomic rename. If it fails, the source is untouched; keep the
+        // journaled original intact for a later revert.
         std::fs::rename(&tmp_path, &source_path).map_err(|e| {
-            // Try to restore from backup on failure
             let _ = std::fs::remove_file(&tmp_path);
-            if backup_path.exists() {
-                let _ = std::fs::rename(&backup_path, &source_path);
-            }
             format!("Failed to replace original: {}", e)
         })?;
 
@@ -1230,5 +1671,592 @@ mod in_place_format_tests {
     #[test]
     fn files_without_extension_are_rejected() {
         assert!(validate_in_place_format("no_extension").is_err());
+    }
+}
+
+#[cfg(test)]
+mod trash_validation_tests {
+    use super::{catalog_paths_by_id, validate_trash_path};
+    use std::collections::HashSet;
+    use std::path::{Path, PathBuf};
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("visto-trash-test-{label}-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&path).expect("create temp dir");
+        path
+    }
+
+    fn write_file(path: &Path) {
+        std::fs::write(path, b"data").expect("write file");
+    }
+
+    fn cataloged(paths: &[&Path]) -> HashSet<String> {
+        paths
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn cataloged_file_is_allowed_even_outside_roots() {
+        let dir = temp_dir("cataloged");
+        let file = dir.join("a.jpg");
+        write_file(&file);
+        let registered = vec!["/some/other/root".to_string()];
+
+        assert!(
+            validate_trash_path(file.to_str().unwrap(), &cataloged(&[&file]), &registered).is_ok()
+        );
+    }
+
+    #[test]
+    fn uncataloged_file_inside_registered_root_is_allowed() {
+        let dir = temp_dir("inside-root");
+        let file = dir.join("a.jpg");
+        write_file(&file);
+        let registered = vec![dir.to_string_lossy().into_owned()];
+
+        assert!(validate_trash_path(file.to_str().unwrap(), &HashSet::new(), &registered).is_ok());
+    }
+
+    #[test]
+    fn uncataloged_file_outside_registered_root_is_rejected() {
+        let root = temp_dir("root");
+        let outside = temp_dir("outside");
+        let file = outside.join("a.jpg");
+        write_file(&file);
+        let registered = vec![root.to_string_lossy().into_owned()];
+
+        let error = validate_trash_path(file.to_str().unwrap(), &HashSet::new(), &registered)
+            .expect_err("outside root should be rejected");
+        assert!(error.contains("outside registered library folders"));
+    }
+
+    #[test]
+    fn path_traversal_cannot_escape_a_root() {
+        let root = temp_dir("traversal-root");
+        let outside = temp_dir("traversal-outside");
+        let file = outside.join("a.jpg");
+        write_file(&file);
+        let registered = vec![root.to_string_lossy().into_owned()];
+        let escaped = root
+            .join("..")
+            .join(outside.file_name().unwrap())
+            .join("a.jpg");
+
+        assert!(
+            validate_trash_path(escaped.to_str().unwrap(), &HashSet::new(), &registered).is_err()
+        );
+    }
+
+    #[test]
+    fn missing_file_is_rejected() {
+        let dir = temp_dir("missing");
+        let file = dir.join("gone.jpg");
+
+        let error = validate_trash_path(file.to_str().unwrap(), &HashSet::new(), &[])
+            .expect_err("missing file should be rejected");
+        assert!(error.contains("no longer exists"));
+    }
+
+    #[test]
+    fn symlinks_are_rejected() {
+        let dir = temp_dir("symlink");
+        let target = dir.join("target.jpg");
+        write_file(&target);
+        let link = dir.join("link.jpg");
+        std::os::unix::fs::symlink(&target, &link).expect("create symlink");
+        let registered = vec![dir.to_string_lossy().into_owned()];
+
+        let error = validate_trash_path(link.to_str().unwrap(), &HashSet::new(), &registered)
+            .expect_err("symlink should be rejected");
+        assert!(error.contains("symbolic link"));
+    }
+
+    #[test]
+    fn directories_are_rejected() {
+        let dir = temp_dir("directories");
+        let registered = vec![dir.to_string_lossy().into_owned()];
+
+        let error = validate_trash_path(dir.to_str().unwrap(), &HashSet::new(), &registered)
+            .expect_err("directory should be rejected");
+        assert!(error.contains("Only regular files"));
+    }
+
+    #[tokio::test]
+    async fn catalog_lookup_resolves_ids_and_drops_unknown_ids() {
+        use sqlx::sqlite::SqlitePoolOptions;
+
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory database");
+        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL)")
+            .execute(&db)
+            .await
+            .expect("create media_items");
+        sqlx::query(
+            "INSERT INTO media_items (id, path) VALUES ('a', '/tmp/a.jpg'), ('b', '/tmp/b.jpg')",
+        )
+        .execute(&db)
+        .await
+        .expect("insert rows");
+
+        let resolved = catalog_paths_by_id(&db, &["b".to_string(), "missing".to_string()])
+            .await
+            .expect("resolve ids");
+
+        assert_eq!(resolved.get("b").map(String::as_str), Some("/tmp/b.jpg"));
+        assert!(!resolved.contains_key("missing"));
+        assert_eq!(resolved.len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod trash_flow_tests {
+    use super::{execute_trash, resolve_trash_targets, TrashSink};
+    use std::collections::HashSet;
+    use std::path::{Path, PathBuf};
+    use std::sync::{Arc, Mutex};
+
+    async fn test_db() -> sqlx::SqlitePool {
+        use sqlx::sqlite::SqlitePoolOptions;
+
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory database");
+        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL)")
+            .execute(&db)
+            .await
+            .expect("create media_items");
+        sqlx::query(
+            "CREATE TABLE edit_backups (media_id TEXT PRIMARY KEY, original_path TEXT NOT NULL, backup_path TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT, created_at INTEGER NOT NULL)",
+        )
+        .execute(&db)
+        .await
+        .expect("create edit_backups");
+        db
+    }
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("visto-trash-flow-{label}-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&path).expect("create temp dir");
+        path
+    }
+
+    fn write_file(path: &Path) {
+        std::fs::write(path, b"data").expect("write file");
+    }
+
+    async fn insert_item(db: &sqlx::SqlitePool, id: &str, path: &Path) {
+        sqlx::query("INSERT INTO media_items (id, path) VALUES (?, ?)")
+            .bind(id)
+            .bind(path.to_string_lossy().into_owned())
+            .execute(db)
+            .await
+            .expect("insert media item");
+    }
+
+    async fn catalog_ids(db: &sqlx::SqlitePool) -> Vec<String> {
+        sqlx::query_scalar("SELECT id FROM media_items ORDER BY id")
+            .fetch_all(db)
+            .await
+            .expect("read catalog")
+    }
+
+    /// Records trashed paths; rejects individual paths to exercise
+    /// partial-failure reporting.
+    #[derive(Default)]
+    struct FakeTrash {
+        fail_paths: HashSet<String>,
+        moved: Mutex<Vec<String>>,
+    }
+
+    impl FakeTrash {
+        fn moved(&self) -> Vec<String> {
+            self.moved.lock().unwrap().clone()
+        }
+    }
+
+    impl TrashSink for FakeTrash {
+        fn delete_all(&self, paths: &[String]) -> Result<(), String> {
+            // If any path in the batch is a known failure, the whole batch
+            // fails (mirrors a single osascript call failing partway).
+            if paths.iter().any(|p| self.fail_paths.contains(p)) {
+                return Err("permission denied".to_string());
+            }
+            self.moved.lock().unwrap().extend(paths.iter().cloned());
+            Ok(())
+        }
+    }
+
+    /// Regression guard for the duplicate-delete bug: the renderer only sends
+    /// ids, so a copy that is not in the currently loaded library page must
+    /// still resolve to its real path and become a trash target.
+    #[tokio::test]
+    async fn resolves_a_duplicate_that_is_not_in_the_loaded_page() {
+        let db = test_db().await;
+        let dir = temp_dir("resolve");
+        let copy = dir.join("copy.jpg");
+        write_file(&copy);
+        insert_item(&db, "copy", &copy).await;
+
+        let (targets, failed) = resolve_trash_targets(&db, vec!["copy".to_string()], &[])
+            .await
+            .expect("resolve targets");
+
+        assert!(failed.is_empty(), "unexpected failures: {failed:?}");
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].0, "copy");
+        assert_eq!(targets[0].1, copy.to_string_lossy().into_owned());
+    }
+
+    #[tokio::test]
+    async fn unresolved_and_unreadable_ids_are_reported_without_targets() {
+        let db = test_db().await;
+        let dir = temp_dir("bad-ids");
+        let missing = dir.join("gone.jpg");
+        insert_item(&db, "missing", &missing).await;
+
+        let (targets, failed) =
+            resolve_trash_targets(&db, vec!["ghost".to_string(), "missing".to_string()], &[])
+                .await
+                .expect("resolve targets");
+
+        assert!(targets.is_empty());
+        let ids: Vec<&str> = failed.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(ids, vec!["ghost", "missing"]);
+        assert!(failed[0].error.contains("no longer in the catalog"));
+        assert!(failed[1].error.contains("no longer exists"));
+    }
+
+    #[tokio::test]
+    async fn symlinked_catalog_rows_are_rejected() {
+        let db = test_db().await;
+        let dir = temp_dir("symlink");
+        let target = dir.join("target.jpg");
+        write_file(&target);
+        let link = dir.join("link.jpg");
+        std::os::unix::fs::symlink(&target, &link).expect("create symlink");
+        insert_item(&db, "linked", &link).await;
+
+        let (targets, failed) = resolve_trash_targets(&db, vec!["linked".to_string()], &[])
+            .await
+            .expect("resolve targets");
+
+        assert!(targets.is_empty());
+        assert_eq!(failed.len(), 1);
+        assert!(failed[0].error.contains("symbolic link"));
+    }
+
+    #[tokio::test]
+    async fn duplicate_ids_are_collapsed_preserving_order() {
+        let db = test_db().await;
+        let dir = temp_dir("dedupe");
+        let a = dir.join("a.jpg");
+        let b = dir.join("b.jpg");
+        write_file(&a);
+        write_file(&b);
+        insert_item(&db, "a", &a).await;
+        insert_item(&db, "b", &b).await;
+
+        let (targets, failed) = resolve_trash_targets(
+            &db,
+            vec![
+                "b".to_string(),
+                "a".to_string(),
+                "b".to_string(),
+                String::new(),
+            ],
+            &[],
+        )
+        .await
+        .expect("resolve targets");
+
+        assert!(failed.is_empty());
+        let ids: Vec<&str> = targets.iter().map(|(id, _)| id.as_str()).collect();
+        assert_eq!(ids, vec!["b", "a"]);
+    }
+
+    /// Full flow: trash the files, delete only the trashed catalog rows, and
+    /// remove journaled originals that belonged to them.
+    #[tokio::test]
+    async fn successful_trash_removes_rows_and_edit_backups() {
+        let db = test_db().await;
+        let dir = temp_dir("success");
+        let a = dir.join("a.jpg");
+        let b = dir.join("b.jpg");
+        let keep = dir.join("keep.jpg");
+        write_file(&a);
+        write_file(&b);
+        write_file(&keep);
+        insert_item(&db, "a", &a).await;
+        insert_item(&db, "b", &b).await;
+        insert_item(&db, "keep", &keep).await;
+
+        let backup = dir.join("a-original.jpg");
+        write_file(&backup);
+        sqlx::query(
+            "INSERT INTO edit_backups (media_id, original_path, backup_path, size, sha256, created_at) VALUES ('a', ?, ?, 4, NULL, 1)",
+        )
+        .bind(a.to_string_lossy().into_owned())
+        .bind(backup.to_string_lossy().into_owned())
+        .execute(&db)
+        .await
+        .expect("insert edit backup");
+
+        let fake = Arc::new(FakeTrash::default());
+        let sink: Arc<dyn TrashSink> = fake.clone();
+        let outcome = execute_trash(
+            &db,
+            vec![
+                ("a".to_string(), a.to_string_lossy().into_owned()),
+                ("b".to_string(), b.to_string_lossy().into_owned()),
+            ],
+            sink,
+            |_, _, _| {},
+        )
+        .await
+        .expect("trash targets");
+
+        assert_eq!(outcome.trashed, vec!["a".to_string(), "b".to_string()]);
+        assert!(outcome.failed.is_empty());
+        assert_eq!(
+            fake.moved(),
+            vec![
+                a.to_string_lossy().into_owned(),
+                b.to_string_lossy().into_owned()
+            ]
+        );
+        // Only the trashed rows are gone; unrelated items survive.
+        assert_eq!(catalog_ids(&db).await, vec!["keep"]);
+        // The journaled original was cleaned up.
+        assert!(!backup.exists(), "edit backup should be removed");
+    }
+
+    /// Per-file failures are reported and leave failed rows in the catalog
+    /// for a retry.
+    #[tokio::test]
+    async fn partial_failures_keep_their_rows_and_report_ids() {
+        let db = test_db().await;
+        let dir = temp_dir("partial");
+        let good = dir.join("good.jpg");
+        let bad = dir.join("bad.jpg");
+        write_file(&good);
+        write_file(&bad);
+        insert_item(&db, "good", &good).await;
+        insert_item(&db, "bad", &bad).await;
+
+        let fake = Arc::new(FakeTrash {
+            fail_paths: HashSet::from([bad.to_string_lossy().into_owned()]),
+            moved: Mutex::new(Vec::new()),
+        });
+        let sink: Arc<dyn TrashSink> = fake.clone();
+        let outcome = execute_trash(
+            &db,
+            vec![
+                ("good".to_string(), good.to_string_lossy().into_owned()),
+                ("bad".to_string(), bad.to_string_lossy().into_owned()),
+            ],
+            sink,
+            |_, _, _| {},
+        )
+        .await
+        .expect("trash targets");
+
+        assert_eq!(outcome.trashed, vec!["good".to_string()]);
+        assert_eq!(outcome.failed.len(), 1);
+        assert_eq!(outcome.failed[0].id, "bad");
+        assert!(outcome.failed[0].error.contains("permission denied"));
+        assert_eq!(catalog_ids(&db).await, vec!["bad"]);
+    }
+
+    /// A panicking sink makes `spawn_blocking` return a JoinError. Every id in
+    /// that chunk must be reported, otherwise the rows stay in the catalog
+    /// while the UI believes nothing happened to them.
+    struct PanickingTrash;
+
+    impl TrashSink for PanickingTrash {
+        fn delete_all(&self, _paths: &[String]) -> Result<(), String> {
+            panic!("trash backend panicked");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_panicking_trash_reports_every_id_in_the_chunk() {
+        let db = test_db().await;
+        let dir = temp_dir("panic");
+        let mut targets = Vec::new();
+        for name in ["a", "b", "c"] {
+            let path = dir.join(format!("{name}.jpg"));
+            write_file(&path);
+            insert_item(&db, name, &path).await;
+            targets.push((name.to_string(), path.to_string_lossy().into_owned()));
+        }
+
+        let sink: Arc<dyn TrashSink> = Arc::new(PanickingTrash);
+        let outcome = execute_trash(&db, targets, sink, |_, _, _| {})
+            .await
+            .expect("trash targets");
+
+        assert!(outcome.trashed.is_empty());
+        let ids: Vec<&str> = outcome.failed.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(ids, vec!["a", "b", "c"], "every id must be reported");
+        assert!(outcome.failed[0].error.contains("Trash task failed"));
+        // Nothing was reported as trashed, so every row must still be there.
+        assert_eq!(catalog_ids(&db).await, vec!["a", "b", "c"]);
+    }
+
+    /// The files are already in the Trash when the catalog update runs, so a
+    /// failure there is a warning, not a failed delete.
+    #[tokio::test]
+    async fn a_catalog_failure_is_a_warning_not_a_failed_delete() {
+        let db = test_db().await;
+        let dir = temp_dir("catalog");
+        let a = dir.join("a.jpg");
+        write_file(&a);
+        insert_item(&db, "a", &a).await;
+        sqlx::query("DROP TABLE edit_backups")
+            .execute(&db)
+            .await
+            .expect("drop edit_backups");
+
+        let sink: Arc<dyn TrashSink> = Arc::new(FakeTrash::default());
+        let outcome = execute_trash(
+            &db,
+            vec![("a".to_string(), a.to_string_lossy().into_owned())],
+            sink,
+            |_, _, _| {},
+        )
+        .await
+        .expect("a catalog failure must not fail the delete");
+
+        assert_eq!(outcome.trashed, vec!["a".to_string()]);
+        let warning = outcome.catalog_error.expect("catalog warning expected");
+        assert!(
+            warning.contains("could not"),
+            "warning should explain the failure: {warning}"
+        );
+    }
+
+    /// The fallback decision depends on this classifier: only a refused
+    /// Automation permission means no file has moved yet.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn apple_events_denials_are_recognised() {
+        use super::is_apple_events_denied;
+
+        assert!(is_apple_events_denied(
+            "execution error: Not authorized to send Apple events to Finder. (-1743)"
+        ));
+        assert!(is_apple_events_denied(
+            "0:67: execution error: Finder got an error: Not allowed to send Apple events to Finder. (-1743)"
+        ));
+        assert!(is_apple_events_denied("osascript: error -1743"));
+        // A missing file must keep its error so the per-file retry can report
+        // the real reason instead of silently re-trashing the batch.
+        assert!(!is_apple_events_denied(
+            "execution error: Finder got an error: Can’t get POSIX file \"/tmp/gone.jpg\". (-1728)"
+        ));
+    }
+}
+
+#[cfg(test)]
+mod edit_backup_tests {
+    use super::ensure_edit_backup_in_dir;
+    use sqlx::sqlite::SqlitePoolOptions;
+    use std::path::PathBuf;
+
+    async fn test_db() -> sqlx::SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory database");
+        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL)")
+            .execute(&db)
+            .await
+            .expect("create media_items");
+        sqlx::query(
+            "CREATE TABLE edit_backups (media_id TEXT PRIMARY KEY, original_path TEXT NOT NULL, backup_path TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT, created_at INTEGER NOT NULL)",
+        )
+        .execute(&db)
+        .await
+        .expect("create edit_backups");
+        db
+    }
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "visto-edit-backup-{label}-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
+
+    #[tokio::test]
+    async fn first_edit_journals_the_original_only_once() {
+        let db = test_db().await;
+        let dir = temp_dir("once");
+        let source = dir.join("photo.jpg");
+        std::fs::write(&source, b"original-bytes").unwrap();
+        sqlx::query("INSERT INTO media_items (id, path) VALUES ('item-1', ?)")
+            .bind(source.to_string_lossy().into_owned())
+            .execute(&db)
+            .await
+            .unwrap();
+
+        let backup_dir = dir.join("originals");
+        let backup =
+            ensure_edit_backup_in_dir(&db, &backup_dir, "item-1", source.to_str().unwrap())
+                .await
+                .expect("journal original");
+        assert_eq!(std::fs::read(&backup).unwrap(), b"original-bytes");
+
+        // A second edit must keep the true original, not the first edit.
+        std::fs::write(&source, b"first-edit").unwrap();
+        let reused =
+            ensure_edit_backup_in_dir(&db, &backup_dir, "item-1", source.to_str().unwrap())
+                .await
+                .expect("reuse journal");
+        assert_eq!(reused, backup);
+        assert_eq!(std::fs::read(&backup).unwrap(), b"original-bytes");
+    }
+
+    #[tokio::test]
+    async fn missing_journaled_original_fails_closed() {
+        let db = test_db().await;
+        let dir = temp_dir("missing");
+        let source = dir.join("photo.jpg");
+        std::fs::write(&source, b"edited-bytes").unwrap();
+        sqlx::query("INSERT INTO media_items (id, path) VALUES ('item-2', ?)")
+            .bind(source.to_string_lossy().into_owned())
+            .execute(&db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO edit_backups (media_id, original_path, backup_path, size, sha256, created_at) VALUES ('item-2', ?, ?, 1, NULL, 1)",
+        )
+        .bind(source.to_string_lossy().into_owned())
+        .bind(dir.join("originals").join("missing.jpg").to_string_lossy().into_owned())
+        .execute(&db)
+        .await
+        .unwrap();
+
+        let error = ensure_edit_backup_in_dir(
+            &db,
+            &dir.join("originals"),
+            "item-2",
+            source.to_str().unwrap(),
+        )
+        .await
+        .expect_err("missing original should fail closed");
+        assert!(error.contains("missing"));
     }
 }

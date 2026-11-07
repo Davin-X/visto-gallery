@@ -69,6 +69,10 @@ Use VoiceOver on the native app and record the exact output where it differs fro
 - [ ] Full Disk Access denial or inaccessible source produces an actionable message.
 - [ ] Finder tag action on one file appears in Finder > Get Info or Tags.
 - [ ] Bulk Finder tag action reports per-file success/failure and does not delete Finder-only tags.
+- [ ] First delete on a fresh macOS user account shows the Automation prompt naming Finder, and allowing it moves the files to the Trash.
+- [ ] Refusing the Automation prompt still deletes: the fallback (NSFileManager) trashes the files and logs that Finder automation is unavailable.
+- [ ] A trashed photo appears in Finder > Trash and "Put Back" restores it to its original folder when the Finder path was used.
+- [ ] Cancelling mid-batch keeps already-moved files out of the catalog and reports the remainder as not moved.
 - [ ] Settings → Save Backup creates a versioned snapshot.
 - [ ] Settings → Restore Backup validates before confirmation; malformed file fails without changing library.
 - [ ] Valid restore recovers albums/tags/ratings after restart.

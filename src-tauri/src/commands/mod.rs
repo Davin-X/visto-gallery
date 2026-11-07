@@ -113,6 +113,9 @@ pub struct ExifData {
 #[serde(rename_all = "camelCase")]
 pub struct RenderRequest {
     pub source_path: String,
+    /// Catalog id of the item. Required for in-place edits so the original can
+    /// be journaled under a stable key.
+    pub media_id: Option<String>,
     pub edits: EditValues,
     pub output_format: String,
     pub quality: f32,
@@ -201,17 +204,21 @@ pub struct BatchExportError {
     pub error: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TrashResult {
+    /// Catalog ids that were moved to Trash.
     pub trashed: Vec<String>,
     pub failed: Vec<TrashError>,
+    /// Set when the files reached the Trash but the catalog could not be
+    /// updated. The move succeeded; the rows are stale until a rescan.
+    pub catalog_error: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TrashError {
-    pub path: String,
+    pub id: String,
     pub error: String,
 }
 

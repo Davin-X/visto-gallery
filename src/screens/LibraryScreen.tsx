@@ -44,12 +44,41 @@ import { useThumbnailSize } from "../engine/stores/useSettingsStore";
 import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple, canPlayVideoInApp } from "../engine/utils/mediaTypes";
 import type { MediaItem, Album, Filter, LayoutMode } from "../engine/types/media";
-import type { LibraryFolder } from "../engine/types/commands";
+import type { DeleteItemsOutcome, LibraryFolder } from "../engine/types/commands";
 
 const GALLERY_PAGE_SIZE = 180;
 const VIRTUAL_GRID_OVERSCAN_ROWS = 6;
 const MAX_VIRTUAL_GRID_ITEMS = 480;
 const GRID_HORIZONTAL_PADDING = 40;
+
+/** Pure row-window calculation for the fixed-height grid and overview cards. */
+export function calculateVirtualGridWindow(
+  itemCount: number,
+  columns: number,
+  rowStride: number,
+  gap: number,
+  scrollTop: number,
+  viewportHeight: number,
+) {
+  const totalRows = Math.ceil(itemCount / columns);
+  const firstVisibleRow = Math.max(0, Math.floor(scrollTop / rowStride));
+  const lastVisibleRow = Math.min(totalRows, Math.ceil((scrollTop + viewportHeight) / rowStride));
+  const startRow = Math.max(0, firstVisibleRow - VIRTUAL_GRID_OVERSCAN_ROWS);
+  const requestedEndRow = Math.min(
+    totalRows,
+    Math.max(lastVisibleRow + VIRTUAL_GRID_OVERSCAN_ROWS, startRow + 1),
+  );
+  // Cap the DOM even on very wide monitors with many grid columns.
+  const maxWindowRows = Math.max(1, Math.floor(MAX_VIRTUAL_GRID_ITEMS / columns));
+  const endRow = Math.min(requestedEndRow, startRow + maxWindowRows);
+
+  return {
+    startIndex: startRow * columns,
+    endIndex: Math.min(itemCount, endRow * columns),
+    topSpacer: startRow ? Math.max(0, startRow * rowStride - gap) : 0,
+    bottomSpacer: endRow < totalRows ? Math.max(0, (totalRows - endRow) * rowStride - gap) : 0,
+  };
+}
 
 interface LibraryScreenProps {
   activeAlbum: string | null;
@@ -99,7 +128,7 @@ interface LibraryScreenProps {
   onToggleInspector: () => void;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
-  onDeleteItems: (ids: string[]) => void | Promise<void>;
+  onDeleteItems: (ids: string[]) => void | Promise<DeleteItemsOutcome>;
   onUpdateTags: (id: string, tags: string[]) => void | Promise<void>;
   query: string;
   minRating: number | null;
@@ -573,31 +602,19 @@ function LibraryScreen(props: LibraryScreenProps) {
     const estimatedTileHeight = tileWidth * (overview ? 10 / 16 : 1) + 58;
     const rowHeight = measuredTileHeight ?? estimatedTileHeight;
     const rowStride = rowHeight + gap;
-    const totalRows = Math.ceil(renderedItems.length / columns);
-    const firstVisibleRow = Math.max(0, Math.floor(gridViewport.scrollTop / rowStride));
-    const lastVisibleRow = Math.min(
-      totalRows,
-      Math.ceil((gridViewport.scrollTop + gridViewport.height) / rowStride),
+    const window = calculateVirtualGridWindow(
+      renderedItems.length,
+      columns,
+      rowStride,
+      gap,
+      gridViewport.scrollTop,
+      gridViewport.height,
     );
-    const startRow = Math.max(0, firstVisibleRow - VIRTUAL_GRID_OVERSCAN_ROWS);
-    const requestedEndRow = Math.min(
-      totalRows,
-      Math.max(lastVisibleRow + VIRTUAL_GRID_OVERSCAN_ROWS, startRow + 1),
-    );
-    // A very wide monitor can have many columns. Cap the mounted item count
-    // regardless of viewport dimensions so scrolling a 100k library never
-    // recreates the unbounded-DOM problem this window is solving.
-    const maxWindowRows = Math.max(1, Math.floor(MAX_VIRTUAL_GRID_ITEMS / columns));
-    const endRow = Math.min(requestedEndRow, startRow + maxWindowRows);
-    const startIndex = startRow * columns;
-    const endIndex = Math.min(renderedItems.length, endRow * columns);
 
     return {
-      items: renderedItems.slice(startIndex, endIndex),
-      // CSS grid contributes one gap after a spacer, so exclude it from the
-      // spacer's own height to preserve each row's original document offset.
-      topSpacer: startRow ? Math.max(0, startRow * rowStride - gap) : 0,
-      bottomSpacer: endRow < totalRows ? Math.max(0, (totalRows - endRow) * rowStride - gap) : 0,
+      items: renderedItems.slice(window.startIndex, window.endIndex),
+      topSpacer: window.topSpacer,
+      bottomSpacer: window.bottomSpacer,
     };
   }, [
     gridViewport.height,
@@ -880,8 +897,9 @@ function LibraryScreen(props: LibraryScreenProps) {
   const selectedItems = useMemo(() => {
     if (!props.selectedIds.length) return [];
     const ids = new Set(props.selectedIds);
-    return library.items.filter((i: any) => ids.has(i.id));
-  }, [library.items, props.selectedIds]);
+    const pool = props.hiddenView ? library.hiddenItems : library.items;
+    return pool.filter((i: any) => ids.has(i.id));
+  }, [props.selectedIds, props.hiddenView, library.items, library.hiddenItems]);
   const anySelectedFavorite = selectedItems.some((i: any) => i.favorite);
   const anySelectedHidden = selectedItems.some((i: any) => i.hidden);
   // Play on a video-only selection opens the player; anything with a photo
@@ -1212,39 +1230,23 @@ function LibraryScreen(props: LibraryScreenProps) {
 
           <div className="filter-cluster" role="group" aria-label="Filter by media type">
             <span className="smart-label">TYPE</span>
-            {(["All", "Photos", "Videos", "RAW", "Favorites"] as string[]).map((f) => {
-              let count: number;
-              if (props.activeAlbum && props.items) {
-                // When viewing an album, describe the album's items, not the
-                // whole library stats (which would show thousands of items).
-                count =
-                  f === "All"
-                    ? props.items.length
-                    : f === "Photos"
-                      ? props.items.filter((i: any) => i.kind === "photo").length
-                      : f === "Videos"
-                        ? props.items.filter((i: any) => i.kind === "video").length
-                        : f === "RAW"
-                          ? props.items.filter((i: any) => i.kind === "raw").length
-                          : f === "Favorites"
-                            ? props.items.filter((i: any) => i.favorite).length
-                            : 0;
-              } else {
-                count =
-                  f === "All"
-                    ? (props.libraryStats?.photos ?? 0) +
-                      (props.libraryStats?.videos ?? 0) +
-                      (props.libraryStats?.raws ?? 0)
-                    : f === "Photos"
-                      ? (props.libraryStats?.photos ?? 0)
-                      : f === "Videos"
-                        ? (props.libraryStats?.videos ?? 0)
-                        : f === "RAW"
-                          ? (props.libraryStats?.raws ?? 0)
-                          : f === "Favorites"
-                            ? (props.libraryStats?.favorites ?? 0)
-                            : 0;
-              }
+            {(["All", "Photos", "Videos", "RAW", "Favorites"] as const).map((f) => {
+              // Album/collection counts must come from the full collection on
+              // screen, not the type-filtered `props.items` (selecting "Photos"
+              // in an album with no photos would zero every count).
+              const count = props.activeAlbum
+                ? filterCounts[f]
+                : f === "All"
+                  ? (props.libraryStats?.photos ?? 0) +
+                    (props.libraryStats?.videos ?? 0) +
+                    (props.libraryStats?.raws ?? 0)
+                  : f === "Photos"
+                    ? (props.libraryStats?.photos ?? 0)
+                    : f === "Videos"
+                      ? (props.libraryStats?.videos ?? 0)
+                      : f === "RAW"
+                        ? (props.libraryStats?.raws ?? 0)
+                        : (props.libraryStats?.favorites ?? 0);
               return (
                 <button
                   key={f}
@@ -1937,9 +1939,14 @@ function LibraryScreen(props: LibraryScreenProps) {
 
       {props.showInspector && (
         <aside className="photo-inspector">
-            {props.inspectedId && (props.hiddenView ? library.hiddenItems : library.items).find((i: any) => i.id === props.inspectedId) ? (
+          {props.inspectedId &&
+          (props.hiddenView ? library.hiddenItems : library.items).find(
+            (i: any) => i.id === props.inspectedId,
+          ) ? (
             (() => {
-              const sel = (props.hiddenView ? library.hiddenItems : library.items).find((i: any) => i.id === props.inspectedId);
+              const sel = (props.hiddenView ? library.hiddenItems : library.items).find(
+                (i: any) => i.id === props.inspectedId,
+              );
               if (!sel) return null;
               // Inspection is independent of selection: the Inspector always
               // shows the inspected item, even when a larger multi-selection

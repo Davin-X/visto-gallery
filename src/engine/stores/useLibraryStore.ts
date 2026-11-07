@@ -14,6 +14,7 @@ import type {
 } from "../types/media";
 import type {
   AlbumOverview,
+  DeleteItemsOutcome,
   LibraryFolder,
   LibraryFilterDTO,
   LibraryItemsPage,
@@ -70,6 +71,9 @@ interface LibraryState {
   sortOrder: "asc" | "desc";
   showInspector: boolean;
   sidebarOpen: boolean;
+  // Rail mode collapses the sidebar to icons while it stays visible.
+  // Distinct from `sidebarOpen`, which hides the sidebar entirely.
+  sidebarCollapsed: boolean;
   activeAlbum: string | null;
   activeSmartAlbum: string | null;
   // Source filter (a library folder path). Independent of `filter`, which is
@@ -179,6 +183,7 @@ interface LibraryState {
   getCurrentLibraryFilter: () => LibraryFilterDTO;
   toggleInspector: () => void;
   toggleSidebar: () => void;
+  toggleSidebarCollapsed: () => void;
   setActiveAlbum: (albumId: string | null) => void;
 
   // Actions - Items
@@ -191,7 +196,9 @@ interface LibraryState {
   setRatingForIds: (ids: string[], rating: number) => Promise<void>;
   setColorLabelForIds: (ids: string[], colorLabel: string) => Promise<void>;
   updateItemTags: (id: string, tags: string[]) => Promise<void>;
-  deleteItems: (ids: string[]) => Promise<void>;
+  deleteItems: (ids: string[]) => Promise<DeleteItemsOutcome>;
+
+  cancelDelete: () => Promise<void>;
 
   // Actions - Albums
   createAlbum: (name: string, itemIds?: string[]) => Promise<void>;
@@ -306,9 +313,31 @@ function getSortedItems(
   return state._sortedCache;
 }
 
+function findKnownItem(state: LibraryState, id: string): MediaItem | null {
+  const direct =
+    state.items.find((item) => item.id === id) ||
+    state.hiddenItems.find((item) => item.id === id);
+  if (direct) return direct;
+  for (const group of state.duplicates) {
+    const match = group.items.find((item) => item.id === id);
+    if (match) return match;
+  }
+  return null;
+}
+
+function resolveInspectedItem(state: LibraryState, viewerItems: MediaItem[]) {
+  if (state.inspectedId) {
+    return (
+      viewerItems.find((item) => item.id === state.inspectedId) ||
+      findKnownItem(state, state.inspectedId) ||
+      null
+    );
+  }
+  return viewerItems[0] || null;
+}
+
 function computeInspectionDerived(state: LibraryState) {
-  const viewerSelected =
-    state.viewerItems.find((item) => item.id === state.inspectedId) || state.viewerItems[0] || null;
+  const viewerSelected = resolveInspectedItem(state, state.viewerItems);
   return {
     viewerSelected,
     currentIndex: Math.max(
@@ -378,8 +407,7 @@ function computeDerived(state: LibraryState) {
     if (state.filter === "Favorites" && !item.favorite) return false;
     return true;
   });
-  const viewerSelected =
-    viewerItems.find((item) => item.id === inspectedId) || viewerItems[0] || null;
+  const viewerSelected = resolveInspectedItem({ ...state, inspectedId }, viewerItems);
   const currentIndex = Math.max(
     0,
     playable.findIndex((item) => item.id === inspectedId),
@@ -423,6 +451,7 @@ export const useLibraryStore = create<LibraryState>()(
       sortOrder: "desc",
       showInspector: true,
       sidebarOpen: true,
+      sidebarCollapsed: false,
       activeAlbum: null,
       activeSmartAlbum: null,
       activeSource: null,
@@ -711,7 +740,7 @@ export const useLibraryStore = create<LibraryState>()(
       inspectItem: (id) => {
         const state = get();
         if (id === state.inspectedId) return;
-        if (id !== null && !state.items.some((i) => i.id === id) && !state.hiddenItems.some((i) => i.id === id)) return;
+        if (id !== null && !findKnownItem(state, id)) return;
         const next = { ...state, inspectedId: id };
         set({ inspectedId: id, ...computeInspectionDerived(next) });
       },
@@ -931,6 +960,7 @@ export const useLibraryStore = create<LibraryState>()(
       getCurrentLibraryFilter: () => currentLibraryFilter(get()),
       toggleInspector: () => set((s) => ({ showInspector: !s.showInspector })),
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+      toggleSidebarCollapsed: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 
       setActiveAlbum: (albumId) => {
         set({
@@ -965,7 +995,17 @@ export const useLibraryStore = create<LibraryState>()(
       },
 
       setHiddenForIds: async (ids, hidden) => {
-        const targets = get().items.filter((i) => ids.includes(i.id));
+        if (!ids.length) return;
+        // Targets may live in the normal library or in the hidden collection
+        // (Hidden screen). Resolve from both so bulk unhide works there.
+        const state = get();
+        const pool = [...state.items, ...state.hiddenItems];
+        const seen = new Set<string>();
+        const targets = pool.filter((i) => {
+          if (!ids.includes(i.id) || seen.has(i.id)) return false;
+          seen.add(i.id);
+          return true;
+        });
         if (!targets.length) return;
 
         // Hiding removes an item from every visible collection; unhiding puts
@@ -987,32 +1027,54 @@ export const useLibraryStore = create<LibraryState>()(
           // library load will reconcile them.
         }
 
-        set((s) => ({
-          items: s.items.map((i) => (ids.includes(i.id) ? { ...i, hidden } : i)),
-          folders,
-          albums: s.albums.map((album) => {
-            const visibleDelta =
-              showing.filter((i) => i.albumIds?.includes(album.id)).length -
-              hiding.filter((i) => i.albumIds?.includes(album.id)).length;
-            return {
-              ...album,
-              itemCount: Math.max(0, (album.itemCount || 0) + visibleDelta),
-            };
-          }),
-          // The items just moved between collections, so they cannot stay
-          // selected or inspected in the view they came from.
-          selectedIds: s.selectedIds.filter((id) => !ids.includes(id)),
-          inspectedId: s.inspectedId && ids.includes(s.inspectedId) ? null : s.inspectedId,
-          duplicates: s.duplicates.map((g) => ({
-            ...g,
-            items: g.items.map((i) => (ids.includes(i.id) ? { ...i, hidden } : i)),
-          })),
-        }));
+        set((s) => {
+          const idSet = new Set(ids);
+          const nextHiddenItems = hidden
+            ? [
+                ...s.hiddenItems.filter((i) => !idSet.has(i.id)),
+                ...targets
+                  .filter((i) => !s.hiddenItems.some((h) => h.id === i.id))
+                  .map((i) => ({ ...i, hidden: true })),
+              ]
+            : s.hiddenItems.filter((i) => !idSet.has(i.id));
+          return {
+            // Hiding removes items from the visible library; unhiding clears the
+            // flag for any copy still present in items.
+            items: hidden
+              ? s.items.filter((i) => !idSet.has(i.id))
+              : s.items.map((i) => (idSet.has(i.id) ? { ...i, hidden } : i)),
+            hiddenItems: nextHiddenItems,
+            folders,
+            albums: s.albums.map((album) => {
+              const visibleDelta =
+                showing.filter((i) => i.albumIds?.includes(album.id)).length -
+                hiding.filter((i) => i.albumIds?.includes(album.id)).length;
+              return {
+                ...album,
+                itemCount: Math.max(0, (album.itemCount || 0) + visibleDelta),
+              };
+            }),
+            // The items just moved between collections, so they cannot stay
+            // selected or inspected in the view they came from.
+            selectedIds: s.selectedIds.filter((id) => !idSet.has(id)),
+            inspectedId: s.inspectedId && idSet.has(s.inspectedId) ? null : s.inspectedId,
+            duplicates: s.duplicates.map((g) => ({
+              ...g,
+              items: g.items.map((i) => (idSet.has(i.id) ? { ...i, hidden } : i)),
+            })),
+          };
+        });
         get().refreshDerived();
+        // Keep both collections authoritative: hidden view reflects changes
+        // immediately after optimistic update, and unhiding restores items to
+        // the filtered library page.
+        void get().loadHiddenItems();
+        if (!hidden) void get().loadItemsPage();
       },
 
       toggleHidden: async (id) => {
-        const item = get().items.find((i) => i.id === id);
+        const item =
+          get().items.find((i) => i.id === id) ?? get().hiddenItems.find((i) => i.id === id);
         if (!item) return;
         await get().setHiddenForIds([id], !item.hidden);
       },
@@ -1102,43 +1164,87 @@ export const useLibraryStore = create<LibraryState>()(
       },
 
       deleteItems: async (ids) => {
-        const paths = get()
-          .items.filter((i) => ids.includes(i.id))
-          .map((i) => i.path);
+        // The backend resolves catalog ids to paths itself, so this works for
+        // duplicates and hidden items that are outside the loaded library
+        // page. Sending paths from renderer state silently missed those.
+        const uniqueIds = [...new Set(ids)].filter(Boolean);
+        if (uniqueIds.length === 0) {
+          return { status: "done", trashed: 0, failed: 0, bytes: 0, failures: [] };
+        }
+        // Sizes have to be read before the rows are dropped, and duplicates /
+        // hidden items can reference rows outside the loaded library page.
+        const sizeById = new Map<string, number>();
+        const state = get();
+        const rememberSize = (item: { id: string; size: number }) => {
+          if (!sizeById.has(item.id)) sizeById.set(item.id, item.size);
+        };
+        state.items.forEach(rememberSize);
+        state.hiddenItems.forEach(rememberSize);
+        state.duplicates.forEach((group) => group.items.forEach(rememberSize));
+        const bytesFor = (trashed: Set<string>) => {
+          let total = 0;
+          trashed.forEach((id) => {
+            total += sizeById.get(id) ?? 0;
+          });
+          return total;
+        };
         set({
           busy: true,
           canceling: false,
-          progress: { phase: "trashing", processed: 0, total: paths.length },
+          progress: { phase: "trashing", processed: 0, total: uniqueIds.length },
         });
         try {
-          const result = await tauri.items.moveToTrash(paths);
-          // Only remove items that were successfully trashed
-          const trashedIds = new Set(
-            get()
-              .items.filter((i) => result.trashed.includes(i.path))
-              .map((i) => i.id),
-          );
-          if (result.failed.length > 0) {
-            const errors = result.failed.map((f) => `${f.path}: ${f.error}`).join("; ");
-            get().showNotice(`Failed to trash ${result.failed.length} item(s): ${errors}`);
-          }
+          const result = await tauri.items.moveToTrash(uniqueIds);
+          // Only remove items the backend confirms it moved to Trash.
+          const trashedIds = new Set(result.trashed);
           set({ busy: false, canceling: false, progress: null });
-          set((s) => ({
-            items: s.items.filter((i) => !trashedIds.has(i.id)),
-            selectedIds: s.selectedIds.filter((id) => !trashedIds.has(id)),
-            inspectedId: s.inspectedId && trashedIds.has(s.inspectedId) ? null : s.inspectedId,
-            duplicates: s.duplicates
-              .map((g) => ({
-                ...g,
-                items: g.items.filter((i) => !trashedIds.has(i.id)),
-              }))
-              .filter((g) => (g.items?.length || 0) > 1),
-          }));
+          set((s) => {
+            const remainingHidden = s.hiddenItems.filter((i) => !trashedIds.has(i.id));
+            // Hidden rows were never part of the library total, so subtracting
+            // every trashed id over-counted the removal (and left the footer
+            // short whenever the delete came from the hidden screen).
+            const hiddenTrashed = s.hiddenItems.filter((i) => trashedIds.has(i.id)).length;
+            const libraryTrashed = trashedIds.size - hiddenTrashed;
+            return {
+              items: s.items.filter((i) => !trashedIds.has(i.id)),
+              hiddenItems: remainingHidden,
+              hiddenCount: Math.max(0, s.hiddenCount - hiddenTrashed),
+              selectedIds: s.selectedIds.filter((id) => !trashedIds.has(id)),
+              totalCount: Math.max(0, s.totalCount - libraryTrashed),
+              inspectedId: s.inspectedId && trashedIds.has(s.inspectedId) ? null : s.inspectedId,
+              duplicates: s.duplicates
+                .map((g) => ({
+                  ...g,
+                  items: g.items.filter((i) => !trashedIds.has(i.id)),
+                }))
+                .filter((g) => (g.items?.length || 0) > 1),
+            };
+          });
+          get().refreshDerived();
+          // A cancel is only a cancel when nothing moved; a partial stop is a
+          // real (smaller) delete and the caller should say so.
+          const cancelled =
+            trashedIds.size === 0 &&
+            result.failed.length > 0 &&
+            result.failed.every((f) => f.error?.includes("cancelled"));
+          if (cancelled) {
+            return { status: "cancelled", trashed: 0, failed: result.failed.length };
+          }
+          if (trashedIds.size === 0) {
+            return { status: "failed", failures: result.failed };
+          }
+          return {
+            status: "done",
+            trashed: trashedIds.size,
+            failed: result.failed.length,
+            bytes: bytesFor(trashedIds),
+            failures: result.failed,
+            catalogWarning: result.catalogError ?? undefined,
+          };
         } catch (e) {
           set({ busy: false, canceling: false, progress: null });
           throw e;
         }
-        get().refreshDerived();
       },
 
       // Albums
@@ -1529,6 +1635,18 @@ export const useLibraryStore = create<LibraryState>()(
         } finally {
           // Always clear canceling state - the backend flag is handled by next scan
           set({ canceling: false });
+        }
+      },
+
+      cancelDelete: async () => {
+        set({ canceling: true });
+        try {
+          await tauri.items.cancelMoveToTrash();
+        } catch (e) {
+          set({
+            canceling: false,
+            notice: `Could not cancel deletion: ${String(e)}`,
+          });
         }
       },
 

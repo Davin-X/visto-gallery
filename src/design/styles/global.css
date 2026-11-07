@@ -905,7 +905,7 @@ kbd {
 .inspector-video-play svg {
   width: 44px;
   height: 44px;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
 }
 .inspector-video-play span {
   margin-top: 10px;
@@ -940,7 +940,7 @@ kbd {
   font-size: 12px;
   text-align: center;
   border-radius: 6px;
-  background: rgba(0,0,0,0.04);
+  background: rgba(0, 0, 0, 0.04);
 }
 .inspector-section {
   padding-top: 12px;
@@ -1392,32 +1392,12 @@ kbd {
   font-size: 13px;
 }
 
-/* Duplicate groups */
-.duplicate-group-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin: 26px 0 14px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--line);
-}
-.duplicate-group-head .duplicate-group-title {
-  display: grid;
-  gap: 4px;
-}
-.duplicate-group-head b {
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-.duplicate-group-head span {
-  color: var(--muted);
-  font-size: 12px;
-}
+/* Duplicate groups: the group header, stack and actions live in the
+   duplicates-screen block of App.css. Descendant rules that painted every
+   `span` and `button` inside the header used to outrank those class rules,
+   which turned the summary into a nested card and greyed out the copy-count
+   badge. Do not reintroduce them here. */
 .duplicate-group-hash {
-  color: var(--faint);
-  font-size: 11px;
   font-family: ui-monospace, Menlo, monospace;
 }
 
@@ -1583,15 +1563,6 @@ kbd {
   white-space: nowrap;
 }
 
-.duplicate-group-head button {
-  min-height: 30px;
-  padding: 5px 9px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 12px;
-}
 .duplicate-group-head button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -2032,7 +2003,7 @@ kbd {
   border: 0;
   border-radius: 6px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-contrast);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -2999,19 +2970,19 @@ kbd {
 }
 .hidden-disclaimer {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
-  margin: 12px 0;
-  padding: 10px 12px;
+  margin: 4px 0 8px;
+  padding: 6px 10px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--surface-2);
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 11.5px;
+  line-height: 1.35;
 }
 .hidden-disclaimer svg {
-  margin-top: 1px;
+  flex: 0 0 auto;
   color: var(--faint);
 }
 
@@ -3088,7 +3059,6 @@ kbd {
     .search-suggestions button,
     .batch-form-row,
     .batch-form-check,
-    .duplicate-group-head,
     .viewer-caption,
     .keyboard-hint,
     .primary-button,
@@ -3656,6 +3626,20 @@ kbd {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
   font-size: 12px;
 }
+.busy-indicator-cancel {
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--text-muted);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  margin-left: auto;
+}
+.busy-indicator-cancel:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
 .spinner {
   width: 12px;
   height: 12px;
@@ -3817,7 +3801,6 @@ kbd {
     .search-suggestions button,
     .batch-form-row,
     .batch-form-check,
-    .duplicate-group-head,
     .viewer-caption,
     .keyboard-hint,
     .primary-button,
@@ -4099,13 +4082,14 @@ body {
   /* Accent tokens: a single accent setting drives every --blue reference in
      the UI, so the accent picker actually changes buttons, links, active
      nav, sliders and focus rings. */
-  --accent: #3474d4;
+  --accent: #2f6ac4;
   --blue: var(--accent);
   /* JS computes the derived accent tokens (hover, text, soft, contrast) from
      the selected accent so they always track the user's choice. The values
-     below are the defaults for the built-in blue accent. */
-  --accent-hover: #2d6bd0;
-  --accent-text: #306ac3;
+     below are the defaults for the built-in blue accent. Light accents all
+     clear 4.5:1 against white, so the label on an accent fill is white. */
+  --accent-hover: #2a5eae;
+  --accent-text: #2f6ac4;
   --accent-contrast: #ffffff;
   /* JS computes --accent-soft so older WebKit builds without color-mix still
      get a correct tint; the color-mix value is the fallback. */
@@ -4154,7 +4138,8 @@ body {
   --blue: var(--accent);
   --accent-hover: #2563eb;
   --accent-text: #60a5fa;
-  --accent-contrast: #ffffff;
+  /* Dark accents are pastels, so their fill label is near-black, not white. */
+  --accent-contrast: #101418;
   --accent-soft: color-mix(in srgb, var(--accent) 15%, var(--surface));
   --blue-soft: var(--accent-soft);
   --green: #34d399;
@@ -4654,16 +4639,7 @@ body {
 }
 
 .rule-line button,
-.search-suggestions button,
-.duplicate-group-head button {
-  min-height: 30px;
-  padding: 5px 9px;
-  border-color: var(--line-strong);
-  border-radius: 7px;
-  font-size: 12px;
-}
-
-.duplicate-group-head button {
+.search-suggestions button {
   min-height: 30px;
   padding: 5px 9px;
   border-color: var(--line-strong);
@@ -4681,7 +4657,6 @@ body {
 .duplicate-summary > div:first-child small,
 .duplicate-safety b,
 .duplicate-safety small,
-.duplicate-group-head span,
 .duplicate-card-meta span,
 .duplicate-card-meta small,
 .duplicate-footer,
@@ -4994,7 +4969,7 @@ body {
   top: 8px;
   left: 8px;
   background: var(--accent);
-  color: #ffffff;
+  color: var(--accent-contrast);
   font-size: 10px;
   padding: 2px 6px;
   border-radius: 4px;
