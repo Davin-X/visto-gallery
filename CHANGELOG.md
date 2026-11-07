@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-07
+
 ### Added
 - Side-by-side duplicate comparison with synced zoom/pan and a metadata table that flags every field the two files disagree on
 - Delete confirmations report the space reclaimed, not just the number of items moved
@@ -24,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Hidden items no longer shrink the library total count when deleted
 - Import progress no longer freezes at 0: an import is titled `importing` locally while the backend reports `scanning`, so phase equality dropped every event
 - Duplicate selection is pruned when copies are trashed or hidden, so the action bar stops counting items that are gone
+- Duplicate scanning hashes candidates sequentially with throttled progress events so the UI and media playback stay responsive
+- The Duplicates screen sticky header docks flush without a floating gap above it
 
 ## [0.3.0] - 2026-11-04
 
