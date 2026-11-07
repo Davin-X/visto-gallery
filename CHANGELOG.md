@@ -18,25 +18,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [0.3.2] - 2026-11-07
 
 ### Added
-- Side-by-side duplicate comparison with synced zoom/pan and a metadata table that flags every field the two files disagree on
-- Delete confirmations report the space reclaimed, not just the number of items moved
-- Journaled edit originals: the true original of an edited photo is verified by size and SHA-256 before a revert, instead of relying on a single `.bak` file that a second edit overwrote
-- "Move to Trash" goes through Finder, so deleted items appear in Trash with a working Put Back, and requests are sent as catalog ids that the backend resolves and validates itself
-- Duplicates screen can pick the keeper by best quality (RAW > TIFF > PNG > JPEG/HEIC, then pixel count), oldest, or newest
+- **Sidebar rail**: collapse the sidebar to an icon rail with a proper panel toggle, persistent WORKSPACE header behavior, restored Sources entry, rail layout polish, and a **Library stats** chart button that opens a portaled stats popup (escapes clipping, paints above main content, viewport-anchored/clamped, keyboard/outside-click dismissal) with accent styling consistent with Sources.
+- **Data integrity / trash (P0)**: id-based “Move to Trash” flow with Finder integration on macOS (Put Back support) and server-side catalog-path resolution/validation. Trash is scoped to catalog rows/registered roots, rejects unsafe paths, and reports per-item refusals/failures.
+- **Edit originals journal**: in-place edits journal the true original once per media id in app data (verified by size and SHA-256 on revert) instead of relying on a single `.bak` file; legacy `.bak` still supported; trashing removes journal/backup artifacts.
+- **Duplicates**: side-by-side compare overlay with synced zoom/pan and metadata diff, quality-based keeper mode (RAW/TIFF > PNG > JPEG/HEIC, then resolution/size) plus oldest/newest, fan thumbnails/UX polish, and delete confirmations that report reclaimed space.
+- **Video player**: paged queue with scroll load-more and queue summary, streamlined header with time/queue pill chips, single stage prev/next controls with SVG chevrons and auto-hide behavior aligned with playback hints/controls.
 
 ### Changed
-- Duplicate grouping and keeper selection moved out of the screen into `src/engine/duplicates/grouping.ts` with unit tests
-- Trash refusals are reported per item instead of filtering missing paths out of the request
+- **Editor redesign/polish**: refreshed header/navigation and metadata tiles, sidebar Edit opens the drafts/selection screen with a scrollable saved-drafts grid, toolbar/canvas/layout polish, and aspect/crop workflow refinements.
+- **Duplicates screen**: grouping/keeper logic extracted to `src/engine/duplicates/grouping.ts` with tests; compact 32px toolbar/selection/group control rhythm; top padding aligned with other screens.
+- **Top bar / panel controls**: clearer sidebar/inspector toggles with matched panel icons and collapse-direction chevron cues.
+- **Playback**: single-instance guard (relaunch focuses existing window) and cross-surface audio exclusivity so the same media doesn’t play/sound from multiple surfaces at once.
+- Progress events are treated as presentation-only with **phase-matched guards** (e.g. scan vs trash) to prevent overlay/cancel-target confusion.
 
 ### Fixed
-- Deleting from the duplicates or hidden screen no longer fails for items outside the loaded library page
-- A failed trash chunk reports every id it covered, so rows never linger for files that may already have moved
-- A catalog failure after the files reached the Trash is reported as a rescan warning instead of a failed delete
-- Hidden items no longer shrink the library total count when deleted
-- Import progress no longer freezes at 0: an import is titled `importing` locally while the backend reports `scanning`, so phase equality dropped every event
-- Duplicate selection is pruned when copies are trashed or hidden, so the action bar stops counting items that are gone
-- Duplicate scanning hashes candidates sequentially with throttled progress events so the UI and media playback stay responsive
-- The Duplicates screen sticky header docks flush without a floating gap above it
+- **Trash/delete reliability**: deleting from Duplicates/Hidden no longer fails for items outside the loaded library page; failed trash chunks report all covered ids; catalog failures after files reach Trash are reported as rescan warnings (not failed deletes); hidden item deletes no longer shrink library totals incorrectly.
+- **Progress/UI responsiveness**: import progress no longer freezes at 0 (phase mapping); duplicate selection pruned when copies are trashed/hidden; duplicate scanning hashes candidates sequentially in `spawn_blocking` with throttled progress/events to keep UI and playback responsive.
+- **Editor**: aspect guide dropdown no longer clips (portal + viewport-aware positioning), crop ratio sizing maximizes correctly within the frame, “Crop to this” applies a single atomic update and matches draggable guide size/position; crop counted as adjustments; draft re-persist race on revert/clear fixed; render-loop risk from inline img ref state updates fixed; crash/error text contrast improved.
+- **Hide/Unhide**: selection/state resolves correctly in Hidden view, hide/unhide syncs `hiddenItems`/visible `items` and collections, and collections reload after state changes; Hidden disclaimer spacing tightened.
+- **Sidebar rail**: fixed stripe/blank layout when sidebar is hidden and collapsed together; Sources visibility and collapsed layout/restyle fixes.
+- **Albums/Viewer/Video**: album type counts remain correct when a zero-count filter is selected; viewer opens duplicates/off-scope items reliably via fresh lookup/fallbacks; Duplicates header docks flush without a floating gap.
 
 ## [0.3.0] - 2026-11-04
 
