@@ -113,11 +113,9 @@ pub async fn find_duplicates(
         .collect();
 
     // Phase 2: Full SHA-256 only for files that share a quick fingerprint.
-    // Use controlled concurrency (1 at a time — hashing is CPU-bound,
-    // so more concurrent tasks just pin more cores and freeze the UI).
-    use tokio::sync::Semaphore;
-
-    // Emit progress for full hash phase start
+    // Hashing is CPU/IO-bound and already runs in spawn_blocking; process
+    // sequentially to avoid spawning thousands of queued tasks and starving the
+    // UI/runtime.
     let _ = window.emit(
         "import-progress",
         json!({
@@ -129,26 +127,12 @@ pub async fn find_duplicates(
     );
 
     let total = full_hash_candidates.len() as u64;
-
-    let semaphore = Arc::new(Semaphore::new(1));
     let quick_prefixes = Arc::new(quick_prefixes);
     let bytes_completed = Arc::new(AtomicU64::new(0));
     let mut hash_updates: Vec<(String, String)> = Vec::with_capacity(full_hash_candidates.len());
     let mut processed = 0u64;
+    let mut last_emit = std::time::Instant::now();
 
-    // Emit progress for full hash phase start
-    let _ = window.emit(
-        "import-progress",
-        json!({
-            "phase": "hashing",
-            "processed": 0,
-            "total": full_hash_candidates.len(),
-            "currentFile": "Computing full SHA-256…",
-        }),
-    );
-
-    // Process with controlled concurrency
-    let mut join_set = tokio::task::JoinSet::new();
     for &index in &full_hash_candidates {
         if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
             break;
@@ -157,54 +141,40 @@ pub async fn find_duplicates(
         let name = items[index].name.clone();
         let size = items[index].size.max(0) as u64;
         let id = items[index].id.clone();
-        let sem = semaphore.clone();
         let window_clone = window.clone();
         let prefixes = quick_prefixes.clone();
         let shared_bytes = bytes_completed.clone();
+        let prefix = prefixes.get(&index).cloned();
 
-        join_set.spawn(async move {
-            let _permit = sem.acquire().await.ok();
-            if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
-                return None;
-            }
-            // Reuse cached prefix from quick fingerprint phase
-            let prefix = prefixes.get(&index).cloned();
-            // Run the entire file read + hash on the blocking pool so the
-            // tokio executor stays free for frontend events.
-            let shared_bytes = shared_bytes.clone();
-            let hash = tokio::task::spawn_blocking(move || {
-                hash_file_content(
-                    path,
-                    name,
-                    size,
-                    0, // bytes_before not needed for individual task
-                    1,
-                    1,
-                    window_clone,
-                    prefix,
-                    shared_bytes,
-                )
-            })
-            .await
-            .ok()
-            .flatten();
-            Some((index, id, hash, size))
-        });
-    }
+        let hash = tokio::task::spawn_blocking(move || {
+            hash_file_content(
+                path,
+                name,
+                size,
+                0,
+                1,
+                1,
+                window_clone,
+                prefix,
+                shared_bytes,
+            )
+        })
+        .await
+        .ok()
+        .flatten();
 
-    while let Some(result) = join_set.join_next().await {
         if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
             break;
         }
-        if let Ok(Some((index, id, hash, _size))) = result {
-            if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
-                break;
-            }
-            processed += 1;
-            if let Some(hash) = hash {
-                hash_updates.push((id.clone(), hash.clone()));
-                items[index].sha256 = Some(hash);
-            }
+        processed += 1;
+        if let Some(hash) = hash {
+            hash_updates.push((id.clone(), hash.clone()));
+            items[index].sha256 = Some(hash);
+        }
+
+        let should_emit =
+            processed == total || last_emit.elapsed() >= std::time::Duration::from_millis(250);
+        if should_emit {
             let total_bytes = bytes_completed.load(Ordering::Relaxed);
             let _ = window.emit(
                 "import-progress",
@@ -217,7 +187,9 @@ pub async fn find_duplicates(
                     "bytesTotal": 0,
                 }),
             );
+            last_emit = std::time::Instant::now();
         }
+        tokio::task::yield_now().await;
     }
 
     // Persist newly computed hashes in one transaction. This avoids a durable
@@ -337,8 +309,8 @@ fn hash_file_content(
         file_bytes = file_bytes.saturating_add(n as u64);
         shared_bytes.fetch_add(n as u64, Ordering::Relaxed);
 
-        let should_report = file_bytes.saturating_sub(last_reported_bytes) >= 64 * 1024 * 1024
-            || last_reported_at.elapsed() >= std::time::Duration::from_millis(300);
+        let should_report = file_bytes.saturating_sub(last_reported_bytes) >= 128 * 1024 * 1024
+            || last_reported_at.elapsed() >= std::time::Duration::from_millis(500);
         if should_report {
             let _ = window.emit(
                 "import-progress",

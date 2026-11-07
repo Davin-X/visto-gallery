@@ -9810,17 +9810,16 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  /* Match the .feature-page top margin of the other screens; the sticky
-     sub-header still docks flush at top: 0 while scrolling. */
-  padding-top: 16px;
+  /* Dock the sticky header flush; top spacing lives inside the header. */
+  padding-top: 0;
 }
 
 .duplicate-header {
   position: sticky;
   top: 0;
   z-index: 20;
-  padding: 6px 0;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  padding: 14px 0 6px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   .duplicates-page .page-subtitle {
     margin: 2px 0 0;
     font-size: 12px;

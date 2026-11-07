@@ -886,8 +886,11 @@ function App() {
       }
 
       // Listen for native import progress events from scan/import commands.
-      const unlistenImportProgress = await events.onImportProgress((progress) => {
-        const { phase, processed, total } = progress;
+      let lastProgressApplyAt = 0;
+      let progressTimer: ReturnType<typeof setTimeout> | null = null;
+      let pendingProgress: any = null;
+      const applyProgress = (p: any) => {
+        const { phase, processed, total } = p;
         const currentPhase = liveRef.current.library.progress?.phase ?? "";
         // The command that started an operation owns `busy` and `progress`.
         // Progress events are presentation-only: don't let a scan/import
@@ -899,14 +902,46 @@ function App() {
           phase,
           processed,
           total,
-          bytesProcessed: progress.bytesProcessed,
-          bytesTotal: progress.bytesTotal,
-          filesProcessed: progress.filesProcessed,
-          filesTotal: progress.filesTotal,
-          currentFile: progress.currentFile,
+          bytesProcessed: p.bytesProcessed,
+          bytesTotal: p.bytesTotal,
+          filesProcessed: p.filesProcessed,
+          filesTotal: p.filesTotal,
+          currentFile: p.currentFile,
         });
+      };
+      const unlistenImportProgress = await events.onImportProgress((progress) => {
+        const now = Date.now();
+        const minIntervalMs = 200;
+        // Always apply terminal/first updates promptly; throttle rapid progress.
+        if (
+          progress.processed === progress.total ||
+          now - lastProgressApplyAt >= minIntervalMs
+        ) {
+          lastProgressApplyAt = now;
+          if (progressTimer) {
+            clearTimeout(progressTimer);
+            progressTimer = null;
+          }
+          pendingProgress = null;
+          applyProgress(progress);
+          return;
+        }
+        pendingProgress = progress;
+        if (!progressTimer) {
+          progressTimer = setTimeout(() => {
+            progressTimer = null;
+            if (pendingProgress) {
+              lastProgressApplyAt = Date.now();
+              applyProgress(pendingProgress);
+              pendingProgress = null;
+            }
+          }, minIntervalMs - (now - lastProgressApplyAt));
+        }
       });
-      unlisteners.push(unlistenImportProgress);
+      unlisteners.push(() => {
+        if (progressTimer) clearTimeout(progressTimer);
+        unlistenImportProgress();
+      });
       autoImportControllerRef.current = createAutoImportController({
         isEnabled: () => useSettingsStore.getState().autoImport,
         scan: async (path) => {
