@@ -64,6 +64,13 @@ npm run tauri dev    # Run in development
 npm run tauri build  # Build for macOS
 ```
 
+## Troubleshooting
+
+- **macOS blocks the app (“damaged” / unidentified developer):** VistoGallery is not notarized yet. See [macOS Gatekeeper (unsigned build)](#️-macos-gatekeeper-unsigned-build) for the `xattr` fix or the right-click → **Open** workaround.
+- **`npm install` or build issues:** use a recent Node.js LTS version, then re-run `npm install`. If issues persist, delete `node_modules` and reinstall.
+- **`npm run tauri dev` fails:** the native app requires the [Rust toolchain](https://www.rust-lang.org/tools/install). On macOS, ensure Xcode Command Line Tools are installed (`xcode-select --install`). See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup details.
+- **Still stuck?** Open an [issue](https://github.com/Davin-X/visto-gallery/issues) (bug/feature templates available) or start a [discussion](https://github.com/Davin-X/visto-gallery/discussions).
+
 ## Privacy
 
 VistoGallery is fully local-first. It never uploads photos, metadata, or usage data. Hidden items are concealed in-app but remain at their original paths on disk.
