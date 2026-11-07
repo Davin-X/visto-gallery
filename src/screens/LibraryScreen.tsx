@@ -897,8 +897,9 @@ function LibraryScreen(props: LibraryScreenProps) {
   const selectedItems = useMemo(() => {
     if (!props.selectedIds.length) return [];
     const ids = new Set(props.selectedIds);
-    return library.items.filter((i: any) => ids.has(i.id));
-  }, [library.items, props.selectedIds]);
+    const pool = props.hiddenView ? library.hiddenItems : library.items;
+    return pool.filter((i: any) => ids.has(i.id));
+  }, [props.selectedIds, props.hiddenView, library.items, library.hiddenItems]);
   const anySelectedFavorite = selectedItems.some((i: any) => i.favorite);
   const anySelectedHidden = selectedItems.some((i: any) => i.hidden);
   // Play on a video-only selection opens the player; anything with a photo

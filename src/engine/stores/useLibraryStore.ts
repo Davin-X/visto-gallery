@@ -995,7 +995,17 @@ export const useLibraryStore = create<LibraryState>()(
       },
 
       setHiddenForIds: async (ids, hidden) => {
-        const targets = get().items.filter((i) => ids.includes(i.id));
+        if (!ids.length) return;
+        // Targets may live in the normal library or in the hidden collection
+        // (Hidden screen). Resolve from both so bulk unhide works there.
+        const state = get();
+        const pool = [...state.items, ...state.hiddenItems];
+        const seen = new Set<string>();
+        const targets = pool.filter((i) => {
+          if (!ids.includes(i.id) || seen.has(i.id)) return false;
+          seen.add(i.id);
+          return true;
+        });
         if (!targets.length) return;
 
         // Hiding removes an item from every visible collection; unhiding puts
@@ -1017,32 +1027,49 @@ export const useLibraryStore = create<LibraryState>()(
           // library load will reconcile them.
         }
 
-        set((s) => ({
-          items: s.items.map((i) => (ids.includes(i.id) ? { ...i, hidden } : i)),
-          folders,
-          albums: s.albums.map((album) => {
-            const visibleDelta =
-              showing.filter((i) => i.albumIds?.includes(album.id)).length -
-              hiding.filter((i) => i.albumIds?.includes(album.id)).length;
-            return {
-              ...album,
-              itemCount: Math.max(0, (album.itemCount || 0) + visibleDelta),
-            };
-          }),
-          // The items just moved between collections, so they cannot stay
-          // selected or inspected in the view they came from.
-          selectedIds: s.selectedIds.filter((id) => !ids.includes(id)),
-          inspectedId: s.inspectedId && ids.includes(s.inspectedId) ? null : s.inspectedId,
-          duplicates: s.duplicates.map((g) => ({
-            ...g,
-            items: g.items.map((i) => (ids.includes(i.id) ? { ...i, hidden } : i)),
-          })),
-        }));
+        set((s) => {
+          const idSet = new Set(ids);
+          const nextHiddenItems = hidden
+            ? [
+                ...s.hiddenItems.filter((i) => !idSet.has(i.id)),
+                ...targets
+                  .filter((i) => !s.hiddenItems.some((h) => h.id === i.id))
+                  .map((i) => ({ ...i, hidden: true })),
+              ]
+            : s.hiddenItems.filter((i) => !idSet.has(i.id));
+          return {
+            // Hiding removes items from the visible library; unhiding clears the
+            // flag for any copy still present in items.
+            items: hidden
+              ? s.items.filter((i) => !idSet.has(i.id))
+              : s.items.map((i) => (idSet.has(i.id) ? { ...i, hidden } : i)),
+            hiddenItems: nextHiddenItems,
+            folders,
+            albums: s.albums.map((album) => {
+              const visibleDelta =
+                showing.filter((i) => i.albumIds?.includes(album.id)).length -
+                hiding.filter((i) => i.albumIds?.includes(album.id)).length;
+              return {
+                ...album,
+                itemCount: Math.max(0, (album.itemCount || 0) + visibleDelta),
+              };
+            }),
+            // The items just moved between collections, so they cannot stay
+            // selected or inspected in the view they came from.
+            selectedIds: s.selectedIds.filter((id) => !idSet.has(id)),
+            inspectedId: s.inspectedId && idSet.has(s.inspectedId) ? null : s.inspectedId,
+            duplicates: s.duplicates.map((g) => ({
+              ...g,
+              items: g.items.map((i) => (idSet.has(i.id) ? { ...i, hidden } : i)),
+            })),
+          };
+        });
         get().refreshDerived();
       },
 
       toggleHidden: async (id) => {
-        const item = get().items.find((i) => i.id === id);
+        const item =
+          get().items.find((i) => i.id === id) ?? get().hiddenItems.find((i) => i.id === id);
         if (!item) return;
         await get().setHiddenForIds([id], !item.hidden);
       },
