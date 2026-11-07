@@ -290,6 +290,15 @@ function EditScreen(props: EditScreenProps) {
   const [canvasTone, setCanvasTone] = useState<"neutral" | "dark" | "black" | "white">("neutral");
   const [aspectGuide, setAspectGuide] = useState<number | "free" | null>(null);
   const [aspectMenuOpen, setAspectMenuOpen] = useState(false);
+  const [guideOffset, setGuideOffset] = useState({ x: 0, y: 0 });
+  const guideDragRef = useRef<{
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+    maxX: number;
+    maxY: number;
+  } | null>(null);
   const [naturalDimensions, setNaturalDimensions] = useState<{ width: number; height: number } | null>(null);
 
   const draftTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -299,6 +308,11 @@ function EditScreen(props: EditScreenProps) {
   const [draftPopoverPos, setDraftPopoverPos] = useState<{
     top: number;
     right: number;
+  } | null>(null);
+  const [aspectPopoverPos, setAspectPopoverPos] = useState<{
+    top?: number;
+    bottom?: number;
+    left: number;
   } | null>(null);
 
   // Measure Canvas Viewport
@@ -339,6 +353,43 @@ function EditScreen(props: EditScreenProps) {
       setDraftPopoverPos(null);
     }
   }, [draftTrayOpen]);
+
+  useEffect(() => {
+    if (!aspectMenuOpen) {
+      setAspectPopoverPos(null);
+      return;
+    }
+    const update = () => {
+      if (!aspectTriggerRef.current) return;
+      const rect = aspectTriggerRef.current.getBoundingClientRect();
+      const menuHeight = 280;
+      const menuWidth = 180;
+      const padding = 8;
+      const spaceBelow = window.innerHeight - rect.bottom - padding;
+      const spaceAbove = rect.top - padding;
+      const openUp = spaceBelow < menuHeight && spaceAbove > spaceBelow;
+      const left = Math.min(
+        Math.max(padding, rect.left),
+        Math.max(padding, window.innerWidth - menuWidth - padding),
+      );
+      setAspectPopoverPos(
+        openUp
+          ? { bottom: Math.max(padding, window.innerHeight - rect.top + padding), left }
+          : { top: rect.bottom + padding, left },
+      );
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [aspectMenuOpen]);
+
+  useEffect(() => {
+    setGuideOffset({ x: 0, y: 0 });
+  }, [aspectGuide, props.item?.id]);
 
   useEffect(() => {
     void refreshDraftMeta();
@@ -489,17 +540,22 @@ function EditScreen(props: EditScreenProps) {
   const setCropRatio = (ratio: number | "free") => {
     const rect = stageRef.current?.getBoundingClientRect();
     if (!rect?.width || !rect?.height || ratio === "free") {
-      props.onSetCrop({ aspectRatio: ratio });
+      props.onSetCrop({
+        aspectRatio: ratio,
+        ...(ratio === "free" ? {} : { x: 0.04, y: 0.04, width: 0.92, height: 0.92 }),
+      });
       return;
     }
     const stageRatio = rect.width / rect.height;
-    const cropRatio = ratio;
-    let width = Math.min(0.85, (0.85 * stageRatio) / cropRatio);
-    let height = (width * stageRatio) / cropRatio;
-    if (height > 0.85) {
-      height = 0.85;
-      width = (height * cropRatio) / stageRatio;
+    // Pixel aspect: (w/h)*stageRatio == ratio. Maximize area within 92%.
+    let width = 0.92;
+    let height = (width * stageRatio) / ratio;
+    if (height > 0.92) {
+      height = 0.92;
+      width = (height * ratio) / stageRatio;
     }
+    width = Math.min(1, Math.max(0.05, width));
+    height = Math.min(1, Math.max(0.05, height));
     props.onSetCrop({
       aspectRatio: ratio,
       x: (1 - width) / 2,
@@ -510,9 +566,60 @@ function EditScreen(props: EditScreenProps) {
   };
 
   const applyGuideAsCrop = (ratio: number | "free") => {
-    props.onSetCrop({ enabled: true });
-    setCropRatio(ratio);
+    const stageRect = stageRef.current?.getBoundingClientRect();
+    const viewportRect = viewportRef.current?.getBoundingClientRect();
+    let cropBox: Partial<{ x: number; y: number; width: number; height: number }> = {};
+
+    // Match the guide's current visual size/position when cropping from the guide.
+    if (
+      ratio !== "free" &&
+      typeof aspectGuide === "number" &&
+      fittedStageSize &&
+      viewportRect &&
+      stageRect &&
+      stageRect.width > 0 &&
+      stageRect.height > 0
+    ) {
+      const guideRatio = ratio;
+      const photoRatio = effectiveWidth / effectiveHeight;
+      let guideW = fittedStageSize.width;
+      let guideH = fittedStageSize.height;
+      if (guideRatio > photoRatio) {
+        guideH = Math.max(10, Math.round(fittedStageSize.width / guideRatio));
+      } else {
+        guideW = Math.max(10, Math.round(fittedStageSize.height * guideRatio));
+      }
+      const guideLeftInViewport = (viewportRect.width - guideW) / 2 + guideOffset.x;
+      const guideTopInViewport = (viewportRect.height - guideH) / 2 + guideOffset.y;
+      const x = (viewportRect.left + guideLeftInViewport - stageRect.left) / stageRect.width;
+      const y = (viewportRect.top + guideTopInViewport - stageRect.top) / stageRect.height;
+      const width = guideW / stageRect.width;
+      const height = guideH / stageRect.height;
+      const cw = Math.min(1, Math.max(0.05, width));
+      const ch = Math.min(1, Math.max(0.05, height));
+      cropBox = {
+        x: Math.min(1 - cw, Math.max(0, x)),
+        y: Math.min(1 - ch, Math.max(0, y)),
+        width: cw,
+        height: ch,
+      };
+    } else if (ratio !== "free" && stageRect && stageRect.width > 0 && stageRect.height > 0) {
+      const stageRatio = stageRect.width / stageRect.height;
+      let width = 0.92;
+      let height = (width * stageRatio) / ratio;
+      if (height > 0.92) {
+        height = 0.92;
+        width = (height * ratio) / stageRatio;
+      }
+      width = Math.min(1, Math.max(0.05, width));
+      height = Math.min(1, Math.max(0.05, height));
+      cropBox = { x: (1 - width) / 2, y: (1 - height) / 2, width, height };
+    } else if (ratio !== "free") {
+      cropBox = { x: 0.04, y: 0.04, width: 0.92, height: 0.92 };
+    }
+    props.onSetCrop({ enabled: true, aspectRatio: ratio, ...cropBox });
     setAspectGuide(null);
+    setGuideOffset({ x: 0, y: 0 });
     const label =
       ratio === "free"
         ? "Free"
@@ -896,50 +1003,96 @@ function EditScreen(props: EditScreenProps) {
           <div ref={viewportRef} className="canvas-viewport">
             {/* Aspect Ratio Framing Guide (when active in non-crop mode) */}
             {aspectGuide && !crop.enabled && typeof aspectGuide === "number" && (
-              <div
-                className="aspect-guide-frame"
-                style={
-                  fittedStageSize
-                    ? (() => {
-                        const guideRatio = aspectGuide;
-                        const photoRatio = effectiveWidth / effectiveHeight;
-                        let guideW = fittedStageSize.width;
-                        let guideH = fittedStageSize.height;
-                        if (guideRatio > photoRatio) {
-                          guideH = Math.max(10, Math.round(fittedStageSize.width / guideRatio));
-                        } else {
-                          guideW = Math.max(10, Math.round(fittedStageSize.height * guideRatio));
-                        }
-                        return {
-                          width: `${guideW}px`,
-                          height: `${guideH}px`,
-                        };
-                      })()
-                    : {
-                        aspectRatio: `${aspectGuide}`,
-                        maxWidth: "100%",
-                        maxHeight: "100%",
-                      }
+              (() => {
+                const guideRatio = aspectGuide;
+                const photoRatio = effectiveWidth / effectiveHeight;
+                let guideW = fittedStageSize?.width ?? 0;
+                let guideH = fittedStageSize?.height ?? 0;
+                if (fittedStageSize) {
+                  if (guideRatio > photoRatio) {
+                    guideH = Math.max(10, Math.round(fittedStageSize.width / guideRatio));
+                  } else {
+                    guideW = Math.max(10, Math.round(fittedStageSize.height * guideRatio));
+                  }
                 }
-              >
-                <div className="aspect-guide-badge">
-                  <span>Preview: {ASPECT_RATIO_OPTIONS.find((r) => r.value === aspectGuide)?.label}</span>
-                  <button
-                    type="button"
-                    onClick={() => applyGuideAsCrop(aspectGuide)}
-                    className="apply-crop-btn"
+                const vpW = viewportSize?.width ?? 0;
+                const vpH = viewportSize?.height ?? 0;
+                const maxX = guideW && vpW ? Math.max(0, (vpW - guideW) / 2) : 0;
+                const maxY = guideH && vpH ? Math.max(0, (vpH - guideH) / 2) : 0;
+                const onGuidePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+                  if ((e.target as HTMLElement).closest("button")) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  guideDragRef.current = {
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    originX: guideOffset.x,
+                    originY: guideOffset.y,
+                    maxX,
+                    maxY,
+                  };
+                  (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+                  const onMove = (ev: PointerEvent) => {
+                    const d = guideDragRef.current;
+                    if (!d) return;
+                    setGuideOffset({
+                      x: Math.max(-d.maxX, Math.min(d.maxX, d.originX + (ev.clientX - d.startX))),
+                      y: Math.max(-d.maxY, Math.min(d.maxY, d.originY + (ev.clientY - d.startY))),
+                    });
+                  };
+                  const onUp = () => {
+                    guideDragRef.current = null;
+                    window.removeEventListener("pointermove", onMove);
+                    window.removeEventListener("pointerup", onUp);
+                    window.removeEventListener("pointercancel", onUp);
+                  };
+                  window.addEventListener("pointermove", onMove);
+                  window.addEventListener("pointerup", onUp);
+                  window.addEventListener("pointercancel", onUp);
+                };
+                return (
+                  <div
+                    className="aspect-guide-frame"
+                    onPointerDown={onGuidePointerDown}
+                    style={{
+                      ...(fittedStageSize
+                        ? {
+                            width: `${guideW}px`,
+                            height: `${guideH}px`,
+                            left: "50%",
+                            top: "50%",
+                            transform: `translate(calc(-50% + ${guideOffset.x}px), calc(-50% + ${guideOffset.y}px))`,
+                          }
+                        : {
+                            aspectRatio: `${aspectGuide}`,
+                            maxWidth: "100%",
+                            maxHeight: "100%",
+                          }),
+                      pointerEvents: "auto",
+                      cursor: fittedStageSize ? "grab" : "default",
+                      touchAction: "none",
+                    }}
                   >
-                    Crop to this
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAspectGuide(null)}
-                    className="close-guide-btn"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
+                    <div className="aspect-guide-badge">
+                      <span>Preview: {ASPECT_RATIO_OPTIONS.find((r) => r.value === aspectGuide)?.label}</span>
+                      <button
+                        type="button"
+                        onClick={() => applyGuideAsCrop(aspectGuide)}
+                        className="apply-crop-btn"
+                      >
+                        Crop to this
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAspectGuide(null)}
+                        className="close-guide-btn"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()
             )}
 
             {/* Stage Container */}
