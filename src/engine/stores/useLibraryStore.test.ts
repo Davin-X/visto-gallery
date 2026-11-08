@@ -662,26 +662,31 @@ test("Animations filter narrows to animated items without reclassifying photos",
   };
   useLibraryStore.setState({ items: [gif, still, animatedVideo], filter: "All" });
   useLibraryStore.getState().refreshDerived();
-  expect(useLibraryStore.getState().visibleItems.map((i) => i.id).sort()).toEqual([
-    "clip",
-    "gif",
-    "still",
-  ]);
+  expect(
+    useLibraryStore
+      .getState()
+      .visibleItems.map((i) => i.id)
+      .sort(),
+  ).toEqual(["clip", "gif", "still"]);
 
   useLibraryStore.setState({ filter: "Animations" });
   useLibraryStore.getState().refreshDerived();
-  expect(useLibraryStore.getState().visibleItems.map((i) => i.id).sort()).toEqual([
-    "clip",
-    "gif",
-  ]);
+  expect(
+    useLibraryStore
+      .getState()
+      .visibleItems.map((i) => i.id)
+      .sort(),
+  ).toEqual(["clip", "gif"]);
 
   // GIFs stay photos: the Photos filter must not lose them.
   useLibraryStore.setState({ filter: "Photos" });
   useLibraryStore.getState().refreshDerived();
-  expect(useLibraryStore.getState().visibleItems.map((i) => i.id).sort()).toEqual([
-    "gif",
-    "still",
-  ]);
+  expect(
+    useLibraryStore
+      .getState()
+      .visibleItems.map((i) => i.id)
+      .sort(),
+  ).toEqual(["gif", "still"]);
 });
 
 test("Animations filter is sent to the backend as an animated flag, not a kind", () => {
