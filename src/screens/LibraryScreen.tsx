@@ -1178,11 +1178,11 @@ function LibraryScreen(props: LibraryScreenProps) {
                       type="button"
                       onClick={() => props.onImportFolder?.()}
                       disabled={props.busy}
-                      title="Open folder (⌘O)"
-                      aria-label="Open folder"
+                      title="Add folder (⌘O)"
+                      aria-label="Add folder"
                     >
                       <FolderIcon size={15} />
-                      <span className="btn-label">Open folder</span>
+                      <span className="btn-label">Add folder</span>
                     </button>
                     <button
                       className="primary-button"
