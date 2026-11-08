@@ -358,34 +358,28 @@ mod thumbnail_cache_tests {
         assert_eq!(relinked, 1, "the rename should be followed");
 
         let new_id = stable_id(&after_path);
-        let (id, path, favorite): (String, String, bool) = sqlx::query_as(
-            "SELECT id, path, favorite FROM media_items",
-        )
-        .fetch_one(&db)
-        .await
-        .expect("read item");
+        let (id, path, favorite): (String, String, bool) =
+            sqlx::query_as("SELECT id, path, favorite FROM media_items")
+                .fetch_one(&db)
+                .await
+                .expect("read item");
         assert_eq!(id, new_id, "the id follows the new path");
         assert_eq!(path, after_path);
         assert!(favorite, "the favourite flag survives the move");
 
-        for (table, column) in [
-            ("media_tags", "tag_id"),
-            ("album_items", "album_id"),
-        ] {
-            let value: String = sqlx::query_scalar(&format!(
-                "SELECT {column} FROM {table} WHERE media_id = ?"
-            ))
-            .bind(&new_id)
-            .fetch_one(&db)
-            .await
-            .unwrap_or_else(|_| panic!("relation in {table} should follow the move"));
+        for (table, column) in [("media_tags", "tag_id"), ("album_items", "album_id")] {
+            let value: String =
+                sqlx::query_scalar(&format!("SELECT {column} FROM {table} WHERE media_id = ?"))
+                    .bind(&new_id)
+                    .fetch_one(&db)
+                    .await
+                    .unwrap_or_else(|_| panic!("relation in {table} should follow the move"));
             assert!(!value.is_empty());
         }
-        let recipe_owner: String =
-            sqlx::query_scalar("SELECT media_id FROM edit_recipes")
-                .fetch_one(&db)
-                .await
-                .expect("recipe should follow the move");
+        let recipe_owner: String = sqlx::query_scalar("SELECT media_id FROM edit_recipes")
+            .fetch_one(&db)
+            .await
+            .expect("recipe should follow the move");
         assert_eq!(recipe_owner, new_id);
 
         assert_eq!(

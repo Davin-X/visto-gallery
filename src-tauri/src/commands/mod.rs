@@ -754,10 +754,7 @@ async fn prune_missing_items(
 /// ambiguous. Guessing between two identical fingerprints could hand one file's
 /// album membership to another, which is worse than importing a fresh row.
 fn only_unused(candidates: Option<&Vec<usize>>, used: &[bool]) -> Option<usize> {
-    let mut found = candidates?
-        .iter()
-        .copied()
-        .filter(|index| !used[*index]);
+    let mut found = candidates?.iter().copied().filter(|index| !used[*index]);
     let index = found.next()?;
     if found.next().is_some() {
         return None;
@@ -796,23 +793,17 @@ async fn relink_moved_items(
         return Ok(0);
     }
 
-    let rows: Vec<(String, String, i64, i64, Option<String>)> = sqlx::query_as(
-        "SELECT id, path, size, modified_at, content_signature FROM media_items",
-    )
-    .fetch_all(db)
-    .await
-    .map_err(|error| error.to_string())?;
+    let rows: Vec<(String, String, i64, i64, Option<String>)> =
+        sqlx::query_as("SELECT id, path, size, modified_at, content_signature FROM media_items")
+            .fetch_all(db)
+            .await
+            .map_err(|error| error.to_string())?;
     // Rows whose file this walk did not see are the only move candidates.
     let vanished: Vec<(&str, i64, i64, Option<String>)> = rows
         .iter()
         .filter(|(_, path, _, _, _)| path_is_inside(path, root) && !seen_paths.contains(path))
         .map(|(id, _, size, modified_at, signature)| {
-            (
-                id.as_str(),
-                *size,
-                *modified_at,
-                signature.clone(),
-            )
+            (id.as_str(), *size, *modified_at, signature.clone())
         })
         .collect();
     if vanished.is_empty() {
@@ -908,12 +899,14 @@ async fn relink_moved_items(
         .await
         .map_err(|error| error.to_string())?;
         for table in ["media_tags", "album_items", "edit_recipes", "edit_backups"] {
-            sqlx::query(&format!("UPDATE {table} SET media_id = ? WHERE media_id = ?"))
-                .bind(&new_id)
-                .bind(old_id)
-                .execute(&mut *transaction)
-                .await
-                .map_err(|error| error.to_string())?;
+            sqlx::query(&format!(
+                "UPDATE {table} SET media_id = ? WHERE media_id = ?"
+            ))
+            .bind(&new_id)
+            .bind(old_id)
+            .execute(&mut *transaction)
+            .await
+            .map_err(|error| error.to_string())?;
         }
     }
     transaction
@@ -1711,4 +1704,3 @@ mod rescan_preservation_tests {
         assert_eq!(hidden, 1, "hidden must survive a forced rescan");
     }
 }
-

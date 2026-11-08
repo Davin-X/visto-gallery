@@ -23,10 +23,7 @@ use std::path::Path;
 /// Extensions worth opening for a header probe. Everything else is answered
 /// from the extension alone without touching the disk.
 pub fn is_probe_candidate(extension: &str) -> bool {
-    matches!(
-        extension,
-        "gif" | "webp" | "png" | "avif" | "heic" | "heif"
-    )
+    matches!(extension, "gif" | "webp" | "png" | "avif" | "heic" | "heif")
 }
 
 /// Whether the catalog should treat this item as animated content.
@@ -394,10 +391,7 @@ mod tests {
     fn still_webp_without_the_flag_is_not_animated() {
         let extended = write_temp(
             "webp",
-            &riff_webp(&[(
-                b"VP8X",
-                vec![0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            )]),
+            &riff_webp(&[(b"VP8X", vec![0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0])]),
         );
         assert_eq!(probe_file(&extended), Some(false));
 
@@ -434,10 +428,7 @@ mod tests {
 
     #[test]
     fn avif_sequence_brand_is_animated_and_still_avif_is_not() {
-        let animated = write_temp(
-            "avif",
-            &isobmff(&[b"avif".as_slice(), b"avis".as_slice()]),
-        );
+        let animated = write_temp("avif", &isobmff(&[b"avif".as_slice(), b"avis".as_slice()]));
         assert_eq!(probe_file(&animated), Some(true));
 
         let still = write_temp("avif", &isobmff(&[b"avif".as_slice(), b"mif1".as_slice()]));
