@@ -235,22 +235,34 @@ function App() {
         if (import.meta.env.DEV) console.error("get_library_stats failed:", e);
       });
 
-    let unlisten: (() => void) | null = null;
+    // Removals arrive as `library-changed`; scans and imports as
+    // `library-counts-changed`. Both debounce through one timer so a bulk scan
+    // does not fire a stats query per batch.
+    const scheduleStatsRefresh = () => {
+      if (statsDebounceRef.current) {
+        clearTimeout(statsDebounceRef.current);
+      }
+      statsDebounceRef.current = setTimeout(() => {
+        statsDebounceRef.current = null;
+        tauri.library
+          .getStats()
+          .then(setLibraryStats)
+          .catch(() => {});
+      }, 500);
+    };
+
+    const unlisteners: Array<() => void> = [];
     events
-      .onLibraryChanged(() => {
-        if (statsDebounceRef.current) {
-          clearTimeout(statsDebounceRef.current);
-        }
-        statsDebounceRef.current = setTimeout(() => {
-          statsDebounceRef.current = null;
-          tauri.library
-            .getStats()
-            .then(setLibraryStats)
-            .catch(() => {});
-        }, 500);
-      })
+      .onLibraryChanged(scheduleStatsRefresh)
       .then((u) => {
-        unlisten = u;
+        if (cancelled) u();
+        else unlisteners.push(u);
+      });
+    events
+      .onLibraryCountsChanged(scheduleStatsRefresh)
+      .then((u) => {
+        if (cancelled) u();
+        else unlisteners.push(u);
       });
     return () => {
       cancelled = true;
@@ -258,7 +270,7 @@ function App() {
         clearTimeout(statsDebounceRef.current);
         statsDebounceRef.current = null;
       }
-      if (unlisten) unlisten();
+      for (const unlisten of unlisteners) unlisten();
     };
   }, []);
 

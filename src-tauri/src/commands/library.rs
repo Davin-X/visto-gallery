@@ -176,6 +176,10 @@ pub async fn scan_library(
         0
     };
 
+    if discovered_count > 0 || removed_count > 0 {
+        let _ = window.emit(super::LIBRARY_COUNTS_CHANGED, ());
+    }
+
     // Hand back the albums and tags so the sidebar is populated from the same
     // call that imports, instead of staying empty until a separate round-trip.
     let albums = sqlx::query_as::<_, Album>(&format!("{} ORDER BY a.created_at ASC", ALBUM_SELECT))
@@ -309,6 +313,9 @@ pub async fn import_files(
         .map_err(|e| e.to_string())?;
 
     let discovered_count = items.len();
+    if discovered_count > 0 {
+        let _ = window.emit(super::LIBRARY_COUNTS_CHANGED, ());
+    }
     Ok(ScanResult {
         items,
         discovered_count,

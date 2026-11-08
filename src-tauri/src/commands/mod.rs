@@ -447,6 +447,15 @@ pub fn validate_path_under_registered_roots(
     }
 }
 
+/// Event asking the frontend to re-read catalog-wide counts.
+///
+/// `library-changed` is only emitted when rows are removed, and scans/imports
+/// emit progress events only, so the sidebar and the type-chip counts used to
+/// describe the catalog from before the import. Emitting this from the commands
+/// that add rows covers every caller — picker, drag-and-drop, watch-folder
+/// rescan — instead of relying on each UI path to refresh itself.
+pub(crate) const LIBRARY_COUNTS_CHANGED: &str = "library-counts-changed";
+
 /// Record an imported folder so the sidebar can list and remove it later.
 /// Failures are non-fatal: a catalog write should never fail an import.
 async fn remember_folder(db: &SqlitePool, root: &str, app: &tauri::AppHandle) {
