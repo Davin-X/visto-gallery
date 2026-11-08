@@ -212,6 +212,17 @@ function App() {
 
   const statsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // `library-changed` is only emitted for removals, so imports and rescans have
+  // to refresh the exact counts themselves. Without this the sidebar and the
+  // type-chip counts keep describing the catalog from before the import (a
+  // freshly imported set of GIFs would show in the grid but count as 0).
+  const refreshLibraryStats = useCallback(() => {
+    void tauri.library
+      .getStats()
+      .then(setLibraryStats)
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     void refreshDraftMeta();
     let cancelled = false;
@@ -1908,6 +1919,7 @@ function App() {
       });
       const result = await tauri.library.importFiles(paths);
       await library.loadLibrary();
+      refreshLibraryStats();
       library.setBusy(false);
       library.setProgress(null);
       showNotice(
@@ -1967,6 +1979,7 @@ function App() {
       }
       await library.loadLibrary();
       await library.loadFolders();
+      refreshLibraryStats();
       library.setBusy(false);
       library.setProgress(null);
       showNotice(
@@ -1998,6 +2011,7 @@ function App() {
       const result = await tauri.library.scan(folder.path, true);
       await library.loadLibrary();
       await library.loadFolders();
+      refreshLibraryStats();
       library.setProgress(null);
       library.setBusy(false);
       showNotice(

@@ -32,3 +32,5 @@ untracked/
 .clinerules
 
 .kilo
+# Local sample media used for manual testing (downloaded fixtures)
+test-media/
