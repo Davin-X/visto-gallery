@@ -330,10 +330,11 @@ button {
 .library-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  position: relative;
   min-height: 0;
 }
 .library-layout.with-inspector {
-  grid-template-columns: minmax(0, 1fr) 260px;
+  grid-template-columns: minmax(0, 1fr) var(--inspector-width, 260px);
 }
 .library-center {
   min-width: 0;
@@ -819,12 +820,14 @@ kbd {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 12px;
+  min-width: 0;
 }
 .inspector-top small {
   color: var(--faint);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.12em;
+  min-width: 0;
 }
 .inspector-top h2 {
   overflow: hidden;
@@ -835,6 +838,13 @@ kbd {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+}
+.inspector-selection-note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 .inspector-top > button {
   width: 21px;
@@ -2473,7 +2483,7 @@ kbd {
 
 @media (max-width: 1160px) {
   .library-layout.with-inspector {
-    grid-template-columns: minmax(0, 1fr) 225px;
+    grid-template-columns: minmax(0, 1fr) var(--inspector-width, 225px);
   }
   .library-center {
     padding-right: 20px;
@@ -3670,7 +3680,7 @@ kbd {
 }
 @media (max-width: 1160px) {
   .library-layout.with-inspector {
-    grid-template-columns: minmax(0, 1fr) 225px;
+    grid-template-columns: minmax(0, 1fr) var(--inspector-width, 225px);
   }
   .library-layout.with-inspector .gallery-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4252,7 +4262,7 @@ body {
 }
 
 .library-layout.with-inspector {
-  grid-template-columns: minmax(0, 1fr) 276px;
+  grid-template-columns: minmax(0, 1fr) var(--inspector-width, 276px);
 }
 
 .library-center {

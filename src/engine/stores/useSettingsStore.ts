@@ -101,6 +101,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       // for (180px - 360px).
       value = Math.min(360, Math.max(180, Number(value) || 220)) as AppSettings["sidebarWidth"];
     }
+    if (key === "inspectorWidth") {
+      // Hard clamp so the inspector stays usable (240px - 480px).
+      value = Math.min(480, Math.max(240, Number(value) || 300)) as AppSettings["inspectorWidth"];
+    }
     const patch: Partial<AppSettings> = {
       [key]: value,
     } as Partial<AppSettings>;
@@ -115,6 +119,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       // Hard clamp so the layout stays within the bounds the CSS was
       // authored for (180px - 360px).
       next.sidebarWidth = Math.min(360, Math.max(180, Number(partial.sidebarWidth) || 220));
+    }
+    if ("inspectorWidth" in partial) {
+      // Hard clamp so the inspector stays usable (240px - 480px).
+      next.inspectorWidth = Math.min(480, Math.max(240, Number(partial.inspectorWidth) || 300));
     }
     // Optimistic update with the fully-clamped merged state.
     set(next);
@@ -138,6 +146,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 export const useAppearance = () => useSettingsStore((s) => s.appearance);
 export const useAccentColor = () => useSettingsStore((s) => s.accentColor);
 export const useSidebarWidth = () => useSettingsStore((s) => s.sidebarWidth);
+export const useInspectorWidth = () => useSettingsStore((s) => s.inspectorWidth);
 export const useDefaultLayout = () => useSettingsStore((s) => s.defaultLayout);
 export const useThumbnailSize = () => useSettingsStore((s) => s.thumbnailSize);
 
