@@ -327,6 +327,13 @@ function LibraryScreen(props: LibraryScreenProps) {
     }
     return counts;
   }, [filterSource, props.hiddenView]);
+  // The picker shows the folder name, which can be long enough to widen the
+  // whole header row. CSS clamps it and ellipsizes; the full name stays
+  // reachable through this tooltip and the native option list.
+  const activeSourceName = useMemo(
+    () => library.folders.find((f: LibraryFolder) => f.path === library.activeSource)?.name ?? null,
+    [library.folders, library.activeSource],
+  );
   const hasActiveRefinements = props.hiddenView
     ? Boolean((props.query || "").trim() || props.filter !== "All")
     : Boolean(
@@ -1020,7 +1027,14 @@ function LibraryScreen(props: LibraryScreenProps) {
               <div className="header-actions">
                 {!props.hiddenView && (
                   <>
-                    <label className="source-select" title="Filter the library by source">
+                    <label
+                      className="source-select"
+                      title={
+                        activeSourceName
+                          ? `Filtering by ${activeSourceName}`
+                          : "Filter the library by source"
+                      }
+                    >
                       <FolderIcon size={14} />
                       <span className="source-select-label">Source</span>
                       <select
