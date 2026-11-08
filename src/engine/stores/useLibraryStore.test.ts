@@ -652,3 +652,47 @@ test("cancelDelete keeps the stable operation overlay in its cancelling state", 
   // result, so the user sees a truthful Cancelling… state between batches.
   expect(useLibraryStore.getState().canceling).toBe(true);
 });
+
+test("Animations filter narrows to animated items without reclassifying photos", () => {
+  const gif = { ...makeItem("gif", "loop.gif"), isAnimated: true };
+  const still = makeItem("still", "still.jpg");
+  const animatedVideo = {
+    ...makeItem("clip", "clip.mp4", false, "video"),
+    isAnimated: true,
+  };
+  useLibraryStore.setState({ items: [gif, still, animatedVideo], filter: "All" });
+  useLibraryStore.getState().refreshDerived();
+  expect(
+    useLibraryStore
+      .getState()
+      .visibleItems.map((i) => i.id)
+      .sort(),
+  ).toEqual(["clip", "gif", "still"]);
+
+  useLibraryStore.setState({ filter: "Animations" });
+  useLibraryStore.getState().refreshDerived();
+  expect(
+    useLibraryStore
+      .getState()
+      .visibleItems.map((i) => i.id)
+      .sort(),
+  ).toEqual(["clip", "gif"]);
+
+  // GIFs stay photos: the Photos filter must not lose them.
+  useLibraryStore.setState({ filter: "Photos" });
+  useLibraryStore.getState().refreshDerived();
+  expect(
+    useLibraryStore
+      .getState()
+      .visibleItems.map((i) => i.id)
+      .sort(),
+  ).toEqual(["gif", "still"]);
+});
+
+test("Animations filter is sent to the backend as an animated flag, not a kind", () => {
+  useLibraryStore.setState({ filter: "Animations" });
+  expect(useLibraryStore.getState().getCurrentLibraryFilter()).toMatchObject({
+    animated: true,
+    kind: undefined,
+  });
+});

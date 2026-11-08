@@ -130,6 +130,7 @@ describe("HiddenScreen", () => {
       photos: 1,
       videos: 1,
       raws: 0,
+      animations: 0,
       favorites: 1,
     });
     expect(props.hiddenCount).toBe(2);

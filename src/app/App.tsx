@@ -197,6 +197,7 @@ function App() {
     photos: 0,
     videos: 0,
     raws: 0,
+    animations: 0,
     uncategorized: 0,
     favorites: 0,
     hidden: 0,
@@ -211,6 +212,17 @@ function App() {
 
   const statsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // `library-changed` is only emitted for removals, so imports and rescans have
+  // to refresh the exact counts themselves. Without this the sidebar and the
+  // type-chip counts keep describing the catalog from before the import (a
+  // freshly imported set of GIFs would show in the grid but count as 0).
+  const refreshLibraryStats = useCallback(() => {
+    void tauri.library
+      .getStats()
+      .then(setLibraryStats)
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     void refreshDraftMeta();
     let cancelled = false;
@@ -223,22 +235,34 @@ function App() {
         if (import.meta.env.DEV) console.error("get_library_stats failed:", e);
       });
 
-    let unlisten: (() => void) | null = null;
+    // Removals arrive as `library-changed`; scans and imports as
+    // `library-counts-changed`. Both debounce through one timer so a bulk scan
+    // does not fire a stats query per batch.
+    const scheduleStatsRefresh = () => {
+      if (statsDebounceRef.current) {
+        clearTimeout(statsDebounceRef.current);
+      }
+      statsDebounceRef.current = setTimeout(() => {
+        statsDebounceRef.current = null;
+        tauri.library
+          .getStats()
+          .then(setLibraryStats)
+          .catch(() => {});
+      }, 500);
+    };
+
+    const unlisteners: Array<() => void> = [];
     events
-      .onLibraryChanged(() => {
-        if (statsDebounceRef.current) {
-          clearTimeout(statsDebounceRef.current);
-        }
-        statsDebounceRef.current = setTimeout(() => {
-          statsDebounceRef.current = null;
-          tauri.library
-            .getStats()
-            .then(setLibraryStats)
-            .catch(() => {});
-        }, 500);
-      })
+      .onLibraryChanged(scheduleStatsRefresh)
       .then((u) => {
-        unlisten = u;
+        if (cancelled) u();
+        else unlisteners.push(u);
+      });
+    events
+      .onLibraryCountsChanged(scheduleStatsRefresh)
+      .then((u) => {
+        if (cancelled) u();
+        else unlisteners.push(u);
       });
     return () => {
       cancelled = true;
@@ -246,7 +270,7 @@ function App() {
         clearTimeout(statsDebounceRef.current);
         statsDebounceRef.current = null;
       }
-      if (unlisten) unlisten();
+      for (const unlisten of unlisteners) unlisten();
     };
   }, []);
 
@@ -1907,6 +1931,7 @@ function App() {
       });
       const result = await tauri.library.importFiles(paths);
       await library.loadLibrary();
+      refreshLibraryStats();
       library.setBusy(false);
       library.setProgress(null);
       showNotice(
@@ -1966,6 +1991,7 @@ function App() {
       }
       await library.loadLibrary();
       await library.loadFolders();
+      refreshLibraryStats();
       library.setBusy(false);
       library.setProgress(null);
       showNotice(
@@ -1997,6 +2023,7 @@ function App() {
       const result = await tauri.library.scan(folder.path, true);
       await library.loadLibrary();
       await library.loadFolders();
+      refreshLibraryStats();
       library.setProgress(null);
       library.setBusy(false);
       showNotice(

@@ -38,6 +38,8 @@ export interface LibraryFilterDTO {
   kind?: string;
   favorite?: boolean;
   hidden?: boolean;
+  /** Narrow to animated (true) or still (false) items; independent of `kind`. */
+  animated?: boolean;
   albumId?: string;
   query?: string;
   tags?: string[];
@@ -343,6 +345,8 @@ export interface LibraryStats {
   photos: number;
   videos: number;
   raws: number;
+  /** Subset of `photos`: items the catalog treats as animated content. */
+  animations: number;
   uncategorized: number;
   favorites: number;
   hidden: number;

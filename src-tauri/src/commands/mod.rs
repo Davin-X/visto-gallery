@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 pub use settings::*;
 pub use smart_albums::*;
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -76,6 +76,9 @@ pub struct LibraryFilterDTO {
     pub kind: Option<String>,
     pub favorite: Option<bool>,
     pub hidden: Option<bool>,
+    /// `Some(true)` narrows to animated items, `Some(false)` to still ones.
+    /// Independent of `kind`, which keeps its photo | video | raw meaning.
+    pub animated: Option<bool>,
     pub album_id: Option<String>,
     pub query: Option<String>,
     pub tags: Option<Vec<String>>,
@@ -444,6 +447,15 @@ pub fn validate_path_under_registered_roots(
     }
 }
 
+/// Event asking the frontend to re-read catalog-wide counts.
+///
+/// `library-changed` is only emitted when rows are removed, and scans/imports
+/// emit progress events only, so the sidebar and the type-chip counts used to
+/// describe the catalog from before the import. Emitting this from the commands
+/// that add rows covers every caller — picker, drag-and-drop, watch-folder
+/// rescan — instead of relying on each UI path to refresh itself.
+pub(crate) const LIBRARY_COUNTS_CHANGED: &str = "library-counts-changed";
+
 /// Record an imported folder so the sidebar can list and remove it later.
 /// Failures are non-fatal: a catalog write should never fail an import.
 async fn remember_folder(db: &SqlitePool, root: &str, app: &tauri::AppHandle) {
@@ -570,6 +582,10 @@ fn inspect_media_file_with_metadata(
         (None, None)
     };
 
+    // Reads container headers only (GIF blocks, WebP VP8X flags, PNG acTL,
+    // ISOBMFF ftyp brands); no pixel decode. Formats that cannot animate are
+    // answered without opening the file.
+    let is_animated = crate::media_animation::detect_animation(path, &ext);
     let mut item = MediaItem::new(
         path.to_string_lossy().to_string(),
         name,
@@ -580,6 +596,10 @@ fn inspect_media_file_with_metadata(
     );
     item.created_at = now;
     item.updated_at = now;
+    item.is_animated = is_animated;
+    // Bounded read (size + the first and last 64 KiB) so a move can be
+    // recognised later without ever reading a whole video.
+    item.content_signature = crate::media_signature::content_signature(path);
 
     // Populate metadata from EXIF for photos.
     if kind == "photo" {
@@ -628,7 +648,7 @@ async fn upsert_media_batch(
     }
 
     let mut query = QueryBuilder::<Sqlite>::new(
-        "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, width, height, camera, lens, exposure, iso, latitude, longitude, sha256, created_at, updated_at, favorite, hidden, rating, color_label) ",
+        "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, width, height, camera, lens, exposure, iso, latitude, longitude, sha256, created_at, updated_at, favorite, hidden, is_animated, content_signature, rating, color_label) ",
     );
     query.push_values(rows, |mut values, (item, width, height)| {
         values
@@ -653,11 +673,13 @@ async fn upsert_media_batch(
             .push_bind(item.updated_at)
             .push_bind(0i32)
             .push_bind(0i32)
+            .push_bind(if item.is_animated { 1i32 } else { 0i32 })
+            .push_bind(&item.content_signature)
             .push_bind(item.rating)
             .push_bind(&item.color_label);
     });
     query.push(
-        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END, updated_at = excluded.updated_at, favorite = media_items.favorite, hidden = media_items.hidden, rating = COALESCE(excluded.rating, media_items.rating), color_label = COALESCE(excluded.color_label, media_items.color_label)",
+        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END, updated_at = excluded.updated_at, favorite = media_items.favorite, hidden = media_items.hidden, is_animated = excluded.is_animated, content_signature = excluded.content_signature, rating = COALESCE(excluded.rating, media_items.rating), color_label = COALESCE(excluded.color_label, media_items.color_label)",
     );
     query.build().execute(db).await.map_err(|e| e.to_string())?;
     Ok(())
@@ -726,6 +748,173 @@ async fn prune_missing_items(
         .map_err(|error| error.to_string())?;
 
     Ok(missing.len())
+}
+
+/// The single unused entry in `candidates`, or `None` when the match is
+/// ambiguous. Guessing between two identical fingerprints could hand one file's
+/// album membership to another, which is worse than importing a fresh row.
+fn only_unused(candidates: Option<&Vec<usize>>, used: &[bool]) -> Option<usize> {
+    let mut found = candidates?.iter().copied().filter(|index| !used[*index]);
+    let index = found.next()?;
+    if found.next().is_some() {
+        return None;
+    }
+    Some(index)
+}
+
+/// Keep a moved or renamed file in the same catalog row.
+///
+/// The id is derived from the path, so otherwise a move looks like a delete plus
+/// an unrelated import: the row (and with it the favourite flag, rating, tags
+/// and album membership) would be dropped. The scan matches rows that vanished
+/// from `root` against files that appeared in the same walk by content
+/// fingerprint, then re-keys the surviving row — and every table that points at
+/// it — to the new path.
+///
+/// Both sides must be unambiguous, so a file that was copied (a duplicate) or a
+/// fingerprint shared by several vanished rows is left alone and handled by the
+/// ordinary import/prune path.
+async fn relink_moved_items(
+    db: &SqlitePool,
+    root: &str,
+    seen_paths: &HashSet<String>,
+) -> Result<usize, String> {
+    let existing: Vec<(String, String)> = sqlx::query_as("SELECT id, path FROM media_items")
+        .fetch_all(db)
+        .await
+        .map_err(|error| error.to_string())?;
+    let existing_paths: HashSet<&str> = existing.iter().map(|(_, path)| path.as_str()).collect();
+    let existing_ids: HashSet<&str> = existing.iter().map(|(id, _)| id.as_str()).collect();
+    let mut added: Vec<&String> = seen_paths
+        .iter()
+        .filter(|path| !existing_paths.contains(path.as_str()))
+        .collect();
+    if added.is_empty() {
+        return Ok(0);
+    }
+
+    let rows: Vec<(String, String, i64, i64, Option<String>)> =
+        sqlx::query_as("SELECT id, path, size, modified_at, content_signature FROM media_items")
+            .fetch_all(db)
+            .await
+            .map_err(|error| error.to_string())?;
+    // Rows whose file this walk did not see are the only move candidates.
+    let vanished: Vec<(&str, i64, i64, Option<String>)> = rows
+        .iter()
+        .filter(|(_, path, _, _, _)| path_is_inside(path, root) && !seen_paths.contains(path))
+        .map(|(id, _, size, modified_at, signature)| {
+            (id.as_str(), *size, *modified_at, signature.clone())
+        })
+        .collect();
+    if vanished.is_empty() {
+        return Ok(0);
+    }
+
+    let mut by_signature: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut by_fingerprint: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+    for (index, (_, size, modified_at, signature)) in vanished.iter().enumerate() {
+        match signature {
+            // The signature covers the size, so equal signatures imply equal
+            // content regardless of when the file was last touched.
+            Some(signature) => by_signature
+                .entry(signature.clone())
+                .or_default()
+                .push(index),
+            // Rows imported before fingerprints existed can still follow a
+            // same-volume move: macOS preserves the modification time.
+            None => by_fingerprint
+                .entry((*size, *modified_at))
+                .or_default()
+                .push(index),
+        }
+    }
+
+    let mut used = vec![false; vanished.len()];
+    let mut moves: Vec<(&str, String)> = Vec::new();
+    added.sort();
+    for new_path in added {
+        let Ok(metadata) = std::fs::metadata(new_path) else {
+            continue;
+        };
+        if !metadata.is_file() {
+            continue;
+        }
+        let signature = crate::media_signature::content_signature(Path::new(new_path));
+        let index = match &signature {
+            Some(signature) => only_unused(by_signature.get(signature), &used),
+            None => only_unused(
+                by_fingerprint.get(&(metadata.len() as i64, file_modified_at(&metadata))),
+                &used,
+            ),
+        };
+        let Some(index) = index else {
+            continue;
+        };
+        // A hash collision must not rewrite another row's key.
+        if existing_ids.contains(stable_id(new_path).as_str()) {
+            continue;
+        }
+        used[index] = true;
+        moves.push((vanished[index].0, new_path.clone()));
+    }
+    if moves.is_empty() {
+        return Ok(0);
+    }
+
+    let now = now_ms();
+    let mut transaction = db.begin().await.map_err(|error| error.to_string())?;
+    // Relations point at the row being re-keyed, so enforcement is deferred to
+    // COMMIT and every table is updated inside the same transaction.
+    sqlx::query("PRAGMA defer_foreign_keys = ON")
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| error.to_string())?;
+    for (old_id, new_path) in &moves {
+        let path = Path::new(new_path);
+        let new_id = stable_id(new_path);
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let extension = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        let modified_at = std::fs::metadata(path)
+            .map(|metadata| file_modified_at(&metadata))
+            .unwrap_or(0);
+        sqlx::query(
+            "UPDATE media_items SET id = ?, path = ?, name = ?, extension = ?, modified_at = ?, updated_at = ? WHERE id = ?",
+        )
+        .bind(&new_id)
+        .bind(new_path)
+        .bind(&name)
+        .bind(&extension)
+        .bind(modified_at)
+        .bind(now)
+        .bind(old_id)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| error.to_string())?;
+        for table in ["media_tags", "album_items", "edit_recipes", "edit_backups"] {
+            sqlx::query(&format!(
+                "UPDATE {table} SET media_id = ? WHERE media_id = ?"
+            ))
+            .bind(&new_id)
+            .bind(old_id)
+            .execute(&mut *transaction)
+            .await
+            .map_err(|error| error.to_string())?;
+        }
+    }
+    transaction
+        .commit()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    Ok(moves.len())
 }
 
 async fn import_media_file(
@@ -1462,7 +1651,7 @@ mod rescan_preservation_tests {
             .connect("sqlite::memory:")
             .await
             .expect("open in-memory database");
-        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, sha256 TEXT, rating INTEGER, color_label TEXT)")
+        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, sha256 TEXT, rating INTEGER, color_label TEXT)")
             .execute(&db)
             .await
             .expect("create media_items");

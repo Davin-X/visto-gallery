@@ -265,6 +265,10 @@ export const events = {
   onLibraryChanged: (callback: (event: LibraryChangedEvent) => void) =>
     listen("library-changed", (e: any) => callback(e.payload)),
 
+  /** Catalog-wide counts may have changed (scan or import added rows). */
+  onLibraryCountsChanged: (callback: () => void) =>
+    listen("library-counts-changed", () => callback()),
+
   onImportProgress: (callback: (event: ImportProgressEvent) => void) =>
     listen("import-progress", (e: any) => callback(e.payload)),
 

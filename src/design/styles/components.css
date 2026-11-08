@@ -181,3 +181,52 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ===== Top mid panel =====
+   The type strip and the source picker should size themselves from the panel,
+   not the other way round. Scoped under `.library-layout` so these win over the
+   container-query tweaks in App.css without reaching for !important. */
+
+/* Six type chips did not fit the default window width, so the strip overflowed
+   and turned on a scrollbar, which made the row look taller than its buttons.
+   The strip never wraps or grows: it scrolls invisibly only as a last resort. */
+.library-layout .filter-cluster {
+  min-width: 0;
+  max-width: 100%;
+  gap: 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.library-layout .filter-cluster::-webkit-scrollbar {
+  display: none;
+}
+
+.library-layout .filter-cluster .quick-filter {
+  flex: 0 0 auto;
+}
+
+/* The counts are what push the strip past the panel with six types. Keep the
+   selected chip's count visible and bring the rest back as soon as the pane is
+   wide enough to hold them, instead of shrinking the buttons for every width. */
+@container library-pane (max-width: 780px) {
+  .library-layout .filter-cluster .quick-filter:not(.active) .filter-count {
+    display: none;
+  }
+}
+
+/* A long folder name must not widen the header row: the selected label
+   ellipsizes, while the option list and the tooltip keep the full name. */
+.library-layout .library-header .header-actions .source-select {
+  min-width: 0;
+  max-width: 220px;
+}
+
+.library-layout .library-header .header-actions .source-select select {
+  min-width: 0;
+  max-width: 168px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

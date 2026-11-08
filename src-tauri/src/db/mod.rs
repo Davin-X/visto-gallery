@@ -48,6 +48,62 @@ impl Database {
         // Backfill dimensions for existing photos (runs once)
         self.backfill_dimensions().await?;
 
+        // Refine `is_animated` for rows seeded by migration 008 (runs once)
+        self.backfill_animation_flags().await?;
+
+        Ok(())
+    }
+
+    /// Re-classify `is_animated` for rows that predate content-based detection.
+    ///
+    /// Migration 008 seeds the flag from the filename (`.gif`), which is only a
+    /// guess: it misses animated WebP/APNG/AVIF and flags static GIFs. This pass
+    /// probes the actual container headers for every candidate extension and
+    /// writes the real answer. Rows whose file cannot be read keep the
+    /// filename fallback, so an offline drive cannot silently lose state; a
+    /// later rescan corrects them.
+    async fn backfill_animation_flags(&self) -> Result<()> {
+        let done: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM _migration_flags WHERE name = 'backfill_animation_flags' AND completed_at > 0"
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if done.is_some() {
+            return Ok(());
+        }
+
+        let rows = sqlx::query(
+            "SELECT id, path, extension, is_animated FROM media_items
+             WHERE extension IN ('gif', 'webp', 'png', 'avif', 'heic', 'heif')",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        for row in rows {
+            let id: String = row.get("id");
+            let path: String = row.get("path");
+            let extension: String = row.get("extension");
+            let current: bool = row.get("is_animated");
+            let detected =
+                crate::media_animation::detect_animation(std::path::Path::new(&path), &extension);
+            if detected == current {
+                continue;
+            }
+            sqlx::query("UPDATE media_items SET is_animated = ? WHERE id = ?")
+                .bind(if detected { 1i32 } else { 0i32 })
+                .bind(&id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        sqlx::query(
+            "INSERT OR REPLACE INTO _migration_flags (name, completed_at) VALUES ('backfill_animation_flags', ?)"
+        )
+        .bind(Utc::now().timestamp_millis())
+        .execute(&self.pool)
+        .await?;
+
         Ok(())
     }
 

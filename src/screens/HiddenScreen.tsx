@@ -68,6 +68,7 @@ function HiddenScreen(props: HiddenScreenProps) {
       photos: library.hiddenItems.filter((i: MediaItem) => i.kind === "photo").length,
       videos: library.hiddenItems.filter((i: MediaItem) => i.kind === "video").length,
       raws: library.hiddenItems.filter((i: MediaItem) => i.kind === "raw").length,
+      animations: library.hiddenItems.filter((i: MediaItem) => i.isAnimated).length,
       favorites: library.hiddenItems.filter((i: MediaItem) => i.favorite).length,
     }),
     [library.hiddenItems],
@@ -88,6 +89,7 @@ function HiddenScreen(props: HiddenScreenProps) {
       if (filter === "Photos" && item.kind !== "photo") return false;
       if (filter === "Videos" && item.kind !== "video") return false;
       if (filter === "RAW" && item.kind !== "raw") return false;
+      if (filter === "Animations" && !item.isAnimated) return false;
       if (filter === "Favorites" && !item.favorite) return false;
       if (!normalized) return true;
       return `${item.name} ${item.path} ${item.extension} ${item.kind} ${item.camera || ""} ${item.lens || ""} ${(item.tags || []).join(" ")}`

@@ -89,6 +89,16 @@ pub async fn scan_library(
             ));
         }
     }
+    // A file moved or renamed inside this source is the same item, not a delete
+    // plus an import: re-key its row (and its album, tag and edit relations) to
+    // the new path before the import loop writes anything.
+    if !super::SCAN_CANCEL.load(Ordering::SeqCst) && !had_walk_error {
+        let relinked = relink_moved_items(&db, &root_path, &seen_paths).await?;
+        if relinked > 0 {
+            eprintln!("visto: followed {relinked} moved file(s) under {root_path}");
+        }
+    }
+
     let total = media_paths.len() as u64;
     let mut discovered_count = 0usize;
 
@@ -168,13 +178,18 @@ pub async fn scan_library(
     hydrate_relations(&db, &mut items).await?;
 
     // Prune catalog entries for files that disappeared from this source.
-    // Only do this if the walk completed fully without errors.
+    // Only do this if the walk completed fully without errors. Rows that were
+    // re-pointed above now sit at a path this walk saw, so they survive.
     let cancelled = super::SCAN_CANCEL.load(Ordering::SeqCst);
     let removed_count = if !cancelled && !had_walk_error {
         prune_missing_items(&db, &root_path, &seen_paths).await?
     } else {
         0
     };
+
+    if discovered_count > 0 || removed_count > 0 {
+        let _ = window.emit(super::LIBRARY_COUNTS_CHANGED, ());
+    }
 
     // Hand back the albums and tags so the sidebar is populated from the same
     // call that imports, instead of staying empty until a separate round-trip.
@@ -309,6 +324,9 @@ pub async fn import_files(
         .map_err(|e| e.to_string())?;
 
     let discovered_count = items.len();
+    if discovered_count > 0 {
+        let _ = window.emit(super::LIBRARY_COUNTS_CHANGED, ());
+    }
     Ok(ScanResult {
         items,
         discovered_count,
@@ -396,6 +414,10 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
     if let Some(hidden) = f.hidden {
         qb.push(" AND hidden = ")
             .push_bind(if hidden { 1i32 } else { 0i32 });
+    }
+    if let Some(animated) = f.animated {
+        qb.push(" AND is_animated = ")
+            .push_bind(if animated { 1i32 } else { 0i32 });
     }
     if let Some(album_id) = &f.album_id {
         qb.push(" AND id IN (SELECT media_id FROM album_items WHERE album_id = ")
@@ -1444,6 +1466,8 @@ pub struct LibraryStats {
     photos: i64,
     videos: i64,
     raws: i64,
+    /// Subset of `photos`: items the catalog treats as animated content.
+    animations: i64,
     uncategorized: i64,
     favorites: i64,
     hidden: i64,
@@ -1459,11 +1483,12 @@ pub struct LibraryStats {
 #[tauri::command]
 pub async fn get_library_stats(state: State<'_, AppState>) -> Result<LibraryStats, String> {
     let db = super::get_db(&state)?;
-    let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
+    let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
         "SELECT
             SUM(CASE WHEN kind = 'photo' AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN kind = 'video' AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN kind = 'raw' AND hidden = 0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN is_animated = 1 AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN kind NOT IN ('photo', 'video', 'raw') AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN favorite = 1 AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN hidden = 1 THEN 1 ELSE 0 END),
@@ -1483,6 +1508,7 @@ pub async fn get_library_stats(state: State<'_, AppState>) -> Result<LibraryStat
         photos,
         videos,
         raws,
+        animations,
         uncategorized,
         favorites,
         hidden,
@@ -1500,6 +1526,7 @@ pub async fn get_library_stats(state: State<'_, AppState>) -> Result<LibraryStat
         photos,
         videos,
         raws,
+        animations,
         uncategorized,
         favorites,
         hidden,
@@ -1631,15 +1658,23 @@ pub async fn toggle_favorite(
     item_id: String,
     favorite: bool,
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
     let db = super::get_db(&state)?;
-    sqlx::query("UPDATE media_items SET favorite = ?, updated_at = ? WHERE id = ?")
+    let changed = sqlx::query("UPDATE media_items SET favorite = ?, updated_at = ? WHERE id = ?")
         .bind(if favorite { 1i32 } else { 0i32 })
         .bind(super::now_ms())
         .bind(&item_id)
         .execute(&db)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?
+        .rows_affected();
+    // The Favourites chip and the sidebar read catalog-wide counts from the
+    // backend, so this flag change has to ask for them again. The frontend
+    // debounces the refresh, which also collapses a bulk favouriting run.
+    if changed > 0 {
+        let _ = app.emit(super::LIBRARY_COUNTS_CHANGED, ());
+    }
     Ok(())
 }
 
@@ -1648,15 +1683,22 @@ pub async fn toggle_hidden(
     item_id: String,
     hidden: bool,
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
     let db = super::get_db(&state)?;
-    sqlx::query("UPDATE media_items SET hidden = ?, updated_at = ? WHERE id = ?")
+    let changed = sqlx::query("UPDATE media_items SET hidden = ?, updated_at = ? WHERE id = ?")
         .bind(if hidden { 1i32 } else { 0i32 })
         .bind(super::now_ms())
         .bind(&item_id)
         .execute(&db)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?
+        .rows_affected();
+    // Hiding changes every catalog-wide count (the stats query ignores hidden
+    // rows), so refresh them here rather than waiting for the next scan.
+    if changed > 0 {
+        let _ = app.emit(super::LIBRARY_COUNTS_CHANGED, ());
+    }
     Ok(())
 }
 
@@ -1949,7 +1991,7 @@ mod pagination_tests {
             .await
             .expect("open in-memory page database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
         )
         .execute(&db)
         .await
@@ -2068,7 +2110,7 @@ mod filter_and_scale_tests {
             .await
             .expect("open in-memory filter database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
         )
         .execute(&db)
         .await
