@@ -43,7 +43,7 @@ function mergeDuplicateGroups(
   return [...byHash.values()].sort((a, b) => b.items.length - a.items.length || b.size - a.size);
 }
 
-interface LibraryState {
+export interface LibraryState {
   // Data
   items: MediaItem[];
   albums: Album[];
@@ -100,6 +100,12 @@ interface LibraryState {
   hasMore: boolean;
   nextCursor: string | null;
   totalCount: number;
+  /**
+   * Filter/sort signature of the query that produced `items`. Screens use it
+   * to tell when a view's first page has arrived before restoring its scroll
+   * position, so a filter switch cannot restore an offset against stale rows.
+   */
+  loadedViewKey: string | null;
   /** A background page request; unlike a scan it must not block the UI. */
   loadingNextPage: boolean;
 
@@ -266,6 +272,17 @@ function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
     lens: state.lensFilter ?? undefined,
     hidden: false,
   };
+}
+
+/**
+ * Stable signature of the filter/sort state that produces `items`.
+ *
+ * LibraryScreen keys its scroll memory with this value and the store records
+ * it on every successful page load. Keeping both sides on the same helper
+ * means a tab switch can never restore an offset against a different query.
+ */
+export function libraryViewKey(state: LibraryState): string {
+  return JSON.stringify(currentLibraryFilter(state));
 }
 
 function getSortedItems(
@@ -481,6 +498,7 @@ export const useLibraryStore = create<LibraryState>()(
       nextCursor: null,
       totalCount: 0,
       loadingNextPage: false,
+      loadedViewKey: null,
 
       // Computed (updated via subscribe in components)
       visibleItems: [],
@@ -516,9 +534,10 @@ export const useLibraryStore = create<LibraryState>()(
         });
         try {
           const state = get();
+          const viewFilter = { ...currentLibraryFilter(state), ...(filter || {}) };
+          const viewKey = JSON.stringify(viewFilter);
           const dto: LibraryFilterDTO = {
-            ...currentLibraryFilter(state),
-            ...(filter || {}),
+            ...viewFilter,
             limit: state.pageSize,
             cursor: undefined,
           };
@@ -529,7 +548,7 @@ export const useLibraryStore = create<LibraryState>()(
           if (!isTauri) {
             if (import.meta.env.DEV)
               console.warn("Tauri IPC is not available in browser preview mode.");
-            set({ refreshingLibrary: false });
+            set({ refreshingLibrary: false, loadedViewKey: viewKey });
             get().refreshDerived();
             return;
           }
@@ -547,6 +566,7 @@ export const useLibraryStore = create<LibraryState>()(
             hasMore: page.hasMore,
             nextCursor: page.nextCursor ?? null,
             totalCount: page.totalCount ?? 0,
+            loadedViewKey: viewKey,
           });
           get().refreshDerived();
         } catch (e) {
@@ -554,6 +574,7 @@ export const useLibraryStore = create<LibraryState>()(
           if (import.meta.env.DEV) console.error("loadItemsPage failed:", e);
           set({
             refreshingLibrary: false,
+            loadedViewKey: null,
             notice: "Failed to load library: " + String(e),
           });
         }

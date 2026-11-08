@@ -122,6 +122,26 @@ test("setQuery narrows visible items", () => {
   expect(useLibraryStore.getState().visibleItems.map((i) => i.id)).toEqual(["a"]);
 });
 
+test("loadItemsPage records the view key so scroll restoration waits for fresh rows", async () => {
+  vi.mocked(tauri.library.getItems).mockResolvedValue({
+    items: [],
+    hasMore: false,
+    totalCount: 0,
+  });
+
+  await useLibraryStore.getState().loadItemsPage();
+  const allPhotosKey = useLibraryStore.getState().loadedViewKey;
+  expect(allPhotosKey).toBeTruthy();
+
+  useLibraryStore.setState({ filter: "Videos" });
+  await useLibraryStore.getState().loadItemsPage();
+  expect(useLibraryStore.getState().loadedViewKey).not.toBe(allPhotosKey);
+
+  useLibraryStore.setState({ filter: "All" });
+  await useLibraryStore.getState().loadItemsPage();
+  expect(useLibraryStore.getState().loadedViewKey).toBe(allPhotosKey);
+});
+
 test("viewer filmstrip follows media category and the active browsing scope", () => {
   const photo = makeItem("photo", "photo.jpg");
   const video = makeItem("video", "clip.mp4", false, "video");

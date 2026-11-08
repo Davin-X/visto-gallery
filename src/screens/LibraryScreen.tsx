@@ -38,7 +38,7 @@ import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
 import { useDraftTransforms } from "../engine/stores/useEditStore";
 import { draftImageStyle } from "../engine/utils/draftImage";
 import { searchShortcutLabel } from "../engine/utils/shortcut";
-import { useLibraryStore } from "../engine/stores/useLibraryStore";
+import { useLibraryStore, libraryViewKey } from "../engine/stores/useLibraryStore";
 import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { FilterDropdown } from "../design/components/FilterDropdown";
 import { useSettingsStore } from "../engine/stores/useSettingsStore";
@@ -52,6 +52,34 @@ const GALLERY_PAGE_SIZE = 180;
 const VIRTUAL_GRID_OVERSCAN_ROWS = 6;
 const MAX_VIRTUAL_GRID_ITEMS = 480;
 const GRID_HORIZONTAL_PADDING = 40;
+
+/**
+ * Scroll offsets remembered per view.
+ *
+ * Switching a type tab, album, source or screen used to send the user back to
+ * the top of the grid. The map lives at module scope so it survives the
+ * Library screen unmounting during navigation. Only the most recent views are
+ * kept; older entries fall off so the map cannot grow without bound.
+ */
+interface RememberedScroll {
+  scrollTop: number;
+  /** Items loaded when the offset was taken, used to refill the same depth. */
+  itemCount: number;
+  /** Progressive-render limit for the non-virtual layouts. */
+  renderLimit: number;
+}
+const rememberedScroll = new Map<string, RememberedScroll>();
+const MAX_REMEMBERED_SCROLL_VIEWS = 40;
+
+function rememberScroll(key: string, value: RememberedScroll) {
+  rememberedScroll.delete(key);
+  rememberedScroll.set(key, value);
+  while (rememberedScroll.size > MAX_REMEMBERED_SCROLL_VIEWS) {
+    const oldest = rememberedScroll.keys().next().value;
+    if (oldest === undefined) break;
+    rememberedScroll.delete(oldest);
+  }
+}
 
 /** Pure row-window calculation for the fixed-height grid and overview cards. */
 export function calculateVirtualGridWindow(
@@ -471,6 +499,20 @@ function LibraryScreen(props: LibraryScreenProps) {
   });
   const [measuredTileHeight, setMeasuredTileHeight] = useState<number | null>(null);
   const virtualFrame = useRef<number | null>(null);
+  const restoringScrollRef = useRef(false);
+  const restoredScrollKeyRef = useRef<string | null>(null);
+
+  // A view is the filter/query/album/source combination plus the layout and
+  // thumbnail size, because the same item offset maps to different pixels in
+  // each layout. Hidden has its own filter state, so it gets its own prefix.
+  const viewKey = props.hiddenView
+    ? `hidden:${library.hiddenFilter}:${library.hiddenQuery}`
+    : libraryViewKey(library);
+  const scrollKey = `${viewKey}|${props.layout}|${thumbnailSize}${props.hiddenView ? "|hidden" : ""}`;
+  const scrollKeyRef = useRef(scrollKey);
+  scrollKeyRef.current = scrollKey;
+  const renderLimitRef = useRef(renderLimit);
+  renderLimitRef.current = renderLimit;
 
   // The standard grid and overview use fixed-ratio cards, so their full
   // scroll height can be represented by two spacers while only nearby rows
@@ -523,11 +565,55 @@ function LibraryScreen(props: LibraryScreenProps) {
     setMeasuredTileHeight(null);
   }, [props.layout, thumbnailSize, gridViewport.width]);
 
-  // A new view starts at the top of the list again.
+  // Restore the scroll offset saved for this view, refilling the same item
+  // depth first so the grid is tall enough to reach the remembered row.
+  // Switching to a view with no history still starts at the top.
   useEffect(() => {
-    setRenderLimit(GALLERY_PAGE_SIZE);
-    scrollRef.current?.scrollTo({ top: 0 });
-  }, [props.filter, props.query, props.activeAlbum, library.activeSource, props.layout]);
+    const dataReady = props.hiddenView || library.loadedViewKey === viewKey;
+    if (!dataReady || restoringScrollRef.current) return;
+    if (restoredScrollKeyRef.current === scrollKey) return;
+    restoredScrollKeyRef.current = scrollKey;
+
+    const el = scrollRef.current;
+    const saved = rememberedScroll.get(scrollKey);
+    if (!el || !saved || (saved.scrollTop <= 0 && saved.renderLimit <= GALLERY_PAGE_SIZE)) {
+      setRenderLimit(GALLERY_PAGE_SIZE);
+      el?.scrollTo({ top: 0 });
+      return;
+    }
+
+    setRenderLimit(Math.max(GALLERY_PAGE_SIZE, saved.renderLimit));
+
+    const jumpToSavedOffset = () => {
+      restoringScrollRef.current = true;
+      window.requestAnimationFrame(() => {
+        el.scrollTo({ top: saved.scrollTop });
+        window.requestAnimationFrame(() => {
+          restoringScrollRef.current = false;
+        });
+      });
+    };
+
+    const refillDepth = async () => {
+      if (props.hiddenView) return;
+      let state = useLibraryStore.getState();
+      let guard = 0;
+      while (state.items.length < saved.itemCount && state.hasMore && guard < 100) {
+        const before = state.items.length;
+        await state.loadNextPage();
+        state = useLibraryStore.getState();
+        // A newer filter load superseded the restore; stop instead of
+        // scrolling unrelated rows into view.
+        if (state.items.length === before) break;
+        guard += 1;
+      }
+    };
+
+    void refillDepth().then(jumpToSavedOffset);
+    // `restoredScrollKeyRef` makes this run once per view; item-count changes
+    // during the depth refill must not restart the effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [library.loadedViewKey, props.hiddenView, scrollKey, viewKey]);
 
   const loadMore = () => {
     if (supportsGridVirtualization) {
@@ -559,6 +645,18 @@ function LibraryScreen(props: LibraryScreenProps) {
     scheduleViewportUpdate();
     const el = scrollRef.current;
     if (!el) return;
+    // Only remember offsets for the view whose rows are actually on screen; a
+    // filter switch clears `loadedViewKey` until the new first page arrives.
+    if (!restoringScrollRef.current) {
+      const state = useLibraryStore.getState();
+      if (props.hiddenView || state.loadedViewKey === viewKey) {
+        rememberScroll(scrollKeyRef.current, {
+          scrollTop: el.scrollTop,
+          itemCount: state.items.length,
+          renderLimit: renderLimitRef.current,
+        });
+      }
+    }
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 800) loadMore();
   };
   const handleGridKeyDown = useCallback(
