@@ -7,11 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
-- **Animations filter**: a new `Animations` type chip in the library shows items the catalog treats as animated content (currently `.gif`). It is a filter over a new `is_animated` catalog flag, not a new media kind — animated items are still `photo`, so Photos counts, the viewer, compare, and edit open them exactly as before.
-- Catalog migration `008_add_is_animated` adds `media_items.is_animated` (default 0) and backfills existing `.gif` rows, so upgrading a library and rescanning one agree.
+- **Animations filter**: a new `Animations` type chip in the library shows items the catalog treats as animated content. It is a filter over a new `is_animated` catalog flag, not a new media kind — animated items are still `photo`, so Photos counts, the viewer, compare, and edit open them exactly as before.
+- **Content-based animation detection**: `is_animated` is decided by reading container headers, never by filename and never by decoding pixels — GIF block walk (a second image descriptor), WebP `VP8X` animation flag / `ANIM` chunk, PNG `acTL` before the first `IDAT` (APNG), and `avis`/`msf1` brands in an AVIF/HEIF `ftyp` box. A still GIF is therefore *not* animated, while an animated WebP/APNG/AVIF *is*.
+- Catalog migration `008_add_is_animated` adds `media_items.is_animated` (default 0) and seeds existing `.gif` rows; a one-time `backfill_animation_flags` startup pass then probes every candidate row so upgraded libraries get the real answer, not the filename guess.
 
 ### Known limitations
-- Animation detection is extension-based (`.gif` only) in this change: animated WebP/AVIF/APNG remain still until multi-frame detection lands. The rule lives in one place (`is_animated_extension`) and the migration backfill mirrors it.
+- Detection covers the image containers the catalog imports (GIF, WebP, PNG/APNG, AVIF/HEIF). An unreadable or unrecognised file falls back to the `.gif` filename rule rather than being marked still, so a transient I/O error cannot silently un-animate an item; a rescan corrects it.
 - Edit/export still flattens animated files: exporting a GIF through the render/export pipeline loses the loop. Not addressed here.
 
 ## [0.3.3] - 2026-11-07

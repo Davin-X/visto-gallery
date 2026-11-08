@@ -28,10 +28,11 @@ pub struct MediaItem {
     pub sha256: Option<String>,
     pub favorite: bool,
     pub hidden: bool,
-    /// Whether the catalog treats this item as animated content.
+    /// Whether the catalog treats this item as animated content, i.e. the file
+    /// contains more than one frame or an animation sequence.
     ///
-    /// Orthogonal to `kind` (which stays photo | video | raw). The v1 rule is
-    /// extension-based and lives in `commands::is_animated_extension`.
+    /// Orthogonal to `kind` (which stays photo | video | raw). Detected from
+    /// container headers by `media_animation::detect_animation`.
     pub is_animated: bool,
     pub rating: Option<i32>,
     pub color_label: Option<String>,

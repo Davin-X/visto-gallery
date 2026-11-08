@@ -6,6 +6,7 @@ use tauri::{Emitter, Manager, State};
 // Modules
 mod commands;
 mod db;
+mod media_animation;
 mod menu;
 mod models;
 

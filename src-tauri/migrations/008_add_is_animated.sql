@@ -3,15 +3,17 @@
 -- `kind` stays photo | video | raw (the 001 CHECK constraint is untouched):
 -- this is an orthogonal property, not a new media kind.
 --
--- v1 rule is extension-based and lives in Rust as `is_animated_extension`
--- (`src-tauri/src/commands/mod.rs`): only `.gif` sets the flag. Formats that
--- can be either still or animated (WebP, AVIF, APNG) stay 0 until real
--- multi-frame detection lands. Keep this UPDATE in sync with that helper.
+-- New rows are classified from container headers by
+-- `media_animation::detect_animation` (GIF frames, WebP VP8X flags, PNG acTL,
+-- AVIF/HEIF ftyp brands). This migration runs *before* that code can touch old
+-- rows, so it seeds the flag from the filename (`.gif`) as a conservative
+-- first guess; the `backfill_animation_flags` startup pass then refines every
+-- candidate row with the real probe and always wins.
 ALTER TABLE media_items
 ADD COLUMN is_animated INTEGER NOT NULL DEFAULT 0;
 
--- Backfill existing catalogs so a library indexed before this migration
--- behaves the same as one scanned after it. Idempotent by design.
+-- Seed existing catalogs so a library indexed before this migration is not
+-- left entirely at 0. Idempotent by design.
 UPDATE media_items
 SET is_animated = 1
 WHERE lower(extension) = 'gif'

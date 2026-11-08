@@ -511,17 +511,6 @@ pub fn supported_extensions() -> Vec<String> {
     exts
 }
 
-/// v1 animated classification: extension-based, `.gif` only.
-///
-/// The catalog flag means "treat this item as animated content". Only an
-/// extension is inspected here, so formats that can be either still or
-/// animated (WebP, AVIF, APNG) stay still until real multi-frame detection
-/// lands. `migrations/008_add_is_animated.sql` backfills by the same rule, so
-/// a rescan and an upgraded library agree.
-fn is_animated_extension(ext: &str) -> bool {
-    ext == "gif"
-}
-
 fn kind_for_ext(ext: &str) -> &'static str {
     let video_exts = [
         "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
@@ -584,7 +573,10 @@ fn inspect_media_file_with_metadata(
         (None, None)
     };
 
-    let is_animated = is_animated_extension(&ext);
+    // Reads container headers only (GIF blocks, WebP VP8X flags, PNG acTL,
+    // ISOBMFF ftyp brands); no pixel decode. Formats that cannot animate are
+    // answered without opening the file.
+    let is_animated = crate::media_animation::detect_animation(path, &ext);
     let mut item = MediaItem::new(
         path.to_string_lossy().to_string(),
         name,
@@ -1533,19 +1525,3 @@ mod rescan_preservation_tests {
     }
 }
 
-#[cfg(test)]
-mod animated_classification_tests {
-    use super::is_animated_extension;
-
-    /// v1 rule: only `.gif` is animated. The extension handed to this helper is
-    /// already lowercased by `inspect_media_file_with_metadata`, and the
-    /// migration backfill matches `lower(extension) = 'gif'` so a rescan and an
-    /// upgraded catalog agree.
-    #[test]
-    fn gif_is_animated_and_other_still_formats_are_not() {
-        assert!(is_animated_extension("gif"));
-        for ext in ["jpg", "jpeg", "png", "webp", "avif", "heic", "tiff", "cr3", ""] {
-            assert!(!is_animated_extension(ext), "{ext} should stay still in v1");
-        }
-    }
-}
