@@ -89,6 +89,16 @@ pub async fn scan_library(
             ));
         }
     }
+    // A file moved or renamed inside this source is the same item, not a delete
+    // plus an import: re-key its row (and its album, tag and edit relations) to
+    // the new path before the import loop writes anything.
+    if !super::SCAN_CANCEL.load(Ordering::SeqCst) && !had_walk_error {
+        let relinked = relink_moved_items(&db, &root_path, &seen_paths).await?;
+        if relinked > 0 {
+            eprintln!("visto: followed {relinked} moved file(s) under {root_path}");
+        }
+    }
+
     let total = media_paths.len() as u64;
     let mut discovered_count = 0usize;
 
@@ -168,7 +178,8 @@ pub async fn scan_library(
     hydrate_relations(&db, &mut items).await?;
 
     // Prune catalog entries for files that disappeared from this source.
-    // Only do this if the walk completed fully without errors.
+    // Only do this if the walk completed fully without errors. Rows that were
+    // re-pointed above now sit at a path this walk saw, so they survive.
     let cancelled = super::SCAN_CANCEL.load(Ordering::SeqCst);
     let removed_count = if !cancelled && !had_walk_error {
         prune_missing_items(&db, &root_path, &seen_paths).await?
@@ -1965,7 +1976,7 @@ mod pagination_tests {
             .await
             .expect("open in-memory page database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
         )
         .execute(&db)
         .await
@@ -2084,7 +2095,7 @@ mod filter_and_scale_tests {
             .await
             .expect("open in-memory filter database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
         )
         .execute(&db)
         .await

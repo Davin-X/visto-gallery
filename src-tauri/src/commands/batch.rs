@@ -155,7 +155,7 @@ mod thumbnail_cache_tests {
             .await
             .expect("open in-memory database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, sha256 TEXT, rating INTEGER, color_label TEXT)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, sha256 TEXT, rating INTEGER, color_label TEXT)",
         )
         .execute(&db)
         .await
@@ -275,6 +275,224 @@ mod thumbnail_cache_tests {
 
         fs::remove_dir_all(&root).ok();
     }
+
+    /// Minimal schema for the move/import tests. Mirrors the columns the ingest
+    /// and prune paths touch, including the foreign keys that prune and relink
+    /// have to keep consistent.
+    async fn move_test_db() -> sqlx::SqlitePool {
+        let db = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory database");
+        for statement in [
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, sha256 TEXT, rating INTEGER, color_label TEXT)",
+            "CREATE TABLE media_tags (media_id TEXT NOT NULL REFERENCES media_items (id) ON DELETE CASCADE, tag_id TEXT NOT NULL, PRIMARY KEY (media_id, tag_id))",
+            "CREATE TABLE album_items (media_id TEXT NOT NULL REFERENCES media_items (id) ON DELETE CASCADE, album_id TEXT NOT NULL, PRIMARY KEY (media_id, album_id))",
+            "CREATE TABLE edit_recipes (media_id TEXT PRIMARY KEY REFERENCES media_items (id) ON DELETE CASCADE, recipe TEXT, updated_at INTEGER)",
+            "CREATE TABLE edit_backups (media_id TEXT PRIMARY KEY REFERENCES media_items (id) ON DELETE CASCADE, path TEXT, updated_at INTEGER)",
+        ] {
+            sqlx::query(statement)
+                .execute(&db)
+                .await
+                .expect("create schema");
+        }
+        db
+    }
+
+    #[tokio::test]
+    async fn a_moved_file_keeps_its_id_and_relations() {
+        use super::{relink_moved_items, upsert_media_batch, MediaItem};
+        use crate::models::stable_id;
+
+        let db = move_test_db().await;
+        let root = std::env::temp_dir().join(format!("visto-gallery-move-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create test dir");
+
+        let before = root.join("holiday.jpg");
+        fs::write(&before, vec![3u8; 8192]).expect("write file");
+        let mut item = MediaItem::new(
+            before.to_string_lossy().into_owned(),
+            "holiday.jpg".into(),
+            "jpg".into(),
+            "photo".into(),
+            8192,
+            1000,
+        );
+        item.content_signature = crate::media_signature::content_signature(&before);
+        upsert_media_batch(&db, &[(item.clone(), None, None)])
+            .await
+            .expect("insert item");
+        // User state is set by the toggle commands, not the ingest upsert.
+        sqlx::query("UPDATE media_items SET favorite = 1 WHERE id = ?")
+            .bind(&item.id)
+            .execute(&db)
+            .await
+            .expect("favourite item");
+        sqlx::query("INSERT INTO media_tags (media_id, tag_id) VALUES (?, 'tag-1')")
+            .bind(&item.id)
+            .execute(&db)
+            .await
+            .expect("insert tag");
+        sqlx::query("INSERT INTO album_items (media_id, album_id) VALUES (?, 'album-1')")
+            .bind(&item.id)
+            .execute(&db)
+            .await
+            .expect("insert album");
+        sqlx::query("INSERT INTO edit_recipes (media_id, recipe) VALUES (?, 'recipe')")
+            .bind(&item.id)
+            .execute(&db)
+            .await
+            .expect("insert recipe");
+
+        // Rename inside the same source, as Finder does.
+        let after = root.join("renamed-holiday.jpg");
+        fs::rename(&before, &after).expect("move file");
+        let after_path = after.to_string_lossy().into_owned();
+        let mut seen = HashSet::new();
+        seen.insert(after_path.clone());
+
+        let relinked = relink_moved_items(&db, root.to_str().unwrap(), &seen)
+            .await
+            .expect("relink should succeed");
+        assert_eq!(relinked, 1, "the rename should be followed");
+
+        let new_id = stable_id(&after_path);
+        let (id, path, favorite): (String, String, bool) = sqlx::query_as(
+            "SELECT id, path, favorite FROM media_items",
+        )
+        .fetch_one(&db)
+        .await
+        .expect("read item");
+        assert_eq!(id, new_id, "the id follows the new path");
+        assert_eq!(path, after_path);
+        assert!(favorite, "the favourite flag survives the move");
+
+        for (table, column) in [
+            ("media_tags", "tag_id"),
+            ("album_items", "album_id"),
+        ] {
+            let value: String = sqlx::query_scalar(&format!(
+                "SELECT {column} FROM {table} WHERE media_id = ?"
+            ))
+            .bind(&new_id)
+            .fetch_one(&db)
+            .await
+            .unwrap_or_else(|_| panic!("relation in {table} should follow the move"));
+            assert!(!value.is_empty());
+        }
+        let recipe_owner: String =
+            sqlx::query_scalar("SELECT media_id FROM edit_recipes")
+                .fetch_one(&db)
+                .await
+                .expect("recipe should follow the move");
+        assert_eq!(recipe_owner, new_id);
+
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM media_items")
+                .fetch_one(&db)
+                .await
+                .expect("count items"),
+            1,
+            "a move must not leave a second row behind"
+        );
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[tokio::test]
+    async fn ambiguous_matches_are_left_to_the_import_path() {
+        use super::{relink_moved_items, upsert_media_batch, MediaItem};
+
+        let db = move_test_db().await;
+        let root = std::env::temp_dir().join(format!("visto-gallery-ambig-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create test dir");
+
+        // Two vanished rows share one fingerprint, so nothing can tell which
+        // one the new file used to be.
+        let mut first = MediaItem::new(
+            root.join("gone-a.jpg").to_string_lossy().into_owned(),
+            "gone-a.jpg".into(),
+            "jpg".into(),
+            "photo".into(),
+            512,
+            1000,
+        );
+        first.content_signature = Some("same-content".into());
+        let mut second = MediaItem::new(
+            root.join("gone-b.jpg").to_string_lossy().into_owned(),
+            "gone-b.jpg".into(),
+            "jpg".into(),
+            "photo".into(),
+            512,
+            1000,
+        );
+        second.content_signature = Some("same-content".into());
+        upsert_media_batch(&db, &[(first, None, None), (second, None, None)])
+            .await
+            .expect("insert items");
+
+        // A copy of that content appears under a new name.
+        let copied = root.join("copy.jpg");
+        fs::write(&copied, vec![0u8; 512]).expect("write copy");
+        let mut seen = HashSet::new();
+        seen.insert(copied.to_string_lossy().into_owned());
+
+        let relinked = relink_moved_items(&db, root.to_str().unwrap(), &seen)
+            .await
+            .expect("relink should succeed");
+        assert_eq!(relinked, 0, "an ambiguous fingerprint must not be guessed");
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM media_items")
+                .fetch_one(&db)
+                .await
+                .expect("count items"),
+            2,
+            "no row may be re-pointed"
+        );
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[tokio::test]
+    async fn a_copy_beside_the_original_is_not_a_move() {
+        use super::{relink_moved_items, upsert_media_batch, MediaItem};
+
+        let db = move_test_db().await;
+        let root = std::env::temp_dir().join(format!("visto-gallery-copy-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create test dir");
+
+        let original = root.join("original.jpg");
+        fs::write(&original, vec![5u8; 4096]).expect("write file");
+        let mut item = MediaItem::new(
+            original.to_string_lossy().into_owned(),
+            "original.jpg".into(),
+            "jpg".into(),
+            "photo".into(),
+            4096,
+            1000,
+        );
+        item.content_signature = crate::media_signature::content_signature(&original);
+        upsert_media_batch(&db, &[(item.clone(), None, None)])
+            .await
+            .expect("insert item");
+
+        let copy = root.join("duplicate.jpg");
+        fs::copy(&original, &copy).expect("copy file");
+        let mut seen = HashSet::new();
+        seen.insert(item.path.clone());
+        seen.insert(copy.to_string_lossy().into_owned());
+
+        let relinked = relink_moved_items(&db, root.to_str().unwrap(), &seen)
+            .await
+            .expect("relink should succeed");
+        assert_eq!(
+            relinked, 0,
+            "the original still exists, so the copy is a separate import"
+        );
+
+        fs::remove_dir_all(&root).ok();
+    }
 }
 
 #[cfg(test)]
@@ -299,7 +517,7 @@ mod batch_export_tests {
             .await
             .expect("open in-memory perf database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, sha256 TEXT, rating INTEGER, color_label TEXT)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, sha256 TEXT, rating INTEGER, color_label TEXT)",
         )
         .execute(&db)
         .await

@@ -11,7 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Content-based animation detection**: `is_animated` is decided by reading container headers, never by filename and never by decoding pixels — GIF block walk (a second image descriptor), WebP `VP8X` animation flag / `ANIM` chunk, PNG `acTL` before the first `IDAT` (APNG), and `avis`/`msf1` brands in an AVIF/HEIF `ftyp` box. A still GIF is therefore *not* animated, while an animated WebP/APNG/AVIF *is*.
 - Catalog migration `008_add_is_animated` adds `media_items.is_animated` (default 0) and seeds existing `.gif` rows; a one-time `backfill_animation_flags` startup pass then probes every candidate row so upgraded libraries get the real answer, not the filename guess.
 
+### Fixed
+- **Moves and renames keep the item**: a file moved or renamed inside a source folder used to be pruned and re-imported under a new id, quietly dropping its favourite flag, rating, tags and album membership. The scan now matches vanished rows against newly appeared files by a content fingerprint (migration `010_add_content_signature`: size plus the first and last 64 KiB, never a full read) and re-keys the surviving row, along with its tags, albums and edit records, to the new path. Matching is only applied when it is unambiguous: a copy next to the original, or two vanished files with the same fingerprint, go through the ordinary import path.
+
 ### Known limitations
+- A move between two different source folders is still a fresh import: the match only looks at rows that vanished from the folder being scanned. Rows imported before this release have no fingerprint until their file is inspected again (a Rescan fills them in), and macOS `mv` preserves the modification time, which lets them follow a same-volume move in the meantime.
 - Detection covers the image containers the catalog imports (GIF, WebP, PNG/APNG, AVIF/HEIF). An unreadable or unrecognised file falls back to the `.gif` filename rule rather than being marked still, so a transient I/O error cannot silently un-animate an item; a rescan corrects it.
 - Edit/export still flattens animated files: exporting a GIF through the render/export pipeline loses the loop. Not addressed here.
 
