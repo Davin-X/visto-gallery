@@ -76,6 +76,9 @@ pub struct LibraryFilterDTO {
     pub kind: Option<String>,
     pub favorite: Option<bool>,
     pub hidden: Option<bool>,
+    /// `Some(true)` narrows to animated items, `Some(false)` to still ones.
+    /// Independent of `kind`, which keeps its photo | video | raw meaning.
+    pub animated: Option<bool>,
     pub album_id: Option<String>,
     pub query: Option<String>,
     pub tags: Option<Vec<String>>,
@@ -508,6 +511,17 @@ pub fn supported_extensions() -> Vec<String> {
     exts
 }
 
+/// v1 animated classification: extension-based, `.gif` only.
+///
+/// The catalog flag means "treat this item as animated content". Only an
+/// extension is inspected here, so formats that can be either still or
+/// animated (WebP, AVIF, APNG) stay still until real multi-frame detection
+/// lands. `migrations/008_add_is_animated.sql` backfills by the same rule, so
+/// a rescan and an upgraded library agree.
+fn is_animated_extension(ext: &str) -> bool {
+    ext == "gif"
+}
+
 fn kind_for_ext(ext: &str) -> &'static str {
     let video_exts = [
         "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
@@ -570,6 +584,7 @@ fn inspect_media_file_with_metadata(
         (None, None)
     };
 
+    let is_animated = is_animated_extension(&ext);
     let mut item = MediaItem::new(
         path.to_string_lossy().to_string(),
         name,
@@ -580,6 +595,7 @@ fn inspect_media_file_with_metadata(
     );
     item.created_at = now;
     item.updated_at = now;
+    item.is_animated = is_animated;
 
     // Populate metadata from EXIF for photos.
     if kind == "photo" {
@@ -628,7 +644,7 @@ async fn upsert_media_batch(
     }
 
     let mut query = QueryBuilder::<Sqlite>::new(
-        "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, width, height, camera, lens, exposure, iso, latitude, longitude, sha256, created_at, updated_at, favorite, hidden, rating, color_label) ",
+        "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, width, height, camera, lens, exposure, iso, latitude, longitude, sha256, created_at, updated_at, favorite, hidden, is_animated, rating, color_label) ",
     );
     query.push_values(rows, |mut values, (item, width, height)| {
         values
@@ -653,11 +669,12 @@ async fn upsert_media_batch(
             .push_bind(item.updated_at)
             .push_bind(0i32)
             .push_bind(0i32)
+            .push_bind(if item.is_animated { 1i32 } else { 0i32 })
             .push_bind(item.rating)
             .push_bind(&item.color_label);
     });
     query.push(
-        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END, updated_at = excluded.updated_at, favorite = media_items.favorite, hidden = media_items.hidden, rating = COALESCE(excluded.rating, media_items.rating), color_label = COALESCE(excluded.color_label, media_items.color_label)",
+        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END, updated_at = excluded.updated_at, favorite = media_items.favorite, hidden = media_items.hidden, is_animated = excluded.is_animated, rating = COALESCE(excluded.rating, media_items.rating), color_label = COALESCE(excluded.color_label, media_items.color_label)",
     );
     query.build().execute(db).await.map_err(|e| e.to_string())?;
     Ok(())
@@ -1462,7 +1479,7 @@ mod rescan_preservation_tests {
             .connect("sqlite::memory:")
             .await
             .expect("open in-memory database");
-        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, sha256 TEXT, rating INTEGER, color_label TEXT)")
+        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, sha256 TEXT, rating INTEGER, color_label TEXT)")
             .execute(&db)
             .await
             .expect("create media_items");
@@ -1513,5 +1530,22 @@ mod rescan_preservation_tests {
                 .expect("read back");
         assert_eq!(favorite, 1, "favorite must survive a forced rescan");
         assert_eq!(hidden, 1, "hidden must survive a forced rescan");
+    }
+}
+
+#[cfg(test)]
+mod animated_classification_tests {
+    use super::is_animated_extension;
+
+    /// v1 rule: only `.gif` is animated. The extension handed to this helper is
+    /// already lowercased by `inspect_media_file_with_metadata`, and the
+    /// migration backfill matches `lower(extension) = 'gif'` so a rescan and an
+    /// upgraded catalog agree.
+    #[test]
+    fn gif_is_animated_and_other_still_formats_are_not() {
+        assert!(is_animated_extension("gif"));
+        for ext in ["jpg", "jpeg", "png", "webp", "avif", "heic", "tiff", "cr3", ""] {
+            assert!(!is_animated_extension(ext), "{ext} should stay still in v1");
+        }
     }
 }

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **Animations filter**: a new `Animations` type chip in the library shows items the catalog treats as animated content (currently `.gif`). It is a filter over a new `is_animated` catalog flag, not a new media kind — animated items are still `photo`, so Photos counts, the viewer, compare, and edit open them exactly as before.
+- Catalog migration `008_add_is_animated` adds `media_items.is_animated` (default 0) and backfills existing `.gif` rows, so upgrading a library and rescanning one agree.
+
+### Known limitations
+- Animation detection is extension-based (`.gif` only) in this change: animated WebP/AVIF/APNG remain still until multi-frame detection lands. The rule lives in one place (`is_animated_extension`) and the migration backfill mirrors it.
+- Edit/export still flattens animated files: exporting a GIF through the render/export pipeline loses the loop. Not addressed here.
+
 ## [0.3.3] - 2026-11-07
 
 ### Changed

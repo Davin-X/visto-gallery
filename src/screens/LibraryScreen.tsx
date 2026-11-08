@@ -136,6 +136,7 @@ interface LibraryScreenProps {
     photos: number;
     videos: number;
     raws: number;
+    animations?: number;
     favorites: number;
   };
   colorLabelFilter: string | null;
@@ -312,13 +313,16 @@ function LibraryScreen(props: LibraryScreenProps) {
   // The SHOW row used to run one full filter pass per chip on every render.
   // One pass keeps the counts in sync and is O(n) instead of 6 × O(n).
   const filterCounts = useMemo(() => {
-    const counts = { All: 0, Photos: 0, Videos: 0, RAW: 0, Favorites: 0 };
+    const counts = { All: 0, Photos: 0, Videos: 0, RAW: 0, Animations: 0, Favorites: 0 };
     for (const item of filterSource) {
       if (!props.hiddenView && item.hidden) continue;
       counts.All += 1;
       if (item.kind === "photo") counts.Photos += 1;
       else if (item.kind === "video") counts.Videos += 1;
       else if (item.kind === "raw") counts.RAW += 1;
+      // Animated items are also photos; the chip is a narrower view, not a
+      // separate kind, so it never changes the Photos or All counts.
+      if (item.isAnimated) counts.Animations += 1;
       if (item.favorite) counts.Favorites += 1;
     }
     return counts;
@@ -1230,7 +1234,7 @@ function LibraryScreen(props: LibraryScreenProps) {
 
           <div className="filter-cluster" role="group" aria-label="Filter by media type">
             <span className="smart-label">TYPE</span>
-            {(["All", "Photos", "Videos", "RAW", "Favorites"] as const).map((f) => {
+            {(["All", "Photos", "Videos", "RAW", "Animations", "Favorites"] as const).map((f) => {
               // Album/collection counts must come from the full collection on
               // screen, not the type-filtered `props.items` (selecting "Photos"
               // in an album with no photos would zero every count).
@@ -1246,7 +1250,9 @@ function LibraryScreen(props: LibraryScreenProps) {
                       ? (props.libraryStats?.videos ?? 0)
                       : f === "RAW"
                         ? (props.libraryStats?.raws ?? 0)
-                        : (props.libraryStats?.favorites ?? 0);
+                        : f === "Animations"
+                          ? (props.libraryStats?.animations ?? 0)
+                          : (props.libraryStats?.favorites ?? 0);
               return (
                 <button
                   key={f}

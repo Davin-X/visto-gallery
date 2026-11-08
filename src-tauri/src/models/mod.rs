@@ -28,6 +28,11 @@ pub struct MediaItem {
     pub sha256: Option<String>,
     pub favorite: bool,
     pub hidden: bool,
+    /// Whether the catalog treats this item as animated content.
+    ///
+    /// Orthogonal to `kind` (which stays photo | video | raw). The v1 rule is
+    /// extension-based and lives in `commands::is_animated_extension`.
+    pub is_animated: bool,
     pub rating: Option<i32>,
     pub color_label: Option<String>,
     pub import_session_id: Option<String>,
@@ -107,6 +112,7 @@ impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for MediaItem {
             sha256: row.try_get("sha256")?,
             favorite: row.try_get("favorite")?,
             hidden: row.try_get("hidden")?,
+            is_animated: row.try_get("is_animated")?,
             rating: row.try_get("rating")?,
             color_label: row.try_get("color_label")?,
             import_session_id: row.try_get("import_session_id")?,
@@ -158,6 +164,7 @@ impl MediaItem {
             sha256: None,
             favorite: false,
             hidden: false,
+            is_animated: false,
             rating: None,
             color_label: None,
             import_session_id: None,

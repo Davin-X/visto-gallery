@@ -397,6 +397,10 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
         qb.push(" AND hidden = ")
             .push_bind(if hidden { 1i32 } else { 0i32 });
     }
+    if let Some(animated) = f.animated {
+        qb.push(" AND is_animated = ")
+            .push_bind(if animated { 1i32 } else { 0i32 });
+    }
     if let Some(album_id) = &f.album_id {
         qb.push(" AND id IN (SELECT media_id FROM album_items WHERE album_id = ")
             .push_bind(album_id.clone())
@@ -1444,6 +1448,8 @@ pub struct LibraryStats {
     photos: i64,
     videos: i64,
     raws: i64,
+    /// Subset of `photos`: items the catalog treats as animated content.
+    animations: i64,
     uncategorized: i64,
     favorites: i64,
     hidden: i64,
@@ -1459,11 +1465,12 @@ pub struct LibraryStats {
 #[tauri::command]
 pub async fn get_library_stats(state: State<'_, AppState>) -> Result<LibraryStats, String> {
     let db = super::get_db(&state)?;
-    let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
+    let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
         "SELECT
             SUM(CASE WHEN kind = 'photo' AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN kind = 'video' AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN kind = 'raw' AND hidden = 0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN is_animated = 1 AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN kind NOT IN ('photo', 'video', 'raw') AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN favorite = 1 AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN hidden = 1 THEN 1 ELSE 0 END),
@@ -1483,6 +1490,7 @@ pub async fn get_library_stats(state: State<'_, AppState>) -> Result<LibraryStat
         photos,
         videos,
         raws,
+        animations,
         uncategorized,
         favorites,
         hidden,
@@ -1500,6 +1508,7 @@ pub async fn get_library_stats(state: State<'_, AppState>) -> Result<LibraryStat
         photos,
         videos,
         raws,
+        animations,
         uncategorized,
         favorites,
         hidden,
@@ -1949,7 +1958,7 @@ mod pagination_tests {
             .await
             .expect("open in-memory page database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
         )
         .execute(&db)
         .await
@@ -2068,7 +2077,7 @@ mod filter_and_scale_tests {
             .await
             .expect("open in-memory filter database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
         )
         .execute(&db)
         .await

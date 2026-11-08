@@ -249,6 +249,9 @@ function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
           : undefined;
   return {
     kind,
+    // "Animations" is a property of the item, not a kind: GIFs stay photos so
+    // the Photos count, viewer and edit flows keep working unchanged.
+    animated: state.filter === "Animations" ? true : undefined,
     favorite: state.filter === "Favorites" ? true : undefined,
     albumId: state.activeAlbum ?? undefined,
     query: state.query.trim() || undefined,
@@ -375,6 +378,7 @@ function computeDerived(state: LibraryState) {
     if (filter === "Photos" && item.kind !== "photo") return false;
     if (filter === "Videos" && item.kind !== "video") return false;
     if (filter === "RAW" && item.kind !== "raw") return false;
+    if (filter === "Animations" && !item.isAnimated) return false;
     if (filter === "Favorites" && !item.favorite) return false;
     return true;
   });
@@ -404,6 +408,7 @@ function computeDerived(state: LibraryState) {
     if (state.filter === "Photos" && item.kind !== "photo") return false;
     if (state.filter === "Videos" && item.kind !== "video") return false;
     if (state.filter === "RAW" && item.kind !== "raw") return false;
+    if (state.filter === "Animations" && !item.isAnimated) return false;
     if (state.filter === "Favorites" && !item.favorite) return false;
     return true;
   });

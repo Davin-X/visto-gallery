@@ -197,6 +197,7 @@ function App() {
     photos: 0,
     videos: 0,
     raws: 0,
+    animations: 0,
     uncategorized: 0,
     favorites: 0,
     hidden: 0,
