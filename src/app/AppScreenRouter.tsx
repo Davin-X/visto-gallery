@@ -215,8 +215,14 @@ export function AppScreenRouter({
             library.setActiveAlbum(albumId);
             library.setFilter("All");
             library.setQuery("");
-            await library.loadAlbumItems(albumId);
+            // Navigate immediately; the album grid loads from the same active
+            // album filter. Cover loading must never block opening the album.
             setScreen("Library");
+            try {
+              await library.loadAlbumItems(albumId);
+            } catch (error) {
+              showNotice(`Could not load album items: ${String(error)}`);
+            }
           }}
         />
       )}

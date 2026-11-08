@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import React, {
   useState,
   useMemo,
@@ -30,6 +31,7 @@ import {
   TrashIcon,
 } from "../design/components/icons";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
+import { PanelResizer } from "../design/components/PanelResizer";
 import { KindBadge, KindDot } from "../design/components/KindBadge";
 import VideoThumb from "../design/components/VideoThumb";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
@@ -40,7 +42,7 @@ import { useLibraryStore } from "../engine/stores/useLibraryStore";
 import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { FilterDropdown } from "../design/components/FilterDropdown";
 import { useSettingsStore } from "../engine/stores/useSettingsStore";
-import { useThumbnailSize } from "../engine/stores/useSettingsStore";
+import { useThumbnailSize, useInspectorWidth } from "../engine/stores/useSettingsStore";
 import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple, canPlayVideoInApp } from "../engine/utils/mediaTypes";
 import type { MediaItem, Album, Filter, LayoutMode } from "../engine/types/media";
@@ -181,6 +183,25 @@ function LibraryScreen(props: LibraryScreenProps) {
   const thumbnailSize = useThumbnailSize();
   const showExtensions = useSettingsStore((s) => s.showExtensions);
   const updateSettings = useSettingsStore((s) => s.update);
+  const inspectorWidth = useInspectorWidth();
+  const inspectorRef = useRef<HTMLDivElement>(null);
+
+  // A width persisted on a large display must not squeeze the grid below a
+  // usable size when the window is later made narrower. The drag handle uses
+  // the same bound; this keeps the resting layout honest after a window resize.
+  useEffect(() => {
+    if (!props.showInspector) return;
+    const clampWidth = () => {
+      const layout = inspectorRef.current;
+      if (!layout) return;
+      const max = Math.min(480, Math.max(240, layout.clientWidth - 360));
+      if (inspectorWidth > max) void updateSettings("inspectorWidth", max);
+    };
+    clampWidth();
+    window.addEventListener("resize", clampWidth);
+    return () => window.removeEventListener("resize", clampWidth);
+  }, [inspectorWidth, props.showInspector, updateSettings]);
+
   const sortDirectionLabel =
     library.sortBy === "capturedAt" || library.sortBy === "modifiedAt"
       ? library.sortOrder === "asc"
@@ -944,7 +965,11 @@ function LibraryScreen(props: LibraryScreenProps) {
   };
 
   return (
-    <div className={`library-layout ${props.showInspector ? "with-inspector" : ""}`}>
+    <div
+      ref={inspectorRef}
+      className={`library-layout ${props.showInspector ? "with-inspector" : ""}`}
+      style={{ "--inspector-width": `${inspectorWidth}px` } as CSSProperties}
+    >
       <section className="library-center">
         <header className="library-header">
           {inAlbum ? (
@@ -1956,7 +1981,24 @@ function LibraryScreen(props: LibraryScreenProps) {
           )}
         </div>
       </section>
-
+      {props.showInspector && (
+        <PanelResizer
+          side="right"
+          width={inspectorWidth}
+          min={240}
+          max={() =>
+            Math.min(
+              480,
+              Math.max(240, (inspectorRef.current?.clientWidth ?? window.innerWidth) - 360),
+            )
+          }
+          cssVar="--inspector-width"
+          targetRef={inspectorRef}
+          onCommit={(next) => void updateSettings("inspectorWidth", next)}
+          defaultWidth={300}
+          label="Resize inspector"
+        />
+      )}
       {props.showInspector && (
         <aside className="photo-inspector">
           {props.inspectedId &&

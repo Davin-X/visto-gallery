@@ -79,9 +79,68 @@ body {
 .app-body {
   display: grid;
   grid-template-columns: var(--sidebar-width, 220px) minmax(0, 1fr);
+  position: relative;
   flex: 1;
   min-height: 0;
   min-width: 0;
+}
+
+.resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  z-index: 40;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  touch-action: none;
+  cursor: col-resize;
+  outline: none;
+}
+
+/* The handle itself is invisible; a hairline appears on hover/focus and while
+   dragging so the panels keep their clean edge the rest of the time. */
+.resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  border-radius: 1px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background-color 120ms ease;
+  pointer-events: none;
+}
+
+.resizer:hover::after,
+.resizer:focus-visible::after,
+.resizer.is-resizing::after {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.resizer-left {
+  left: calc(var(--sidebar-width, 240px) - 5px);
+}
+
+.resizer-right {
+  right: calc(var(--inspector-width, 300px) - 5px);
+}
+
+body.is-resizing,
+body.is-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* Suppress panel transitions for the duration of a drag so the edge tracks
+   the pointer instead of easing behind it. */
+body.is-resizing .app-body,
+body.is-resizing .photo-inspector {
+  transition: none !important;
 }
 
 @media (max-width: 700px) {
@@ -2023,9 +2082,12 @@ body {
 /* Photo Inspector - polished native macOS style */
 .photo-inspector {
   position: relative;
-  flex: 0 0 320px;
-  width: 320px;
-  max-width: 320px;
+  /* Width comes from the persisted setting; PanelResizer updates this custom
+     property live while dragging. */
+  flex: 0 0 var(--inspector-width, 300px);
+  width: var(--inspector-width, 300px);
+  max-width: var(--inspector-width, 300px);
+  min-width: 0;
   height: 100%;
   min-height: 0;
   border-left: 1px solid var(--line);
@@ -2037,9 +2099,8 @@ body {
   padding: 0 16px 24px;
   box-sizing: border-box;
   z-index: 2;
-  transition:
-    width 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.2s ease;
+  opacity: 1;
+  transition: opacity 0.2s ease;
 }
 
 .inspector-close-btn {
@@ -3716,6 +3777,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .sources-entry-count {
@@ -3723,6 +3785,9 @@ body {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .sources-entry-action {
@@ -5156,12 +5221,13 @@ body {
        spare the difference. */
     grid-template-columns: var(--sidebar-width, 220px) minmax(0, 1fr);
   }
-  .library-layout.with-inspector {
-    grid-template-columns: minmax(0, 1fr) 260px;
-  }
 }
 
 @media (max-width: 900px) {
+  /* Both side panels become overlays here, so edge dragging is disabled. */
+  .resizer {
+    display: none;
+  }
   /* The sidebar becomes an overlay here, so the main pane takes the full
      width. This needs to beat `.app-body.sidebar-open` (0,2,0), so the
      sidebar modifier is included in the selector. */
@@ -5189,9 +5255,6 @@ body {
   }
   .sidebar-collapse-toggle {
     display: none;
-  }
-  .library-layout.with-inspector {
-    grid-template-columns: minmax(0, 1fr);
   }
   .editor-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -7968,22 +8031,6 @@ body {
   overscroll-behavior: contain;
 }
 
-/* The inspector sits beside the center pane in a flex layout; use flex sizing
-   here instead of the stale grid-track declarations from the original shell. */
-.library-layout.with-inspector .photo-inspector {
-  flex: 0 0 300px;
-  width: 300px;
-  max-width: 300px;
-}
-
-@media (max-width: 1100px) and (min-width: 901px) {
-  .library-layout.with-inspector .photo-inspector {
-    flex-basis: 260px;
-    width: 260px;
-    max-width: 260px;
-  }
-}
-
 @media (max-width: 900px) {
   .library-layout.with-inspector .photo-inspector {
     position: absolute;
@@ -8044,9 +8091,6 @@ body {
 /* Unified library panel rhythm: the inspector and collection header share a
    top baseline, while all inspector content uses one consistent inset. */
 .library-layout.with-inspector .photo-inspector {
-  flex: 0 0 clamp(280px, 25vw, 328px);
-  width: clamp(280px, 25vw, 328px);
-  max-width: clamp(280px, 25vw, 328px);
   padding: 16px 18px 24px;
   border-left-color: var(--line);
 }
@@ -8262,9 +8306,6 @@ body {
 
 @media (max-width: 1100px) and (min-width: 901px) {
   .library-layout.with-inspector .photo-inspector {
-    flex-basis: 280px;
-    width: 280px;
-    max-width: 280px;
     padding-right: 14px;
     padding-left: 14px;
   }

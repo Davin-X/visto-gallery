@@ -1043,7 +1043,9 @@ function App() {
       library.setActiveAlbum(lastFolder);
       library.setFilter("All");
       library.setQuery("");
-      library.loadAlbumItems(lastFolder);
+      library.loadAlbumItems(lastFolder).catch(() => {
+        // The album grid itself still loads through the active-album filter.
+      });
       setScreen("Library");
       return;
     }
