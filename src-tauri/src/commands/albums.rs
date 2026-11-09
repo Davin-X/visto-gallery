@@ -105,7 +105,7 @@ pub(crate) async fn load_album_overviews(
                 .remove(&album.id)
                 .unwrap_or_default()
                 .into_iter()
-                .filter_map(|id| items_by_id.remove(&id))
+                .filter_map(|id| items_by_id.get(&id).cloned())
                 .collect();
             AlbumOverview {
                 id: album.id,
