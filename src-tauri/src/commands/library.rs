@@ -433,7 +433,7 @@ fn cursor_value(item: &MediaItem, sort_by: &str) -> Value {
         // for non-ASCII filenames (for example, accented characters).
         "name" => Value::String(item.name.clone()),
         "size" => Value::from(item.size),
-        "kind" => Value::String(item.kind.clone()),
+        "kind" => Value::String(item.kind.as_str().to_string()),
         "modifiedAt" => Value::from(item.modified_at),
         _ => Value::from(item.captured_at.unwrap_or(item.modified_at)),
     }
@@ -2122,7 +2122,7 @@ mod pagination_tests {
             "/tmp/Example.JPG".to_string(),
             "Example.JPG".to_string(),
             "jpg".to_string(),
-            "photo".to_string(),
+            crate::media_kind::MediaKind::Photo,
             42,
             100,
         );

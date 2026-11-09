@@ -11,6 +11,7 @@
 //! Dimensions are reported as displayed: a 90° or 270° rotation (`irot` for
 //! HEIF, the track matrix for video) swaps width and height.
 
+use crate::media_kind::MediaKind;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
@@ -28,13 +29,13 @@ const ISOBMFF_VIDEO_EXTS: &[&str] = &["mp4", "mov", "m4v", "3gp", "3g2"];
 pub fn probe_dimensions(
     path: &Path,
     ext: &str,
-    kind: &str,
+    kind: MediaKind,
     exif: Option<(u32, u32)>,
 ) -> Option<(u32, u32)> {
     let ext = ext.to_ascii_lowercase();
     let valid = |d: (u32, u32)| (d.0 > 0 && d.1 > 0).then_some(d);
 
-    if kind == "photo" && !ISOBMFF_IMAGE_EXTS.contains(&ext.as_str()) {
+    if kind == MediaKind::Photo && !ISOBMFF_IMAGE_EXTS.contains(&ext.as_str()) {
         if let Some(d) = image::image_dimensions(path).ok().and_then(valid) {
             return Some(d);
         }
@@ -52,7 +53,7 @@ pub fn probe_dimensions(
     if let Some(d) = exif.and_then(valid) {
         return Some(d);
     }
-    if kind == "photo" || kind == "raw" {
+    if kind == MediaKind::Photo || kind == MediaKind::Raw {
         return sips_dimensions(path).and_then(valid);
     }
     None
@@ -314,7 +315,7 @@ mod tests {
     fn heif_uses_largest_ispe() {
         let file = write_temp("heic", &heif_file(&[ispe(512, 512), ispe(4032, 3024)]));
         assert_eq!(
-            probe_dimensions(&file, "heic", "photo", None),
+            probe_dimensions(&file, "heic", MediaKind::Photo, None),
             Some((4032, 3024))
         );
         let _ = std::fs::remove_file(file);
@@ -324,7 +325,7 @@ mod tests {
     fn heif_irot_quarter_turn_swaps() {
         let file = write_temp("avif", &heif_file(&[ispe(4032, 3024), bx(b"irot", &[1])]));
         assert_eq!(
-            probe_dimensions(&file, "avif", "photo", None),
+            probe_dimensions(&file, "avif", MediaKind::Photo, None),
             Some((3024, 4032))
         );
         let _ = std::fs::remove_file(file);
@@ -337,7 +338,7 @@ mod tests {
             &movie_file(&[tkhd_v0(0, 0, false), tkhd_v0(1920, 1080, false)], true),
         );
         assert_eq!(
-            probe_dimensions(&file, "mp4", "video", None),
+            probe_dimensions(&file, "mp4", MediaKind::Video, None),
             Some((1920, 1080))
         );
         let _ = std::fs::remove_file(file);
@@ -347,7 +348,7 @@ mod tests {
     fn rotated_video_reports_display_size() {
         let file = write_temp("mov", &movie_file(&[tkhd_v0(1920, 1080, true)], false));
         assert_eq!(
-            probe_dimensions(&file, "mov", "video", None),
+            probe_dimensions(&file, "mov", MediaKind::Video, None),
             Some((1080, 1920))
         );
         let _ = std::fs::remove_file(file);
@@ -357,7 +358,7 @@ mod tests {
     fn exif_dimensions_fill_in_when_header_fails() {
         let file = write_temp("jpg", b"not a real jpeg");
         assert_eq!(
-            probe_dimensions(&file, "jpg", "photo", Some((800, 600))),
+            probe_dimensions(&file, "jpg", MediaKind::Photo, Some((800, 600))),
             Some((800, 600))
         );
         let _ = std::fs::remove_file(file);
@@ -366,11 +367,14 @@ mod tests {
     #[test]
     fn truncated_or_garbage_files_give_none() {
         let file = write_temp("mkv", b"\x1aE\xdf\xa3garbage");
-        assert_eq!(probe_dimensions(&file, "mkv", "video", None), None);
+        assert_eq!(probe_dimensions(&file, "mkv", MediaKind::Video, None), None);
         let mut broken = movie_file(&[tkhd_v0(1920, 1080, false)], false);
         broken.truncate(30);
         let file2 = write_temp("mp4", &broken);
-        assert_eq!(probe_dimensions(&file2, "mp4", "video", None), None);
+        assert_eq!(
+            probe_dimensions(&file2, "mp4", MediaKind::Video, None),
+            None
+        );
         let _ = std::fs::remove_file(file);
         let _ = std::fs::remove_file(file2);
     }

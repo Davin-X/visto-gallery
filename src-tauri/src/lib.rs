@@ -8,6 +8,7 @@ mod commands;
 mod db;
 mod media_animation;
 mod media_dimensions;
+mod media_kind;
 mod media_signature;
 mod menu;
 mod models;
