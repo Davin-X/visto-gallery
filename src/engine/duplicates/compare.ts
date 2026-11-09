@@ -1,5 +1,6 @@
 import { formatBytesSimple } from "../utils/mediaTypes";
 import type { MediaItem } from "../types/media";
+import { formatCapturedDate, formatFileDate } from "../utils/mediaDate";
 
 export interface CompareRow {
   label: string;
@@ -21,13 +22,12 @@ function parentFolder(path: string): string {
   return index > 0 ? path.slice(0, index) : path;
 }
 
-function date(ms?: number): string {
-  if (!ms) return DASH;
-  return new Date(ms).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+function capturedDate(ms?: number | null): string {
+  return ms ? formatCapturedDate(ms) : DASH;
+}
+
+function fileDate(ms?: number): string {
+  return ms ? formatFileDate(ms) : DASH;
 }
 
 function dimensions(item: MediaItem): string {
@@ -61,8 +61,12 @@ export function compareRows(keeper: MediaItem, copy: MediaItem): CompareRow[] {
       copy: text(copy.extension?.toUpperCase()),
     },
     { label: "Kind", keeper: text(keeper.kind), copy: text(copy.kind) },
-    { label: "Captured", keeper: date(keeper.capturedAt), copy: date(copy.capturedAt) },
-    { label: "Modified", keeper: date(keeper.modifiedAt), copy: date(copy.modifiedAt) },
+    {
+      label: "Captured",
+      keeper: capturedDate(keeper.capturedAt),
+      copy: capturedDate(copy.capturedAt),
+    },
+    { label: "Modified", keeper: fileDate(keeper.modifiedAt), copy: fileDate(copy.modifiedAt) },
     { label: "Camera", keeper: text(keeper.camera), copy: text(copy.camera) },
     { label: "Lens", keeper: text(keeper.lens), copy: text(copy.lens) },
     { label: "Exposure", keeper: text(keeper.exposure), copy: text(copy.exposure) },

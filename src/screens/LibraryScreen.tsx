@@ -47,6 +47,12 @@ import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple, canPlayVideoInApp } from "../engine/utils/mediaTypes";
 import type { MediaItem, Album, Filter, LayoutMode } from "../engine/types/media";
 import type { DeleteItemsOutcome, LibraryFolder } from "../engine/types/commands";
+import {
+  formatCapturedDateTime,
+  formatFileDateTime,
+  formatItemDate,
+  itemMonth,
+} from "../engine/utils/mediaDate";
 
 const GALLERY_PAGE_SIZE = 180;
 const VIRTUAL_GRID_OVERSCAN_ROWS = 6;
@@ -781,13 +787,13 @@ function LibraryScreen(props: LibraryScreenProps) {
     () =>
       props.layout === "timeline"
         ? (() => {
-            const grouped = new Map<string, { timestamp: number; items: any[] }>();
+            const grouped = new Map<string, { timestamp: number; label: string; items: any[] }>();
             for (const item of props.items) {
               const timestamp = item.capturedAt ?? item.modifiedAt;
-              const date = new Date(timestamp);
-              const key = `${date.getFullYear()}-${date.getMonth()}`;
+              const { key, label } = itemMonth(item);
               const group = grouped.get(key) ?? {
                 timestamp,
+                label,
                 items: [] as any[],
               };
               group.timestamp = Math.max(group.timestamp, timestamp);
@@ -798,10 +804,7 @@ function LibraryScreen(props: LibraryScreenProps) {
               .sort((a, b) => b[1].timestamp - a[1].timestamp)
               .map(([key, group]) => ({
                 key,
-                label: new Intl.DateTimeFormat(undefined, {
-                  month: "long",
-                  year: "numeric",
-                }).format(group.timestamp),
+                label: group.label,
                 items: group.items,
                 count: group.items.length,
               }));
@@ -813,9 +816,7 @@ function LibraryScreen(props: LibraryScreenProps) {
     if (!timelineGroups.length) return [];
     const visibleItemsByMonth = new Map<string, any[]>();
     for (const item of renderedItems) {
-      const timestamp = item.capturedAt ?? item.modifiedAt;
-      const date = new Date(timestamp);
-      const key = `${date.getFullYear()}-${date.getMonth()}`;
+      const { key } = itemMonth(item);
       const items = visibleItemsByMonth.get(key) ?? [];
       items.push(item);
       visibleItemsByMonth.set(key, items);
@@ -826,7 +827,6 @@ function LibraryScreen(props: LibraryScreenProps) {
     });
   }, [renderedItems, timelineGroups]);
 
-  const captureDate = (item: any) => item.capturedAt ?? item.modifiedAt;
   const sortDetailsBy = (sortBy: typeof library.sortBy) => {
     library.setSort(
       sortBy,
@@ -1709,9 +1709,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                               ? "Hidden item"
                               : item.name + (showExtensions ? `.${item.extension}` : "")}
                           </b>
-                          <small className="tile-date">
-                            {new Date(captureDate(item)).toLocaleDateString()}
-                          </small>
+                          <small className="tile-date">{formatItemDate(item)}</small>
                           <small className="tile-kind">
                             <KindDot kind={item.kind} />
                             {item.kind === "video"
@@ -1889,9 +1887,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                                     <b>
                                       {item.name + (showExtensions ? `.${item.extension}` : "")}
                                     </b>
-                                    <small className="tile-date">
-                                      {new Date(captureDate(item)).toLocaleDateString()}
-                                    </small>
+                                    <small className="tile-date">{formatItemDate(item)}</small>
                                     <small className="tile-kind">
                                       <KindDot kind={item.kind} />
                                       {item.kind === "video"
@@ -2048,9 +2044,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                       </span>
                       <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
                         <b>{item.name + (showExtensions ? `.${item.extension}` : "")}</b>
-                        <small className="tile-date">
-                          {new Date(captureDate(item)).toLocaleDateString()}
-                        </small>
+                        <small className="tile-date">{formatItemDate(item)}</small>
                         <small className="tile-kind">
                           {item.kind === "video" ? "Video" : item.kind === "raw" ? "RAW" : "Photo"}
                         </small>
@@ -2316,15 +2310,13 @@ function LibraryScreen(props: LibraryScreenProps) {
                             <div className="info-row">
                               <span className="info-label">Captured</span>
                               <span className="info-value">
-                                {new Date(sel.capturedAt).toLocaleString()}
+                                {formatCapturedDateTime(sel.capturedAt)}
                               </span>
                             </div>
                           )}
                           <div className="info-row">
                             <span className="info-label">Modified</span>
-                            <span className="info-value">
-                              {new Date(sel.modifiedAt).toLocaleString()}
-                            </span>
+                            <span className="info-value">{formatFileDateTime(sel.modifiedAt)}</span>
                           </div>
                         </>
                       )}

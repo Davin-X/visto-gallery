@@ -22,6 +22,7 @@ import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import { formatDuration } from "../engine/utils/time";
 import { draftImageStyle } from "../engine/utils/draftImage";
 import type { MediaItem, EditValues } from "../engine/types/media";
+import { formatItemDate } from "../engine/utils/mediaDate";
 
 interface ViewerScreenProps {
   active: boolean;
@@ -256,7 +257,7 @@ function ViewerScreen(props: ViewerScreenProps) {
                   <rect x="2" y="2" width="12" height="12" rx="2" />
                   <path d="M8 2v4M8 10v4M2 8h4M10 8h4" />
                 </svg>
-                {new Date(selected.capturedAt ?? selected.modifiedAt).toLocaleDateString()}
+                {formatItemDate(selected)}
               </span>
               <span className="meta-chip">
                 <svg
