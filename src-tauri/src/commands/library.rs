@@ -557,11 +557,15 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
 
 pub(crate) async fn get_library_items_page(
     db: &SqlitePool,
-    f: super::LibraryFilterDTO,
+    mut f: super::LibraryFilterDTO,
 ) -> Result<LibraryItemsPage, String> {
+    // Hidden items stay out of every view unless the caller asks for them, so
+    // the items and the count always describe the same set. Smart Albums pass
+    // no `hidden` value and used to page hidden items while counting none.
+    f.hidden.get_or_insert(false);
     let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new("SELECT * FROM media_items WHERE 1=1");
     let mut count_qb: QueryBuilder<Sqlite> =
-        QueryBuilder::new("SELECT COUNT(*) FROM media_items WHERE hidden = 0");
+        QueryBuilder::new("SELECT COUNT(*) FROM media_items WHERE 1=1");
     push_library_filters(&mut qb, &f);
     push_library_filters(&mut count_qb, &f);
 
@@ -2220,6 +2224,59 @@ mod filter_and_scale_tests {
         .execute(db)
         .await
         .expect("insert media row");
+    }
+
+    async fn set_hidden(db: &SqlitePool, id: &str) {
+        sqlx::query("UPDATE media_items SET hidden = 1 WHERE id = ?")
+            .bind(id)
+            .execute(db)
+            .await
+            .expect("hide row");
+    }
+
+    #[tokio::test]
+    async fn unspecified_hidden_excludes_hidden_items_from_items_and_count() {
+        let db = filter_db().await;
+        insert_item(&db, "shown", "photo", Some(1), 1, None).await;
+        insert_item(&db, "secret", "photo", Some(2), 2, None).await;
+        set_hidden(&db, "secret").await;
+
+        let page = get_library_items_page(
+            &db,
+            LibraryFilterDTO {
+                limit: Some(10),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("read default page");
+
+        let ids: Vec<&str> = page.items.iter().map(|item| item.id.as_str()).collect();
+        assert_eq!(ids, ["shown"]);
+        assert_eq!(page.total_count, 1);
+    }
+
+    #[tokio::test]
+    async fn hidden_true_counts_the_hidden_items_it_returns() {
+        let db = filter_db().await;
+        insert_item(&db, "shown", "photo", Some(1), 1, None).await;
+        insert_item(&db, "secret", "photo", Some(2), 2, None).await;
+        set_hidden(&db, "secret").await;
+
+        let page = get_library_items_page(
+            &db,
+            LibraryFilterDTO {
+                hidden: Some(true),
+                limit: Some(10),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("read hidden page");
+
+        let ids: Vec<&str> = page.items.iter().map(|item| item.id.as_str()).collect();
+        assert_eq!(ids, ["secret"]);
+        assert_eq!(page.total_count, 1);
     }
 
     #[tokio::test]
