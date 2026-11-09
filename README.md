@@ -19,9 +19,10 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/library-dark.jpg">
-    <img src="docs/screenshots/library-light.jpg" alt="The VistoGallery library: a sidebar with sources and library totals, a grid of photos in an album, and an inspector showing file details" width="900">
+    <img src="docs/screenshots/library-light.jpg" alt="The VistoGallery library: a sidebar with sources and library totals, the All Photos grid with type filters and search, and an inspector showing the selected photo's details" width="900">
   </picture>
 </p>
+<p align="center"><sub>Shown in your GitHub theme. Every screen in the <a href="#tour">tour</a> appears in both light and dark.</sub></p>
 
 VistoGallery points at the folders you already have. It never copies, moves or uploads your files; it builds a local catalog next to them so you can browse thousands of photos and videos quickly, organize them, and find duplicates.
 
@@ -55,46 +56,91 @@ VistoGallery points at the folders you already have. It never copies, moves or u
 
 ### Albums and Smart Albums
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/albums-dark.jpg">
-  <img src="docs/screenshots/albums-light.jpg" alt="Albums screen with a row of Smart Albums above a grid of regular albums" width="900">
-</picture>
+<table>
+  <tr>
+    <th>Light</th>
+    <th>Dark</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/albums-light.jpg" alt="Albums screen with a row of Smart Albums above a grid of regular albums (light theme)" width="440"></td>
+    <td><img src="docs/screenshots/albums-dark.jpg" alt="Albums screen with a row of Smart Albums above a grid of regular albums (dark theme)" width="440"></td>
+  </tr>
+</table>
 
 Smart Albums are saved filters (for example "5-star picks" or "Sunsets") that stay current as your library changes.
 
+### Album view
+
+<table>
+  <tr>
+    <th>Light</th>
+    <th>Dark</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/album-view-light.jpg" alt="An album's photos in the library grid, with the inspector open on a selected photo (light theme)" width="440"></td>
+    <td><img src="docs/screenshots/album-view-dark.jpg" alt="An album's photos in the library grid, with the inspector open on a selected photo (dark theme)" width="440"></td>
+  </tr>
+</table>
+
+Open an album to see just its photos. The inspector follows the selected item and shows its file details, tags and actions.
+
 ### Viewer
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/viewer-dark.jpg">
-  <img src="docs/screenshots/viewer-light.jpg" alt="Full-size photo viewer with zoom, rotate, favorite and slideshow controls and a filmstrip of the folder" width="900">
-</picture>
+<table>
+  <tr>
+    <th>Light</th>
+    <th>Dark</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/viewer-light.jpg" alt="Full-size photo viewer with zoom, rotate, favorite and slideshow controls and a filmstrip of the folder (light theme)" width="440"></td>
+    <td><img src="docs/screenshots/viewer-dark.jpg" alt="Full-size photo viewer with zoom, rotate, favorite and slideshow controls and a filmstrip of the folder (dark theme)" width="440"></td>
+  </tr>
+</table>
 
 Zoom, rotate, favorite and hide without leaving the photo. The filmstrip shows the rest of the folder.
 
 ### Edit
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/edit-dark.jpg">
-  <img src="docs/screenshots/edit-light.jpg" alt="Editor with light and color sliders, crop tools, and save draft, save copy and restore original actions" width="900">
-</picture>
+<table>
+  <tr>
+    <th>Light</th>
+    <th>Dark</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/edit-light.jpg" alt="Editor with light and color sliders, crop tools, and save draft, save copy and restore original actions (light theme)" width="440"></td>
+    <td><img src="docs/screenshots/edit-dark.jpg" alt="Editor with light and color sliders, crop tools, and save draft, save copy and restore original actions (dark theme)" width="440"></td>
+  </tr>
+</table>
 
 Adjustments are saved as drafts. Save a copy, or replace the file knowing the original is kept and can be restored.
 
 ### Duplicates
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/duplicates-dark.jpg">
-  <img src="docs/screenshots/duplicates-light.jpg" alt="Compare dialog showing a keeper and a copy side by side with a table of differing metadata" width="900">
-</picture>
+<table>
+  <tr>
+    <th>Light</th>
+    <th>Dark</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/duplicates-light.jpg" alt="Compare dialog showing a keeper and a copy side by side with a table of differing metadata (light theme)" width="440"></td>
+    <td><img src="docs/screenshots/duplicates-dark.jpg" alt="Compare dialog showing a keeper and a copy side by side with a table of differing metadata (dark theme)" width="440"></td>
+  </tr>
+</table>
 
 Compare a keeper and its copies side by side, with synced zoom and a field-by-field diff, before moving copies to the Trash.
 
 ### Sources
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/sources-dark.jpg">
-  <img src="docs/screenshots/sources-light.jpg" alt="Sources dialog listing library folders with item counts and sizes" width="900">
-</picture>
+<table>
+  <tr>
+    <th>Light</th>
+    <th>Dark</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/sources-light.jpg" alt="Sources dialog listing library folders with item counts and sizes (light theme)" width="440"></td>
+    <td><img src="docs/screenshots/sources-dark.jpg" alt="Sources dialog listing library folders with item counts and sizes (dark theme)" width="440"></td>
+  </tr>
+</table>
 
 Add, rescan or remove folders. Removing a source only removes it from the catalog; your files stay on disk.
 
