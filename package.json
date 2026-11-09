@@ -35,6 +35,7 @@
     "tauri:dev": "tauri dev",
     "test": "vitest run",
     "benchmark:library": "node scripts/benchmark-library-harness.mjs",
+    "test:e2e": "playwright test",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
