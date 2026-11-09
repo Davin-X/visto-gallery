@@ -194,9 +194,11 @@ export function SourcesManager(props: {
                 return (
                   <tr
                     key={folder.path}
-                    className={[viewing ? "is-active" : "", missing ? "is-missing" : ""]
-                      .filter(Boolean)
-                      .join(" ") || undefined}
+                    className={
+                      [viewing ? "is-active" : "", missing ? "is-missing" : ""]
+                        .filter(Boolean)
+                        .join(" ") || undefined
+                    }
                     onContextMenu={(event) => {
                       event.preventDefault();
                       setMenu({ folder, x: event.clientX, y: event.clientY });
