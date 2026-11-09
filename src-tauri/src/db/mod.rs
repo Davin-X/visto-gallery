@@ -44,7 +44,15 @@ impl Database {
     async fn migrate(&self) -> Result<()> {
         // Run embedded migrations
         sqlx::migrate!("./migrations").run(&self.pool).await?;
+        Ok(())
+    }
 
+    /// One-time data backfills that open media files. They can take minutes
+    /// on a large or slow (external) library, so they run in the background
+    /// after the window is up instead of blocking launch. Each is idempotent
+    /// and records completion in `_migration_flags`, so an interrupted run
+    /// simply resumes next launch.
+    pub async fn run_backfills(&self) -> Result<()> {
         // Backfill dimensions for existing photos (runs once)
         self.backfill_dimensions().await?;
 
@@ -52,6 +60,13 @@ impl Database {
         self.backfill_animation_flags().await?;
 
         Ok(())
+    }
+
+    /// A second handle on the same pool, for background work.
+    pub fn handle(&self) -> Self {
+        Self {
+            pool: self.pool.clone(),
+        }
     }
 
     /// Re-classify `is_animated` for rows that predate content-based detection.
@@ -85,8 +100,10 @@ impl Database {
             let path: String = row.get("path");
             let extension: String = row.get("extension");
             let current: bool = row.get("is_animated");
-            let detected =
-                crate::media_animation::detect_animation(std::path::Path::new(&path), &extension);
+            let detected = tokio::task::spawn_blocking(move || {
+                crate::media_animation::detect_animation(std::path::Path::new(&path), &extension)
+            })
+            .await?;
             if detected == current {
                 continue;
             }
@@ -127,7 +144,8 @@ impl Database {
         for row in rows {
             let id: String = row.get("id");
             let path: String = row.get("path");
-            if let Ok((w, h)) = image::image_dimensions(&path) {
+            let dims = tokio::task::spawn_blocking(move || image::image_dimensions(&path)).await?;
+            if let Ok((w, h)) = dims {
                 sqlx::query("UPDATE media_items SET width = ?, height = ? WHERE id = ?")
                     .bind(w as i32)
                     .bind(h as i32)

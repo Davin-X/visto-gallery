@@ -17,6 +17,9 @@ use menu::create_menu;
 
 struct AppState {
     db: Mutex<Option<Database>>,
+    /// Why the catalog could not be opened at launch, shown by every command
+    /// instead of crashing the app.
+    db_error: Mutex<Option<String>>,
     watchers: Mutex<HashMap<String, notify::RecommendedWatcher>>,
     /// Paths the user chose in a native picker or dropped on the window.
     grants: GrantedPaths,
@@ -28,6 +31,7 @@ impl Default for AppState {
     fn default() -> Self {
         Self {
             db: Mutex::new(None),
+            db_error: Mutex::new(None),
             watchers: Mutex::new(HashMap::new()),
             grants: GrantedPaths::default(),
             scan_jobs: ScanJobs::default(),
@@ -61,20 +65,36 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            // Initialize database (await so it's ready before any invoke)
+            // Initialize database (await so it's ready before any invoke). A
+            // locked or damaged catalog must not crash launch: the error is
+            // kept and returned by every command so the UI can explain it.
             let app_handle = app.handle().clone();
-            let db = tauri::async_runtime::block_on(async {
-                let handle = app_handle.clone();
-                let db = Database::new(&handle)
-                    .await
-                    .expect("Failed to initialize database");
+            let opened = tauri::async_runtime::block_on(async {
+                let db = Database::new(&app_handle).await?;
                 for folder in db.registered_folders().await {
-                    let _ = handle.asset_protocol_scope().allow_directory(&folder, true);
+                    let _ = app_handle
+                        .asset_protocol_scope()
+                        .allow_directory(&folder, true);
                 }
-                db
+                anyhow::Ok(db)
             });
             let state: State<'_, AppState> = app_handle.state();
-            *state.db.lock().unwrap() = Some(db);
+            match opened {
+                Ok(db) => {
+                    let background = db.handle();
+                    *state.db.lock().unwrap_or_else(|e| e.into_inner()) = Some(db);
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(error) = background.run_backfills().await {
+                            tracing::warn!("catalog backfill failed: {error:#}");
+                        }
+                    });
+                }
+                Err(error) => {
+                    tracing::error!("could not open the catalog: {error:#}");
+                    *state.db_error.lock().unwrap_or_else(|e| e.into_inner()) =
+                        Some(format!("{error:#}"));
+                }
+            }
 
             // Create and set menu
             let app_handle = app.handle();

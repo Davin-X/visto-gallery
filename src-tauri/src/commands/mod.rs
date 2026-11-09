@@ -369,11 +369,19 @@ pub async fn cancel_move_to_trash() -> Result<(), String> {
 
 fn get_db(state: &State<'_, AppState>) -> Result<SqlitePool, String> {
     let guard = state.db.lock().map_err(|e| e.to_string())?;
-    Ok(guard
-        .as_ref()
-        .ok_or("Database not initialized".to_string())?
-        .pool()
-        .clone())
+    if let Some(db) = guard.as_ref() {
+        return Ok(db.pool().clone());
+    }
+    let reason = state
+        .db_error
+        .lock()
+        .ok()
+        .and_then(|e| e.clone())
+        .unwrap_or_else(|| "it is still starting up".to_string());
+    Err(format!(
+        "The VistoGallery catalog could not be opened: {reason}. \
+         Quit other copies of VistoGallery, or restore a catalog backup."
+    ))
 }
 
 fn now_ms() -> i64 {
