@@ -482,72 +482,55 @@ async fn remember_folder(db: &SqlitePool, root: &str, app: &tauri::AppHandle) {
     let _ = app.asset_protocol_scope().allow_directory(&path, true);
 }
 
+/// The one list of extensions the catalog accepts, by kind. The scanner, the
+/// file picker (`supported_extensions`) and kind detection all read these, so
+/// they cannot drift apart. Entries are lowercase.
+const IMAGE_EXTS: &[&str] = &[
+    "avif", "bmp", "gif", "heic", "heif", "jfif", "jpe", "jpeg", "jpg", "jxl", "png", "tif",
+    "tiff", "webp",
+];
+const RAW_EXTS: &[&str] = &[
+    "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf",
+    "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",
+    "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f",
+];
+const VIDEO_EXTS: &[&str] = &[
+    "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "mts",
+    "ogv", "ts", "vob", "webm", "wmv",
+];
+
+/// Catalog kind for a supported lowercase extension, or `None` when the
+/// extension is not media.
+fn media_kind(ext: &str) -> Option<&'static str> {
+    if VIDEO_EXTS.contains(&ext) {
+        Some("video")
+    } else if RAW_EXTS.contains(&ext) {
+        Some("raw")
+    } else if IMAGE_EXTS.contains(&ext) {
+        Some("photo")
+    } else {
+        None
+    }
+}
+
 fn is_media_file(ext: &str) -> bool {
-    let image_exts = [
-        "avif", "bmp", "gif", "heic", "heif", "jfif", "jpe", "jpeg", "jpg", "jxl", "png", "tif",
-        "tiff", "webp",
-    ];
-    let raw_exts = [
-        "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf",
-        "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",
-        "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f",
-    ];
-    let video_exts = [
-        "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
-        "mts", "ogv", "ts", "vob", "webm", "wmv",
-    ];
-    image_exts.contains(&ext) || raw_exts.contains(&ext) || video_exts.contains(&ext)
+    media_kind(ext).is_some()
 }
 
 /// Returns the canonical list of supported media extensions, so the frontend
 /// file picker and the backend scanner stay in sync.
 #[tauri::command]
 pub fn supported_extensions() -> Vec<String> {
-    let mut exts: Vec<String> = vec![
-        "avif", "bmp", "gif", "heic", "heif", "jfif", "jpe", "jpeg", "jpg", "jxl", "png", "tif",
-        "tiff", "webp",
-    ]
-    .into_iter()
-    .map(|s| s.to_string())
-    .collect();
-    exts.extend(
-        [
-            "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip",
-            "erf", "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw",
-            "obm", "orf", "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf",
-            "srw", "x3f",
-        ]
-        .into_iter()
-        .map(|s| s.to_string()),
-    );
-    exts.extend(
-        [
-            "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
-            "mts", "ogv", "ts", "vob", "webm", "wmv",
-        ]
-        .into_iter()
-        .map(|s| s.to_string()),
-    );
-    exts
+    IMAGE_EXTS
+        .iter()
+        .chain(RAW_EXTS)
+        .chain(VIDEO_EXTS)
+        .map(|ext| ext.to_string())
+        .collect()
 }
 
 fn kind_for_ext(ext: &str) -> &'static str {
-    let video_exts = [
-        "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
-        "mts", "ogv", "ts", "vob", "webm", "wmv",
-    ];
-    let raw_exts = [
-        "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf",
-        "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",
-        "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f",
-    ];
-    if video_exts.contains(&ext) {
-        "video"
-    } else if raw_exts.contains(&ext) {
-        "raw"
-    } else {
-        "photo"
-    }
+    media_kind(ext).unwrap_or("photo")
 }
 
 /// Read file facts needed by the catalog without decoding the image payload.
@@ -1788,5 +1771,26 @@ mod purge_catalog_tests {
             assert_eq!(count(&db, table).await, 0, "{table} should be empty");
         }
         assert_eq!(count(&db, "settings").await, settings_before);
+    }
+}
+
+#[cfg(test)]
+mod extension_tests {
+    use super::{is_media_file, kind_for_ext, supported_extensions};
+
+    #[test]
+    fn picker_list_and_scanner_agree() {
+        let exts = supported_extensions();
+        assert!(exts.iter().all(|ext| is_media_file(ext)));
+        assert!(!is_media_file("txt"));
+        let unique: std::collections::HashSet<_> = exts.iter().collect();
+        assert_eq!(unique.len(), exts.len(), "no extension is listed twice");
+    }
+
+    #[test]
+    fn kinds_follow_the_lists() {
+        assert_eq!(kind_for_ext("mkv"), "video");
+        assert_eq!(kind_for_ext("cr3"), "raw");
+        assert_eq!(kind_for_ext("heic"), "photo");
     }
 }
