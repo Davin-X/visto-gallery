@@ -167,6 +167,24 @@ test("clearDraft deletes the recipe from SQLite", async () => {
   expect(await tauri.edit.getRecipe("item-1")).toBeNull();
 });
 
+test("clearEditDraft drops draft meta immediately so a following saveDraft is a no-op", async () => {
+  useDraftMetaStore.setState({
+    ids: new Set(["item-1"]),
+    transforms: new Map([["item-1", { rotation: 90, flip: false }]]),
+  });
+
+  await clearEditDraft("item-1");
+
+  expect(useDraftMetaStore.getState().ids.has("item-1")).toBe(false);
+  expect(useDraftMetaStore.getState().transforms.has("item-1")).toBe(false);
+
+  // A revert/reset followed by saveDraft must not recreate a neutral draft
+  // from the now-stale draft id.
+  useEditStore.setState({ item, values: { ...baseEdits }, crop: { ...baseCrop } });
+  await useEditStore.getState().saveDraft();
+  expect(await tauri.edit.getRecipe("item-1")).toBeNull();
+});
+
 test("listRecipes returns all saved recipes for draft meta store", async () => {
   await tauri.edit.saveRecipe({
     mediaId: "item-1",

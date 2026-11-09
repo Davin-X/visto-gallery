@@ -28,6 +28,17 @@ pub struct MediaItem {
     pub sha256: Option<String>,
     pub favorite: bool,
     pub hidden: bool,
+    /// Whether the catalog treats this item as animated content, i.e. the file
+    /// contains more than one frame or an animation sequence.
+    ///
+    /// Orthogonal to `kind` (which stays photo | video | raw). Detected from
+    /// container headers by `media_animation::detect_animation`.
+    pub is_animated: bool,
+    /// Fingerprint of the file's bytes (`media_signature::content_signature`),
+    /// used by the scan to recognise a moved or renamed file. Internal only:
+    /// the UI never needs it, so it stays out of the IPC payload.
+    #[serde(skip)]
+    pub content_signature: Option<String>,
     pub rating: Option<i32>,
     pub color_label: Option<String>,
     pub import_session_id: Option<String>,
@@ -107,6 +118,8 @@ impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for MediaItem {
             sha256: row.try_get("sha256")?,
             favorite: row.try_get("favorite")?,
             hidden: row.try_get("hidden")?,
+            is_animated: row.try_get("is_animated")?,
+            content_signature: row.try_get("content_signature")?,
             rating: row.try_get("rating")?,
             color_label: row.try_get("color_label")?,
             import_session_id: row.try_get("import_session_id")?,
@@ -123,6 +136,10 @@ impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for MediaItem {
 /// The absolute path is the natural key for a local file, so hashing it means a
 /// re-scan updates the existing row (`INSERT OR REPLACE`) instead of appending a
 /// duplicate for every file, which a random id would do.
+///
+/// A move or rename on disk keeps the item by re-keying its row to the new path
+/// before the file is imported (see `commands::relink_moved_items`), so the id
+/// stays a pure function of the current path.
 pub fn stable_id(path: &str) -> String {
     let digest = ring::digest::digest(&ring::digest::SHA256, path.as_bytes());
     hex::encode(&digest.as_ref()[..16])
@@ -158,6 +175,8 @@ impl MediaItem {
             sha256: None,
             favorite: false,
             hidden: false,
+            is_animated: false,
+            content_signature: None,
             rating: None,
             color_label: None,
             import_session_id: None,

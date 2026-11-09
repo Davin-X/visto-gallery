@@ -213,28 +213,34 @@ pub async fn rename_album(
     Ok(())
 }
 
+async fn fetch_album_items(
+    db: &sqlx::SqlitePool,
+    album_id: &str,
+) -> Result<Vec<MediaItem>, String> {
+    // `SELECT m.*` keeps this query in sync with MediaItem's row mapper.
+    // Listing columns by hand previously dropped `is_animated` and
+    // `content_signature`, so every album open failed to decode a row.
+    let items = sqlx::query_as::<_, MediaItem>(
+        "SELECT m.*
+         FROM media_items m
+         JOIN album_items ai ON ai.media_id = m.id
+         WHERE ai.album_id = ? AND m.hidden = 0
+         ORDER BY m.captured_at ASC",
+    )
+    .bind(album_id)
+    .fetch_all(db)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(items)
+}
+
 #[tauri::command]
 pub async fn get_album_items(
     album_id: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<MediaItem>, String> {
     let db = super::get_db(&state)?;
-    let items = sqlx::query_as::<_, MediaItem>(
-        "SELECT m.id, m.path, m.name, m.extension, m.kind, m.size,
-               m.modified_at, m.captured_at, m.width, m.height, m.camera, m.lens,
-               m.exposure, m.iso, m.latitude, m.longitude, m.sha256,
-               m.favorite, m.hidden, m.import_session_id,
-               m.created_at, m.updated_at, m.rating, m.color_label
-        FROM media_items m
-        JOIN album_items ai ON ai.media_id = m.id
-        WHERE ai.album_id = ? AND m.hidden = 0
-        ORDER BY m.captured_at ASC",
-    )
-    .bind(&album_id)
-    .fetch_all(&db)
-    .await
-    .map_err(|e| e.to_string())?;
-    Ok(items)
+    fetch_album_items(&db, &album_id).await
 }
 
 #[tauri::command]
@@ -274,4 +280,52 @@ pub async fn remove_from_album(
             .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fetch_album_items;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn album_db() -> sqlx::SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory album database");
+        sqlx::query(
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
+        )
+        .execute(&db)
+        .await
+        .expect("create media table");
+        sqlx::query("CREATE TABLE album_items (album_id TEXT NOT NULL, media_id TEXT NOT NULL, added_at INTEGER NOT NULL DEFAULT 0)")
+            .execute(&db)
+            .await
+            .expect("create album items table");
+        db
+    }
+
+    #[tokio::test]
+    async fn album_items_decode_animation_and_signature_columns() {
+        let db = album_db().await;
+        sqlx::query(
+            "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at, is_animated, content_signature) VALUES ('m1', '/tmp/a.gif', 'a.gif', 'gif', 'photo', 1, 1, 1, 1, 1, 'sig')",
+        )
+        .execute(&db)
+        .await
+        .expect("insert media row");
+        sqlx::query("INSERT INTO album_items (album_id, media_id) VALUES ('a1', 'm1')")
+            .execute(&db)
+            .await
+            .expect("insert album membership");
+
+        let items = fetch_album_items(&db, "a1")
+            .await
+            .expect("decode album items");
+
+        assert_eq!(items.len(), 1);
+        assert!(items[0].is_animated);
+        assert_eq!(items[0].content_signature.as_deref(), Some("sig"));
+    }
 }

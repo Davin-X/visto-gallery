@@ -6,6 +6,7 @@ use serde_json::{json, Value};
 use sqlx::{QueryBuilder, SqlitePool};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tauri::{State, Window};
 use walkdir::WalkDir;
 
@@ -16,7 +17,17 @@ pub async fn scan_library(
     state: State<'_, AppState>,
     window: Window,
 ) -> Result<ScanResult, String> {
-    super::SCAN_CANCEL.store(false, Ordering::SeqCst);
+    {
+        let db = super::get_db(&state)?;
+        super::authorize_import_path(&root_path, &db, &state.grants).await?;
+    }
+    // Register before waiting on the root lock so Cancel also reaches a scan
+    // that is still queued behind another scan of the same root.
+    let job = state.scan_jobs.start();
+    let root_lock = state
+        .scan_jobs
+        .root_lock(&super::normalize_root(&root_path));
+    let _root_guard = root_lock.lock().await;
     let root = PathBuf::from(&root_path);
     let root_metadata = std::fs::metadata(&root)
         .map_err(|error| format!("Cannot access source folder '{}': {error}", root.display()))?;
@@ -37,51 +48,40 @@ pub async fn scan_library(
 
     // A normal startup scan only needs to inspect new or changed files. The
     // explicit Rescan action passes `force` to re-read every file header.
-    let known_files: HashMap<String, (i64, i64)> = if force {
+    // Only rows under this root can match a walked path, so load just those.
+    let known_files: Arc<HashMap<String, (i64, i64)>> = Arc::new(if force {
         HashMap::new()
     } else {
-        sqlx::query_as::<_, (String, i64, i64)>("SELECT path, size, modified_at FROM media_items")
-            .fetch_all(&db)
-            .await
-            .map_err(|e| e.to_string())?
-            .into_iter()
-            .map(|(path, size, modified_at)| (path, (size, modified_at)))
-            .collect()
-    };
+        let prefix = format!(
+            "{}/",
+            super::normalize_root(&root_path).trim_end_matches('/')
+        );
+        sqlx::query_as::<_, (String, i64, i64)>(
+            "SELECT path, size, modified_at FROM media_items WHERE substr(path, 1, length(?)) = ?",
+        )
+        .bind(&prefix)
+        .bind(&prefix)
+        .fetch_all(&db)
+        .await
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|(path, size, modified_at)| (path, (size, modified_at)))
+        .collect()
+    });
 
-    // Discover the media paths once. Keeping only paths avoids retaining the
-    // walker's directory entries while still giving the progress UI a total.
-    let mut media_paths = Vec::new();
-    let mut walk_error: Option<String> = None;
-    for entry in WalkDir::new(&root) {
-        if super::SCAN_CANCEL.load(Ordering::SeqCst) {
-            break;
-        }
-        match entry {
-            Ok(entry) if entry.file_type().is_file() => {
-                let ext = entry
-                    .path()
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .unwrap_or("")
-                    .to_lowercase();
-                if is_media_file(&ext) {
-                    media_paths.push(entry.into_path());
-                }
-            }
-            Ok(_) => {}
-            Err(error) => {
-                if walk_error.is_none() {
-                    walk_error = Some(error.to_string());
-                }
-            }
-        }
-    }
+    // Discover the media paths once, on the blocking pool: a large tree can
+    // take minutes to walk and must not pin an async worker.
+    let walk_root = root.clone();
+    let walk_cancel = job.flag();
+    let (media_paths, walk_error) =
+        tokio::task::spawn_blocking(move || collect_media_paths(&walk_root, &walk_cancel))
+            .await
+            .map_err(|e| format!("Scan worker failed: {e}"))?;
     let had_walk_error = walk_error.is_some();
     for p in &media_paths {
         seen_paths.insert(p.to_string_lossy().into_owned());
     }
-    if media_paths.is_empty() && !super::SCAN_CANCEL.load(Ordering::SeqCst) {
+    if media_paths.is_empty() && !job.is_cancelled() {
         if let Some(error) = walk_error {
             return Err(format!(
                 "Could not read media in '{}': {error}. Check the folder's macOS access permissions.",
@@ -89,43 +89,37 @@ pub async fn scan_library(
             ));
         }
     }
+    // A file moved or renamed inside this source is the same item, not a delete
+    // plus an import: re-key its row (and its album, tag and edit relations) to
+    // the new path before the import loop writes anything.
+    if !job.is_cancelled() && !had_walk_error {
+        let relinked = relink_moved_items(&db, &root_path, &seen_paths).await?;
+        if relinked > 0 {
+            eprintln!("visto: followed {relinked} moved file(s) under {root_path}");
+        }
+    }
+
     let total = media_paths.len() as u64;
     let mut discovered_count = 0usize;
 
     // Check metadata for every path, but only decode image headers and write
-    // rows for new/changed files. Writes stay in bounded batches.
+    // rows for new/changed files. File work runs on the blocking pool one
+    // chunk at a time; writes stay in bounded async batches.
     const SCAN_BATCH_SIZE: usize = 100;
     for paths in media_paths.chunks(SCAN_BATCH_SIZE) {
-        let mut batch = Vec::with_capacity(paths.len());
-        let mut completed_in_batch = 0u64;
-        for path in paths {
-            if super::SCAN_CANCEL.load(Ordering::SeqCst) {
-                break;
-            }
-            completed_in_batch += 1;
-            let Some(metadata) = std::fs::metadata(path)
-                .ok()
-                .filter(|metadata| metadata.is_file())
-            else {
-                continue;
-            };
-            let size = metadata.len() as i64;
-            let modified_at = file_modified_at(&metadata);
-            total_size += size;
-            discovered_count += 1;
-            let path_key = path.to_string_lossy().into_owned();
-            if !force
-                && known_files
-                    .get(&path_key)
-                    .is_some_and(|fingerprint| *fingerprint == (size, modified_at))
-            {
-                continue;
-            }
-            if let Some(item) = inspect_media_file_with_metadata(path, &metadata, now) {
-                batch.push(item);
-            }
-        }
-        let cancelled = super::SCAN_CANCEL.load(Ordering::SeqCst);
+        let chunk = paths.to_vec();
+        let known = Arc::clone(&known_files);
+        let chunk_cancel = job.flag();
+        let scanned = tokio::task::spawn_blocking(move || {
+            inspect_scan_chunk(&chunk, &known, force, now, &chunk_cancel)
+        })
+        .await
+        .map_err(|e| format!("Scan worker failed: {e}"))?;
+        let batch = scanned.batch;
+        let completed_in_batch = scanned.completed;
+        total_size += scanned.size;
+        discovered_count += scanned.discovered;
+        let cancelled = job.is_cancelled();
         items.extend(batch.iter().map(|(item, _, _)| item.clone()));
         upsert_media_batch(&db, &batch).await?;
         processed += completed_in_batch;
@@ -168,13 +162,18 @@ pub async fn scan_library(
     hydrate_relations(&db, &mut items).await?;
 
     // Prune catalog entries for files that disappeared from this source.
-    // Only do this if the walk completed fully without errors.
-    let cancelled = super::SCAN_CANCEL.load(Ordering::SeqCst);
+    // Only do this if the walk completed fully without errors. Rows that were
+    // re-pointed above now sit at a path this walk saw, so they survive.
+    let cancelled = job.is_cancelled();
     let removed_count = if !cancelled && !had_walk_error {
         prune_missing_items(&db, &root_path, &seen_paths).await?
     } else {
         0
     };
+
+    if discovered_count > 0 || removed_count > 0 {
+        let _ = window.emit(super::LIBRARY_COUNTS_CHANGED, ());
+    }
 
     // Hand back the albums and tags so the sidebar is populated from the same
     // call that imports, instead of staying empty until a separate round-trip.
@@ -199,6 +198,98 @@ pub async fn scan_library(
     })
 }
 
+/// Walk `root` and return every media file path plus the first walk error.
+/// Blocking: call it from `spawn_blocking`.
+pub(crate) fn collect_media_paths(
+    root: &Path,
+    cancel: &std::sync::atomic::AtomicBool,
+) -> (Vec<PathBuf>, Option<String>) {
+    let mut media_paths = Vec::new();
+    let mut walk_error: Option<String> = None;
+    for entry in WalkDir::new(root) {
+        if cancel.load(Ordering::SeqCst) {
+            break;
+        }
+        match entry {
+            Ok(entry) if entry.file_type().is_file() => {
+                let ext = entry
+                    .path()
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                if is_media_file(&ext) {
+                    media_paths.push(entry.into_path());
+                }
+            }
+            Ok(_) => {}
+            Err(error) => {
+                if walk_error.is_none() {
+                    walk_error = Some(error.to_string());
+                }
+            }
+        }
+    }
+    (media_paths, walk_error)
+}
+
+/// What one chunk of a folder scan found.
+pub(crate) struct ScanChunk {
+    /// New or changed files, ready for `upsert_media_batch`.
+    pub batch: Vec<(MediaItem, Option<i32>, Option<i32>)>,
+    /// Paths looked at (including unchanged ones) before any cancellation.
+    pub completed: u64,
+    /// Paths that still exist as regular files.
+    pub discovered: usize,
+    /// Bytes across `discovered` files.
+    pub size: i64,
+}
+
+/// Stat every path in `paths` and inspect the ones that are new or changed
+/// since `known`. Blocking: call it from `spawn_blocking`.
+pub(crate) fn inspect_scan_chunk(
+    paths: &[PathBuf],
+    known: &HashMap<String, (i64, i64)>,
+    force: bool,
+    now: i64,
+    cancel: &std::sync::atomic::AtomicBool,
+) -> ScanChunk {
+    let mut chunk = ScanChunk {
+        batch: Vec::with_capacity(paths.len()),
+        completed: 0,
+        discovered: 0,
+        size: 0,
+    };
+    for path in paths {
+        if cancel.load(Ordering::SeqCst) {
+            break;
+        }
+        chunk.completed += 1;
+        let Some(metadata) = std::fs::metadata(path)
+            .ok()
+            .filter(|metadata| metadata.is_file())
+        else {
+            continue;
+        };
+        let size = metadata.len() as i64;
+        let modified_at = file_modified_at(&metadata);
+        chunk.size += size;
+        chunk.discovered += 1;
+        let path_key = path.to_string_lossy().into_owned();
+        if !force
+            && known
+                .get(&path_key)
+                .is_some_and(|fingerprint| *fingerprint == (size, modified_at))
+        {
+            continue;
+        }
+        if let Some(item) = inspect_media_file_with_metadata(path, &metadata, now) {
+            chunk.batch.push(item);
+        }
+    }
+    chunk
+}
+
 /// Import exactly the files the user picked.
 ///
 /// Unlike `scan_library`, a selected file is never expanded to its parent
@@ -211,54 +302,46 @@ pub async fn import_files(
     window: Window,
     app: tauri::AppHandle,
 ) -> Result<ScanResult, String> {
-    super::SCAN_CANCEL.store(false, Ordering::SeqCst);
-    let start = std::time::Instant::now();
     let db = super::get_db(&state)?;
+    for raw in &paths {
+        super::authorize_import_path(raw, &db, &state.grants).await?;
+    }
+    let job = state.scan_jobs.start();
+    let walk_cancel = job.flag();
+    let start = std::time::Instant::now();
     let now = super::now_ms();
     let mut items = Vec::new();
     let mut total_size: i64 = 0;
     let mut processed: u64 = 0;
 
-    // Collect all media file paths first so we can report a total.
-    let all_paths: Vec<PathBuf> = {
+    // Collect all media file paths first so we can report a total. Walking
+    // picked folders can take a long time, so it runs on the blocking pool.
+    let picked = paths.clone();
+    let all_paths: Vec<PathBuf> = tokio::task::spawn_blocking(move || {
         let mut tmp = Vec::new();
-        for raw in &paths {
-            if super::SCAN_CANCEL.load(Ordering::SeqCst) {
+        for raw in &picked {
+            if walk_cancel.load(Ordering::SeqCst) {
                 break;
             }
             let path = PathBuf::from(raw);
             if path.is_dir() {
-                for entry in WalkDir::new(&path) {
-                    if super::SCAN_CANCEL.load(Ordering::SeqCst) {
-                        break;
-                    }
-                    let Ok(entry) = entry else {
-                        continue;
-                    };
-                    if entry.file_type().is_file() {
-                        if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
-                            let ext = ext.to_lowercase();
-                            if is_media_file(&ext) {
-                                tmp.push(entry.path().to_path_buf());
-                            }
-                        }
-                    }
-                }
+                tmp.extend(collect_media_paths(&path, &walk_cancel).0);
             } else if path.is_file() {
                 if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                    let ext = ext.to_lowercase();
-                    if is_media_file(&ext) {
+                    if is_media_file(&ext.to_lowercase()) {
                         tmp.push(path.clone());
                     }
                 }
             }
         }
         tmp
-    };
+    })
+    .await
+    .map_err(|e| format!("Import worker failed: {e}"))?;
     let total = all_paths.len() as u64;
 
     for path in all_paths {
-        if super::SCAN_CANCEL.load(Ordering::SeqCst) {
+        if job.is_cancelled() {
             break;
         }
         if let Some((item, size)) = import_media_file(&db, &path, now).await? {
@@ -267,10 +350,7 @@ pub async fn import_files(
         }
 
         processed += 1;
-        if processed.is_multiple_of(200)
-            || processed == total
-            || super::SCAN_CANCEL.load(Ordering::SeqCst)
-        {
+        if processed.is_multiple_of(200) || processed == total || job.is_cancelled() {
             let _ = window.emit(
                 "import-progress",
                 json!({
@@ -309,11 +389,14 @@ pub async fn import_files(
         .map_err(|e| e.to_string())?;
 
     let discovered_count = items.len();
+    if discovered_count > 0 {
+        let _ = window.emit(super::LIBRARY_COUNTS_CHANGED, ());
+    }
     Ok(ScanResult {
         items,
         discovered_count,
         removed_count: 0,
-        cancelled: super::SCAN_CANCEL.load(Ordering::SeqCst),
+        cancelled: job.is_cancelled(),
         albums,
         tags,
         total_size,
@@ -363,6 +446,41 @@ pub async fn get_library_items(
     get_library_items_page(&db, f).await
 }
 
+/// Return every hidden item (`hidden = 1`) for the Hidden gallery.
+/// Unlike `get_library_items`, this does not paginate — the Hidden screen is
+/// a secondary view over a typically small set.
+#[tauri::command]
+pub async fn get_hidden_items(state: State<'_, AppState>) -> Result<LibraryItemsPage, String> {
+    let db = super::get_db(&state)?;
+    let mut items: Vec<MediaItem> = sqlx::query_as(
+        "SELECT * FROM media_items WHERE hidden = 1 ORDER BY COALESCE(captured_at, modified_at) DESC",
+    )
+    .fetch_all(&db)
+    .await
+    .map_err(|e| e.to_string())?;
+    hydrate_relations(&db, &mut items).await?;
+    let total_count = items.len() as i64;
+    Ok(LibraryItemsPage {
+        items,
+        has_more: false,
+        next_cursor: None,
+        total_count,
+    })
+}
+
+/// Escape `\\`, `%` and `_` so a search term matches literally inside a
+/// `LIKE ... ESCAPE '\\'` pattern.
+fn escape_like(term: &str) -> String {
+    let mut out = String::with_capacity(term.len());
+    for c in term.chars() {
+        if matches!(c, '\\' | '%' | '_') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
 fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterDTO) {
     if let Some(kind) = &f.kind {
         qb.push(" AND kind = ").push_bind(kind.clone());
@@ -374,6 +492,10 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
     if let Some(hidden) = f.hidden {
         qb.push(" AND hidden = ")
             .push_bind(if hidden { 1i32 } else { 0i32 });
+    }
+    if let Some(animated) = f.animated {
+        qb.push(" AND is_animated = ")
+            .push_bind(if animated { 1i32 } else { 0i32 });
     }
     if let Some(album_id) = &f.album_id {
         qb.push(" AND id IN (SELECT media_id FROM album_items WHERE album_id = ")
@@ -395,22 +517,23 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
         }
     }
     if let Some(query) = &f.query {
-        let like = format!("%{}%", query);
+        // `%` and `_` typed by the user are literal characters, not wildcards.
+        let like = format!("%{}%", escape_like(query));
         qb.push(" AND (name LIKE ")
             .push_bind(like.clone())
-            .push(" OR path LIKE ")
+            .push(" ESCAPE '\\' OR path LIKE ")
             .push_bind(like.clone())
-            .push(" OR extension LIKE ")
+            .push(" ESCAPE '\\' OR extension LIKE ")
             .push_bind(like.clone())
-            .push(" OR kind LIKE ")
+            .push(" ESCAPE '\\' OR kind LIKE ")
             .push_bind(like.clone())
-            .push(" OR COALESCE(camera, '') LIKE ")
+            .push(" ESCAPE '\\' OR COALESCE(camera, '') LIKE ")
             .push_bind(like.clone())
-            .push(" OR COALESCE(lens, '') LIKE ")
+            .push(" ESCAPE '\\' OR COALESCE(lens, '') LIKE ")
             .push_bind(like.clone())
-            .push(" OR EXISTS (SELECT 1 FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.media_id = media_items.id AND t.name LIKE ")
+            .push(" ESCAPE '\\' OR EXISTS (SELECT 1 FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.media_id = media_items.id AND t.name LIKE ")
             .push_bind(like)
-            .push(")")
+            .push(" ESCAPE '\\')")
             .push(")");
     }
     if let Some(from) = f.date_from {
@@ -448,11 +571,15 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
 
 pub(crate) async fn get_library_items_page(
     db: &SqlitePool,
-    f: super::LibraryFilterDTO,
+    mut f: super::LibraryFilterDTO,
 ) -> Result<LibraryItemsPage, String> {
+    // Hidden items stay out of every view unless the caller asks for them, so
+    // the items and the count always describe the same set. Smart Albums pass
+    // no `hidden` value and used to page hidden items while counting none.
+    f.hidden.get_or_insert(false);
     let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new("SELECT * FROM media_items WHERE 1=1");
     let mut count_qb: QueryBuilder<Sqlite> =
-        QueryBuilder::new("SELECT COUNT(*) FROM media_items WHERE hidden = 0");
+        QueryBuilder::new("SELECT COUNT(*) FROM media_items WHERE 1=1");
     push_library_filters(&mut qb, &f);
     push_library_filters(&mut count_qb, &f);
 
@@ -714,18 +841,24 @@ pub async fn get_item_thumbnail(
     tokio::fs::create_dir_all(&cache_root)
         .await
         .map_err(|error| error.to_string())?;
-    let cache_key = thumbnail_cache_key(&request.item_id, item.2, item.3, request.size, &item.1);
+    let cache_key = thumbnail_cache_key(
+        &request.item_id,
+        item.2,
+        item.3,
+        request.size,
+        &item.1,
+        quality,
+    );
     let digest = ring::digest::digest(&ring::digest::SHA256, cache_key.as_bytes());
     let cache_path = cache_root.join(format!("{}.jpg", hex::encode(digest.as_ref())));
 
-    let cached = if let Ok(bytes) = tokio::fs::read(&cache_path).await {
-        image::image_dimensions(&cache_path)
-            .ok()
-            .map(|(width, height)| (bytes, width, height))
-    } else {
-        None
+    // A cache hit reads the file once and takes its dimensions from the bytes
+    // already in memory; a miss reuses the bytes the generator just wrote.
+    let cached = match tokio::fs::read(&cache_path).await {
+        Ok(bytes) => jpeg_dimensions(&bytes).map(|(width, height)| (bytes, width, height)),
+        Err(_) => None,
     };
-    let (_bytes, width, height) = if let Some(cached) = cached {
+    let (bytes, width, height) = if let Some(cached) = cached {
         cached
     } else {
         let _ = tokio::fs::remove_file(&cache_path).await;
@@ -750,10 +883,6 @@ pub async fn get_item_thumbnail(
         generated
     };
 
-    let bytes = tokio::fs::read(&cache_path)
-        .await
-        .map_err(|e| e.to_string())?;
-
     Ok(ThumbnailResponse {
         item_id: request.item_id,
         data_url: format!("data:image/jpeg;base64,{}", BASE64.encode(bytes)),
@@ -763,16 +892,18 @@ pub async fn get_item_thumbnail(
 }
 
 /// Cache identity must include every input that changes the rendered image.
-/// Thumbnails for the same photo at different sizes are distinct files.
+/// Thumbnails for the same photo at different sizes or JPEG qualities are
+/// distinct files.
 pub(crate) fn thumbnail_cache_key(
     item_id: &str,
     modified_at: i64,
     source_size: i64,
     thumbnail_size: u32,
     kind: &str,
+    quality: u8,
 ) -> String {
     let version = if kind == "video" { "v2" } else { "v1" };
-    format!("{item_id}:{modified_at}:{source_size}:{thumbnail_size}:{version}")
+    format!("{item_id}:{modified_at}:{source_size}:{thumbnail_size}:{version}:q{quality}")
 }
 
 /// Keep the cache bounded without making every thumbnail request pay for a
@@ -853,6 +984,16 @@ pub(crate) fn prune_thumbnail_cache(root: &Path, max_bytes: u64) -> (usize, u64,
     }
 
     (deleted, bytes_freed, failed)
+}
+
+/// Dimensions of an encoded image held in memory (cached thumbnails are JPEG),
+/// or `None` when the bytes are not a readable image.
+fn jpeg_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?
+        .into_dimensions()
+        .ok()
 }
 
 pub(crate) fn generate_cached_thumbnail(
@@ -1301,7 +1442,7 @@ pub async fn get_library_roots(state: State<'_, AppState>) -> Result<Vec<String>
 /// volume and first component (`/Applications/Safari.app/...` →
 /// `/Applications/Safari.app`). This keeps the sidebar to a handful of rows
 /// instead of one row per leaf directory.
-fn inferred_folder_root(path: &str) -> Option<String> {
+pub(crate) fn inferred_folder_root(path: &str) -> Option<String> {
     let home = std::env::var("HOME")
         .ok()
         .map(|h| super::normalize_root(&h))?;
@@ -1413,6 +1554,8 @@ pub struct LibraryStats {
     photos: i64,
     videos: i64,
     raws: i64,
+    /// Subset of `photos`: items the catalog treats as animated content.
+    animations: i64,
     uncategorized: i64,
     favorites: i64,
     hidden: i64,
@@ -1428,11 +1571,12 @@ pub struct LibraryStats {
 #[tauri::command]
 pub async fn get_library_stats(state: State<'_, AppState>) -> Result<LibraryStats, String> {
     let db = super::get_db(&state)?;
-    let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
+    let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
         "SELECT
             SUM(CASE WHEN kind = 'photo' AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN kind = 'video' AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN kind = 'raw' AND hidden = 0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN is_animated = 1 AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN kind NOT IN ('photo', 'video', 'raw') AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN favorite = 1 AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN hidden = 1 THEN 1 ELSE 0 END),
@@ -1452,6 +1596,7 @@ pub async fn get_library_stats(state: State<'_, AppState>) -> Result<LibraryStat
         photos,
         videos,
         raws,
+        animations,
         uncategorized,
         favorites,
         hidden,
@@ -1469,6 +1614,7 @@ pub async fn get_library_stats(state: State<'_, AppState>) -> Result<LibraryStat
         photos,
         videos,
         raws,
+        animations,
         uncategorized,
         favorites,
         hidden,
@@ -1600,15 +1746,23 @@ pub async fn toggle_favorite(
     item_id: String,
     favorite: bool,
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
     let db = super::get_db(&state)?;
-    sqlx::query("UPDATE media_items SET favorite = ?, updated_at = ? WHERE id = ?")
+    let changed = sqlx::query("UPDATE media_items SET favorite = ?, updated_at = ? WHERE id = ?")
         .bind(if favorite { 1i32 } else { 0i32 })
         .bind(super::now_ms())
         .bind(&item_id)
         .execute(&db)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?
+        .rows_affected();
+    // The Favourites chip and the sidebar read catalog-wide counts from the
+    // backend, so this flag change has to ask for them again. The frontend
+    // debounces the refresh, which also collapses a bulk favouriting run.
+    if changed > 0 {
+        let _ = app.emit(super::LIBRARY_COUNTS_CHANGED, ());
+    }
     Ok(())
 }
 
@@ -1617,15 +1771,22 @@ pub async fn toggle_hidden(
     item_id: String,
     hidden: bool,
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
     let db = super::get_db(&state)?;
-    sqlx::query("UPDATE media_items SET hidden = ?, updated_at = ? WHERE id = ?")
+    let changed = sqlx::query("UPDATE media_items SET hidden = ?, updated_at = ? WHERE id = ?")
         .bind(if hidden { 1i32 } else { 0i32 })
         .bind(super::now_ms())
         .bind(&item_id)
         .execute(&db)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?
+        .rows_affected();
+    // Hiding changes every catalog-wide count (the stats query ignores hidden
+    // rows), so refresh them here rather than waiting for the next scan.
+    if changed > 0 {
+        let _ = app.emit(super::LIBRARY_COUNTS_CHANGED, ());
+    }
     Ok(())
 }
 
@@ -1918,7 +2079,7 @@ mod pagination_tests {
             .await
             .expect("open in-memory page database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
         )
         .execute(&db)
         .await
@@ -2037,7 +2198,7 @@ mod filter_and_scale_tests {
             .await
             .expect("open in-memory filter database");
         sqlx::query(
-            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
         )
         .execute(&db)
         .await
@@ -2082,6 +2243,92 @@ mod filter_and_scale_tests {
         .execute(db)
         .await
         .expect("insert media row");
+    }
+
+    async fn set_hidden(db: &SqlitePool, id: &str) {
+        sqlx::query("UPDATE media_items SET hidden = 1 WHERE id = ?")
+            .bind(id)
+            .execute(db)
+            .await
+            .expect("hide row");
+    }
+
+    #[tokio::test]
+    async fn unspecified_hidden_excludes_hidden_items_from_items_and_count() {
+        let db = filter_db().await;
+        insert_item(&db, "shown", "photo", Some(1), 1, None).await;
+        insert_item(&db, "secret", "photo", Some(2), 2, None).await;
+        set_hidden(&db, "secret").await;
+
+        let page = get_library_items_page(
+            &db,
+            LibraryFilterDTO {
+                limit: Some(10),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("read default page");
+
+        let ids: Vec<&str> = page.items.iter().map(|item| item.id.as_str()).collect();
+        assert_eq!(ids, ["shown"]);
+        assert_eq!(page.total_count, 1);
+    }
+
+    #[tokio::test]
+    async fn hidden_true_counts_the_hidden_items_it_returns() {
+        let db = filter_db().await;
+        insert_item(&db, "shown", "photo", Some(1), 1, None).await;
+        insert_item(&db, "secret", "photo", Some(2), 2, None).await;
+        set_hidden(&db, "secret").await;
+
+        let page = get_library_items_page(
+            &db,
+            LibraryFilterDTO {
+                hidden: Some(true),
+                limit: Some(10),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("read hidden page");
+
+        let ids: Vec<&str> = page.items.iter().map(|item| item.id.as_str()).collect();
+        assert_eq!(ids, ["secret"]);
+        assert_eq!(page.total_count, 1);
+    }
+
+    #[tokio::test]
+    async fn search_treats_percent_and_underscore_literally() {
+        let db = filter_db().await;
+        insert_item(&db, "IMG_0001", "photo", Some(1), 1, None).await;
+        insert_item(&db, "IMGX0002", "photo", Some(2), 2, None).await;
+        insert_item(&db, "sale-100%", "photo", Some(3), 3, None).await;
+        insert_item(&db, "sale-1000", "photo", Some(4), 4, None).await;
+
+        let search = |query: &str| {
+            let db = db.clone();
+            let query = query.to_string();
+            async move {
+                let page = get_library_items_page(
+                    &db,
+                    LibraryFilterDTO {
+                        query: Some(query),
+                        limit: Some(10),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .expect("search");
+                let mut ids: Vec<String> = page.items.into_iter().map(|i| i.id).collect();
+                ids.sort();
+                ids
+            }
+        };
+
+        assert_eq!(search("IMG_").await, ["IMG_0001"]);
+        assert_eq!(search("100%").await, ["sale-100%"]);
+        assert_eq!(search("_").await, ["IMG_0001"]);
     }
 
     #[tokio::test]
@@ -2205,5 +2452,137 @@ mod filter_and_scale_tests {
         assert_eq!(overview.len(), 1);
         assert_eq!(overview[0].item_count, 10_000);
         assert!(overview[0].cover_items.len() <= 4);
+    }
+}
+
+#[cfg(test)]
+mod scan_chunk_tests {
+    use super::{collect_media_paths, file_modified_at, inspect_scan_chunk};
+    use std::collections::HashMap;
+    use std::fs;
+    use std::sync::atomic::AtomicBool;
+
+    fn tree() -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!("visto-scan-chunk-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(root.join("nested")).unwrap();
+        fs::write(root.join("a.jpg"), b"not really a jpeg").unwrap();
+        fs::write(root.join("nested/b.PNG"), b"not really a png").unwrap();
+        fs::write(root.join("notes.txt"), b"skip me").unwrap();
+        root
+    }
+
+    #[test]
+    fn walk_keeps_only_media_extensions() {
+        let root = tree();
+        let (mut paths, error) = collect_media_paths(&root, &AtomicBool::new(false));
+        paths.sort();
+        assert!(error.is_none());
+        assert_eq!(paths, vec![root.join("a.jpg"), root.join("nested/b.PNG")]);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn walk_stops_when_cancelled() {
+        let root = tree();
+        let (paths, _) = collect_media_paths(&root, &AtomicBool::new(true));
+        assert!(paths.is_empty());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn unchanged_files_are_counted_but_not_reinspected() {
+        let root = tree();
+        let a = root.join("a.jpg");
+        let meta = fs::metadata(&a).unwrap();
+        let known = HashMap::from([(
+            a.to_string_lossy().into_owned(),
+            (meta.len() as i64, file_modified_at(&meta)),
+        )]);
+        let chunk = inspect_scan_chunk(
+            std::slice::from_ref(&a),
+            &known,
+            false,
+            0,
+            &AtomicBool::new(false),
+        );
+        assert_eq!(chunk.completed, 1);
+        assert_eq!(chunk.discovered, 1);
+        assert_eq!(chunk.size, meta.len() as i64);
+        assert!(chunk.batch.is_empty());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn missing_files_are_completed_but_not_discovered() {
+        let root = tree();
+        let gone = root.join("gone.jpg");
+        let chunk = inspect_scan_chunk(&[gone], &HashMap::new(), false, 0, &AtomicBool::new(false));
+        assert_eq!(chunk.completed, 1);
+        assert_eq!(chunk.discovered, 0);
+        let _ = fs::remove_dir_all(&root);
+    }
+}
+
+#[cfg(test)]
+mod sort_index_tests {
+    use sqlx::sqlite::SqlitePoolOptions;
+    use sqlx::Row;
+
+    async fn plan_for(sql: &str) -> String {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory catalog");
+        sqlx::migrate!("./migrations")
+            .run(&db)
+            .await
+            .expect("run migrations");
+        let rows = sqlx::query(&format!("EXPLAIN QUERY PLAN {sql}"))
+            .bind(0i32)
+            .bind(201i64)
+            .fetch_all(&db)
+            .await
+            .expect("explain query");
+        rows.iter()
+            .map(|row| row.get::<String, _>("detail"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// The default page (`get_library_items_page` with no sort) must walk the
+    /// sort index instead of sorting the whole table for every page.
+    #[tokio::test]
+    async fn default_library_sort_uses_index_without_temp_sort() {
+        let plan = plan_for(
+            "SELECT * FROM media_items WHERE 1=1 AND hidden = ? \
+             ORDER BY COALESCE(captured_at, modified_at) DESC, id ASC LIMIT ?",
+        )
+        .await;
+        assert!(plan.contains("idx_media_hidden_sort_date_id"), "{plan}");
+        assert!(!plan.contains("TEMP B-TREE"), "{plan}");
+    }
+}
+
+#[cfg(test)]
+mod thumbnail_bytes_tests {
+    use super::jpeg_dimensions;
+
+    #[test]
+    fn reads_dimensions_from_encoded_bytes() {
+        let img = image::RgbImage::new(7, 3);
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgb8(img)
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Jpeg,
+            )
+            .unwrap();
+        assert_eq!(jpeg_dimensions(&bytes), Some((7, 3)));
+    }
+
+    #[test]
+    fn rejects_corrupt_bytes() {
+        assert_eq!(jpeg_dimensions(b"not an image"), None);
     }
 }

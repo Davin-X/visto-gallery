@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import React, {
   useState,
   useMemo,
@@ -30,26 +31,92 @@ import {
   TrashIcon,
 } from "../design/components/icons";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
+import { PanelResizer } from "../design/components/PanelResizer";
 import { KindBadge, KindDot } from "../design/components/KindBadge";
 import VideoThumb from "../design/components/VideoThumb";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
 import { useDraftTransforms } from "../engine/stores/useEditStore";
 import { draftImageStyle } from "../engine/utils/draftImage";
 import { searchShortcutLabel } from "../engine/utils/shortcut";
-import { useLibraryStore } from "../engine/stores/useLibraryStore";
+import { useLibraryStore, libraryViewKey } from "../engine/stores/useLibraryStore";
 import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { FilterDropdown } from "../design/components/FilterDropdown";
 import { useSettingsStore } from "../engine/stores/useSettingsStore";
-import { useThumbnailSize } from "../engine/stores/useSettingsStore";
+import { useThumbnailSize, useInspectorWidth } from "../engine/stores/useSettingsStore";
 import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple, canPlayVideoInApp } from "../engine/utils/mediaTypes";
 import type { MediaItem, Album, Filter, LayoutMode } from "../engine/types/media";
-import type { LibraryFolder } from "../engine/types/commands";
+import type { DeleteItemsOutcome, LibraryFolder } from "../engine/types/commands";
+import {
+  formatCapturedDateTime,
+  formatFileDateTime,
+  formatItemDate,
+  itemMonth,
+} from "../engine/utils/mediaDate";
+import { displayFileName } from "../engine/utils/fileName";
+import { MiddleTruncate } from "../design/components/MiddleTruncate";
 
 const GALLERY_PAGE_SIZE = 180;
 const VIRTUAL_GRID_OVERSCAN_ROWS = 6;
 const MAX_VIRTUAL_GRID_ITEMS = 480;
 const GRID_HORIZONTAL_PADDING = 40;
+
+/**
+ * Scroll offsets remembered per view.
+ *
+ * Switching a type tab, album, source or screen used to send the user back to
+ * the top of the grid. The map lives at module scope so it survives the
+ * Library screen unmounting during navigation. Only the most recent views are
+ * kept; older entries fall off so the map cannot grow without bound.
+ */
+interface RememberedScroll {
+  scrollTop: number;
+  /** Items loaded when the offset was taken, used to refill the same depth. */
+  itemCount: number;
+  /** Progressive-render limit for the non-virtual layouts. */
+  renderLimit: number;
+}
+const rememberedScroll = new Map<string, RememberedScroll>();
+const MAX_REMEMBERED_SCROLL_VIEWS = 40;
+
+function rememberScroll(key: string, value: RememberedScroll) {
+  rememberedScroll.delete(key);
+  rememberedScroll.set(key, value);
+  while (rememberedScroll.size > MAX_REMEMBERED_SCROLL_VIEWS) {
+    const oldest = rememberedScroll.keys().next().value;
+    if (oldest === undefined) break;
+    rememberedScroll.delete(oldest);
+  }
+}
+
+/** Pure row-window calculation for the fixed-height grid and overview cards. */
+export function calculateVirtualGridWindow(
+  itemCount: number,
+  columns: number,
+  rowStride: number,
+  gap: number,
+  scrollTop: number,
+  viewportHeight: number,
+) {
+  const totalRows = Math.ceil(itemCount / columns);
+  const firstVisibleRow = Math.max(0, Math.floor(scrollTop / rowStride));
+  const lastVisibleRow = Math.min(totalRows, Math.ceil((scrollTop + viewportHeight) / rowStride));
+  const startRow = Math.max(0, firstVisibleRow - VIRTUAL_GRID_OVERSCAN_ROWS);
+  const requestedEndRow = Math.min(
+    totalRows,
+    Math.max(lastVisibleRow + VIRTUAL_GRID_OVERSCAN_ROWS, startRow + 1),
+  );
+  // Cap the DOM even on very wide monitors with many grid columns.
+  const maxWindowRows = Math.max(1, Math.floor(MAX_VIRTUAL_GRID_ITEMS / columns));
+  const endRow = Math.min(requestedEndRow, startRow + maxWindowRows);
+
+  return {
+    startIndex: startRow * columns,
+    endIndex: Math.min(itemCount, endRow * columns),
+    topSpacer: startRow ? Math.max(0, startRow * rowStride - gap) : 0,
+    bottomSpacer: endRow < totalRows ? Math.max(0, (totalRows - endRow) * rowStride - gap) : 0,
+  };
+}
 
 interface LibraryScreenProps {
   activeAlbum: string | null;
@@ -99,7 +166,7 @@ interface LibraryScreenProps {
   onToggleInspector: () => void;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
-  onDeleteItems: (ids: string[]) => void | Promise<void>;
+  onDeleteItems: (ids: string[]) => void | Promise<DeleteItemsOutcome>;
   onUpdateTags: (id: string, tags: string[]) => void | Promise<void>;
   query: string;
   minRating: number | null;
@@ -107,6 +174,7 @@ interface LibraryScreenProps {
     photos: number;
     videos: number;
     raws: number;
+    animations?: number;
     favorites: number;
   };
   colorLabelFilter: string | null;
@@ -149,8 +217,27 @@ function LibraryScreen(props: LibraryScreenProps) {
   }, [library.refreshingLibrary]);
   const draftTransforms = useDraftTransforms();
   const thumbnailSize = useThumbnailSize();
-  const settingsStore = useSettingsStore();
-  const showExtensions = settingsStore.showExtensions;
+  const showExtensions = useSettingsStore((s) => s.showExtensions);
+  const updateSettings = useSettingsStore((s) => s.update);
+  const inspectorWidth = useInspectorWidth();
+  const inspectorRef = useRef<HTMLDivElement>(null);
+
+  // A width persisted on a large display must not squeeze the grid below a
+  // usable size when the window is later made narrower. The drag handle uses
+  // the same bound; this keeps the resting layout honest after a window resize.
+  useEffect(() => {
+    if (!props.showInspector) return;
+    const clampWidth = () => {
+      const layout = inspectorRef.current;
+      if (!layout) return;
+      const max = Math.min(480, Math.max(240, layout.clientWidth - 360));
+      if (inspectorWidth > max) void updateSettings("inspectorWidth", max);
+    };
+    clampWidth();
+    window.addEventListener("resize", clampWidth);
+    return () => window.removeEventListener("resize", clampWidth);
+  }, [inspectorWidth, props.showInspector, updateSettings]);
+
   const sortDirectionLabel =
     library.sortBy === "capturedAt" || library.sortBy === "modifiedAt"
       ? library.sortOrder === "asc"
@@ -283,17 +370,27 @@ function LibraryScreen(props: LibraryScreenProps) {
   // The SHOW row used to run one full filter pass per chip on every render.
   // One pass keeps the counts in sync and is O(n) instead of 6 × O(n).
   const filterCounts = useMemo(() => {
-    const counts = { All: 0, Photos: 0, Videos: 0, RAW: 0, Favorites: 0 };
+    const counts = { All: 0, Photos: 0, Videos: 0, RAW: 0, Animations: 0, Favorites: 0 };
     for (const item of filterSource) {
       if (!props.hiddenView && item.hidden) continue;
       counts.All += 1;
       if (item.kind === "photo") counts.Photos += 1;
       else if (item.kind === "video") counts.Videos += 1;
       else if (item.kind === "raw") counts.RAW += 1;
+      // Animated items are also photos; the chip is a narrower view, not a
+      // separate kind, so it never changes the Photos or All counts.
+      if (item.isAnimated) counts.Animations += 1;
       if (item.favorite) counts.Favorites += 1;
     }
     return counts;
   }, [filterSource, props.hiddenView]);
+  // The picker shows the folder name, which can be long enough to widen the
+  // whole header row. CSS clamps it and ellipsizes; the full name stays
+  // reachable through this tooltip and the native option list.
+  const activeSourceName = useMemo(
+    () => library.folders.find((f: LibraryFolder) => f.path === library.activeSource)?.name ?? null,
+    [library.folders, library.activeSource],
+  );
   const hasActiveRefinements = props.hiddenView
     ? Boolean((props.query || "").trim() || props.filter !== "All")
     : Boolean(
@@ -410,6 +507,20 @@ function LibraryScreen(props: LibraryScreenProps) {
   });
   const [measuredTileHeight, setMeasuredTileHeight] = useState<number | null>(null);
   const virtualFrame = useRef<number | null>(null);
+  const restoringScrollRef = useRef(false);
+  const restoredScrollKeyRef = useRef<string | null>(null);
+
+  // A view is the filter/query/album/source combination plus the layout and
+  // thumbnail size, because the same item offset maps to different pixels in
+  // each layout. Hidden has its own filter state, so it gets its own prefix.
+  const viewKey = props.hiddenView
+    ? `hidden:${library.hiddenFilter}:${library.hiddenQuery}`
+    : libraryViewKey(library);
+  const scrollKey = `${viewKey}|${props.layout}|${thumbnailSize}${props.hiddenView ? "|hidden" : ""}`;
+  const scrollKeyRef = useRef(scrollKey);
+  scrollKeyRef.current = scrollKey;
+  const renderLimitRef = useRef(renderLimit);
+  renderLimitRef.current = renderLimit;
 
   // The standard grid and overview use fixed-ratio cards, so their full
   // scroll height can be represented by two spacers while only nearby rows
@@ -462,11 +573,55 @@ function LibraryScreen(props: LibraryScreenProps) {
     setMeasuredTileHeight(null);
   }, [props.layout, thumbnailSize, gridViewport.width]);
 
-  // A new view starts at the top of the list again.
+  // Restore the scroll offset saved for this view, refilling the same item
+  // depth first so the grid is tall enough to reach the remembered row.
+  // Switching to a view with no history still starts at the top.
   useEffect(() => {
-    setRenderLimit(GALLERY_PAGE_SIZE);
-    scrollRef.current?.scrollTo({ top: 0 });
-  }, [props.filter, props.query, props.activeAlbum, library.activeSource, props.layout]);
+    const dataReady = props.hiddenView || library.loadedViewKey === viewKey;
+    if (!dataReady || restoringScrollRef.current) return;
+    if (restoredScrollKeyRef.current === scrollKey) return;
+    restoredScrollKeyRef.current = scrollKey;
+
+    const el = scrollRef.current;
+    const saved = rememberedScroll.get(scrollKey);
+    if (!el || !saved || (saved.scrollTop <= 0 && saved.renderLimit <= GALLERY_PAGE_SIZE)) {
+      setRenderLimit(GALLERY_PAGE_SIZE);
+      el?.scrollTo({ top: 0 });
+      return;
+    }
+
+    setRenderLimit(Math.max(GALLERY_PAGE_SIZE, saved.renderLimit));
+
+    const jumpToSavedOffset = () => {
+      restoringScrollRef.current = true;
+      window.requestAnimationFrame(() => {
+        el.scrollTo({ top: saved.scrollTop });
+        window.requestAnimationFrame(() => {
+          restoringScrollRef.current = false;
+        });
+      });
+    };
+
+    const refillDepth = async () => {
+      if (props.hiddenView) return;
+      let state = useLibraryStore.getState();
+      let guard = 0;
+      while (state.items.length < saved.itemCount && state.hasMore && guard < 100) {
+        const before = state.items.length;
+        await state.loadNextPage();
+        state = useLibraryStore.getState();
+        // A newer filter load superseded the restore; stop instead of
+        // scrolling unrelated rows into view.
+        if (state.items.length === before) break;
+        guard += 1;
+      }
+    };
+
+    void refillDepth().then(jumpToSavedOffset);
+    // `restoredScrollKeyRef` makes this run once per view; item-count changes
+    // during the depth refill must not restart the effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [library.loadedViewKey, props.hiddenView, scrollKey, viewKey]);
 
   const loadMore = () => {
     if (supportsGridVirtualization) {
@@ -498,6 +653,18 @@ function LibraryScreen(props: LibraryScreenProps) {
     scheduleViewportUpdate();
     const el = scrollRef.current;
     if (!el) return;
+    // Only remember offsets for the view whose rows are actually on screen; a
+    // filter switch clears `loadedViewKey` until the new first page arrives.
+    if (!restoringScrollRef.current) {
+      const state = useLibraryStore.getState();
+      if (props.hiddenView || state.loadedViewKey === viewKey) {
+        rememberScroll(scrollKeyRef.current, {
+          scrollTop: el.scrollTop,
+          itemCount: state.items.length,
+          renderLimit: renderLimitRef.current,
+        });
+      }
+    }
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 800) loadMore();
   };
   const handleGridKeyDown = useCallback(
@@ -573,31 +740,19 @@ function LibraryScreen(props: LibraryScreenProps) {
     const estimatedTileHeight = tileWidth * (overview ? 10 / 16 : 1) + 58;
     const rowHeight = measuredTileHeight ?? estimatedTileHeight;
     const rowStride = rowHeight + gap;
-    const totalRows = Math.ceil(renderedItems.length / columns);
-    const firstVisibleRow = Math.max(0, Math.floor(gridViewport.scrollTop / rowStride));
-    const lastVisibleRow = Math.min(
-      totalRows,
-      Math.ceil((gridViewport.scrollTop + gridViewport.height) / rowStride),
+    const window = calculateVirtualGridWindow(
+      renderedItems.length,
+      columns,
+      rowStride,
+      gap,
+      gridViewport.scrollTop,
+      gridViewport.height,
     );
-    const startRow = Math.max(0, firstVisibleRow - VIRTUAL_GRID_OVERSCAN_ROWS);
-    const requestedEndRow = Math.min(
-      totalRows,
-      Math.max(lastVisibleRow + VIRTUAL_GRID_OVERSCAN_ROWS, startRow + 1),
-    );
-    // A very wide monitor can have many columns. Cap the mounted item count
-    // regardless of viewport dimensions so scrolling a 100k library never
-    // recreates the unbounded-DOM problem this window is solving.
-    const maxWindowRows = Math.max(1, Math.floor(MAX_VIRTUAL_GRID_ITEMS / columns));
-    const endRow = Math.min(requestedEndRow, startRow + maxWindowRows);
-    const startIndex = startRow * columns;
-    const endIndex = Math.min(renderedItems.length, endRow * columns);
 
     return {
-      items: renderedItems.slice(startIndex, endIndex),
-      // CSS grid contributes one gap after a spacer, so exclude it from the
-      // spacer's own height to preserve each row's original document offset.
-      topSpacer: startRow ? Math.max(0, startRow * rowStride - gap) : 0,
-      bottomSpacer: endRow < totalRows ? Math.max(0, (totalRows - endRow) * rowStride - gap) : 0,
+      items: renderedItems.slice(window.startIndex, window.endIndex),
+      topSpacer: window.topSpacer,
+      bottomSpacer: window.bottomSpacer,
     };
   }, [
     gridViewport.height,
@@ -617,10 +772,10 @@ function LibraryScreen(props: LibraryScreenProps) {
       ".gallery-grid.layout-grid .gallery-tile, .gallery-grid.layout-overview .gallery-tile",
     );
     const height = tile?.getBoundingClientRect().height;
-    if (height && Math.abs((measuredTileHeight ?? 0) - height) > 1) {
+    if (height && (measuredTileHeight === null || Math.abs(measuredTileHeight - height) > 1)) {
       setMeasuredTileHeight(height);
     }
-  }, [measuredTileHeight, props.layout, supportsGridVirtualization, virtualGrid.items.length]);
+  }, [props.layout, thumbnailSize, gridViewport.width, supportsGridVirtualization]);
   const selectedIdSet = useMemo(() => new Set(props.selectedIds), [props.selectedIds]);
 
   // Timeline groups use the photo's capture date when available, with file
@@ -634,13 +789,13 @@ function LibraryScreen(props: LibraryScreenProps) {
     () =>
       props.layout === "timeline"
         ? (() => {
-            const grouped = new Map<string, { timestamp: number; items: any[] }>();
+            const grouped = new Map<string, { timestamp: number; label: string; items: any[] }>();
             for (const item of props.items) {
               const timestamp = item.capturedAt ?? item.modifiedAt;
-              const date = new Date(timestamp);
-              const key = `${date.getFullYear()}-${date.getMonth()}`;
+              const { key, label } = itemMonth(item);
               const group = grouped.get(key) ?? {
                 timestamp,
+                label,
                 items: [] as any[],
               };
               group.timestamp = Math.max(group.timestamp, timestamp);
@@ -651,10 +806,7 @@ function LibraryScreen(props: LibraryScreenProps) {
               .sort((a, b) => b[1].timestamp - a[1].timestamp)
               .map(([key, group]) => ({
                 key,
-                label: new Intl.DateTimeFormat(undefined, {
-                  month: "long",
-                  year: "numeric",
-                }).format(group.timestamp),
+                label: group.label,
                 items: group.items,
                 count: group.items.length,
               }));
@@ -666,9 +818,7 @@ function LibraryScreen(props: LibraryScreenProps) {
     if (!timelineGroups.length) return [];
     const visibleItemsByMonth = new Map<string, any[]>();
     for (const item of renderedItems) {
-      const timestamp = item.capturedAt ?? item.modifiedAt;
-      const date = new Date(timestamp);
-      const key = `${date.getFullYear()}-${date.getMonth()}`;
+      const { key } = itemMonth(item);
       const items = visibleItemsByMonth.get(key) ?? [];
       items.push(item);
       visibleItemsByMonth.set(key, items);
@@ -679,7 +829,6 @@ function LibraryScreen(props: LibraryScreenProps) {
     });
   }, [renderedItems, timelineGroups]);
 
-  const captureDate = (item: any) => item.capturedAt ?? item.modifiedAt;
   const sortDetailsBy = (sortBy: typeof library.sortBy) => {
     library.setSort(
       sortBy,
@@ -880,8 +1029,9 @@ function LibraryScreen(props: LibraryScreenProps) {
   const selectedItems = useMemo(() => {
     if (!props.selectedIds.length) return [];
     const ids = new Set(props.selectedIds);
-    return library.items.filter((i: any) => ids.has(i.id));
-  }, [library.items, props.selectedIds]);
+    const pool = props.hiddenView ? library.hiddenItems : library.items;
+    return pool.filter((i: any) => ids.has(i.id));
+  }, [props.selectedIds, props.hiddenView, library.items, library.hiddenItems]);
   const anySelectedFavorite = selectedItems.some((i: any) => i.favorite);
   const anySelectedHidden = selectedItems.some((i: any) => i.hidden);
   // Play on a video-only selection opens the player; anything with a photo
@@ -915,7 +1065,11 @@ function LibraryScreen(props: LibraryScreenProps) {
   };
 
   return (
-    <div className={`library-layout ${props.showInspector ? "with-inspector" : ""}`}>
+    <div
+      ref={inspectorRef}
+      className={`library-layout ${props.showInspector ? "with-inspector" : ""}`}
+      style={{ "--inspector-width": `${inspectorWidth}px` } as CSSProperties}
+    >
       <section className="library-center">
         <header className="library-header">
           {inAlbum ? (
@@ -998,7 +1152,14 @@ function LibraryScreen(props: LibraryScreenProps) {
               <div className="header-actions">
                 {!props.hiddenView && (
                   <>
-                    <label className="source-select" title="Filter the library by source">
+                    <label
+                      className="source-select"
+                      title={
+                        activeSourceName
+                          ? `Filtering by ${activeSourceName}`
+                          : "Filter the library by source"
+                      }
+                    >
                       <FolderIcon size={14} />
                       <span className="source-select-label">Source</span>
                       <select
@@ -1019,11 +1180,11 @@ function LibraryScreen(props: LibraryScreenProps) {
                       type="button"
                       onClick={() => props.onImportFolder?.()}
                       disabled={props.busy}
-                      title="Open folder (⌘O)"
-                      aria-label="Open folder"
+                      title="Add folder (⌘O)"
+                      aria-label="Add folder"
                     >
                       <FolderIcon size={15} />
-                      <span className="btn-label">Open folder</span>
+                      <span className="btn-label">Add folder</span>
                     </button>
                     <button
                       className="primary-button"
@@ -1089,17 +1250,20 @@ function LibraryScreen(props: LibraryScreenProps) {
             </div>
             <div className="toolbar-right">
               <div className="toolbar-actions">
-                <button
-                  className="toolbar-button slideshow-action"
-                  type="button"
-                  onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
-                  disabled={props.busy || props.items.length === 0}
-                  title="Play the current view as a slideshow (Space)"
-                  aria-label="Play slideshow"
-                >
-                  <PlayIcon size={14} />
-                  <span className="slideshow-label">Slideshow</span>
-                </button>
+                {/* An album already has a Play button in its header. */}
+                {!props.activeAlbum && (
+                  <button
+                    className="toolbar-button slideshow-action"
+                    type="button"
+                    onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
+                    disabled={props.busy || props.items.length === 0}
+                    title="Play the current view as a slideshow (Space)"
+                    aria-label="Play slideshow"
+                  >
+                    <PlayIcon size={14} />
+                    <span className="slideshow-label">Slideshow</span>
+                  </button>
+                )}
                 {!props.hiddenView && (
                   <button
                     className="toolbar-button"
@@ -1132,42 +1296,50 @@ function LibraryScreen(props: LibraryScreenProps) {
                       );
                     })}
                   </div>
-                  <div className="zoom-control" role="group" aria-label="Thumbnail size">
-                    {(["small", "medium", "large"] as const).map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        className={`zoom-step ${thumbnailSize === s ? "selected" : ""}`}
-                        aria-label={
-                          s === "small"
-                            ? "Small thumbnails"
-                            : s === "medium"
-                              ? "Medium thumbnails"
-                              : "Large thumbnails"
-                        }
-                        aria-pressed={thumbnailSize === s}
-                        onClick={() => settingsStore.update("thumbnailSize", s)}
-                        title={
-                          s === "small"
-                            ? "Small thumbnails"
-                            : s === "medium"
-                              ? "Medium thumbnails"
-                              : "Large thumbnails"
-                        }
-                      >
-                        <span className={`zoom-glyph zoom-glyph-${s}`} aria-hidden="true">
-                          {Array.from(
-                            {
-                              length: s === "small" ? 6 : s === "medium" ? 4 : 1,
-                            },
-                            (_, index) => (
-                              <i key={index} />
-                            ),
-                          )}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+                  {/* Details rows use a fixed thumbnail, so size only matters
+                      for the visual layouts. A divider keeps the two icon
+                      groups from reading as one six-button control. */}
+                  {props.layout !== "details" && (
+                    <span className="toolbar-divider" aria-hidden="true" />
+                  )}
+                  {props.layout !== "details" && (
+                    <div className="zoom-control" role="group" aria-label="Thumbnail size">
+                      {(["small", "medium", "large"] as const).map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          className={`zoom-step ${thumbnailSize === s ? "selected" : ""}`}
+                          aria-label={
+                            s === "small"
+                              ? "Small thumbnails"
+                              : s === "medium"
+                                ? "Medium thumbnails"
+                                : "Large thumbnails"
+                          }
+                          aria-pressed={thumbnailSize === s}
+                          onClick={() => updateSettings("thumbnailSize", s)}
+                          title={
+                            s === "small"
+                              ? "Small thumbnails"
+                              : s === "medium"
+                                ? "Medium thumbnails"
+                                : "Large thumbnails"
+                          }
+                        >
+                          <span className={`zoom-glyph zoom-glyph-${s}`} aria-hidden="true">
+                            {Array.from(
+                              {
+                                length: s === "small" ? 6 : s === "medium" ? 4 : 1,
+                              },
+                              (_, index) => (
+                                <i key={index} />
+                              ),
+                            )}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {!props.hiddenView && (
                   <div
@@ -1212,9 +1384,13 @@ function LibraryScreen(props: LibraryScreenProps) {
 
           <div className="filter-cluster" role="group" aria-label="Filter by media type">
             <span className="smart-label">TYPE</span>
-            {(["All", "Photos", "Videos", "RAW", "Favorites"] as string[]).map((f) => {
-              const count =
-                f === "All"
+            {(["All", "Photos", "Videos", "RAW", "Animations", "Favorites"] as const).map((f) => {
+              // Album/collection counts must come from the full collection on
+              // screen, not the type-filtered `props.items` (selecting "Photos"
+              // in an album with no photos would zero every count).
+              const count = props.activeAlbum
+                ? filterCounts[f]
+                : f === "All"
                   ? (props.libraryStats?.photos ?? 0) +
                     (props.libraryStats?.videos ?? 0) +
                     (props.libraryStats?.raws ?? 0)
@@ -1224,19 +1400,26 @@ function LibraryScreen(props: LibraryScreenProps) {
                       ? (props.libraryStats?.videos ?? 0)
                       : f === "RAW"
                         ? (props.libraryStats?.raws ?? 0)
-                        : f === "Favorites"
-                          ? (props.libraryStats?.favorites ?? 0)
-                          : 0;
+                        : f === "Animations"
+                          ? (props.libraryStats?.animations ?? 0)
+                          : (props.libraryStats?.favorites ?? 0);
               return (
                 <button
                   key={f}
                   type="button"
                   aria-pressed={props.filter === f}
-                  className={`quick-filter ${props.filter === f ? "active" : ""}`}
+                  className={`quick-filter ${props.filter === f ? "active" : ""} ${
+                    count === 0 && f !== "All" ? "is-empty" : ""
+                  }`}
+                  title={
+                    count === 0 && f !== "All"
+                      ? `No ${f === "RAW" ? "RAW files" : f.toLowerCase()} here`
+                      : undefined
+                  }
                   onClick={() => props.onChangeFilter(f as Filter)}
                 >
                   {f}
-                  <span className="filter-count">{count}</span>
+                  <span className="filter-count">{count.toLocaleString()}</span>
                 </button>
               );
             })}
@@ -1542,13 +1725,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                         </span>
                         <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
                           <b>
-                            {masked(item)
-                              ? "Hidden item"
-                              : item.name + (showExtensions ? `.${item.extension}` : "")}
+                            {masked(item) ? (
+                              "Hidden item"
+                            ) : (
+                              <MiddleTruncate
+                                text={displayFileName(item.name, item.extension, showExtensions)}
+                              />
+                            )}
                           </b>
-                          <small className="tile-date">
-                            {new Date(captureDate(item)).toLocaleDateString()}
-                          </small>
+                          <small className="tile-date">{formatItemDate(item)}</small>
                           <small className="tile-kind">
                             <KindDot kind={item.kind} />
                             {item.kind === "video"
@@ -1724,11 +1909,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                                     className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
                                   >
                                     <b>
-                                      {item.name + (showExtensions ? `.${item.extension}` : "")}
+                                      <MiddleTruncate
+                                        text={displayFileName(
+                                          item.name,
+                                          item.extension,
+                                          showExtensions,
+                                        )}
+                                      />
                                     </b>
-                                    <small className="tile-date">
-                                      {new Date(captureDate(item)).toLocaleDateString()}
-                                    </small>
+                                    <small className="tile-date">{formatItemDate(item)}</small>
                                     <small className="tile-kind">
                                       <KindDot kind={item.kind} />
                                       {item.kind === "video"
@@ -1884,10 +2073,12 @@ function LibraryScreen(props: LibraryScreenProps) {
                         ) : null}
                       </span>
                       <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
-                        <b>{item.name + (showExtensions ? `.${item.extension}` : "")}</b>
-                        <small className="tile-date">
-                          {new Date(captureDate(item)).toLocaleDateString()}
-                        </small>
+                        <b>
+                          <MiddleTruncate
+                            text={displayFileName(item.name, item.extension, showExtensions)}
+                          />
+                        </b>
+                        <small className="tile-date">{formatItemDate(item)}</small>
                         <small className="tile-kind">
                           {item.kind === "video" ? "Video" : item.kind === "raw" ? "RAW" : "Photo"}
                         </small>
@@ -1916,12 +2107,34 @@ function LibraryScreen(props: LibraryScreenProps) {
           )}
         </div>
       </section>
-
+      {props.showInspector && (
+        <PanelResizer
+          side="right"
+          width={inspectorWidth}
+          min={240}
+          max={() =>
+            Math.min(
+              480,
+              Math.max(240, (inspectorRef.current?.clientWidth ?? window.innerWidth) - 360),
+            )
+          }
+          cssVar="--inspector-width"
+          targetRef={inspectorRef}
+          onCommit={(next) => void updateSettings("inspectorWidth", next)}
+          defaultWidth={300}
+          label="Resize inspector"
+        />
+      )}
       {props.showInspector && (
         <aside className="photo-inspector">
-          {props.inspectedId && library.items.find((i: any) => i.id === props.inspectedId) ? (
+          {props.inspectedId &&
+          (props.hiddenView ? library.hiddenItems : library.items).find(
+            (i: any) => i.id === props.inspectedId,
+          ) ? (
             (() => {
-              const sel = library.items.find((i: any) => i.id === props.inspectedId);
+              const sel = (props.hiddenView ? library.hiddenItems : library.items).find(
+                (i: any) => i.id === props.inspectedId,
+              );
               if (!sel) return null;
               // Inspection is independent of selection: the Inspector always
               // shows the inspected item, even when a larger multi-selection
@@ -2021,7 +2234,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                     )}
                   </span>
                   <div className="inspector-actions">
-                    {sel.kind === "video" && props.onPlayBackground && (
+                    {sel.kind === "video" ? (
                       <button
                         className="inspector-action primary"
                         onClick={() => toggleBackground(sel)}
@@ -2038,6 +2251,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                           <PlayIcon size={14} />
                         )}
                         <span>{playingId === sel.id && isPlaying ? "Pause" : "Play"}</span>
+                      </button>
+                    ) : (
+                      <button
+                        className="inspector-action primary"
+                        onClick={() => props.onOpenViewer(sel.id)}
+                        title="View item"
+                      >
+                        <PlayIcon size={14} />
+                        <span>View</span>
                       </button>
                     )}
                     <button
@@ -2095,7 +2317,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                           <div className="info-row">
                             <span className="info-label">Dimensions</span>
                             <span className="info-value">
-                              {sel.width && sel.height ? `${sel.width} × ${sel.height}` : "Unknown"}
+                              {sel.width && sel.height ? `${sel.width} × ${sel.height}` : "—"}
                             </span>
                           </div>
                           <div className="info-row">
@@ -2122,15 +2344,13 @@ function LibraryScreen(props: LibraryScreenProps) {
                             <div className="info-row">
                               <span className="info-label">Captured</span>
                               <span className="info-value">
-                                {new Date(sel.capturedAt).toLocaleString()}
+                                {formatCapturedDateTime(sel.capturedAt)}
                               </span>
                             </div>
                           )}
                           <div className="info-row">
                             <span className="info-label">Modified</span>
-                            <span className="info-value">
-                              {new Date(sel.modifiedAt).toLocaleString()}
-                            </span>
+                            <span className="info-value">{formatFileDateTime(sel.modifiedAt)}</span>
                           </div>
                         </>
                       )}
