@@ -53,6 +53,8 @@ import {
   formatItemDate,
   itemMonth,
 } from "../engine/utils/mediaDate";
+import { displayFileName } from "../engine/utils/fileName";
+import { MiddleTruncate } from "../design/components/MiddleTruncate";
 
 const GALLERY_PAGE_SIZE = 180;
 const VIRTUAL_GRID_OVERSCAN_ROWS = 6;
@@ -1723,9 +1725,13 @@ function LibraryScreen(props: LibraryScreenProps) {
                         </span>
                         <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
                           <b>
-                            {masked(item)
-                              ? "Hidden item"
-                              : item.name + (showExtensions ? `.${item.extension}` : "")}
+                            {masked(item) ? (
+                              "Hidden item"
+                            ) : (
+                              <MiddleTruncate
+                                text={displayFileName(item.name, item.extension, showExtensions)}
+                              />
+                            )}
                           </b>
                           <small className="tile-date">{formatItemDate(item)}</small>
                           <small className="tile-kind">
@@ -1903,7 +1909,13 @@ function LibraryScreen(props: LibraryScreenProps) {
                                     className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
                                   >
                                     <b>
-                                      {item.name + (showExtensions ? `.${item.extension}` : "")}
+                                      <MiddleTruncate
+                                        text={displayFileName(
+                                          item.name,
+                                          item.extension,
+                                          showExtensions,
+                                        )}
+                                      />
                                     </b>
                                     <small className="tile-date">{formatItemDate(item)}</small>
                                     <small className="tile-kind">
@@ -2061,7 +2073,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                         ) : null}
                       </span>
                       <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
-                        <b>{item.name + (showExtensions ? `.${item.extension}` : "")}</b>
+                        <b>{displayFileName(item.name, item.extension, showExtensions)}</b>
                         <small className="tile-date">{formatItemDate(item)}</small>
                         <small className="tile-kind">
                           {item.kind === "video" ? "Video" : item.kind === "raw" ? "RAW" : "Photo"}
