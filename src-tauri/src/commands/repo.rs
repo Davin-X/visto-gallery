@@ -4,9 +4,11 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use sqlx::SqlitePool;
+use tauri::{AppHandle, Manager, State};
 
 use crate::commands::{file_modified_at, now_ms, path_is_inside};
-use crate::models::stable_id;
+use crate::models::{stable_id, Tag};
+use crate::{AppState, Catalog};
 
 /// Album rows with their item count folded in, so `Album.item_count` is always a
 /// real column on the result set.
@@ -209,4 +211,43 @@ pub(crate) async fn relink_moved_items(
         .map_err(|error| error.to_string())?;
 
     Ok(moves.len())
+}
+
+/// Secure export: the backend owns path selection via native dialog.
+/// Writes to a temp file next to the destination, then renames atomically.
+#[tauri::command]
+pub async fn get_tags(catalog: State<'_, Catalog>) -> Result<Vec<Tag>, String> {
+    let db = crate::commands::get_db(&catalog)?;
+    let tags = sqlx::query_as::<_, Tag>(&format!("{} ORDER BY t.name ASC", TAG_SELECT))
+        .fetch_all(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(tags)
+}
+
+/// Purge the library catalog (media items with their tags, album links, edit
+/// recipes and edit-backup records, plus albums, tags, Smart Albums and
+/// library folders) in one transaction, while leaving original media files on
+/// disk. Also stops folder watchers and empties the thumbnail cache so nothing
+/// keeps describing the old catalog. This is irreversible through the UI.
+///
+/// Kept on purpose: settings, edit presets, and the backed-up originals of
+/// in-place edits under the app data folder (user data, never deleted here).
+#[tauri::command]
+pub async fn delete_library_database(
+    app: AppHandle,
+    catalog: State<'_, Catalog>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let db = crate::commands::get_db(&catalog)?;
+    purge_catalog(&db).await?;
+
+    if let Ok(mut watchers) = state.watchers.lock() {
+        watchers.clear();
+    }
+    if let Ok(cache) = app.path().app_cache_dir() {
+        let thumbnails = cache.join("thumbnails");
+        let _ = tokio::fs::remove_dir_all(&thumbnails).await;
+    }
+    Ok(())
 }

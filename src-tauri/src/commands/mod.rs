@@ -54,10 +54,11 @@ use uuid::Uuid;
 // payloads in src/engine/commands/tauri.ts send.
 
 mod dto;
-mod repo;
+pub(crate) mod repo;
 pub mod security;
 pub use dto::*;
-pub(crate) use repo::{purge_catalog, relink_moved_items, ALBUM_SELECT, TAG_SELECT};
+pub use repo::{delete_library_database, get_tags};
+pub(crate) use repo::{relink_moved_items, ALBUM_SELECT, TAG_SELECT};
 // ===== Helper Functions =====
 
 /// Cooperative cancellation flags for long operations that are not folder
@@ -79,7 +80,7 @@ pub async fn cancel_move_to_trash() -> Result<(), String> {
     Ok(())
 }
 
-fn get_db(catalog: &State<'_, Catalog>) -> Result<SqlitePool, String> {
+pub(crate) fn get_db(catalog: &State<'_, Catalog>) -> Result<SqlitePool, String> {
     catalog.pool()
 }
 
@@ -741,45 +742,6 @@ pub(crate) fn apply_setting(settings: &mut AppSettings, key: &str, value: &str) 
     }
 }
 
-/// Purge the library catalog (media items with their tags, album links, edit
-/// recipes and edit-backup records, plus albums, tags, Smart Albums and
-/// library folders) in one transaction, while leaving original media files on
-/// disk. Also stops folder watchers and empties the thumbnail cache so nothing
-/// keeps describing the old catalog. This is irreversible through the UI.
-///
-/// Kept on purpose: settings, edit presets, and the backed-up originals of
-/// in-place edits under the app data folder (user data, never deleted here).
-#[tauri::command]
-pub async fn delete_library_database(
-    app: AppHandle,
-    catalog: State<'_, Catalog>,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    let db = get_db(&catalog)?;
-    purge_catalog(&db).await?;
-
-    if let Ok(mut watchers) = state.watchers.lock() {
-        watchers.clear();
-    }
-    if let Ok(cache) = app.path().app_cache_dir() {
-        let thumbnails = cache.join("thumbnails");
-        let _ = tokio::fs::remove_dir_all(&thumbnails).await;
-    }
-    Ok(())
-}
-
-/// Secure export: the backend owns path selection via native dialog.
-/// Writes to a temp file next to the destination, then renames atomically.
-#[tauri::command]
-pub async fn get_tags(catalog: State<'_, Catalog>) -> Result<Vec<Tag>, String> {
-    let db = get_db(&catalog)?;
-    let tags = sqlx::query_as::<_, Tag>(&format!("{} ORDER BY t.name ASC", TAG_SELECT))
-        .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(tags)
-}
-
 #[cfg(test)]
 mod path_validation_tests {
     use super::validate_path_under_registered_roots;
@@ -941,7 +903,7 @@ mod rescan_preservation_tests {
 
 #[cfg(test)]
 mod purge_catalog_tests {
-    use super::purge_catalog;
+    use super::repo::purge_catalog;
     use sqlx::sqlite::SqlitePoolOptions;
 
     async fn migrated_db() -> sqlx::SqlitePool {
