@@ -58,16 +58,17 @@ export function SourcesManager(props: {
 
   const menuItems = (folder: LibraryFolder): ContextMenuItem[] => {
     const viewing = isViewing(folder);
+    const missing = !folder.available;
     return [
       {
         label: viewing ? "Viewing in Library" : "View in Library",
-        disabled: viewing,
+        disabled: viewing || missing,
         onClick: () => filterTo(folder),
       },
-      { label: "Reveal in Finder", onClick: () => reveal(folder) },
+      { label: "Reveal in Finder", disabled: missing, onClick: () => reveal(folder) },
       {
         label: "Rescan this source",
-        disabled: !onRescanFolder,
+        disabled: !onRescanFolder || missing,
         onClick: () => void onRescanFolder?.(folder),
       },
       { label: "", divider: true },
@@ -189,10 +190,15 @@ export function SourcesManager(props: {
             <tbody>
               {filteredFolders.map((folder) => {
                 const viewing = isViewing(folder);
+                const missing = !folder.available;
                 return (
                   <tr
                     key={folder.path}
-                    className={viewing ? "is-active" : undefined}
+                    className={
+                      [viewing ? "is-active" : "", missing ? "is-missing" : ""]
+                        .filter(Boolean)
+                        .join(" ") || undefined
+                    }
                     onContextMenu={(event) => {
                       event.preventDefault();
                       setMenu({ folder, x: event.clientX, y: event.clientY });
@@ -208,14 +214,25 @@ export function SourcesManager(props: {
                             <span className="sources-name-text" title={folder.name}>
                               {folder.name}
                             </span>
-                            {viewing && <span className="sources-active">Viewing</span>}
+                            {missing ? (
+                              <span className="sources-missing">Missing</span>
+                            ) : viewing ? (
+                              <span className="sources-active">Viewing</span>
+                            ) : null}
                           </span>
                           <button
                             type="button"
                             className="sources-path"
                             title={folder.path}
-                            aria-label={`Reveal ${folder.path} in Finder`}
-                            onClick={() => reveal(folder)}
+                            aria-label={
+                              missing
+                                ? `Missing folder: ${folder.path}`
+                                : `Reveal ${folder.path} in Finder`
+                            }
+                            onClick={() => {
+                              if (!missing) reveal(folder);
+                            }}
+                            disabled={missing}
                           >
                             {compactPath(folder.path)}
                           </button>
@@ -226,7 +243,16 @@ export function SourcesManager(props: {
                     <td className="sources-num">{formatBytes(folder.totalSize)}</td>
                     <td className="sources-actions">
                       <div className="sources-row-actions">
-                        {!viewing && (
+                        {missing && onRemoveFolder ? (
+                          <button
+                            type="button"
+                            className="sources-row-remove danger-button"
+                            title={`Remove missing source ${folder.name}`}
+                            onClick={() => onRemoveFolder(folder)}
+                          >
+                            Remove
+                          </button>
+                        ) : !viewing ? (
                           <button
                             type="button"
                             className="sources-row-view"
@@ -235,7 +261,7 @@ export function SourcesManager(props: {
                           >
                             View
                           </button>
-                        )}
+                        ) : null}
                         <button
                           type="button"
                           className="sources-row-menu"

@@ -72,6 +72,9 @@ pub struct LibraryFolder {
     pub name: String,
     pub item_count: i64,
     pub total_size: i64,
+    /// False when the folder no longer exists on disk (registered source was
+    /// deleted or moved outside the app).
+    pub available: bool,
 }
 
 #[derive(Deserialize, Default)]
