@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "description": "Performance regression thresholds for the synthetic library harness (Chromium). Update deliberately when intentional changes shift metrics; keep margins for CI noise.",
+    "harness": "scripts/benchmark-library-harness.mjs / harness.html?benchmark=N",
+    "howToUpdate": "Run `npm run build && LIBRARY_BENCHMARK_ITEMS=50000 node scripts/check-library-harness-perf.mjs --record` locally, review the printed metrics, then adjust thresholds with headroom. Do not tighten based on a single fast machine.",
+    "notes": [
+      "Times are wall-clock ms in a headless Chromium browser on vite preview (not native WebKit).",
+      "maxActiveThumbnails is a deterministic app bound (CachedThumbnail MAX_CONCURRENT_THUMBNAIL_REQUESTS = 6).",
+      "Scan metrics are proxied by first useful screen/query load in the synthetic harness (no real Rust scanner runs)."
+    ]
+  },
+  "items": 50000,
+  "thresholds": {
+    "firstUsefulScreenMs": { "max": 20000, "unit": "ms", "meaning": "initial library grid render (synthetic scan/page load proxy)" },
+    "albumsOverviewMs": { "max": 15000, "unit": "ms", "meaning": "albums overview page render" },
+    "maxActiveThumbnails": { "max": 6, "unit": "count", "meaning": "concurrent thumbnail request bound" },
+    "mountedTiles": { "min": 1, "unit": "count", "meaning": "sanity: grid rendered tiles" },
+    "albumCards": { "min": 1, "unit": "count", "meaning": "sanity: albums rendered cards" }
+  },
+  "reference": {
+    "recordedAt": null,
+    "environment": null,
+    "metrics": null
+  }
+}
