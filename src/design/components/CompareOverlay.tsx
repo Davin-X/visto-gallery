@@ -14,6 +14,12 @@ export interface PanOffset {
   y: number;
 }
 
+/** Header summary for the number of metadata fields that differ. */
+export function describeDifferences(differences: number): string {
+  if (differences === 0) return "Identical metadata";
+  return `${differences} ${differences === 1 ? "field differs" : "fields differ"}`;
+}
+
 export function clampZoom(zoom: number): number {
   if (!Number.isFinite(zoom)) return MIN_ZOOM;
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
@@ -255,7 +261,7 @@ export function CompareOverlay({
           </div>
           <div className="compare-head-side">
             <span className={`compare-diff-count${differences === 0 ? " is-clean" : ""}`}>
-              {differences === 0 ? "Identical metadata" : `${differences} fields differ`}
+              {describeDifferences(differences)}
             </span>
             <button
               type="button"

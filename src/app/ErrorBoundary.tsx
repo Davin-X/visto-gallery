@@ -90,20 +90,21 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       const report = this.state.crashReport ?? readCrashReport();
       return (
         <div
-          role="alert"            style={{
-              position: "fixed",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "light-dark(#ffffff, #111827)",
-              color: "light-dark(#111827, #f9fafb)",
-              colorScheme: "light dark",
-              zIndex: 10000,
-              padding: 24,
-              textAlign: "center",
-            }}
+          role="alert"
+          style={{
+            position: "fixed",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "light-dark(#ffffff, #111827)",
+            color: "light-dark(#111827, #f9fafb)",
+            colorScheme: "light dark",
+            zIndex: 10000,
+            padding: 24,
+            textAlign: "center",
+          }}
         >
           <h2 style={{ marginBottom: 12 }}>VistoGallery encountered an error</h2>
           <p style={{ marginBottom: 16, maxWidth: 420, opacity: 0.85 }}>

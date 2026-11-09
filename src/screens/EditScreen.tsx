@@ -81,7 +81,10 @@ function HighlightsIcon({ size = 14, className = "" }: { size?: number; classNam
     >
       <circle cx="12" cy="12" r="3.2" />
       <path d="M12 3v2M12 19v2M3 12h2M19 12h2" />
-      <path d="M5.6 5.6l1.5 1.5M16.9 16.9l1.5 1.5M5.6 18.4l1.5-1.5M16.9 7.1l1.5-1.5" strokeWidth={1.4} />
+      <path
+        d="M5.6 5.6l1.5 1.5M16.9 16.9l1.5 1.5M5.6 18.4l1.5-1.5M16.9 7.1l1.5-1.5"
+        strokeWidth={1.4}
+      />
     </svg>
   );
 }
@@ -299,7 +302,10 @@ function EditScreen(props: EditScreenProps) {
     maxX: number;
     maxY: number;
   } | null>(null);
-  const [naturalDimensions, setNaturalDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [naturalDimensions, setNaturalDimensions] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
 
   const draftTriggerRef = useRef<HTMLButtonElement | null>(null);
   const aspectTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -636,12 +642,8 @@ function EditScreen(props: EditScreenProps) {
   const rawHeight = naturalDimensions?.height || props.item?.height || 0;
   const fallbackW = 4;
   const fallbackH = 3;
-  const effectiveWidth = isRotatedSideways
-    ? (rawHeight || fallbackH)
-    : (rawWidth || fallbackW);
-  const effectiveHeight = isRotatedSideways
-    ? (rawWidth || fallbackW)
-    : (rawHeight || fallbackH);
+  const effectiveWidth = isRotatedSideways ? rawHeight || fallbackH : rawWidth || fallbackW;
+  const effectiveHeight = isRotatedSideways ? rawWidth || fallbackW : rawHeight || fallbackH;
   const photoAspectRatio = effectiveWidth / effectiveHeight;
 
   // Accurately fit the stage container within the measured viewport
@@ -709,13 +711,22 @@ function EditScreen(props: EditScreenProps) {
 
   const cameraLensExif = useMemo(() => {
     if (!props.item) return null;
-    const parts = [props.item.camera, props.item.exposure, props.item.iso ? `ISO ${props.item.iso}` : null].filter(Boolean);
+    const parts = [
+      props.item.camera,
+      props.item.exposure,
+      props.item.iso ? `ISO ${props.item.iso}` : null,
+    ].filter(Boolean);
     return parts.length > 0 ? parts.join(" · ") : null;
   }, [props.item]);
 
   // Cycle Background Tones
   const cycleCanvasTone = () => {
-    const tones: Array<"neutral" | "dark" | "black" | "white"> = ["neutral", "dark", "black", "white"];
+    const tones: Array<"neutral" | "dark" | "black" | "white"> = [
+      "neutral",
+      "dark",
+      "black",
+      "white",
+    ];
     const nextIdx = (tones.indexOf(canvasTone) + 1) % tones.length;
     setCanvasTone(tones[nextIdx]);
   };
@@ -799,7 +810,9 @@ function EditScreen(props: EditScreenProps) {
           </section>
         ) : (
           <div className="viewer-empty-state">
-            <p>No draft edits in progress. Select a photo in your library and click <b>Edit</b>.</p>
+            <p>
+              No draft edits in progress. Select a photo in your library and click <b>Edit</b>.
+            </p>
           </div>
         )}
       </div>
@@ -862,7 +875,10 @@ function EditScreen(props: EditScreenProps) {
                 <CheckIcon size={11} /> Original safe
               </span>
               {hasAdjustments && (
-                <span className="edit-status-chip is-draft" title="You have in-progress edits in this draft">
+                <span
+                  className="edit-status-chip is-draft"
+                  title="You have in-progress edits in this draft"
+                >
                   Draft active
                 </span>
               )}
@@ -919,10 +935,7 @@ function EditScreen(props: EditScreenProps) {
                 draftPopoverPos &&
                 createPortal(
                   <>
-                    <div
-                      className="edit-drafts-backdrop"
-                      onClick={() => setDraftTrayOpen(false)}
-                    />
+                    <div className="edit-drafts-backdrop" onClick={() => setDraftTrayOpen(false)} />
                     <div
                       className="edit-drafts-popover"
                       style={{
@@ -937,7 +950,8 @@ function EditScreen(props: EditScreenProps) {
                       <div className="edit-drafts-popover-head">
                         <b>Saved drafts</b>
                         <small>
-                          {savedDraftItems.length} {savedDraftItems.length === 1 ? "photo" : "photos"}
+                          {savedDraftItems.length}{" "}
+                          {savedDraftItems.length === 1 ? "photo" : "photos"}
                         </small>
                       </div>
                       <div className="edit-drafts-list">
@@ -1002,7 +1016,9 @@ function EditScreen(props: EditScreenProps) {
           {/* Main Stage Viewport */}
           <div ref={viewportRef} className="canvas-viewport">
             {/* Aspect Ratio Framing Guide (when active in non-crop mode) */}
-            {aspectGuide && !crop.enabled && typeof aspectGuide === "number" && (
+            {aspectGuide &&
+              !crop.enabled &&
+              typeof aspectGuide === "number" &&
               (() => {
                 const guideRatio = aspectGuide;
                 const photoRatio = effectiveWidth / effectiveHeight;
@@ -1074,7 +1090,9 @@ function EditScreen(props: EditScreenProps) {
                     }}
                   >
                     <div className="aspect-guide-badge">
-                      <span>Preview: {ASPECT_RATIO_OPTIONS.find((r) => r.value === aspectGuide)?.label}</span>
+                      <span>
+                        Preview: {ASPECT_RATIO_OPTIONS.find((r) => r.value === aspectGuide)?.label}
+                      </span>
                       <button
                         type="button"
                         onClick={() => applyGuideAsCrop(aspectGuide)}
@@ -1092,8 +1110,7 @@ function EditScreen(props: EditScreenProps) {
                     </div>
                   </div>
                 );
-              })()
-            )}
+              })()}
 
             {/* Stage Container */}
             <div
@@ -1113,8 +1130,12 @@ function EditScreen(props: EditScreenProps) {
                 alt={props.item.name}
                 onLoad={(e) => updateNaturalDimensions(e.currentTarget)}
                 style={{
-                  maxWidth: isRotatedSideways ? "min(calc(100cqh - 32px), calc(100vh - 180px))" : "min(calc(100cqw - 32px), calc(100vw - 380px))",
-                  maxHeight: isRotatedSideways ? "min(calc(100cqw - 32px), calc(100vw - 380px))" : "min(calc(100cqh - 32px), calc(100vh - 180px))",
+                  maxWidth: isRotatedSideways
+                    ? "min(calc(100cqh - 32px), calc(100vh - 180px))"
+                    : "min(calc(100cqw - 32px), calc(100vw - 380px))",
+                  maxHeight: isRotatedSideways
+                    ? "min(calc(100cqw - 32px), calc(100vw - 380px))"
+                    : "min(calc(100cqh - 32px), calc(100vh - 180px))",
                   width: "auto",
                   height: "auto",
                   objectFit: "contain",
@@ -1453,7 +1474,8 @@ function EditScreen(props: EditScreenProps) {
                 </div>
 
                 <p className="edit-crop-help">
-                  The crop frame stays locked inside the photo dimensions. Press Shift while dragging for finer step adjustments.
+                  The crop frame stays locked inside the photo dimensions. Press Shift while
+                  dragging for finer step adjustments.
                 </p>
               </div>
             ) : (
@@ -1671,8 +1693,16 @@ function EditScreen(props: EditScreenProps) {
         <div className="edit-modal-backdrop">
           <div className="edit-modal-dialog">
             <h3 style={{ margin: "0 0 8px", color: "var(--text)" }}>Replace original file?</h3>
-            <p style={{ margin: "0 0 16px", color: "var(--muted)", lineHeight: 1.5, fontSize: "13px" }}>
-              This bakes your current edits into <b>{props.item.name}</b> on disk. A backup is kept so you can undo this anytime using <b>Restore original</b>.
+            <p
+              style={{
+                margin: "0 0 16px",
+                color: "var(--muted)",
+                lineHeight: 1.5,
+                fontSize: "13px",
+              }}
+            >
+              This bakes your current edits into <b>{props.item.name}</b> on disk. A backup is kept
+              so you can undo this anytime using <b>Restore original</b>.
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button
@@ -1701,11 +1731,17 @@ function EditScreen(props: EditScreenProps) {
       {confirmRevert && (
         <div className="edit-modal-backdrop">
           <div className="edit-modal-dialog">
-            <h3 style={{ margin: "0 0 8px", color: "var(--text)" }}>
-              Restore original file?
-            </h3>
-            <p style={{ margin: "0 0 16px", color: "var(--muted)", lineHeight: 1.5, fontSize: "13px" }}>
-              If <b>{props.item.name}</b> was previously replaced in-place, this restores the unedited backup file. If there is no backup, it resets your draft adjustments.
+            <h3 style={{ margin: "0 0 8px", color: "var(--text)" }}>Restore original file?</h3>
+            <p
+              style={{
+                margin: "0 0 16px",
+                color: "var(--muted)",
+                lineHeight: 1.5,
+                fontSize: "13px",
+              }}
+            >
+              If <b>{props.item.name}</b> was previously replaced in-place, this restores the
+              unedited backup file. If there is no backup, it resets your draft adjustments.
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button

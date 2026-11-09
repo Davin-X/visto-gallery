@@ -91,7 +91,7 @@ describe("DuplicatesScreen", () => {
     expect(dialog.textContent).toContain("copy.jpg");
     // Size differs, so the row is flagged and the header counts it.
     expect(dialog.querySelectorAll(".compare-table tr.is-diff").length).toBeGreaterThan(0);
-    expect(dialog.textContent).toMatch(/fields differ/);
+    expect(dialog.textContent).toMatch(/fields? differs?/);
 
     fireEvent.click(screen.getByRole("button", { name: /Close compare/i }));
     expect(screen.queryByRole("dialog", { name: /Keeper vs copy/i })).toBeNull();
