@@ -28,7 +28,7 @@ pub use duplicates::*;
 pub use edit_recipes::*;
 pub use finder_tags::{merge_finder_tags, read_finder_tags, write_finder_tags};
 use image::codecs::jpeg::JpegEncoder;
-use image::{DynamicImage, GenericImageView, ImageDecoder};
+use image::{DynamicImage, ImageDecoder};
 pub use library::*;
 pub use media::*;
 use notify::Watcher;
