@@ -1111,12 +1111,14 @@ fn render_edited_blocking(
             return Err("Missing journaled original for in-place edit.".to_string());
         }
 
-        let tmp_path = source_path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
+        let mut guard = super::TempFileGuard::new(
+            source_path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4())),
+        );
 
         // Write to temp
         write_image(
             &img,
-            &tmp_path,
+            guard.path(),
             &write_format,
             request.quality,
             request.strip_metadata,
@@ -1125,10 +1127,9 @@ fn render_edited_blocking(
 
         // Atomic rename. If it fails, the source is untouched; keep the
         // journaled original intact for a later revert.
-        std::fs::rename(&tmp_path, &source_path).map_err(|e| {
-            let _ = std::fs::remove_file(&tmp_path);
-            format!("Failed to replace original: {}", e)
-        })?;
+        std::fs::rename(guard.path(), &source_path)
+            .map_err(|e| format!("Failed to replace original: {}", e))?;
+        guard.commit();
 
         source_path.to_string_lossy().into_owned()
     } else {
@@ -1436,7 +1437,7 @@ pub(crate) fn read_exif_bytes(path: &PathBuf) -> Option<Vec<u8>> {
 /// Write image with format-specific options, optionally preserving EXIF
 fn write_image(
     img: &DynamicImage,
-    path: &PathBuf,
+    path: &Path,
     format: &str,
     quality: f32,
     strip_metadata: bool,

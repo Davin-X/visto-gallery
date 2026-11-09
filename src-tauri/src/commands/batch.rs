@@ -31,7 +31,9 @@ pub async fn export_bytes(
 
     let path = picked.into_path().map_err(|e| e.to_string())?;
 
-    // 2. Optional backup of existing file (only if user chose to replace)
+    // 2. Optional backup of existing file (only if user chose to replace).
+    // Kept next to the photo (not moved/pruned) so a user who asked for a
+    // backup can still find it; we avoid deleting unknown *.bak files.
     if backup.unwrap_or(false) && path.exists() {
         let bak = path.with_extension(format!(
             "{}.bak",
@@ -40,15 +42,15 @@ pub async fn export_bytes(
         let _ = std::fs::copy(&path, &bak);
     }
 
-    // 3. Atomic write: temp file next to destination, then rename
-    let tmp = path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
-    let mut file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+    // 3. Atomic write: temp file next to destination, then rename. The guard
+    // removes the temp file on any error (create/write/sync/rename).
+    let mut guard =
+        super::TempFileGuard::new(path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4())));
+    let mut file = std::fs::File::create(guard.path()).map_err(|e| e.to_string())?;
     file.write_all(&bytes).map_err(|e| e.to_string())?;
     file.sync_all().map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, &path).map_err(|e| {
-        let _ = std::fs::remove_file(&tmp);
-        e.to_string()
-    })?;
+    std::fs::rename(guard.path(), &path).map_err(|e| e.to_string())?;
+    guard.commit();
 
     Ok(path.to_string_lossy().into_owned())
 }

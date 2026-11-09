@@ -66,5 +66,8 @@ dirs = "7"
 reqwest = { version = "0.13", default-features = false, features = ["json", "native-tls"] }
 semver = "1"
 
+[dev-dependencies]
+filetime = "0.2"
+
 [patch.crates-io]
 wry = { path = "vendor/wry" }

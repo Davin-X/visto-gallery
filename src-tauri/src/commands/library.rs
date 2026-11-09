@@ -34,6 +34,9 @@ pub async fn scan_library(
     if !root_metadata.is_dir() {
         return Err(format!("Source path is not a folder: {}", root.display()));
     }
+    // Remove app-created temp exports left by a crash/failed write. Only files
+    // matching `<name>.tmp-<uuid>` and older than the grace period are touched.
+    super::sweep_stale_export_temps(&root, std::time::Duration::from_secs(300));
     let start = std::time::Instant::now();
     let mut items = Vec::new();
     let mut total_size: i64 = 0;
