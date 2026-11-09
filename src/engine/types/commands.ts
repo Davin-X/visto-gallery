@@ -321,6 +321,8 @@ export interface LibraryFolder {
   name: string;
   itemCount: number;
   totalSize: number;
+  /** False when the folder no longer exists on disk. */
+  available: boolean;
 }
 
 export interface UpdateCheckResult {

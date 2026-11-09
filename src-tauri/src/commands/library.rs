@@ -1381,6 +1381,12 @@ pub async fn watch_folder(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    // A source deleted outside the app is "missing", not an access error.
+    // Report it distinctly so the frontend can skip the permissions notice and
+    // avoid recording it as watched (a remounted drive must be watched again).
+    if !std::path::Path::new(&path).is_dir() {
+        return Err(format!("MISSING_SOURCE:{path}"));
+    }
     let app_handle = app.clone();
     let watch_path = path.clone();
     let mut watcher =
@@ -1471,15 +1477,20 @@ pub(crate) fn inferred_folder_root(path: &str) -> Option<String> {
 #[tauri::command]
 pub async fn get_library_folders(state: State<'_, AppState>) -> Result<Vec<LibraryFolder>, String> {
     let db = super::get_db(&state)?;
+    get_library_folders_inner(&db).await
+}
 
+pub(crate) async fn get_library_folders_inner(
+    db: &SqlitePool,
+) -> Result<Vec<LibraryFolder>, String> {
     let registered: Vec<String> =
         sqlx::query_scalar("SELECT path FROM library_folders ORDER BY path ASC")
-            .fetch_all(&db)
+            .fetch_all(db)
             .await
             .map_err(|e| e.to_string())?;
 
     let rows = sqlx::query("SELECT path, size FROM media_items WHERE hidden = 0")
-        .fetch_all(&db)
+        .fetch_all(db)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -1513,17 +1524,19 @@ pub async fn get_library_folders(state: State<'_, AppState>) -> Result<Vec<Libra
                 .map(|n| n.to_string_lossy().to_string())
                 .filter(|n| !n.is_empty())
                 .unwrap_or_else(|| path.clone());
+            let available = Path::new(&path).is_dir();
             LibraryFolder {
                 path,
                 name,
                 item_count,
                 total_size,
+                available,
             }
         })
         .collect();
 
     // Keep explicitly imported folders visible even when they are empty, so a
-    // stale entry can still be removed.
+    // stale/missing entry can still be removed.
     for root in &registered {
         if !folders.iter().any(|folder| &folder.path == root) {
             let name = Path::new(root)
@@ -1536,6 +1549,7 @@ pub async fn get_library_folders(state: State<'_, AppState>) -> Result<Vec<Libra
                 name,
                 item_count: 0,
                 total_size: 0,
+                available: Path::new(root).is_dir(),
             });
         }
     }
@@ -2625,5 +2639,61 @@ mod thumbnail_bytes_tests {
     #[test]
     fn rejects_corrupt_bytes() {
         assert_eq!(jpeg_dimensions(b"not an image"), None);
+    }
+}
+
+#[cfg(test)]
+mod library_folders_tests {
+    use sqlx::sqlite::SqlitePoolOptions;
+    use std::fs;
+
+    #[tokio::test]
+    async fn registered_but_missing_root_is_listed_as_unavailable() {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory catalog");
+        sqlx::migrate!("./migrations")
+            .run(&db)
+            .await
+            .expect("run migrations");
+
+        let existing = std::env::temp_dir().join(format!("visto-src-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&existing).expect("create existing source");
+        let missing = std::env::temp_dir().join(format!("visto-missing-{}", uuid::Uuid::new_v4()));
+        let _ = fs::remove_dir_all(&missing);
+
+        for path in [&existing, &missing] {
+            sqlx::query("INSERT INTO library_folders (path, added_at) VALUES (?, 0)")
+                .bind(path.to_string_lossy().as_ref())
+                .execute(&db)
+                .await
+                .expect("insert library folder");
+        }
+
+        let folders = super::get_library_folders_inner(&db)
+            .await
+            .expect("list folders");
+        let existing_path = existing.to_string_lossy().to_string();
+        let missing_path = missing.to_string_lossy().to_string();
+
+        let existing_row = folders
+            .iter()
+            .find(|f| f.path == existing_path)
+            .expect("existing");
+        let missing_row = folders
+            .iter()
+            .find(|f| f.path == missing_path)
+            .expect("missing");
+
+        assert!(
+            existing_row.available,
+            "existing source should be available"
+        );
+        assert!(!missing_row.available, "deleted source should be missing");
+        assert_eq!(missing_row.item_count, 0);
+
+        let _ = fs::remove_dir_all(&existing);
     }
 }

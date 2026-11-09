@@ -52,6 +52,7 @@ export function makeLibraryFolder(overrides: Partial<LibraryFolder> = {}): Libra
     name: "Photos",
     itemCount: 0,
     totalSize: 0,
+    available: true,
   };
   return { ...base, ...overrides };
 }

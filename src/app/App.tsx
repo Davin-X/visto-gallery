@@ -967,8 +967,10 @@ function App() {
         autoImportControllerRef.current?.changed(path);
       });
       const unlistenWatchError = await events.onFolderWatchError(({ path, message }) => {
+        const folder = useLibraryStore.getState().folders.find((f) => f.path === path);
+        if (folder && !folder.available) return;
         liveRef.current.library.showNotice(
-          `Folder watching stopped for ${path}: ${message}. Check the folder's macOS access permissions and re-add the source if needed.`,
+          `Folder watching stopped for ${path}: ${message}. Check the folder's macOS access permissions and restore or remove the source if needed.`,
         );
       });
       unlisteners.push(unlistenFolderChanged, unlistenWatchError);
@@ -1141,15 +1143,28 @@ function App() {
           })
         : [];
       if (cancelled) return;
-      const result = await syncFolderWatchers(roots, watchedRootsRef.current, {
+      // A deleted source is "missing", not a permissions problem — don't try to
+      // watch it and don't report an access error. The Sources UI shows it.
+      const missing = new Set(
+        useLibraryStore
+          .getState()
+          .folders.filter((folder) => !folder.available)
+          .map((folder) => folder.path),
+      );
+      const watchable = roots.filter((path) => !missing.has(path));
+      const result = await syncFolderWatchers(watchable, watchedRootsRef.current, {
         watch: (path) => tauri.library.watchFolder(path),
         unwatch: (path) => tauri.library.unwatchFolder(path),
       });
       if (cancelled) return;
       watchedRootsRef.current = result.watched;
       for (const failure of result.errors) {
+        const detail = describeError(failure.error);
+        // Missing sources are handled by the Sources UI; don't spam a
+        // permissions-style error while the folder is gone or mid-remount.
+        if (detail.includes("MISSING_SOURCE:")) continue;
         showNotice(
-          `Could not ${roots.includes(failure.path) ? "watch" : "stop watching"} ${failure.path}: ${describeError(failure.error)}. Check macOS folder access permissions.`,
+          `Could not ${watchable.includes(failure.path) ? "watch" : "stop watching"} ${failure.path}: ${detail}. Check macOS folder access permissions.`,
         );
       }
     };
@@ -1172,10 +1187,15 @@ function App() {
     if (!isTauri) return;
     let cancelled = false;
     void (async () => {
-      const roots = await tauri.library.getRoots().catch(() => [] as string[]);
+      const [roots, folders] = await Promise.all([
+        tauri.library.getRoots().catch(() => [] as string[]),
+        tauri.library.getFolders().catch(() => []),
+      ]);
       if (cancelled || roots.length === 0) return;
+      const missing = new Set(folders.filter((f) => !f.available).map((f) => f.path));
       for (const root of roots) {
         if (cancelled) break;
+        if (missing.has(root)) continue;
         await tauri.library.scan(root, false).catch(() => {});
       }
       if (cancelled) return;
