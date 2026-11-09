@@ -34,7 +34,6 @@ import type {
   EditRecipe,
   EditPreset,
   TrashResult,
-  TrashError,
   UpdateCheckResult,
   LibraryStats,
   ExternalPlayer,
@@ -50,8 +49,16 @@ export const tauri = {
 
     importFiles: (paths: string[]): Promise<ScanResult> => invoke("import_files", { paths }),
 
+    /** Native folder picker owned by the backend; picked roots are trusted. */
+    pickSourceFolders: (): Promise<string[]> => invoke("pick_source_folders"),
+
+    /** Native media-file picker owned by the backend; picked files are trusted. */
+    pickMediaFiles: (): Promise<string[]> => invoke("pick_media_files"),
+
     getItems: (filter: LibraryFilterDTO): Promise<LibraryItemsPage> =>
       invoke("get_library_items", { filter }),
+
+    getHiddenItems: (): Promise<LibraryItemsPage> => invoke("get_hidden_items"),
 
     getThumbnail: (request: ThumbnailRequest): Promise<ThumbnailResponse> =>
       invoke("get_item_thumbnail", { request }),
@@ -90,7 +97,7 @@ export const tauri = {
     updateTags: (itemId: string, tags: string[]): Promise<void> =>
       invoke("update_item_tags", { itemId, tags }),
 
-    moveToTrash: (paths: string[]): Promise<TrashResult> => invoke("move_to_trash", { paths }),
+    moveToTrash: (ids: string[]): Promise<TrashResult> => invoke("move_to_trash", { ids }),
 
     cancelMoveToTrash: (): Promise<void> => invoke("cancel_move_to_trash"),
 
@@ -171,8 +178,8 @@ export const tauri = {
   editing: {
     render: (request: RenderRequest): Promise<ExportResult> => invoke("render_edited", { request }),
 
-    moveExportedFile: (sourcePath: string, destinationPath: string): Promise<void> =>
-      invoke("move_exported_file", { sourcePath, destinationPath }),
+    saveExportedFile: (sourcePath: string, suggestedName: string): Promise<string | null> =>
+      invoke("save_exported_file", { sourcePath, suggestedName }),
   },
 
   batch: {
@@ -220,6 +227,7 @@ export const tauri = {
     listRecipes: () => invoke<EditRecipe[]>("list_edit_recipes"),
 
     deleteRecipe: (mediaId: string) => invoke<boolean>("delete_edit_recipe", { mediaId }),
+    revertRecipe: (mediaId: string) => invoke<boolean>("revert_edit_recipe", { mediaId }),
 
     copyRecipe: (req: { fromMediaId: string; toMediaId: string }) =>
       invoke<EditRecipe>("copy_edit_recipe", req),
@@ -236,6 +244,8 @@ export const tauri = {
 
     applyPreset: (req: { presetId: string; mediaId: string }) =>
       invoke<EditRecipe>("apply_edit_preset", req),
+
+    vacuumCatalog: () => invoke<void>("vacuum_catalog", {}),
   },
 
   app: {
@@ -260,6 +270,10 @@ import { listen } from "@tauri-apps/api/event";
 export const events = {
   onLibraryChanged: (callback: (event: LibraryChangedEvent) => void) =>
     listen("library-changed", (e: any) => callback(e.payload)),
+
+  /** Catalog-wide counts may have changed (scan or import added rows). */
+  onLibraryCountsChanged: (callback: () => void) =>
+    listen("library-counts-changed", () => callback()),
 
   onImportProgress: (callback: (event: ImportProgressEvent) => void) =>
     listen("import-progress", (e: any) => callback(e.payload)),

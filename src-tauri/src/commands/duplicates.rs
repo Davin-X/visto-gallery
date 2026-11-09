@@ -3,7 +3,9 @@ use super::MediaItem;
 use crate::AppState;
 use serde_json::json;
 use std::collections::HashMap;
-use std::sync::atomic::Ordering;
+use std::io::{Read, Seek};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use tauri::{Emitter, State, Window};
 
 #[tauri::command]
@@ -111,19 +113,9 @@ pub async fn find_duplicates(
         .collect();
 
     // Phase 2: Full SHA-256 only for files that share a quick fingerprint.
-    // Use controlled concurrency (max 2 at a time) to avoid I/O saturation.
-    use std::sync::Arc;
-    use tokio::sync::Semaphore;
-
-    let total = full_hash_candidates.len() as u64;
-
-    let semaphore = Arc::new(Semaphore::new(2));
-    let quick_prefixes = Arc::new(quick_prefixes);
-    let mut hash_updates: Vec<(String, String)> = Vec::with_capacity(full_hash_candidates.len());
-    let mut bytes_completed = 0u64;
-    let mut processed = 0u64;
-
-    // Emit progress for full hash phase start
+    // Hashing is CPU/IO-bound and already runs in spawn_blocking; process
+    // sequentially to avoid spawning thousands of queued tasks and starving the
+    // UI/runtime.
     let _ = window.emit(
         "import-progress",
         json!({
@@ -134,8 +126,13 @@ pub async fn find_duplicates(
         }),
     );
 
-    // Process with controlled concurrency
-    let mut join_set = tokio::task::JoinSet::new();
+    let total = full_hash_candidates.len() as u64;
+    let quick_prefixes = Arc::new(quick_prefixes);
+    let bytes_completed = Arc::new(AtomicU64::new(0));
+    let mut hash_updates: Vec<(String, String)> = Vec::with_capacity(full_hash_candidates.len());
+    let mut processed = 0u64;
+    let mut last_emit = std::time::Instant::now();
+
     for &index in &full_hash_candidates {
         if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
             break;
@@ -144,47 +141,41 @@ pub async fn find_duplicates(
         let name = items[index].name.clone();
         let size = items[index].size.max(0) as u64;
         let id = items[index].id.clone();
-        let sem = semaphore.clone();
         let window_clone = window.clone();
         let prefixes = quick_prefixes.clone();
+        let shared_bytes = bytes_completed.clone();
+        let prefix = prefixes.get(&index).cloned();
 
-        join_set.spawn(async move {
-            let _permit = sem.acquire().await.ok();
-            if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
-                return None;
-            }
-            // Reuse cached prefix from quick fingerprint phase
-            let prefix = prefixes.get(&index).cloned();
-            let hash = compute_full_sha256_with_progress(
+        let hash = tokio::task::spawn_blocking(move || {
+            hash_file_content(
                 path,
                 name,
                 size,
-                0, // bytes_before not needed for individual task
                 0,
                 1,
                 1,
                 window_clone,
                 prefix,
+                shared_bytes,
             )
-            .await;
-            Some((index, id, hash, size))
-        });
-    }
+        })
+        .await
+        .ok()
+        .flatten();
 
-    while let Some(result) = join_set.join_next().await {
         if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
             break;
         }
-        if let Ok(Some((index, id, hash, size))) = result {
-            if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
-                break;
-            }
-            processed += 1;
-            if let Some(hash) = hash {
-                hash_updates.push((id.clone(), hash.clone()));
-                items[index].sha256 = Some(hash);
-            }
-            bytes_completed = bytes_completed.saturating_add(size);
+        processed += 1;
+        if let Some(hash) = hash {
+            hash_updates.push((id.clone(), hash.clone()));
+            items[index].sha256 = Some(hash);
+        }
+
+        let should_emit =
+            processed == total || last_emit.elapsed() >= std::time::Duration::from_millis(250);
+        if should_emit {
+            let total_bytes = bytes_completed.load(Ordering::Relaxed);
             let _ = window.emit(
                 "import-progress",
                 json!({
@@ -192,10 +183,13 @@ pub async fn find_duplicates(
                     "processed": processed,
                     "total": total,
                     "currentFile": "Computing full SHA-256…",
+                    "bytesProcessed": total_bytes,
+                    "bytesTotal": 0,
                 }),
             );
-            tokio::task::yield_now().await;
+            last_emit = std::time::Instant::now();
         }
+        tokio::task::yield_now().await;
     }
 
     // Persist newly computed hashes in one transaction. This avoids a durable
@@ -261,36 +255,38 @@ fn compute_quick_fingerprint(path: &str, size: u64) -> Option<(String, Vec<u8>)>
     Some((fingerprint, buf[..n].to_vec()))
 }
 
-/// Full SHA-256 with progress. Uses a 1MB buffer and async I/O for throughput.
-/// Accepts an optional prefix (first 64KB) from the quick fingerprint phase
-/// to avoid re-reading the beginning of the file.
+/// Full SHA-256 for a single file. All blocking I/O and CPU-intensive
+/// hashing happens on the calling thread; the caller is expected to invoke
+/// this inside `tokio::task::spawn_blocking` so the tokio executor stays free
+/// to process Tauri/frontend events. Accepts an optional prefix (first 64KB)
+/// from the quick fingerprint phase to avoid re-reading the beginning of the file.
 #[allow(clippy::too_many_arguments)]
-async fn compute_full_sha256_with_progress(
+fn hash_file_content(
     path: String,
     name: String,
     file_size: u64,
-    bytes_before_file: u64,
-    total_bytes: u64,
+    _bytes_before_file: u64,
     file_number: u64,
     total_files: u64,
     window: Window,
     prefix: Option<Vec<u8>>,
+    shared_bytes: Arc<AtomicU64>,
 ) -> Option<String> {
-    use tokio::io::AsyncReadExt;
-    let mut file = tokio::fs::File::open(&path).await.ok()?;
+    let mut file = match std::fs::File::open(&path) {
+        Ok(f) => f,
+        Err(_) => return None,
+    };
     let mut ctx = ring::digest::Context::new(&ring::digest::SHA256);
 
     // If we have a prefix from quick fingerprint, use it and skip those bytes
-    if let Some(prefix) = prefix {
-        ctx.update(&prefix);
-        // Skip the prefix bytes in the file
-        use tokio::io::AsyncSeekExt;
-        file.seek(std::io::SeekFrom::Start(prefix.len() as u64))
-            .await
-            .ok()?;
+    if let Some(prefix) = &prefix {
+        ctx.update(prefix);
+        let _ = file
+            .seek(std::io::SeekFrom::Start(prefix.len() as u64))
+            .ok();
     }
 
-    // 1MB buffer for sequential throughput on SSD/NVMe (reduced from 64MB)
+    // 1MB buffer for sequential throughput on SSD/NVMe.
     let mut buf = vec![0u8; 1024 * 1024];
     let mut file_bytes = 0u64;
     let mut last_reported_bytes = 0u64;
@@ -300,13 +296,20 @@ async fn compute_full_sha256_with_progress(
         if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
             return None;
         }
-        let n = file.read(&mut buf).await.ok()?;
+        let n = match file.read(&mut buf) {
+            Ok(n) => n,
+            Err(_) => break,
+        };
         if n == 0 {
             break;
         }
+
+        // CPU-intensive SHA-256 update happens here on the blocking pool.
         ctx.update(&buf[..n]);
         file_bytes = file_bytes.saturating_add(n as u64);
-        let should_report = file_bytes.saturating_sub(last_reported_bytes) >= 64 * 1024 * 1024
+        shared_bytes.fetch_add(n as u64, Ordering::Relaxed);
+
+        let should_report = file_bytes.saturating_sub(last_reported_bytes) >= 128 * 1024 * 1024
             || last_reported_at.elapsed() >= std::time::Duration::from_millis(500);
         if should_report {
             let _ = window.emit(
@@ -317,8 +320,8 @@ async fn compute_full_sha256_with_progress(
                     "total": total_files,
                     "filesProcessed": file_number.saturating_sub(1),
                     "filesTotal": total_files,
-                    "bytesProcessed": bytes_before_file.saturating_add(file_bytes),
-                    "bytesTotal": total_bytes,
+                    "bytesProcessed": shared_bytes.load(Ordering::Relaxed),
+                    "bytesTotal": 0,
                     "currentFile": &name,
                     "currentFileBytes": file_bytes,
                     "currentFileSize": file_size,
@@ -327,22 +330,11 @@ async fn compute_full_sha256_with_progress(
             last_reported_bytes = file_bytes;
             last_reported_at = std::time::Instant::now();
         }
-        tokio::task::yield_now().await;
     }
-    let _ = window.emit(
-        "import-progress",
-        json!({
-            "phase": "hashing",
-            "processed": file_number,
-            "total": total_files,
-            "filesProcessed": file_number,
-            "filesTotal": total_files,
-            "bytesProcessed": bytes_before_file.saturating_add(file_bytes),
-            "bytesTotal": total_bytes,
-            "currentFile": &name,
-            "currentFileBytes": file_bytes,
-            "currentFileSize": file_size,
-        }),
-    );
+
+    if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
+        return None;
+    }
+
     Some(hex::encode(ctx.finish().as_ref()))
 }

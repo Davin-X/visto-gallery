@@ -1,3 +1,4 @@
+mod access;
 mod albums;
 mod backup;
 mod batch;
@@ -6,10 +7,12 @@ mod edit_recipes;
 mod library;
 mod media;
 mod roots;
+mod scan_jobs;
 mod settings;
 mod smart_albums;
 mod update;
 use crate::{models::*, AppState};
+pub use access::*;
 pub use albums::*;
 use anyhow::Result;
 pub use backup::*;
@@ -24,11 +27,12 @@ pub use library::*;
 pub use media::*;
 use notify::Watcher;
 pub use roots::*;
+pub use scan_jobs::ScanJobs;
 use serde::{Deserialize, Serialize};
 pub use settings::*;
 pub use smart_albums::*;
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -76,6 +80,9 @@ pub struct LibraryFilterDTO {
     pub kind: Option<String>,
     pub favorite: Option<bool>,
     pub hidden: Option<bool>,
+    /// `Some(true)` narrows to animated items, `Some(false)` to still ones.
+    /// Independent of `kind`, which keeps its photo | video | raw meaning.
+    pub animated: Option<bool>,
     pub album_id: Option<String>,
     pub query: Option<String>,
     pub tags: Option<Vec<String>>,
@@ -113,6 +120,9 @@ pub struct ExifData {
 #[serde(rename_all = "camelCase")]
 pub struct RenderRequest {
     pub source_path: String,
+    /// Catalog id of the item. Required for in-place edits so the original can
+    /// be journaled under a stable key.
+    pub media_id: Option<String>,
     pub edits: EditValues,
     pub output_format: String,
     pub quality: f32,
@@ -201,17 +211,21 @@ pub struct BatchExportError {
     pub error: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TrashResult {
+    /// Catalog ids that were moved to Trash.
     pub trashed: Vec<String>,
     pub failed: Vec<TrashError>,
+    /// Set when the files reached the Trash but the catalog could not be
+    /// updated. The move succeeded; the rows are stale until a rescan.
+    pub catalog_error: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TrashError {
-    pub path: String,
+    pub id: String,
     pub error: String,
 }
 
@@ -334,17 +348,16 @@ const TAG_SELECT: &str = "SELECT t.id, t.name, t.color_index, t.created_at, \
      (SELECT COUNT(*) FROM media_tags mt JOIN media_items m ON m.id = mt.media_id \
       WHERE mt.tag_id = t.id AND m.hidden = 0) AS item_count FROM tags t";
 
-/// Shared cooperative cancellation flag for folder scans, file imports, and
-/// duplicate hashing. Each operation clears it before starting and checks it
-/// between filesystem work units.
-static SCAN_CANCEL: AtomicBool = AtomicBool::new(false);
+/// Cooperative cancellation flags for long operations that are not folder
+/// scans or imports (those use per-job flags in [`ScanJobs`]).
 static TRASH_CANCEL: AtomicBool = AtomicBool::new(false);
 static DUPLICATE_CANCEL: AtomicBool = AtomicBool::new(false);
 static BATCH_CANCEL: AtomicBool = AtomicBool::new(false);
 
+/// Cancel every folder scan and file import that is running now.
 #[tauri::command]
-pub async fn cancel_scan() -> Result<(), String> {
-    SCAN_CANCEL.store(true, Ordering::SeqCst);
+pub async fn cancel_scan(state: State<'_, AppState>) -> Result<(), String> {
+    state.scan_jobs.cancel_all();
     Ok(())
 }
 
@@ -356,11 +369,19 @@ pub async fn cancel_move_to_trash() -> Result<(), String> {
 
 fn get_db(state: &State<'_, AppState>) -> Result<SqlitePool, String> {
     let guard = state.db.lock().map_err(|e| e.to_string())?;
-    Ok(guard
-        .as_ref()
-        .ok_or("Database not initialized".to_string())?
-        .pool()
-        .clone())
+    if let Some(db) = guard.as_ref() {
+        return Ok(db.pool().clone());
+    }
+    let reason = state
+        .db_error
+        .lock()
+        .ok()
+        .and_then(|e| e.clone())
+        .unwrap_or_else(|| "it is still starting up".to_string());
+    Err(format!(
+        "The VistoGallery catalog could not be opened: {reason}. \
+         Quit other copies of VistoGallery, or restore a catalog backup."
+    ))
 }
 
 fn now_ms() -> i64 {
@@ -437,6 +458,15 @@ pub fn validate_path_under_registered_roots(
     }
 }
 
+/// Event asking the frontend to re-read catalog-wide counts.
+///
+/// `library-changed` is only emitted when rows are removed, and scans/imports
+/// emit progress events only, so the sidebar and the type-chip counts used to
+/// describe the catalog from before the import. Emitting this from the commands
+/// that add rows covers every caller — picker, drag-and-drop, watch-folder
+/// rescan — instead of relying on each UI path to refresh itself.
+pub(crate) const LIBRARY_COUNTS_CHANGED: &str = "library-counts-changed";
+
 /// Record an imported folder so the sidebar can list and remove it later.
 /// Failures are non-fatal: a catalog write should never fail an import.
 async fn remember_folder(db: &SqlitePool, root: &str, app: &tauri::AppHandle) {
@@ -452,72 +482,55 @@ async fn remember_folder(db: &SqlitePool, root: &str, app: &tauri::AppHandle) {
     let _ = app.asset_protocol_scope().allow_directory(&path, true);
 }
 
+/// The one list of extensions the catalog accepts, by kind. The scanner, the
+/// file picker (`supported_extensions`) and kind detection all read these, so
+/// they cannot drift apart. Entries are lowercase.
+const IMAGE_EXTS: &[&str] = &[
+    "avif", "bmp", "gif", "heic", "heif", "jfif", "jpe", "jpeg", "jpg", "jxl", "png", "tif",
+    "tiff", "webp",
+];
+const RAW_EXTS: &[&str] = &[
+    "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf",
+    "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",
+    "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f",
+];
+const VIDEO_EXTS: &[&str] = &[
+    "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "mts",
+    "ogv", "ts", "vob", "webm", "wmv",
+];
+
+/// Catalog kind for a supported lowercase extension, or `None` when the
+/// extension is not media.
+fn media_kind(ext: &str) -> Option<&'static str> {
+    if VIDEO_EXTS.contains(&ext) {
+        Some("video")
+    } else if RAW_EXTS.contains(&ext) {
+        Some("raw")
+    } else if IMAGE_EXTS.contains(&ext) {
+        Some("photo")
+    } else {
+        None
+    }
+}
+
 fn is_media_file(ext: &str) -> bool {
-    let image_exts = [
-        "avif", "bmp", "gif", "heic", "heif", "jfif", "jpe", "jpeg", "jpg", "jxl", "png", "tif",
-        "tiff", "webp",
-    ];
-    let raw_exts = [
-        "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf",
-        "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",
-        "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f",
-    ];
-    let video_exts = [
-        "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
-        "mts", "ogv", "ts", "vob", "webm", "wmv",
-    ];
-    image_exts.contains(&ext) || raw_exts.contains(&ext) || video_exts.contains(&ext)
+    media_kind(ext).is_some()
 }
 
 /// Returns the canonical list of supported media extensions, so the frontend
 /// file picker and the backend scanner stay in sync.
 #[tauri::command]
 pub fn supported_extensions() -> Vec<String> {
-    let mut exts: Vec<String> = vec![
-        "avif", "bmp", "gif", "heic", "heif", "jfif", "jpe", "jpeg", "jpg", "jxl", "png", "tif",
-        "tiff", "webp",
-    ]
-    .into_iter()
-    .map(|s| s.to_string())
-    .collect();
-    exts.extend(
-        [
-            "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip",
-            "erf", "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw",
-            "obm", "orf", "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf",
-            "srw", "x3f",
-        ]
-        .into_iter()
-        .map(|s| s.to_string()),
-    );
-    exts.extend(
-        [
-            "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
-            "mts", "ogv", "ts", "vob", "webm", "wmv",
-        ]
-        .into_iter()
-        .map(|s| s.to_string()),
-    );
-    exts
+    IMAGE_EXTS
+        .iter()
+        .chain(RAW_EXTS)
+        .chain(VIDEO_EXTS)
+        .map(|ext| ext.to_string())
+        .collect()
 }
 
 fn kind_for_ext(ext: &str) -> &'static str {
-    let video_exts = [
-        "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
-        "mts", "ogv", "ts", "vob", "webm", "wmv",
-    ];
-    let raw_exts = [
-        "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf",
-        "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",
-        "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f",
-    ];
-    if video_exts.contains(&ext) {
-        "video"
-    } else if raw_exts.contains(&ext) {
-        "raw"
-    } else {
-        "photo"
-    }
+    media_kind(ext).unwrap_or("photo")
 }
 
 /// Read file facts needed by the catalog without decoding the image payload.
@@ -553,16 +566,10 @@ fn inspect_media_file_with_metadata(
         .to_string();
     let kind = kind_for_ext(&ext).to_string();
 
-    // Read dimensions from the file header only; no full decode.
-    let (width, height) = if kind == "photo" {
-        match image::image_dimensions(path) {
-            Ok((w, h)) => (Some(w as i32), Some(h as i32)),
-            Err(_) => (None, None),
-        }
-    } else {
-        (None, None)
-    };
-
+    // Reads container headers only (GIF blocks, WebP VP8X flags, PNG acTL,
+    // ISOBMFF ftyp brands); no pixel decode. Formats that cannot animate are
+    // answered without opening the file.
+    let is_animated = crate::media_animation::detect_animation(path, &ext);
     let mut item = MediaItem::new(
         path.to_string_lossy().to_string(),
         name,
@@ -573,8 +580,13 @@ fn inspect_media_file_with_metadata(
     );
     item.created_at = now;
     item.updated_at = now;
+    item.is_animated = is_animated;
+    // Bounded read (size + the first and last 64 KiB) so a move can be
+    // recognised later without ever reading a whole video.
+    item.content_signature = crate::media_signature::content_signature(path);
 
     // Populate metadata from EXIF for photos.
+    let mut exif_dims = None;
     if kind == "photo" {
         let exif = crate::commands::media::extract_exif(path);
         item.captured_at = exif.captured_at;
@@ -584,13 +596,21 @@ fn inspect_media_file_with_metadata(
         item.iso = exif.iso;
         item.latitude = exif.latitude;
         item.longitude = exif.longitude;
-        if item.width.is_none() {
-            item.width = exif.width;
-        }
-        if item.height.is_none() {
-            item.height = exif.height;
+        if let (Some(w), Some(h)) = (exif.width, exif.height) {
+            exif_dims = Some((w.max(0) as u32, h.max(0) as u32));
         }
     }
+
+    // Header-only dimension probe for every kind (image headers, HEIF/AVIF
+    // and MP4/MOV boxes, EXIF, then ImageIO). The upsert stores the returned
+    // pair, so it must carry every fallback, not just the first probe.
+    let dims = crate::media_dimensions::probe_dimensions(path, &item.extension, &kind, exif_dims);
+    let (width, height) = match dims {
+        Some((w, h)) => (Some(w as i32), Some(h as i32)),
+        None => (None, None),
+    };
+    item.width = width;
+    item.height = height;
 
     // Upsert on the stable id. `favorite` and `hidden` are left out of the
     // UPDATE clause so a re-import refreshes file facts without discarding the
@@ -621,7 +641,7 @@ async fn upsert_media_batch(
     }
 
     let mut query = QueryBuilder::<Sqlite>::new(
-        "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, width, height, camera, lens, exposure, iso, latitude, longitude, sha256, created_at, updated_at, favorite, hidden, rating, color_label) ",
+        "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, width, height, camera, lens, exposure, iso, latitude, longitude, sha256, created_at, updated_at, favorite, hidden, is_animated, content_signature, rating, color_label) ",
     );
     query.push_values(rows, |mut values, (item, width, height)| {
         values
@@ -646,11 +666,13 @@ async fn upsert_media_batch(
             .push_bind(item.updated_at)
             .push_bind(0i32)
             .push_bind(0i32)
+            .push_bind(if item.is_animated { 1i32 } else { 0i32 })
+            .push_bind(&item.content_signature)
             .push_bind(item.rating)
             .push_bind(&item.color_label);
     });
     query.push(
-        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END, updated_at = excluded.updated_at, favorite = excluded.favorite, hidden = excluded.hidden, rating = COALESCE(excluded.rating, media_items.rating), color_label = COALESCE(excluded.color_label, media_items.color_label)",
+        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END, updated_at = excluded.updated_at, favorite = media_items.favorite, hidden = media_items.hidden, is_animated = excluded.is_animated, content_signature = excluded.content_signature, rating = COALESCE(excluded.rating, media_items.rating), color_label = COALESCE(excluded.color_label, media_items.color_label)",
     );
     query.build().execute(db).await.map_err(|e| e.to_string())?;
     Ok(())
@@ -721,12 +743,183 @@ async fn prune_missing_items(
     Ok(missing.len())
 }
 
+/// The single unused entry in `candidates`, or `None` when the match is
+/// ambiguous. Guessing between two identical fingerprints could hand one file's
+/// album membership to another, which is worse than importing a fresh row.
+fn only_unused(candidates: Option<&Vec<usize>>, used: &[bool]) -> Option<usize> {
+    let mut found = candidates?.iter().copied().filter(|index| !used[*index]);
+    let index = found.next()?;
+    if found.next().is_some() {
+        return None;
+    }
+    Some(index)
+}
+
+/// Keep a moved or renamed file in the same catalog row.
+///
+/// The id is derived from the path, so otherwise a move looks like a delete plus
+/// an unrelated import: the row (and with it the favourite flag, rating, tags
+/// and album membership) would be dropped. The scan matches rows that vanished
+/// from `root` against files that appeared in the same walk by content
+/// fingerprint, then re-keys the surviving row — and every table that points at
+/// it — to the new path.
+///
+/// Both sides must be unambiguous, so a file that was copied (a duplicate) or a
+/// fingerprint shared by several vanished rows is left alone and handled by the
+/// ordinary import/prune path.
+async fn relink_moved_items(
+    db: &SqlitePool,
+    root: &str,
+    seen_paths: &HashSet<String>,
+) -> Result<usize, String> {
+    let existing: Vec<(String, String)> = sqlx::query_as("SELECT id, path FROM media_items")
+        .fetch_all(db)
+        .await
+        .map_err(|error| error.to_string())?;
+    let existing_paths: HashSet<&str> = existing.iter().map(|(_, path)| path.as_str()).collect();
+    let existing_ids: HashSet<&str> = existing.iter().map(|(id, _)| id.as_str()).collect();
+    let mut added: Vec<&String> = seen_paths
+        .iter()
+        .filter(|path| !existing_paths.contains(path.as_str()))
+        .collect();
+    if added.is_empty() {
+        return Ok(0);
+    }
+
+    let rows: Vec<(String, String, i64, i64, Option<String>)> =
+        sqlx::query_as("SELECT id, path, size, modified_at, content_signature FROM media_items")
+            .fetch_all(db)
+            .await
+            .map_err(|error| error.to_string())?;
+    // Rows whose file this walk did not see are the only move candidates.
+    let vanished: Vec<(&str, i64, i64, Option<String>)> = rows
+        .iter()
+        .filter(|(_, path, _, _, _)| path_is_inside(path, root) && !seen_paths.contains(path))
+        .map(|(id, _, size, modified_at, signature)| {
+            (id.as_str(), *size, *modified_at, signature.clone())
+        })
+        .collect();
+    if vanished.is_empty() {
+        return Ok(0);
+    }
+
+    let mut by_signature: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut by_fingerprint: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+    for (index, (_, size, modified_at, signature)) in vanished.iter().enumerate() {
+        match signature {
+            // The signature covers the size, so equal signatures imply equal
+            // content regardless of when the file was last touched.
+            Some(signature) => by_signature
+                .entry(signature.clone())
+                .or_default()
+                .push(index),
+            // Rows imported before fingerprints existed can still follow a
+            // same-volume move: macOS preserves the modification time.
+            None => by_fingerprint
+                .entry((*size, *modified_at))
+                .or_default()
+                .push(index),
+        }
+    }
+
+    let mut used = vec![false; vanished.len()];
+    let mut moves: Vec<(&str, String)> = Vec::new();
+    added.sort();
+    for new_path in added {
+        let Ok(metadata) = std::fs::metadata(new_path) else {
+            continue;
+        };
+        if !metadata.is_file() {
+            continue;
+        }
+        let signature = crate::media_signature::content_signature(Path::new(new_path));
+        let index = match &signature {
+            Some(signature) => only_unused(by_signature.get(signature), &used),
+            None => only_unused(
+                by_fingerprint.get(&(metadata.len() as i64, file_modified_at(&metadata))),
+                &used,
+            ),
+        };
+        let Some(index) = index else {
+            continue;
+        };
+        // A hash collision must not rewrite another row's key.
+        if existing_ids.contains(stable_id(new_path).as_str()) {
+            continue;
+        }
+        used[index] = true;
+        moves.push((vanished[index].0, new_path.clone()));
+    }
+    if moves.is_empty() {
+        return Ok(0);
+    }
+
+    let now = now_ms();
+    let mut transaction = db.begin().await.map_err(|error| error.to_string())?;
+    // Relations point at the row being re-keyed, so enforcement is deferred to
+    // COMMIT and every table is updated inside the same transaction.
+    sqlx::query("PRAGMA defer_foreign_keys = ON")
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| error.to_string())?;
+    for (old_id, new_path) in &moves {
+        let path = Path::new(new_path);
+        let new_id = stable_id(new_path);
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let extension = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        let modified_at = std::fs::metadata(path)
+            .map(|metadata| file_modified_at(&metadata))
+            .unwrap_or(0);
+        sqlx::query(
+            "UPDATE media_items SET id = ?, path = ?, name = ?, extension = ?, modified_at = ?, updated_at = ? WHERE id = ?",
+        )
+        .bind(&new_id)
+        .bind(new_path)
+        .bind(&name)
+        .bind(&extension)
+        .bind(modified_at)
+        .bind(now)
+        .bind(old_id)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| error.to_string())?;
+        for table in ["media_tags", "album_items", "edit_recipes", "edit_backups"] {
+            sqlx::query(&format!(
+                "UPDATE {table} SET media_id = ? WHERE media_id = ?"
+            ))
+            .bind(&new_id)
+            .bind(old_id)
+            .execute(&mut *transaction)
+            .await
+            .map_err(|error| error.to_string())?;
+        }
+    }
+    transaction
+        .commit()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    Ok(moves.len())
+}
+
 async fn import_media_file(
     db: &SqlitePool,
     path: &Path,
     now: i64,
 ) -> Result<Option<(MediaItem, i64)>, String> {
-    let Some((item, width, height)) = inspect_media_file(path, now) else {
+    let owned = path.to_path_buf();
+    let inspected = tokio::task::spawn_blocking(move || inspect_media_file(&owned, now))
+        .await
+        .map_err(|e| format!("Import worker failed: {e}"))?;
+    let Some((item, width, height)) = inspected else {
         return Ok(None);
     };
     let size = item.size;
@@ -1250,45 +1443,60 @@ pub async fn get_version() -> Result<String, String> {
     Ok(env!("CARGO_PKG_VERSION").to_string())
 }
 
-/// Purge the entire library catalog (media items, tags, albums, folders and
-/// library folders, import sessions) while leaving original media files on disk.
-/// This is irreversible through the UI.
+/// Purge the library catalog (media items with their tags, album links, edit
+/// recipes and edit-backup records, plus albums, tags, Smart Albums and
+/// library folders) in one transaction, while leaving original media files on
+/// disk. Also stops folder watchers and empties the thumbnail cache so nothing
+/// keeps describing the old catalog. This is irreversible through the UI.
+///
+/// Kept on purpose: settings, edit presets, and the backed-up originals of
+/// in-place edits under the app data folder (user data, never deleted here).
 #[tauri::command]
-pub async fn delete_library_database(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn delete_library_database(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let db = get_db(&state)?;
-    sqlx::query("DELETE FROM media_items")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM media_tags")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM album_items")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM albums")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM tags")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM library_folders")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+    purge_catalog(&db).await?;
+
+    if let Ok(mut watchers) = state.watchers.lock() {
+        watchers.clear();
+    }
+    if let Ok(cache) = app.path().app_cache_dir() {
+        let thumbnails = cache.join("thumbnails");
+        let _ = tokio::fs::remove_dir_all(&thumbnails).await;
+    }
     Ok(())
+}
+
+/// Delete every catalog row in one transaction: a failure part-way leaves the
+/// catalog exactly as it was instead of half-deleted.
+pub(crate) async fn purge_catalog(db: &SqlitePool) -> Result<(), String> {
+    let mut tx = db.begin().await.map_err(|e| e.to_string())?;
+    // Children first, so this also works without foreign-key cascades.
+    for table in [
+        "media_tags",
+        "album_items",
+        "edit_recipes",
+        "edit_backups",
+        "media_items",
+        "albums",
+        "tags",
+        "smart_albums",
+        "library_folders",
+    ] {
+        sqlx::query(&format!("DELETE FROM {table}"))
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Could not clear {table}: {e}"))?;
+    }
+    tx.commit().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn open_external(url: String) -> Result<(), String> {
     let trimmed = url.trim();
-    let allowed = trimmed.starts_with("https://")
-        || trimmed.starts_with("http://")
-        || trimmed.starts_with("mailto:");
+    let allowed = trimmed.starts_with("https://") || trimmed.starts_with("mailto:");
     if !allowed {
         return Err("Unsupported URL scheme".to_string());
     }
@@ -1442,5 +1650,147 @@ mod finder_tag_merge_tests {
         let merged = merge_finder_tag_values(&[], &["Albums".into()]);
         assert_eq!(merged, vec![raw("Albums")]);
         assert_eq!(finder_tag_name(&merged[0]), "Albums");
+    }
+}
+
+#[cfg(test)]
+mod rescan_preservation_tests {
+    use super::upsert_media_batch;
+    use crate::models::MediaItem;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn media_db() -> sqlx::SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory database");
+        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, sha256 TEXT, rating INTEGER, color_label TEXT)")
+            .execute(&db)
+            .await
+            .expect("create media_items");
+        db
+    }
+
+    #[tokio::test]
+    async fn forced_rescan_preserves_favorite_and_hidden() {
+        let db = media_db().await;
+        let path = "/tmp/rescan-preserve.jpg".to_string();
+        let item = MediaItem::new(
+            path.clone(),
+            "photo.jpg".into(),
+            "jpg".into(),
+            "photo".into(),
+            10,
+            1000,
+        );
+        upsert_media_batch(&db, &[(item.clone(), Some(800), Some(600))])
+            .await
+            .expect("initial upsert");
+
+        // The user curates the item.
+        sqlx::query("UPDATE media_items SET favorite = 1, hidden = 1 WHERE id = ?")
+            .bind(&item.id)
+            .execute(&db)
+            .await
+            .expect("curate");
+
+        // A forced rescan re-upserts the same row.
+        let rescanned = MediaItem::new(
+            path,
+            "photo.jpg".into(),
+            "jpg".into(),
+            "photo".into(),
+            10,
+            1000,
+        );
+        upsert_media_batch(&db, &[(rescanned, Some(800), Some(600))])
+            .await
+            .expect("rescan upsert");
+
+        let (favorite, hidden): (i64, i64) =
+            sqlx::query_as("SELECT favorite, hidden FROM media_items WHERE id = ?")
+                .bind(&item.id)
+                .fetch_one(&db)
+                .await
+                .expect("read back");
+        assert_eq!(favorite, 1, "favorite must survive a forced rescan");
+        assert_eq!(hidden, 1, "hidden must survive a forced rescan");
+    }
+}
+
+#[cfg(test)]
+mod purge_catalog_tests {
+    use super::purge_catalog;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn migrated_db() -> sqlx::SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory catalog");
+        sqlx::migrate!("./migrations")
+            .run(&db)
+            .await
+            .expect("run migrations");
+        db
+    }
+
+    async fn count(db: &sqlx::SqlitePool, table: &str) -> i64 {
+        sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
+            .fetch_one(db)
+            .await
+            .expect("count rows")
+    }
+
+    #[tokio::test]
+    async fn purge_clears_catalog_tables_and_keeps_settings() {
+        let db = migrated_db().await;
+        for sql in [
+            "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at) VALUES ('m', '/p/a.jpg', 'a.jpg', 'jpg', 'photo', 1, 1, 1, 1)",
+            "INSERT INTO albums (id, name, created_at, updated_at) VALUES ('a', 'Album', 1, 1)",
+            "INSERT INTO album_items (album_id, media_id, added_at) VALUES ('a', 'm', 1)",
+            "INSERT INTO library_folders (path, added_at) VALUES ('/p', 1)",
+            "INSERT INTO smart_albums (id, name, filter_json, created_at, updated_at) VALUES ('s', 'Smart', '{}', 1, 1)",
+            "INSERT INTO settings (key, value) VALUES ('appearance', '\"dark\"')",
+        ] {
+            sqlx::query(sql).execute(&db).await.expect(sql);
+        }
+
+        let settings_before = count(&db, "settings").await;
+        purge_catalog(&db).await.expect("purge");
+
+        for table in [
+            "media_items",
+            "albums",
+            "album_items",
+            "library_folders",
+            "smart_albums",
+        ] {
+            assert_eq!(count(&db, table).await, 0, "{table} should be empty");
+        }
+        assert_eq!(count(&db, "settings").await, settings_before);
+    }
+}
+
+#[cfg(test)]
+mod extension_tests {
+    use super::{is_media_file, kind_for_ext, supported_extensions};
+
+    #[test]
+    fn picker_list_and_scanner_agree() {
+        let exts = supported_extensions();
+        assert!(exts.iter().all(|ext| is_media_file(ext)));
+        assert!(!is_media_file("txt"));
+        let unique: std::collections::HashSet<_> = exts.iter().collect();
+        assert_eq!(unique.len(), exts.len(), "no extension is listed twice");
+    }
+
+    #[test]
+    fn kinds_follow_the_lists() {
+        assert_eq!(kind_for_ext("mkv"), "video");
+        assert_eq!(kind_for_ext("cr3"), "raw");
+        assert_eq!(kind_for_ext("heic"), "photo");
     }
 }

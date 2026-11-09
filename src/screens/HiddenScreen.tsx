@@ -3,6 +3,7 @@ import { EyeOffIcon, ImageOffIcon } from "../design/components/icons";
 import { BrandMark } from "../design/components/BrandMark";
 import LibraryScreen from "./LibraryScreen";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
+import { useShallow } from "zustand/react/shallow";
 import type { MediaItem } from "../engine/types/media";
 
 interface HiddenScreenProps {
@@ -21,7 +22,57 @@ interface HiddenScreenProps {
 }
 
 function HiddenScreen(props: HiddenScreenProps) {
-  const library = useLibraryStore();
+  const library = useLibraryStore(
+    useShallow((s) => ({
+      albums: s.albums,
+      busy: s.busy,
+      clearSelection: s.clearSelection,
+      colorLabelFilter: s.colorLabelFilter,
+      dateFrom: s.dateFrom,
+      dateTo: s.dateTo,
+      deleteItems: s.deleteItems,
+      hiddenCount: s.hiddenCount,
+      hiddenFilter: s.hiddenFilter,
+      hiddenItems: s.hiddenItems,
+      hiddenQuery: s.hiddenQuery,
+      inspectItem: s.inspectItem,
+      inspectedId: s.inspectedId,
+      items: s.items,
+      layout: s.layout,
+      minRating: s.minRating,
+      progress: s.progress,
+      selectedIds: s.selectedIds,
+      setActiveAlbum: s.setActiveAlbum,
+      setColorLabelFilter: s.setColorLabelFilter,
+      setColorLabelForIds: s.setColorLabelForIds,
+      setDateRange: s.setDateRange,
+      setFavoriteForIds: s.setFavoriteForIds,
+      setHiddenFilter: s.setHiddenFilter,
+      setHiddenForIds: s.setHiddenForIds,
+      setHiddenQuery: s.setHiddenQuery,
+      setLayout: s.setLayout,
+      setMinRating: s.setMinRating,
+      setRatingForIds: s.setRatingForIds,
+      setSelectedIds: s.setSelectedIds,
+      showInspector: s.showInspector,
+      showNotice: s.showNotice,
+      toggleFavorite: s.toggleFavorite,
+      toggleHidden: s.toggleHidden,
+      toggleInspector: s.toggleInspector,
+      toggleSelection: s.toggleSelection,
+      updateItemTags: s.updateItemTags,
+    })),
+  );
+  const hiddenLibraryStats = useMemo(
+    () => ({
+      photos: library.hiddenItems.filter((i: MediaItem) => i.kind === "photo").length,
+      videos: library.hiddenItems.filter((i: MediaItem) => i.kind === "video").length,
+      raws: library.hiddenItems.filter((i: MediaItem) => i.kind === "raw").length,
+      animations: library.hiddenItems.filter((i: MediaItem) => i.isAnimated).length,
+      favorites: library.hiddenItems.filter((i: MediaItem) => i.favorite).length,
+    }),
+    [library.hiddenItems],
+  );
   const filter = library.hiddenFilter;
   const query = library.hiddenQuery;
   const [pendingReveal, setPendingReveal] = useState<
@@ -38,6 +89,7 @@ function HiddenScreen(props: HiddenScreenProps) {
       if (filter === "Photos" && item.kind !== "photo") return false;
       if (filter === "Videos" && item.kind !== "video") return false;
       if (filter === "RAW" && item.kind !== "raw") return false;
+      if (filter === "Animations" && !item.isAnimated) return false;
       if (filter === "Favorites" && !item.favorite) return false;
       if (!normalized) return true;
       return `${item.name} ${item.path} ${item.extension} ${item.kind} ${item.camera || ""} ${item.lens || ""} ${(item.tags || []).join(" ")}`
@@ -170,6 +222,7 @@ function HiddenScreen(props: HiddenScreenProps) {
         activeAlbum={null}
         albums={library.albums}
         hiddenCount={library.hiddenCount}
+        libraryStats={hiddenLibraryStats}
         onInspectItem={library.inspectItem}
         onToggleSelect={library.toggleSelection}
         onSelectRange={selectRange}

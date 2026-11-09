@@ -36,12 +36,7 @@
   flex-shrink: 0;
   /* Subtle fade-out on the right edge when tabs overflow and can scroll. */
   mask-image: linear-gradient(to right, black 0%, black 88%, transparent 100%);
-  -webkit-mask-image: linear-gradient(
-    to right,
-    black 0%,
-    black 88%,
-    transparent 100%
-  );
+  -webkit-mask-image: linear-gradient(to right, black 0%, black 88%, transparent 100%);
 }
 
 @media (min-width: 961px) {
@@ -442,8 +437,7 @@
 }
 
 .radio-option:focus-within {
-  outline: 2px solid
-    color-mix(in srgb, var(--accent, var(--blue)) 55%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--accent, var(--blue)) 55%, transparent);
   outline-offset: 2px;
 }
 
@@ -990,12 +984,24 @@
   border: 1px solid rgba(255, 255, 255, 0.7);
 }
 
-.ctx-dot-none { background: #9ca3af; }
-.ctx-dot-red { background: #ef4444; }
-.ctx-dot-yellow { background: #eab308; }
-.ctx-dot-green { background: #22c55e; }
-.ctx-dot-blue { background: #3b82f6; }
-.ctx-dot-purple { background: #a855f7; }
+.ctx-dot-none {
+  background: #9ca3af;
+}
+.ctx-dot-red {
+  background: #ef4444;
+}
+.ctx-dot-yellow {
+  background: #eab308;
+}
+.ctx-dot-green {
+  background: #22c55e;
+}
+.ctx-dot-blue {
+  background: #3b82f6;
+}
+.ctx-dot-purple {
+  background: #a855f7;
+}
 
 .ctx-star {
   color: #f5a524;
