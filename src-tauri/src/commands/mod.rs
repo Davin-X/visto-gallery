@@ -11,6 +11,7 @@ mod roots;
 mod scan_jobs;
 mod settings;
 mod smart_albums;
+mod system;
 mod temp_files;
 mod update;
 use crate::{models::*, AppState, Catalog};
@@ -37,6 +38,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+pub use system::{get_version, open_external};
 use tauri::{AppHandle, Emitter, Manager, State};
 pub use temp_files::*;
 use time::OffsetDateTime;
@@ -701,7 +703,7 @@ fn export_batch_item(
     Ok(output_path)
 }
 
-fn apply_setting(settings: &mut AppSettings, key: &str, value: &str) {
+pub(crate) fn apply_setting(settings: &mut AppSettings, key: &str, value: &str) {
     match key {
         "appearance" => settings.appearance = value.to_string(),
         "accent_color" => settings.accent_color = value.to_string(),
@@ -739,11 +741,6 @@ fn apply_setting(settings: &mut AppSettings, key: &str, value: &str) {
     }
 }
 
-#[tauri::command]
-pub async fn get_version() -> Result<String, String> {
-    Ok(env!("CARGO_PKG_VERSION").to_string())
-}
-
 /// Purge the library catalog (media items with their tags, album links, edit
 /// recipes and edit-backup records, plus albums, tags, Smart Albums and
 /// library folders) in one transaction, while leaving original media files on
@@ -771,19 +768,6 @@ pub async fn delete_library_database(
     Ok(())
 }
 
-#[tauri::command]
-pub async fn open_external(url: String) -> Result<(), String> {
-    let trimmed = url.trim();
-    let allowed = trimmed.starts_with("https://") || trimmed.starts_with("mailto:");
-    if !allowed {
-        return Err("Unsupported URL scheme".to_string());
-    }
-    std::process::Command::new("open")
-        .arg(trimmed)
-        .status()
-        .map_err(|e| format!("Could not open {}: {}", trimmed, e))?;
-    Ok(())
-}
 /// Secure export: the backend owns path selection via native dialog.
 /// Writes to a temp file next to the destination, then renames atomically.
 #[tauri::command]
