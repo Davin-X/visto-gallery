@@ -1,0 +1,51 @@
+# cargo-deny configuration for VistoGallery (src-tauri).
+# Keep advisory exceptions aligned with CI's `cargo audit` flags.
+# https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+# cargo-audit scans Cargo.lock and ignores RUSTSEC-2023-0071 (rsa via
+# sqlx-mysql is lockfile-only, not in the compiled graph); cargo-deny omits it
+# to avoid advisory-not-detected.
+ignore = [
+  # libsqlite3-sys/SQLite WAL info disclosure: restore/validation opens only an
+  # isolated temp copy of the chosen .db (no sibling -wal/-shm). sqlx-sqlite
+  # (0.8/0.9) does not yet accept libsqlite3-sys >= 0.39.0; remove once sqlx
+  # ships a compatible update.
+  { id = "RUSTSEC-2026-0459", reason = "isolated temp copy on restore/validate; no upstream-compatible fixed libsqlite3-sys yet" },
+]
+# Transitive unmaintained crates (e.g. zvariant_derive via
+# tauri-plugin-single-instance → zbus 5) are not actionable by us; workspace
+# crates must not be unmaintained.
+unmaintained = "workspace"
+
+[licenses]
+confidence-threshold = 0.93
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  "ISC",
+  "LGPL-2.1-or-later",
+  "MIT",
+  "MIT-0",
+  "MPL-2.0",
+  "NCSA",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+  "0BSD",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
