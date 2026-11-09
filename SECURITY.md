@@ -1,29 +1,37 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
+
+Security fixes go into the latest release only.
 
 | Version | Supported |
 |---------|-----------|
-| 0.1.x   | ✅        |
+| 0.3.x   | ✅        |
+| < 0.3   | ❌        |
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-VistoGallery is designed to be **local-first** — it makes no network requests by default and stores all data in a local SQLite database on your Mac. Because of this, the attack surface is intentionally small.
+Please **don't** open a public issue for a security problem.
 
-If you discover a security issue (for example, in the Vault encryption, SQLite handling, or Tauri command surface), please report it responsibly:
+Report it privately through GitHub: open the repository's **Security** tab and choose **Report a vulnerability** ([direct link](https://github.com/Davin-X/visto-gallery/security/advisories/new)). Include what you found, steps to reproduce, the version and macOS version, and a suggested fix if you have one.
 
-1. **Do not** open a public GitHub issue for security vulnerabilities.
-2. Email the maintainer with details, steps to reproduce, and (if available) a suggested fix.
-3. We will acknowledge receipt within 7 business days and provide an initial assessment within 14 business days.
+We aim to acknowledge reports within 7 days and to share an initial assessment within 14 days. We follow coordinated disclosure: details stay private until a fix is released or a reasonable time has passed.
 
-## Security Design
+## Security model
 
-- **Local-first:** No telemetry, no analytics, no remote code loading
-- **Vault:** Password-protected items; planned native backing via macOS Secure Enclave / Keychain
-- **SQLite:** Single-file catalog with WAL mode; migrations run at startup
-- **Tauri commands:** Explicit allow-list; no arbitrary shell execution exposed to the frontend
-- **File access:** Only folders you explicitly grant via the native file picker
+VistoGallery runs entirely on your Mac. The things it protects are your files and its catalog, and the main boundary is between the app's web-based interface and its Rust backend.
 
-## Disclosure Policy
+- **No network by default.** No telemetry, analytics or remote code. The only request the app can make is the optional update check against GitHub Releases, which is off unless you turn it on.
+- **You choose what it reads.** The backend only scans or imports folders and files you picked in a macOS dialog, dropped on the window, or added as a source earlier.
+- **Catalog-only file actions.** Opening, revealing and trashing only work on files that are in the catalog. Trash takes catalog ids, never paths.
+- **Backend-owned save dialogs.** When the app writes a file you exported, the Rust backend shows the save dialog and picks the destination.
+- **Recoverable deletes.** Deleted files go to the macOS Trash (with Put Back where Finder allows). Removing a source or resetting the catalog never deletes your files.
+- **Originals kept on edit.** Replacing a file with an edited version first stores the original in the app's data folder so it can be restored.
+- **Locked-down web view.** A strict Content Security Policy, no developer tools in release builds, and an asset scope limited to the thumbnail cache and your sources.
 
-We follow coordinated disclosure. We will not publicize a vulnerability until a fix is available or a reasonable remediation period has passed.
+Data lives in `~/Library/Application Support/com.vistogallery.desktop/` (catalog, edit originals, backups) and `~/Library/Caches/com.vistogallery.desktop/` (thumbnails).
+
+## Known limitations
+
+- Release builds are not yet signed or notarized by Apple.
+- Hidden items are hidden in the app only. They are not encrypted, and the files stay readable on disk.

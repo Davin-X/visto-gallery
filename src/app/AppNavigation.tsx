@@ -354,14 +354,18 @@ export function AppSidebar({
           <span className="stat-size">· {formatBytesSimple(stats.favoriteSize)}</span>
         </span>
       </div>
-      <div className="stat-row">
-        <KindDot kind="photo" />
-        <span className="stat-label">Uncategorized</span>
-        <span className="stat-value">
-          {stats.uncategorized.toLocaleString()}
-          <span className="stat-size">· {formatBytesSimple(stats.uncategorizedSize)}</span>
-        </span>
-      </div>
+      {/* The catalog only stores photo, video and raw kinds, so this row
+          only appears if an older catalog holds something else. */}
+      {stats.uncategorized > 0 && (
+        <div className="stat-row">
+          <KindDot kind="photo" />
+          <span className="stat-label">Uncategorized</span>
+          <span className="stat-value">
+            {stats.uncategorized.toLocaleString()}
+            <span className="stat-size">· {formatBytesSimple(stats.uncategorizedSize)}</span>
+          </span>
+        </div>
+      )}
       <div className="stat-row hidden">
         <KindDot kind="photo" />
         <span className="stat-label">Hidden</span>
@@ -514,9 +518,10 @@ export function AppSidebar({
         </div>
       </div>
       <div className="sidebar-footer">
-        <span className="sidebar-health">
-          <span className="health-dot" aria-hidden="true" />
-          Storage Healthy
+        {/* A plain statement of where the library lives. The old "Storage
+            Healthy" badge was static text that no check ever updated. */}
+        <span className="sidebar-health" title="Your photos and catalog never leave this Mac">
+          On this Mac
         </span>
         <div className="sidebar-version-group">
           {updateAvailable && (

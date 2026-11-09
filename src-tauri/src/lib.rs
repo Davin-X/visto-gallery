@@ -7,6 +7,7 @@ use tauri::{Emitter, Manager, State};
 mod commands;
 mod db;
 mod media_animation;
+mod media_dimensions;
 mod media_signature;
 mod menu;
 mod models;
@@ -17,14 +18,24 @@ use menu::create_menu;
 
 struct AppState {
     db: Mutex<Option<Database>>,
+    /// Why the catalog could not be opened at launch, shown by every command
+    /// instead of crashing the app.
+    db_error: Mutex<Option<String>>,
     watchers: Mutex<HashMap<String, notify::RecommendedWatcher>>,
+    /// Paths the user chose in a native picker or dropped on the window.
+    grants: GrantedPaths,
+    /// Per-operation cancel flags and per-root locks for scans and imports.
+    scan_jobs: ScanJobs,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
             db: Mutex::new(None),
+            db_error: Mutex::new(None),
             watchers: Mutex::new(HashMap::new()),
+            grants: GrantedPaths::default(),
+            scan_jobs: ScanJobs::default(),
         }
     }
 }
@@ -46,21 +57,45 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        // Native drops are user intent: grant the dropped paths before the
+        // webview relays them to `import_files`.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                let state: State<'_, AppState> = window.state();
+                state.grants.grant(paths);
+            }
+        })
         .setup(|app| {
-            // Initialize database (await so it's ready before any invoke)
+            // Initialize database (await so it's ready before any invoke). A
+            // locked or damaged catalog must not crash launch: the error is
+            // kept and returned by every command so the UI can explain it.
             let app_handle = app.handle().clone();
-            let db = tauri::async_runtime::block_on(async {
-                let handle = app_handle.clone();
-                let db = Database::new(&handle)
-                    .await
-                    .expect("Failed to initialize database");
+            let opened = tauri::async_runtime::block_on(async {
+                let db = Database::new(&app_handle).await?;
                 for folder in db.registered_folders().await {
-                    let _ = handle.asset_protocol_scope().allow_directory(&folder, true);
+                    let _ = app_handle
+                        .asset_protocol_scope()
+                        .allow_directory(&folder, true);
                 }
-                db
+                anyhow::Ok(db)
             });
             let state: State<'_, AppState> = app_handle.state();
-            *state.db.lock().unwrap() = Some(db);
+            match opened {
+                Ok(db) => {
+                    let background = db.handle();
+                    *state.db.lock().unwrap_or_else(|e| e.into_inner()) = Some(db);
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(error) = background.run_backfills().await {
+                            tracing::warn!("catalog backfill failed: {error:#}");
+                        }
+                    });
+                }
+                Err(error) => {
+                    tracing::error!("could not open the catalog: {error:#}");
+                    *state.db_error.lock().unwrap_or_else(|e| e.into_inner()) =
+                        Some(format!("{error:#}"));
+                }
+            }
 
             // Create and set menu
             let app_handle = app.handle();
@@ -161,6 +196,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // Library
             scan_library,
+            pick_source_folders,
+            pick_media_files,
             cancel_scan,
             cancel_move_to_trash,
             cancel_find_duplicates,
@@ -215,7 +252,7 @@ pub fn run() {
             supported_extensions,
             // Editing
             render_edited,
-            move_exported_file,
+            save_exported_file,
             save_edit_recipe,
             get_edit_recipe,
             list_edit_recipes,
