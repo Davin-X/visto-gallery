@@ -1453,37 +1453,54 @@ pub async fn get_version() -> Result<String, String> {
     Ok(env!("CARGO_PKG_VERSION").to_string())
 }
 
-/// Purge the entire library catalog (media items, tags, albums, folders and
-/// library folders, import sessions) while leaving original media files on disk.
-/// This is irreversible through the UI.
+/// Purge the library catalog (media items with their tags, album links, edit
+/// recipes and edit-backup records, plus albums, tags, Smart Albums and
+/// library folders) in one transaction, while leaving original media files on
+/// disk. Also stops folder watchers and empties the thumbnail cache so nothing
+/// keeps describing the old catalog. This is irreversible through the UI.
+///
+/// Kept on purpose: settings, edit presets, and the backed-up originals of
+/// in-place edits under the app data folder (user data, never deleted here).
 #[tauri::command]
-pub async fn delete_library_database(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn delete_library_database(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let db = get_db(&state)?;
-    sqlx::query("DELETE FROM media_items")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM media_tags")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM album_items")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM albums")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM tags")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM library_folders")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+    purge_catalog(&db).await?;
+
+    if let Ok(mut watchers) = state.watchers.lock() {
+        watchers.clear();
+    }
+    if let Ok(cache) = app.path().app_cache_dir() {
+        let thumbnails = cache.join("thumbnails");
+        let _ = tokio::fs::remove_dir_all(&thumbnails).await;
+    }
     Ok(())
+}
+
+/// Delete every catalog row in one transaction: a failure part-way leaves the
+/// catalog exactly as it was instead of half-deleted.
+pub(crate) async fn purge_catalog(db: &SqlitePool) -> Result<(), String> {
+    let mut tx = db.begin().await.map_err(|e| e.to_string())?;
+    // Children first, so this also works without foreign-key cascades.
+    for table in [
+        "media_tags",
+        "album_items",
+        "edit_recipes",
+        "edit_backups",
+        "media_items",
+        "albums",
+        "tags",
+        "smart_albums",
+        "library_folders",
+    ] {
+        sqlx::query(&format!("DELETE FROM {table}"))
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Could not clear {table}: {e}"))?;
+    }
+    tx.commit().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1709,5 +1726,60 @@ mod rescan_preservation_tests {
                 .expect("read back");
         assert_eq!(favorite, 1, "favorite must survive a forced rescan");
         assert_eq!(hidden, 1, "hidden must survive a forced rescan");
+    }
+}
+
+#[cfg(test)]
+mod purge_catalog_tests {
+    use super::purge_catalog;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn migrated_db() -> sqlx::SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory catalog");
+        sqlx::migrate!("./migrations")
+            .run(&db)
+            .await
+            .expect("run migrations");
+        db
+    }
+
+    async fn count(db: &sqlx::SqlitePool, table: &str) -> i64 {
+        sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
+            .fetch_one(db)
+            .await
+            .expect("count rows")
+    }
+
+    #[tokio::test]
+    async fn purge_clears_catalog_tables_and_keeps_settings() {
+        let db = migrated_db().await;
+        for sql in [
+            "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at) VALUES ('m', '/p/a.jpg', 'a.jpg', 'jpg', 'photo', 1, 1, 1, 1)",
+            "INSERT INTO albums (id, name, created_at, updated_at) VALUES ('a', 'Album', 1, 1)",
+            "INSERT INTO album_items (album_id, media_id, added_at) VALUES ('a', 'm', 1)",
+            "INSERT INTO library_folders (path, added_at) VALUES ('/p', 1)",
+            "INSERT INTO smart_albums (id, name, filter_json, created_at, updated_at) VALUES ('s', 'Smart', '{}', 1, 1)",
+            "INSERT INTO settings (key, value) VALUES ('appearance', '\"dark\"')",
+        ] {
+            sqlx::query(sql).execute(&db).await.expect(sql);
+        }
+
+        let settings_before = count(&db, "settings").await;
+        purge_catalog(&db).await.expect("purge");
+
+        for table in [
+            "media_items",
+            "albums",
+            "album_items",
+            "library_folders",
+            "smart_albums",
+        ] {
+            assert_eq!(count(&db, table).await, 0, "{table} should be empty");
+        }
+        assert_eq!(count(&db, "settings").await, settings_before);
     }
 }
