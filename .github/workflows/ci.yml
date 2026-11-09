@@ -28,5 +28,20 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run lint
       - run: npm test
       - run: npm run build
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      # RUSTSEC-2023-0071 (rsa, Marvin attack) is ignored because rsa only
+      # reaches Cargo.lock through sqlx-mysql, which sqlx's macros list in the
+      # lockfile but this app never compiles (`cargo tree -i rsa` is empty).
+      - name: cargo audit
+        run: cargo audit --file src-tauri/Cargo.lock --ignore RUSTSEC-2023-0071
+      - name: npm audit (production dependencies)
+        run: npm audit --omit=dev --audit-level=high
