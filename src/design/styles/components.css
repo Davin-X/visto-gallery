@@ -230,3 +230,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Middle truncation: the head shrinks with an ellipsis, the tail stays. */
+.middle-truncate {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.middle-truncate-head {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.middle-truncate-tail {
+  flex: 0 0 auto;
+}

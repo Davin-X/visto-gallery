@@ -22,6 +22,10 @@ import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import { formatDuration } from "../engine/utils/time";
 import { draftImageStyle } from "../engine/utils/draftImage";
 import type { MediaItem, EditValues } from "../engine/types/media";
+import { formatItemDate } from "../engine/utils/mediaDate";
+
+/** Whether the viewer's shortcut legend has been shown in this app session. */
+let viewerLegendSeen = false;
 
 interface ViewerScreenProps {
   active: boolean;
@@ -66,6 +70,9 @@ function ViewerScreen(props: ViewerScreenProps) {
     : "";
   const folderName = folderPath.split("/").filter(Boolean).pop() || "Local Files";
   const [hintsVisible, setHintsVisible] = useState(true);
+  // The keyboard legend is a first-time aid: shown once per app session, then
+  // left to the ⌘/ cheat sheet so it stops covering the photo on every move.
+  const [legendVisible, setLegendVisible] = useState(!viewerLegendSeen);
   const [photoLoadState, setPhotoLoadState] = useState<{
     id: string;
     status: "loading" | "loaded" | "failed";
@@ -101,6 +108,15 @@ function ViewerScreen(props: ViewerScreenProps) {
       if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
     };
   }, [props.selected?.id, flashHints]);
+
+  useEffect(() => {
+    if (!legendVisible) return;
+    const timer = window.setTimeout(() => {
+      viewerLegendSeen = true;
+      setLegendVisible(false);
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [legendVisible]);
 
   // Keep the active thumbnail in view as you navigate a long filmstrip.
   // Keep the active thumbnail in view as you navigate a long filmstrip.
@@ -256,7 +272,7 @@ function ViewerScreen(props: ViewerScreenProps) {
                   <rect x="2" y="2" width="12" height="12" rx="2" />
                   <path d="M8 2v4M8 10v4M2 8h4M10 8h4" />
                 </svg>
-                {new Date(selected.capturedAt ?? selected.modifiedAt).toLocaleDateString()}
+                {formatItemDate(selected)}
               </span>
               <span className="meta-chip">
                 <svg
@@ -383,9 +399,7 @@ function ViewerScreen(props: ViewerScreenProps) {
             <img
               key={`${selected.id}-${selected.size}-${selected.modifiedAt}`}
               className={`photo-viewer-image${photoStatus === "loaded" ? " is-loaded" : ""}`}
-              src={
-                props.assetUrl(selected.path) + `?v=${selected.modifiedAt}-${selected.size}`
-              }
+              src={props.assetUrl(selected.path) + `?v=${selected.modifiedAt}-${selected.size}`}
               alt={selected.name}
               decoding="async"
               onLoad={() => setPhotoLoadState({ id: selected.id, status: "loaded" })}
@@ -502,7 +516,10 @@ function ViewerScreen(props: ViewerScreenProps) {
         </div>
         {/* Compact shortcut hints live in the stage corner so the frame keeps
             all of its room for the media and the control bar. */}
-        <div className={`viewer-hints${hintsVisible ? "" : " hidden"}`} aria-hidden="true">
+        <div
+          className={`viewer-hints${hintsVisible && legendVisible ? "" : " hidden"}`}
+          aria-hidden="true"
+        >
           <span>
             <kbd>←</kbd>
             <kbd>→</kbd> Navigate

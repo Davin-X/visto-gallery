@@ -335,8 +335,7 @@ function getSortedItems(
 
 function findKnownItem(state: LibraryState, id: string): MediaItem | null {
   const direct =
-    state.items.find((item) => item.id === id) ||
-    state.hiddenItems.find((item) => item.id === id);
+    state.items.find((item) => item.id === id) || state.hiddenItems.find((item) => item.id === id);
   if (direct) return direct;
   for (const group of state.duplicates) {
     const match = group.items.find((item) => item.id === id);

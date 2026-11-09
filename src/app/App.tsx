@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import {
   currentMonitor,
   getCurrentWindow,
@@ -57,9 +56,6 @@ function App() {
   const [screenHistory, setScreenHistory] = useState<Screen[]>([]);
   const [lastFolder, setLastFolder] = useState<string | null>(null);
   const [lastScreen, setLastScreen] = useState<Screen | null>(null);
-  // Supported media extensions, fetched from the backend so the file picker
-  // filter stays in sync with the backend scanner.
-  const supportedExtensionsRef = useRef<string[] | null>(null);
 
   const goBack = () => {
     setScreenHistory((prev) => {
@@ -252,18 +248,14 @@ function App() {
     };
 
     const unlisteners: Array<() => void> = [];
-    events
-      .onLibraryChanged(scheduleStatsRefresh)
-      .then((u) => {
-        if (cancelled) u();
-        else unlisteners.push(u);
-      });
-    events
-      .onLibraryCountsChanged(scheduleStatsRefresh)
-      .then((u) => {
-        if (cancelled) u();
-        else unlisteners.push(u);
-      });
+    events.onLibraryChanged(scheduleStatsRefresh).then((u) => {
+      if (cancelled) u();
+      else unlisteners.push(u);
+    });
+    events.onLibraryCountsChanged(scheduleStatsRefresh).then((u) => {
+      if (cancelled) u();
+      else unlisteners.push(u);
+    });
     return () => {
       cancelled = true;
       if (statsDebounceRef.current) {
@@ -866,14 +858,6 @@ function App() {
     void liveRef.current.library.loadHiddenItems();
     liveRef.current.settings.hydrate();
 
-    // Fetch the canonical list of supported extensions from the backend so the
-    // file picker filter stays in sync with the backend scanner.
-    if (supportedExtensionsRef.current === null) {
-      void tauri.library.supportedExtensions().then((exts) => {
-        supportedExtensionsRef.current = exts;
-      });
-    }
-
     // Listen for native menu events (cleaned up on unmount / StrictMode remount).
     let cancelled = false;
     const unlisteners: Array<() => void> = [];
@@ -937,10 +921,7 @@ function App() {
         const now = Date.now();
         const minIntervalMs = 200;
         // Always apply terminal/first updates promptly; throttle rapid progress.
-        if (
-          progress.processed === progress.total ||
-          now - lastProgressApplyAt >= minIntervalMs
-        ) {
+        if (progress.processed === progress.total || now - lastProgressApplyAt >= minIntervalMs) {
           lastProgressApplyAt = now;
           if (progressTimer) {
             clearTimeout(progressTimer);
@@ -952,14 +933,17 @@ function App() {
         }
         pendingProgress = progress;
         if (!progressTimer) {
-          progressTimer = setTimeout(() => {
-            progressTimer = null;
-            if (pendingProgress) {
-              lastProgressApplyAt = Date.now();
-              applyProgress(pendingProgress);
-              pendingProgress = null;
-            }
-          }, minIntervalMs - (now - lastProgressApplyAt));
+          progressTimer = setTimeout(
+            () => {
+              progressTimer = null;
+              if (pendingProgress) {
+                lastProgressApplyAt = Date.now();
+                applyProgress(pendingProgress);
+                pendingProgress = null;
+              }
+            },
+            minIntervalMs - (now - lastProgressApplyAt),
+          );
         }
       });
       unlisteners.push(() => {
@@ -1692,13 +1676,9 @@ function App() {
   const addItemsToAlbum = async (albumId: string) => {
     let paths: string[];
     try {
-      const selected = await openFileDialog({
-        directory: false,
-        multiple: true,
-        filters: [{ name: "Media", extensions: supportedExtensionsRef.current ?? [] }],
-      });
-      if (!selected) return;
-      paths = Array.isArray(selected) ? selected : [selected];
+      // The backend opens the picker so it can trust the paths it imports.
+      paths = await tauri.library.pickMediaFiles();
+      if (!paths.length) return;
     } catch (error) {
       showNotice(`Could not open the file picker: ${describeError(error)}`);
       return;
@@ -1911,13 +1891,9 @@ function App() {
   const importFiles = async () => {
     let paths: string[];
     try {
-      const selected = await openFileDialog({
-        directory: false,
-        multiple: true,
-        filters: [{ name: "Media", extensions: supportedExtensionsRef.current ?? [] }],
-      });
-      if (!selected) return;
-      paths = Array.isArray(selected) ? selected : [selected];
+      // The backend opens the picker so it can trust the paths it imports.
+      paths = await tauri.library.pickMediaFiles();
+      if (!paths.length) return;
     } catch (e) {
       showNotice(`Could not open the file picker: ${describeError(e)}`);
       return;
@@ -1953,13 +1929,8 @@ function App() {
   const importFolder = async () => {
     let selectedPaths: string[];
     try {
-      const selected = await openFileDialog({
-        directory: true,
-        multiple: true,
-        title: "Choose source folders",
-      });
-      if (!selected) return;
-      selectedPaths = Array.isArray(selected) ? selected : [selected];
+      // The backend opens the picker so it can trust the roots it registers.
+      selectedPaths = await tauri.library.pickSourceFolders();
     } catch (e) {
       showNotice(`Could not open the folder picker: ${describeError(e)}`);
       return;

@@ -47,6 +47,14 @@ import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple, canPlayVideoInApp } from "../engine/utils/mediaTypes";
 import type { MediaItem, Album, Filter, LayoutMode } from "../engine/types/media";
 import type { DeleteItemsOutcome, LibraryFolder } from "../engine/types/commands";
+import {
+  formatCapturedDateTime,
+  formatFileDateTime,
+  formatItemDate,
+  itemMonth,
+} from "../engine/utils/mediaDate";
+import { displayFileName } from "../engine/utils/fileName";
+import { MiddleTruncate } from "../design/components/MiddleTruncate";
 
 const GALLERY_PAGE_SIZE = 180;
 const VIRTUAL_GRID_OVERSCAN_ROWS = 6;
@@ -781,13 +789,13 @@ function LibraryScreen(props: LibraryScreenProps) {
     () =>
       props.layout === "timeline"
         ? (() => {
-            const grouped = new Map<string, { timestamp: number; items: any[] }>();
+            const grouped = new Map<string, { timestamp: number; label: string; items: any[] }>();
             for (const item of props.items) {
               const timestamp = item.capturedAt ?? item.modifiedAt;
-              const date = new Date(timestamp);
-              const key = `${date.getFullYear()}-${date.getMonth()}`;
+              const { key, label } = itemMonth(item);
               const group = grouped.get(key) ?? {
                 timestamp,
+                label,
                 items: [] as any[],
               };
               group.timestamp = Math.max(group.timestamp, timestamp);
@@ -798,10 +806,7 @@ function LibraryScreen(props: LibraryScreenProps) {
               .sort((a, b) => b[1].timestamp - a[1].timestamp)
               .map(([key, group]) => ({
                 key,
-                label: new Intl.DateTimeFormat(undefined, {
-                  month: "long",
-                  year: "numeric",
-                }).format(group.timestamp),
+                label: group.label,
                 items: group.items,
                 count: group.items.length,
               }));
@@ -813,9 +818,7 @@ function LibraryScreen(props: LibraryScreenProps) {
     if (!timelineGroups.length) return [];
     const visibleItemsByMonth = new Map<string, any[]>();
     for (const item of renderedItems) {
-      const timestamp = item.capturedAt ?? item.modifiedAt;
-      const date = new Date(timestamp);
-      const key = `${date.getFullYear()}-${date.getMonth()}`;
+      const { key } = itemMonth(item);
       const items = visibleItemsByMonth.get(key) ?? [];
       items.push(item);
       visibleItemsByMonth.set(key, items);
@@ -826,7 +829,6 @@ function LibraryScreen(props: LibraryScreenProps) {
     });
   }, [renderedItems, timelineGroups]);
 
-  const captureDate = (item: any) => item.capturedAt ?? item.modifiedAt;
   const sortDetailsBy = (sortBy: typeof library.sortBy) => {
     library.setSort(
       sortBy,
@@ -1248,17 +1250,20 @@ function LibraryScreen(props: LibraryScreenProps) {
             </div>
             <div className="toolbar-right">
               <div className="toolbar-actions">
-                <button
-                  className="toolbar-button slideshow-action"
-                  type="button"
-                  onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
-                  disabled={props.busy || props.items.length === 0}
-                  title="Play the current view as a slideshow (Space)"
-                  aria-label="Play slideshow"
-                >
-                  <PlayIcon size={14} />
-                  <span className="slideshow-label">Slideshow</span>
-                </button>
+                {/* An album already has a Play button in its header. */}
+                {!props.activeAlbum && (
+                  <button
+                    className="toolbar-button slideshow-action"
+                    type="button"
+                    onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
+                    disabled={props.busy || props.items.length === 0}
+                    title="Play the current view as a slideshow (Space)"
+                    aria-label="Play slideshow"
+                  >
+                    <PlayIcon size={14} />
+                    <span className="slideshow-label">Slideshow</span>
+                  </button>
+                )}
                 {!props.hiddenView && (
                   <button
                     className="toolbar-button"
@@ -1291,42 +1296,50 @@ function LibraryScreen(props: LibraryScreenProps) {
                       );
                     })}
                   </div>
-                  <div className="zoom-control" role="group" aria-label="Thumbnail size">
-                    {(["small", "medium", "large"] as const).map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        className={`zoom-step ${thumbnailSize === s ? "selected" : ""}`}
-                        aria-label={
-                          s === "small"
-                            ? "Small thumbnails"
-                            : s === "medium"
-                              ? "Medium thumbnails"
-                              : "Large thumbnails"
-                        }
-                        aria-pressed={thumbnailSize === s}
-                        onClick={() => updateSettings("thumbnailSize", s)}
-                        title={
-                          s === "small"
-                            ? "Small thumbnails"
-                            : s === "medium"
-                              ? "Medium thumbnails"
-                              : "Large thumbnails"
-                        }
-                      >
-                        <span className={`zoom-glyph zoom-glyph-${s}`} aria-hidden="true">
-                          {Array.from(
-                            {
-                              length: s === "small" ? 6 : s === "medium" ? 4 : 1,
-                            },
-                            (_, index) => (
-                              <i key={index} />
-                            ),
-                          )}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+                  {/* Details rows use a fixed thumbnail, so size only matters
+                      for the visual layouts. A divider keeps the two icon
+                      groups from reading as one six-button control. */}
+                  {props.layout !== "details" && (
+                    <span className="toolbar-divider" aria-hidden="true" />
+                  )}
+                  {props.layout !== "details" && (
+                    <div className="zoom-control" role="group" aria-label="Thumbnail size">
+                      {(["small", "medium", "large"] as const).map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          className={`zoom-step ${thumbnailSize === s ? "selected" : ""}`}
+                          aria-label={
+                            s === "small"
+                              ? "Small thumbnails"
+                              : s === "medium"
+                                ? "Medium thumbnails"
+                                : "Large thumbnails"
+                          }
+                          aria-pressed={thumbnailSize === s}
+                          onClick={() => updateSettings("thumbnailSize", s)}
+                          title={
+                            s === "small"
+                              ? "Small thumbnails"
+                              : s === "medium"
+                                ? "Medium thumbnails"
+                                : "Large thumbnails"
+                          }
+                        >
+                          <span className={`zoom-glyph zoom-glyph-${s}`} aria-hidden="true">
+                            {Array.from(
+                              {
+                                length: s === "small" ? 6 : s === "medium" ? 4 : 1,
+                              },
+                              (_, index) => (
+                                <i key={index} />
+                              ),
+                            )}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {!props.hiddenView && (
                   <div
@@ -1395,11 +1408,18 @@ function LibraryScreen(props: LibraryScreenProps) {
                   key={f}
                   type="button"
                   aria-pressed={props.filter === f}
-                  className={`quick-filter ${props.filter === f ? "active" : ""}`}
+                  className={`quick-filter ${props.filter === f ? "active" : ""} ${
+                    count === 0 && f !== "All" ? "is-empty" : ""
+                  }`}
+                  title={
+                    count === 0 && f !== "All"
+                      ? `No ${f === "RAW" ? "RAW files" : f.toLowerCase()} here`
+                      : undefined
+                  }
                   onClick={() => props.onChangeFilter(f as Filter)}
                 >
                   {f}
-                  <span className="filter-count">{count}</span>
+                  <span className="filter-count">{count.toLocaleString()}</span>
                 </button>
               );
             })}
@@ -1705,13 +1725,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                         </span>
                         <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
                           <b>
-                            {masked(item)
-                              ? "Hidden item"
-                              : item.name + (showExtensions ? `.${item.extension}` : "")}
+                            {masked(item) ? (
+                              "Hidden item"
+                            ) : (
+                              <MiddleTruncate
+                                text={displayFileName(item.name, item.extension, showExtensions)}
+                              />
+                            )}
                           </b>
-                          <small className="tile-date">
-                            {new Date(captureDate(item)).toLocaleDateString()}
-                          </small>
+                          <small className="tile-date">{formatItemDate(item)}</small>
                           <small className="tile-kind">
                             <KindDot kind={item.kind} />
                             {item.kind === "video"
@@ -1887,11 +1909,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                                     className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
                                   >
                                     <b>
-                                      {item.name + (showExtensions ? `.${item.extension}` : "")}
+                                      <MiddleTruncate
+                                        text={displayFileName(
+                                          item.name,
+                                          item.extension,
+                                          showExtensions,
+                                        )}
+                                      />
                                     </b>
-                                    <small className="tile-date">
-                                      {new Date(captureDate(item)).toLocaleDateString()}
-                                    </small>
+                                    <small className="tile-date">{formatItemDate(item)}</small>
                                     <small className="tile-kind">
                                       <KindDot kind={item.kind} />
                                       {item.kind === "video"
@@ -2047,10 +2073,12 @@ function LibraryScreen(props: LibraryScreenProps) {
                         ) : null}
                       </span>
                       <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
-                        <b>{item.name + (showExtensions ? `.${item.extension}` : "")}</b>
-                        <small className="tile-date">
-                          {new Date(captureDate(item)).toLocaleDateString()}
-                        </small>
+                        <b>
+                          <MiddleTruncate
+                            text={displayFileName(item.name, item.extension, showExtensions)}
+                          />
+                        </b>
+                        <small className="tile-date">{formatItemDate(item)}</small>
                         <small className="tile-kind">
                           {item.kind === "video" ? "Video" : item.kind === "raw" ? "RAW" : "Photo"}
                         </small>
@@ -2289,7 +2317,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                           <div className="info-row">
                             <span className="info-label">Dimensions</span>
                             <span className="info-value">
-                              {sel.width && sel.height ? `${sel.width} × ${sel.height}` : "Unknown"}
+                              {sel.width && sel.height ? `${sel.width} × ${sel.height}` : "—"}
                             </span>
                           </div>
                           <div className="info-row">
@@ -2316,15 +2344,13 @@ function LibraryScreen(props: LibraryScreenProps) {
                             <div className="info-row">
                               <span className="info-label">Captured</span>
                               <span className="info-value">
-                                {new Date(sel.capturedAt).toLocaleString()}
+                                {formatCapturedDateTime(sel.capturedAt)}
                               </span>
                             </div>
                           )}
                           <div className="info-row">
                             <span className="info-label">Modified</span>
-                            <span className="info-value">
-                              {new Date(sel.modifiedAt).toLocaleString()}
-                            </span>
+                            <span className="info-value">{formatFileDateTime(sel.modifiedAt)}</span>
                           </div>
                         </>
                       )}

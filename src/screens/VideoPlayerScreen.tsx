@@ -164,11 +164,7 @@ export default function VideoPlayerScreen({
             </span>
           </div>
         </div>
-        <div
-          className="video-player-queue-strip"
-          ref={queueStripRef}
-          onScroll={maybeLoadMoreQueue}
-        >
+        <div className="video-player-queue-strip" ref={queueStripRef} onScroll={maybeLoadMoreQueue}>
           {queue.map((video, index) => (
             <button
               type="button"

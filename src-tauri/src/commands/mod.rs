@@ -1,3 +1,4 @@
+mod access;
 mod albums;
 mod backup;
 mod batch;
@@ -6,10 +7,12 @@ mod edit_recipes;
 mod library;
 mod media;
 mod roots;
+mod scan_jobs;
 mod settings;
 mod smart_albums;
 mod update;
 use crate::{models::*, AppState};
+pub use access::*;
 pub use albums::*;
 use anyhow::Result;
 pub use backup::*;
@@ -24,6 +27,7 @@ pub use library::*;
 pub use media::*;
 use notify::Watcher;
 pub use roots::*;
+pub use scan_jobs::ScanJobs;
 use serde::{Deserialize, Serialize};
 pub use settings::*;
 pub use smart_albums::*;
@@ -344,17 +348,16 @@ const TAG_SELECT: &str = "SELECT t.id, t.name, t.color_index, t.created_at, \
      (SELECT COUNT(*) FROM media_tags mt JOIN media_items m ON m.id = mt.media_id \
       WHERE mt.tag_id = t.id AND m.hidden = 0) AS item_count FROM tags t";
 
-/// Shared cooperative cancellation flag for folder scans, file imports, and
-/// duplicate hashing. Each operation clears it before starting and checks it
-/// between filesystem work units.
-static SCAN_CANCEL: AtomicBool = AtomicBool::new(false);
+/// Cooperative cancellation flags for long operations that are not folder
+/// scans or imports (those use per-job flags in [`ScanJobs`]).
 static TRASH_CANCEL: AtomicBool = AtomicBool::new(false);
 static DUPLICATE_CANCEL: AtomicBool = AtomicBool::new(false);
 static BATCH_CANCEL: AtomicBool = AtomicBool::new(false);
 
+/// Cancel every folder scan and file import that is running now.
 #[tauri::command]
-pub async fn cancel_scan() -> Result<(), String> {
-    SCAN_CANCEL.store(true, Ordering::SeqCst);
+pub async fn cancel_scan(state: State<'_, AppState>) -> Result<(), String> {
+    state.scan_jobs.cancel_all();
     Ok(())
 }
 
@@ -366,11 +369,19 @@ pub async fn cancel_move_to_trash() -> Result<(), String> {
 
 fn get_db(state: &State<'_, AppState>) -> Result<SqlitePool, String> {
     let guard = state.db.lock().map_err(|e| e.to_string())?;
-    Ok(guard
-        .as_ref()
-        .ok_or("Database not initialized".to_string())?
-        .pool()
-        .clone())
+    if let Some(db) = guard.as_ref() {
+        return Ok(db.pool().clone());
+    }
+    let reason = state
+        .db_error
+        .lock()
+        .ok()
+        .and_then(|e| e.clone())
+        .unwrap_or_else(|| "it is still starting up".to_string());
+    Err(format!(
+        "The VistoGallery catalog could not be opened: {reason}. \
+         Quit other copies of VistoGallery, or restore a catalog backup."
+    ))
 }
 
 fn now_ms() -> i64 {
@@ -471,72 +482,55 @@ async fn remember_folder(db: &SqlitePool, root: &str, app: &tauri::AppHandle) {
     let _ = app.asset_protocol_scope().allow_directory(&path, true);
 }
 
+/// The one list of extensions the catalog accepts, by kind. The scanner, the
+/// file picker (`supported_extensions`) and kind detection all read these, so
+/// they cannot drift apart. Entries are lowercase.
+const IMAGE_EXTS: &[&str] = &[
+    "avif", "bmp", "gif", "heic", "heif", "jfif", "jpe", "jpeg", "jpg", "jxl", "png", "tif",
+    "tiff", "webp",
+];
+const RAW_EXTS: &[&str] = &[
+    "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf",
+    "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",
+    "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f",
+];
+const VIDEO_EXTS: &[&str] = &[
+    "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "mts",
+    "ogv", "ts", "vob", "webm", "wmv",
+];
+
+/// Catalog kind for a supported lowercase extension, or `None` when the
+/// extension is not media.
+fn media_kind(ext: &str) -> Option<&'static str> {
+    if VIDEO_EXTS.contains(&ext) {
+        Some("video")
+    } else if RAW_EXTS.contains(&ext) {
+        Some("raw")
+    } else if IMAGE_EXTS.contains(&ext) {
+        Some("photo")
+    } else {
+        None
+    }
+}
+
 fn is_media_file(ext: &str) -> bool {
-    let image_exts = [
-        "avif", "bmp", "gif", "heic", "heif", "jfif", "jpe", "jpeg", "jpg", "jxl", "png", "tif",
-        "tiff", "webp",
-    ];
-    let raw_exts = [
-        "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf",
-        "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",
-        "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f",
-    ];
-    let video_exts = [
-        "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
-        "mts", "ogv", "ts", "vob", "webm", "wmv",
-    ];
-    image_exts.contains(&ext) || raw_exts.contains(&ext) || video_exts.contains(&ext)
+    media_kind(ext).is_some()
 }
 
 /// Returns the canonical list of supported media extensions, so the frontend
 /// file picker and the backend scanner stay in sync.
 #[tauri::command]
 pub fn supported_extensions() -> Vec<String> {
-    let mut exts: Vec<String> = vec![
-        "avif", "bmp", "gif", "heic", "heif", "jfif", "jpe", "jpeg", "jpg", "jxl", "png", "tif",
-        "tiff", "webp",
-    ]
-    .into_iter()
-    .map(|s| s.to_string())
-    .collect();
-    exts.extend(
-        [
-            "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip",
-            "erf", "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw",
-            "obm", "orf", "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf",
-            "srw", "x3f",
-        ]
-        .into_iter()
-        .map(|s| s.to_string()),
-    );
-    exts.extend(
-        [
-            "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
-            "mts", "ogv", "ts", "vob", "webm", "wmv",
-        ]
-        .into_iter()
-        .map(|s| s.to_string()),
-    );
-    exts
+    IMAGE_EXTS
+        .iter()
+        .chain(RAW_EXTS)
+        .chain(VIDEO_EXTS)
+        .map(|ext| ext.to_string())
+        .collect()
 }
 
 fn kind_for_ext(ext: &str) -> &'static str {
-    let video_exts = [
-        "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg",
-        "mts", "ogv", "ts", "vob", "webm", "wmv",
-    ];
-    let raw_exts = [
-        "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf",
-        "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",
-        "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f",
-    ];
-    if video_exts.contains(&ext) {
-        "video"
-    } else if raw_exts.contains(&ext) {
-        "raw"
-    } else {
-        "photo"
-    }
+    media_kind(ext).unwrap_or("photo")
 }
 
 /// Read file facts needed by the catalog without decoding the image payload.
@@ -572,16 +566,6 @@ fn inspect_media_file_with_metadata(
         .to_string();
     let kind = kind_for_ext(&ext).to_string();
 
-    // Read dimensions from the file header only; no full decode.
-    let (width, height) = if kind == "photo" {
-        match image::image_dimensions(path) {
-            Ok((w, h)) => (Some(w as i32), Some(h as i32)),
-            Err(_) => (None, None),
-        }
-    } else {
-        (None, None)
-    };
-
     // Reads container headers only (GIF blocks, WebP VP8X flags, PNG acTL,
     // ISOBMFF ftyp brands); no pixel decode. Formats that cannot animate are
     // answered without opening the file.
@@ -602,6 +586,7 @@ fn inspect_media_file_with_metadata(
     item.content_signature = crate::media_signature::content_signature(path);
 
     // Populate metadata from EXIF for photos.
+    let mut exif_dims = None;
     if kind == "photo" {
         let exif = crate::commands::media::extract_exif(path);
         item.captured_at = exif.captured_at;
@@ -611,13 +596,21 @@ fn inspect_media_file_with_metadata(
         item.iso = exif.iso;
         item.latitude = exif.latitude;
         item.longitude = exif.longitude;
-        if item.width.is_none() {
-            item.width = exif.width;
-        }
-        if item.height.is_none() {
-            item.height = exif.height;
+        if let (Some(w), Some(h)) = (exif.width, exif.height) {
+            exif_dims = Some((w.max(0) as u32, h.max(0) as u32));
         }
     }
+
+    // Header-only dimension probe for every kind (image headers, HEIF/AVIF
+    // and MP4/MOV boxes, EXIF, then ImageIO). The upsert stores the returned
+    // pair, so it must carry every fallback, not just the first probe.
+    let dims = crate::media_dimensions::probe_dimensions(path, &item.extension, &kind, exif_dims);
+    let (width, height) = match dims {
+        Some((w, h)) => (Some(w as i32), Some(h as i32)),
+        None => (None, None),
+    };
+    item.width = width;
+    item.height = height;
 
     // Upsert on the stable id. `favorite` and `hidden` are left out of the
     // UPDATE clause so a re-import refreshes file facts without discarding the
@@ -922,7 +915,11 @@ async fn import_media_file(
     path: &Path,
     now: i64,
 ) -> Result<Option<(MediaItem, i64)>, String> {
-    let Some((item, width, height)) = inspect_media_file(path, now) else {
+    let owned = path.to_path_buf();
+    let inspected = tokio::task::spawn_blocking(move || inspect_media_file(&owned, now))
+        .await
+        .map_err(|e| format!("Import worker failed: {e}"))?;
+    let Some((item, width, height)) = inspected else {
         return Ok(None);
     };
     let size = item.size;
@@ -1446,37 +1443,54 @@ pub async fn get_version() -> Result<String, String> {
     Ok(env!("CARGO_PKG_VERSION").to_string())
 }
 
-/// Purge the entire library catalog (media items, tags, albums, folders and
-/// library folders, import sessions) while leaving original media files on disk.
-/// This is irreversible through the UI.
+/// Purge the library catalog (media items with their tags, album links, edit
+/// recipes and edit-backup records, plus albums, tags, Smart Albums and
+/// library folders) in one transaction, while leaving original media files on
+/// disk. Also stops folder watchers and empties the thumbnail cache so nothing
+/// keeps describing the old catalog. This is irreversible through the UI.
+///
+/// Kept on purpose: settings, edit presets, and the backed-up originals of
+/// in-place edits under the app data folder (user data, never deleted here).
 #[tauri::command]
-pub async fn delete_library_database(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn delete_library_database(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let db = get_db(&state)?;
-    sqlx::query("DELETE FROM media_items")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM media_tags")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM album_items")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM albums")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM tags")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM library_folders")
-        .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+    purge_catalog(&db).await?;
+
+    if let Ok(mut watchers) = state.watchers.lock() {
+        watchers.clear();
+    }
+    if let Ok(cache) = app.path().app_cache_dir() {
+        let thumbnails = cache.join("thumbnails");
+        let _ = tokio::fs::remove_dir_all(&thumbnails).await;
+    }
     Ok(())
+}
+
+/// Delete every catalog row in one transaction: a failure part-way leaves the
+/// catalog exactly as it was instead of half-deleted.
+pub(crate) async fn purge_catalog(db: &SqlitePool) -> Result<(), String> {
+    let mut tx = db.begin().await.map_err(|e| e.to_string())?;
+    // Children first, so this also works without foreign-key cascades.
+    for table in [
+        "media_tags",
+        "album_items",
+        "edit_recipes",
+        "edit_backups",
+        "media_items",
+        "albums",
+        "tags",
+        "smart_albums",
+        "library_folders",
+    ] {
+        sqlx::query(&format!("DELETE FROM {table}"))
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Could not clear {table}: {e}"))?;
+    }
+    tx.commit().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1702,5 +1716,81 @@ mod rescan_preservation_tests {
                 .expect("read back");
         assert_eq!(favorite, 1, "favorite must survive a forced rescan");
         assert_eq!(hidden, 1, "hidden must survive a forced rescan");
+    }
+}
+
+#[cfg(test)]
+mod purge_catalog_tests {
+    use super::purge_catalog;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn migrated_db() -> sqlx::SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory catalog");
+        sqlx::migrate!("./migrations")
+            .run(&db)
+            .await
+            .expect("run migrations");
+        db
+    }
+
+    async fn count(db: &sqlx::SqlitePool, table: &str) -> i64 {
+        sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
+            .fetch_one(db)
+            .await
+            .expect("count rows")
+    }
+
+    #[tokio::test]
+    async fn purge_clears_catalog_tables_and_keeps_settings() {
+        let db = migrated_db().await;
+        for sql in [
+            "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at) VALUES ('m', '/p/a.jpg', 'a.jpg', 'jpg', 'photo', 1, 1, 1, 1)",
+            "INSERT INTO albums (id, name, created_at, updated_at) VALUES ('a', 'Album', 1, 1)",
+            "INSERT INTO album_items (album_id, media_id, added_at) VALUES ('a', 'm', 1)",
+            "INSERT INTO library_folders (path, added_at) VALUES ('/p', 1)",
+            "INSERT INTO smart_albums (id, name, filter_json, created_at, updated_at) VALUES ('s', 'Smart', '{}', 1, 1)",
+            "INSERT INTO settings (key, value) VALUES ('appearance', '\"dark\"')",
+        ] {
+            sqlx::query(sql).execute(&db).await.expect(sql);
+        }
+
+        let settings_before = count(&db, "settings").await;
+        purge_catalog(&db).await.expect("purge");
+
+        for table in [
+            "media_items",
+            "albums",
+            "album_items",
+            "library_folders",
+            "smart_albums",
+        ] {
+            assert_eq!(count(&db, table).await, 0, "{table} should be empty");
+        }
+        assert_eq!(count(&db, "settings").await, settings_before);
+    }
+}
+
+#[cfg(test)]
+mod extension_tests {
+    use super::{is_media_file, kind_for_ext, supported_extensions};
+
+    #[test]
+    fn picker_list_and_scanner_agree() {
+        let exts = supported_extensions();
+        assert!(exts.iter().all(|ext| is_media_file(ext)));
+        assert!(!is_media_file("txt"));
+        let unique: std::collections::HashSet<_> = exts.iter().collect();
+        assert_eq!(unique.len(), exts.len(), "no extension is listed twice");
+    }
+
+    #[test]
+    fn kinds_follow_the_lists() {
+        assert_eq!(kind_for_ext("mkv"), "video");
+        assert_eq!(kind_for_ext("cr3"), "raw");
+        assert_eq!(kind_for_ext("heic"), "photo");
     }
 }

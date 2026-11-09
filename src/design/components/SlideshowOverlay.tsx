@@ -26,6 +26,7 @@ import {
   supportsPictureInPicture,
   togglePictureInPicture,
 } from "../../engine/utils/pictureInPicture";
+import { formatItemDate } from "../../engine/utils/mediaDate";
 
 interface SlideshowOverlayProps {
   assetUrl: (path: string) => string;
@@ -444,7 +445,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
             {item.name}
           </div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>
-            {new Date(item.modifiedAt).toLocaleDateString()}
+            {formatItemDate(item)}
             {item.extension ? ` · ${item.extension.toUpperCase()}` : ""}
           </div>
         </div>

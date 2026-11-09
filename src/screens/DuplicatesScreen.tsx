@@ -17,6 +17,7 @@ import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { DuplicateGroup, MediaItem } from "../engine/types/media";
 import { buildGroupViews, type GroupView, type KeeperMode } from "../engine/duplicates/grouping";
 import { CompareOverlay } from "../design/components/CompareOverlay";
+import { formatFileDate } from "../engine/utils/mediaDate";
 
 interface DuplicatesScreenProps {
   groups: DuplicateGroup[];
@@ -75,7 +76,7 @@ function parentFolder(path: string): string {
 
 function formatDate(timestamp?: number): string {
   if (!timestamp) return "";
-  return new Date(timestamp).toLocaleDateString();
+  return formatFileDate(timestamp);
 }
 
 function DuplicatesScreen(props: DuplicatesScreenProps) {
