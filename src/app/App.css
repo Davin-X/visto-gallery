@@ -316,15 +316,6 @@ body.is-resizing .photo-inspector {
   font-weight: 500;
 }
 
-.health-dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--green);
-  flex: 0 0 auto;
-}
-
 .sidebar-version {
   color: var(--faint);
   font-variant-numeric: tabular-nums;
