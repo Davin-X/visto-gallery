@@ -248,18 +248,14 @@ function App() {
     };
 
     const unlisteners: Array<() => void> = [];
-    events
-      .onLibraryChanged(scheduleStatsRefresh)
-      .then((u) => {
-        if (cancelled) u();
-        else unlisteners.push(u);
-      });
-    events
-      .onLibraryCountsChanged(scheduleStatsRefresh)
-      .then((u) => {
-        if (cancelled) u();
-        else unlisteners.push(u);
-      });
+    events.onLibraryChanged(scheduleStatsRefresh).then((u) => {
+      if (cancelled) u();
+      else unlisteners.push(u);
+    });
+    events.onLibraryCountsChanged(scheduleStatsRefresh).then((u) => {
+      if (cancelled) u();
+      else unlisteners.push(u);
+    });
     return () => {
       cancelled = true;
       if (statsDebounceRef.current) {
@@ -925,10 +921,7 @@ function App() {
         const now = Date.now();
         const minIntervalMs = 200;
         // Always apply terminal/first updates promptly; throttle rapid progress.
-        if (
-          progress.processed === progress.total ||
-          now - lastProgressApplyAt >= minIntervalMs
-        ) {
+        if (progress.processed === progress.total || now - lastProgressApplyAt >= minIntervalMs) {
           lastProgressApplyAt = now;
           if (progressTimer) {
             clearTimeout(progressTimer);
@@ -940,14 +933,17 @@ function App() {
         }
         pendingProgress = progress;
         if (!progressTimer) {
-          progressTimer = setTimeout(() => {
-            progressTimer = null;
-            if (pendingProgress) {
-              lastProgressApplyAt = Date.now();
-              applyProgress(pendingProgress);
-              pendingProgress = null;
-            }
-          }, minIntervalMs - (now - lastProgressApplyAt));
+          progressTimer = setTimeout(
+            () => {
+              progressTimer = null;
+              if (pendingProgress) {
+                lastProgressApplyAt = Date.now();
+                applyProgress(pendingProgress);
+                pendingProgress = null;
+              }
+            },
+            minIntervalMs - (now - lastProgressApplyAt),
+          );
         }
       });
       unlisteners.push(() => {

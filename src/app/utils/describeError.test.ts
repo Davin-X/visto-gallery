@@ -11,9 +11,7 @@ describe("describeError", () => {
   });
 
   test("stringifies plain objects", () => {
-    expect(describeError({ code: "E_FAIL", detail: 1 })).toBe(
-      '{"code":"E_FAIL","detail":1}',
-    );
+    expect(describeError({ code: "E_FAIL", detail: 1 })).toBe('{"code":"E_FAIL","detail":1}');
   });
 
   test("falls back to String() when JSON serialization fails", () => {
