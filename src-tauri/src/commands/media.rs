@@ -611,27 +611,21 @@ pub(crate) fn extract_exif(path: &std::path::Path) -> ExifData {
         }
     };
 
-    if let Some(field) = exif.get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY) {
-        let s = field.display_value().to_string();
-        if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(&s, "%Y:%m:%d %H:%M:%S") {
-            data.captured_at = Some(dt.and_utc().timestamp_millis());
-        }
-    }
-    let make = exif
-        .get_field(exif::Tag::Make, exif::In::PRIMARY)
-        .map(|f| f.display_value().to_string());
-    let model = exif
-        .get_field(exif::Tag::Model, exif::In::PRIMARY)
-        .map(|f| f.display_value().to_string());
-    data.camera = match (make, model) {
-        (Some(m), Some(modl)) => Some(format!("{} {}", m.trim(), modl.trim())),
-        (Some(m), None) => Some(m.trim().to_string()),
-        (None, Some(modl)) => Some(modl.trim().to_string()),
-        _ => None,
-    };
-    if let Some(f) = exif.get_field(exif::Tag::LensModel, exif::In::PRIMARY) {
-        data.lens = Some(f.display_value().to_string().trim().to_string());
-    }
+    // Text fields are read as raw ASCII: `display_value()` wraps strings in
+    // quotes and reformats dates, which broke both the stored names and the
+    // capture-date parse.
+    data.captured_at = [
+        exif::Tag::DateTimeOriginal,
+        exif::Tag::DateTimeDigitized,
+        exif::Tag::DateTime,
+    ]
+    .into_iter()
+    .find_map(|tag| exif_ascii(&exif, tag).and_then(|s| parse_exif_datetime(&s)));
+    data.camera = camera_name(
+        exif_ascii(&exif, exif::Tag::Make),
+        exif_ascii(&exif, exif::Tag::Model),
+    );
+    data.lens = exif_ascii(&exif, exif::Tag::LensModel);
     if let Some(f) = exif.get_field(exif::Tag::ExposureTime, exif::In::PRIMARY) {
         data.exposure = Some(f.display_value().to_string());
     }
@@ -658,16 +652,19 @@ pub(crate) fn extract_exif(path: &std::path::Path) -> ExifData {
         exif.get_field(exif::Tag::GPSLatitude, exif::In::PRIMARY),
         exif.get_field(exif::Tag::GPSLongitude, exif::In::PRIMARY),
     ) {
-        let lat_ref = exif
-            .get_field(exif::Tag::GPSLatitudeRef, exif::In::PRIMARY)
-            .map(|f| f.display_value().to_string())
-            .unwrap_or_else(|| "N".to_string());
-        let lon_ref = exif
-            .get_field(exif::Tag::GPSLongitudeRef, exif::In::PRIMARY)
-            .map(|f| f.display_value().to_string())
-            .unwrap_or_else(|| "E".to_string());
+        let lat_ref =
+            exif_ascii(&exif, exif::Tag::GPSLatitudeRef).unwrap_or_else(|| "N".to_string());
+        let lon_ref =
+            exif_ascii(&exif, exif::Tag::GPSLongitudeRef).unwrap_or_else(|| "E".to_string());
 
-        if let (Some(la), Some(lo)) = (dms_to_decimal(lat), dms_to_decimal(lon)) {
+        // Some cameras (DJI action cams, for one) write 0,0 when they have
+        // no fix; that is "no location", not a point in the Gulf of Guinea.
+        let has_fix = |la: f64, lo: f64| la.abs() > 1e-9 || lo.abs() > 1e-9;
+        let coords = match (dms_to_decimal(lat), dms_to_decimal(lon)) {
+            (Some(la), Some(lo)) if has_fix(la, lo) => Some((la, lo)),
+            _ => None,
+        };
+        if let Some((la, lo)) = coords {
             data.latitude = Some(if lat_ref.trim().eq_ignore_ascii_case("S") {
                 -la
             } else {
@@ -682,6 +679,100 @@ pub(crate) fn extract_exif(path: &std::path::Path) -> ExifData {
     }
 
     data
+}
+
+/// The text of an ASCII EXIF field, without quotes, NUL padding or empty
+/// components. Some cameras pad Make/Model with dozens of empty strings.
+fn exif_ascii(exif: &exif::Exif, tag: exif::Tag) -> Option<String> {
+    let field = exif.get_field(tag, exif::In::PRIMARY)?;
+    let exif::Value::Ascii(ref parts) = field.value else {
+        return None;
+    };
+    clean_ascii_parts(parts)
+}
+
+pub(crate) fn clean_ascii_parts(parts: &[Vec<u8>]) -> Option<String> {
+    let text = parts
+        .iter()
+        .map(|part| {
+            String::from_utf8_lossy(part)
+                .trim_matches(|c: char| c == '\0' || c.is_whitespace())
+                .to_string()
+        })
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    (!text.is_empty()).then_some(text)
+}
+
+/// "Make Model", without repeating the make when the model already starts
+/// with it ("Canon" + "Canon EOS R5" is "Canon EOS R5").
+pub(crate) fn camera_name(make: Option<String>, model: Option<String>) -> Option<String> {
+    match (make, model) {
+        (Some(make), Some(model)) => {
+            if model.to_lowercase().starts_with(&make.to_lowercase()) {
+                Some(model)
+            } else {
+                Some(format!("{make} {model}"))
+            }
+        }
+        (Some(only), None) | (None, Some(only)) => Some(only),
+        (None, None) => None,
+    }
+}
+
+/// Parse an EXIF date ("2024:05:17 14:03:09"). Like the rest of the catalog,
+/// the wall-clock time is stored as if it were UTC.
+pub(crate) fn parse_exif_datetime(text: &str) -> Option<i64> {
+    let text = text.trim();
+    let head = text.get(..19)?;
+    chrono::NaiveDateTime::parse_from_str(head, "%Y:%m:%d %H:%M:%S")
+        .or_else(|_| chrono::NaiveDateTime::parse_from_str(head, "%Y-%m-%d %H:%M:%S"))
+        .ok()
+        .filter(|dt| dt.and_utc().timestamp() > 0)
+        .map(|dt| dt.and_utc().timestamp_millis())
+}
+
+#[cfg(test)]
+mod exif_text_tests {
+    use super::{camera_name, clean_ascii_parts, parse_exif_datetime};
+
+    #[test]
+    fn ascii_parts_lose_padding_and_empty_components() {
+        assert_eq!(
+            clean_ascii_parts(&[b"SONY\0".to_vec()]),
+            Some("SONY".into())
+        );
+        let mut padded = vec![b"samsung".to_vec()];
+        padded.extend(std::iter::repeat_n(Vec::new(), 24));
+        assert_eq!(clean_ascii_parts(&padded), Some("samsung".into()));
+        assert_eq!(clean_ascii_parts(&[b"  ".to_vec()]), None);
+    }
+
+    #[test]
+    fn camera_name_avoids_repeating_the_make() {
+        let name = |a: &str, b: &str| camera_name(Some(a.into()), Some(b.into()));
+        assert_eq!(name("SONY", "DSC-RX10M3"), Some("SONY DSC-RX10M3".into()));
+        assert_eq!(name("Canon", "Canon EOS R5"), Some("Canon EOS R5".into()));
+        assert_eq!(
+            camera_name(None, Some("AC006".into())),
+            Some("AC006".into())
+        );
+    }
+
+    #[test]
+    fn exif_dates_parse_with_and_without_padding() {
+        assert_eq!(
+            parse_exif_datetime("2024:05:17 14:03:09"),
+            Some(1_715_954_589_000)
+        );
+        assert_eq!(
+            parse_exif_datetime("2024:05:17 14:03:09\0"),
+            Some(1_715_954_589_000)
+        );
+        assert_eq!(parse_exif_datetime("0000:00:00 00:00:00"), None);
+        assert_eq!(parse_exif_datetime("    :  :     :  :  "), None);
+    }
 }
 
 /// Convert an EXIF GPS DMS field (three rationals) to decimal degrees.
@@ -1043,7 +1134,7 @@ fn render_edited_blocking(
     } else {
         // Save a copy - caller handles path via dialog
         // We write to a temp location and return the path
-        let tmp_dir = std::env::temp_dir();
+        let tmp_dir = export_staging_dir()?;
         let output_name = format!(
             "{}_edited.{}",
             source_path
@@ -1083,48 +1174,136 @@ fn render_edited_blocking(
     })
 }
 
-/// Move an exported temp file to its final destination.
-#[tauri::command]
-pub async fn move_exported_file(
-    source_path: String,
-    destination_path: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    // Validate the source unless it is an app-generated temp file. The
-    // destination is user-chosen via a save dialog and is not constrained.
-    let in_temp = std::path::Path::new(&source_path)
-        .ancestors()
-        .any(|p| p == std::env::temp_dir());
-    if !in_temp {
-        let db = super::get_db(&state)?;
-        let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
-            .fetch_all(&db)
-            .await
-            .map_err(|e| e.to_string())?;
-        super::validate_path_under_registered_roots(&source_path, &registered)?;
+/// Folder that holds "save a copy" renders until the user picks a
+/// destination. Only files inside it may be handed to `save_exported_file`.
+pub(crate) fn export_staging_dir() -> Result<PathBuf, String> {
+    let dir = std::env::temp_dir().join("visto-export");
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("Could not create export staging folder: {}", e))?;
+    Ok(dir)
+}
+
+/// Resolve `source` and require it to be a regular file directly inside the
+/// export staging folder. Canonicalizing first means `..` segments and
+/// symlinks cannot point the move at a file elsewhere on disk.
+pub(crate) fn validate_export_source(source: &str, staging: &Path) -> Result<PathBuf, String> {
+    let staging = staging
+        .canonicalize()
+        .map_err(|e| format!("Export staging folder is unavailable: {}", e))?;
+    let src = Path::new(source)
+        .canonicalize()
+        .map_err(|_| "Exported file no longer exists.".to_string())?;
+    if src.parent() != Some(staging.as_path()) || !src.is_file() {
+        return Err("Source is not an app-generated export.".to_string());
     }
+    Ok(src)
+}
+
+/// Move a staged export to a destination the user picks in a native save
+/// dialog. The backend owns the destination, so the webview can neither name
+/// an arbitrary target nor move a file that the app did not render.
+///
+/// Returns the saved path, or `None` when the user cancels the dialog.
+#[tauri::command]
+pub async fn save_exported_file(
+    app: tauri::AppHandle,
+    source_path: String,
+    suggested_name: String,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let src = validate_export_source(&source_path, &export_staging_dir()?)?;
+    let ext = src
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("jpg")
+        .to_lowercase();
+    let (label, exts): (&str, &[&str]) = match ext.as_str() {
+        "png" => ("PNG image", &["png"]),
+        "webp" => ("WebP image", &["webp"]),
+        _ => ("JPEG image", &["jpg", "jpeg"]),
+    };
+    let Some(picked) = app
+        .dialog()
+        .file()
+        .set_file_name(&suggested_name)
+        .add_filter(label, exts)
+        .blocking_save_file()
+    else {
+        let _ = std::fs::remove_file(&src);
+        return Ok(None);
+    };
+    let dst = picked.into_path().map_err(|e| e.to_string())?;
 
     tokio::task::spawn_blocking(move || {
-        use std::path::PathBuf;
-        let src = PathBuf::from(&source_path);
-        let dst = PathBuf::from(&destination_path);
-
-        if let Some(parent) = dst.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| format!("Could not create destination folder: {}", e))?;
+        // Prefer an atomic rename; fall back to copy+remove across volumes.
+        if std::fs::rename(&src, &dst).is_err() {
+            std::fs::copy(&src, &dst)
+                .map_err(|e| format!("Could not copy exported file: {}", e))?;
+            let _ = std::fs::remove_file(&src);
         }
-
-        // Prefer an atomic rename; fall back to copy+remove for cross-device moves.
-        if std::fs::rename(&src, &dst).is_ok() {
-            return Ok(());
-        }
-
-        std::fs::copy(&src, &dst).map_err(|e| format!("Could not copy exported file: {}", e))?;
-        let _ = std::fs::remove_file(&src);
-        Ok(())
+        Ok(Some(dst.to_string_lossy().into_owned()))
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod export_source_tests {
+    use super::validate_export_source;
+    use std::fs;
+
+    fn staging() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("visto-export-test-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn accepts_file_inside_staging() {
+        let dir = staging();
+        let file = dir.join("a_edited.jpg");
+        fs::write(&file, b"x").unwrap();
+        assert!(validate_export_source(file.to_str().unwrap(), &dir).is_ok());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rejects_dotdot_escape_from_staging() {
+        let dir = staging();
+        let outside =
+            std::env::temp_dir().join(format!("visto-outside-{}.jpg", uuid::Uuid::new_v4()));
+        fs::write(&outside, b"secret").unwrap();
+        let sneaky = dir.join("..").join(outside.file_name().unwrap());
+        assert!(validate_export_source(sneaky.to_str().unwrap(), &dir).is_err());
+        let _ = fs::remove_file(&outside);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_pointing_outside_staging() {
+        let dir = staging();
+        let outside =
+            std::env::temp_dir().join(format!("visto-outside-{}.jpg", uuid::Uuid::new_v4()));
+        fs::write(&outside, b"secret").unwrap();
+        let link = dir.join("link.jpg");
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        assert!(validate_export_source(link.to_str().unwrap(), &dir).is_err());
+        let _ = fs::remove_file(&outside);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rejects_nested_and_directory_paths() {
+        let dir = staging();
+        let nested = dir.join("sub");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(nested.join("b.jpg"), b"x").unwrap();
+        assert!(validate_export_source(nested.join("b.jpg").to_str().unwrap(), &dir).is_err());
+        assert!(validate_export_source(nested.to_str().unwrap(), &dir).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
 
 /// Check if any color adjustments are non-zero

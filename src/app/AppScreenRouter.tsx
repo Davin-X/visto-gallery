@@ -1,5 +1,5 @@
 import type { MutableRefObject, RefObject } from "react";
-import { open as openFileDialog, save } from "@tauri-apps/plugin-dialog";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { tauri } from "../engine/commands/tauri";
 import { clearEditDraft } from "../engine/stores";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
@@ -337,17 +337,19 @@ export function AppScreenRouter({
 
               if (!inPlace) {
                 // For save-copy, backend wrote to temp; now show save dialog
-                const suggestedName = String(item.name).replace(/\.[^.]+$/, "") + "_edited.jpg";
-                const finalPath = await save({
-                  defaultPath: suggestedName,
-                  filters: [{ name: "JPEG image", extensions: ["jpg", "jpeg"] }],
-                });
+                const extension = result.outputPath.split(".").pop() ?? "jpg";
+                const suggestedName =
+                  String(item.name).replace(/\.[^.]+$/, "") + `_edited.${extension}`;
+                // The backend opens the save dialog and moves the staged file,
+                // so the webview never names a source or destination path.
+                const finalPath = await tauri.editing.saveExportedFile(
+                  result.outputPath,
+                  suggestedName,
+                );
                 if (!finalPath) {
                   showNotice("Export cancelled");
                   return;
                 }
-                // Move temp file to final destination
-                await tauri.editing.moveExportedFile(result.outputPath, finalPath);
               }
 
               if (inPlace) {

@@ -13,6 +13,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 - **Moves and renames keep the item**: a file moved or renamed inside a source folder used to be pruned and re-imported under a new id, quietly dropping its favourite flag, rating, tags and album membership. The scan now matches vanished rows against newly appeared files by a content fingerprint (migration `010_add_content_signature`: size plus the first and last 64 KiB, never a full read) and re-keys the surviving row, along with its tags, albums and edit records, to the new path. Matching is only applied when it is unambiguous: a copy next to the original, or two vanished files with the same fingerprint, go through the ordinary import path.
+- **Hidden items stayed visible in Smart Albums**: Smart Album grids and cover images included hidden items while their counts left them out. Hidden items are now excluded everywhere unless you're on the Hidden screen.
+- **Dimensions for more formats**: HEIC, AVIF, RAW, MP4/MOV and some JPEGs showed "Dimensions: Unknown". They are now read on import, and existing items are filled in in the background on the next launch. Formats without a reader yet (WebM, MKV, AVI, WMV) show "—".
+- **Search treats `%` and `_` literally**: searching for `_` no longer matches every item.
+- **Cancelling a scan stays cancelled**: starting another scan used to silently resume a cancelled one. Two scans of the same folder now run one after the other.
+- **Launch survives a damaged catalog**: a locked or corrupt catalog now shows an error instead of crashing, and one-time catalog updates no longer delay launch.
+- **Delete library is all-or-nothing**: it runs as one transaction and also clears Smart Albums, edit records, folder watchers and the thumbnail cache.
+- **Camera names, capture dates and GPS from EXIF**: camera and lens names were stored in quotes, no photo ever got a capture date (so "Date captured" sorting and the Timeline used file modification time), and southern/western GPS coordinates had the wrong sign. All three are read correctly now, and existing photos are corrected in the background on the next launch.
+- **Dates are unambiguous**: dates show a month name ("11 Jul 2026") everywhere, and capture times show exactly what the camera recorded instead of shifting with your time zone.
+- **Show extensions works**: names showed the extension even with the setting off, and twice ("a.jpg.jpg") with it on.
+- Long file names in the grid are shortened in the middle, so names that share a prefix stay distinguishable.
+- Type chips with nothing to show are dimmed; albums no longer show both Play and Slideshow; thumbnail-size buttons are hidden in Details, where they did nothing.
+- The viewer's shortcut legend shows once per session instead of on every mouse move (⌘/ lists every shortcut).
+- The sidebar drops the always-zero "Uncategorized" row and the static "Storage Healthy" badge.
+- "Smart Albums" heading is readable in dark mode.
+- The compare dialog says "1 field differs" instead of "1 fields differ".
+
+### Security
+- Saving an edited copy no longer accepts a source or destination path from the interface: the backend shows the save dialog and only moves files it rendered.
+- Scanning and importing only accept folders and files you picked in a dialog, dropped on the window, or already added as a source.
+
+### Performance
+- Scans and imports read files off the main async runtime, so large libraries no longer stall other actions.
+- The default library sort (capture date) uses an index (migration `011_sort_date_index`) instead of sorting the whole catalog for each page.
+- Cached thumbnails are read once instead of three times.
+- Only the five newest pre-restore catalog snapshots are kept.
 
 ### Known limitations
 - A move between two different source folders is still a fresh import: the match only looks at rows that vanished from the folder being scanned. Rows imported before this release have no fingerprint until their file is inspected again (a Rescan fills them in), and macOS `mv` preserves the modification time, which lets them follow a same-volume move in the meantime.
