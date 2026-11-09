@@ -18,6 +18,8 @@ use menu::create_menu;
 struct AppState {
     db: Mutex<Option<Database>>,
     watchers: Mutex<HashMap<String, notify::RecommendedWatcher>>,
+    /// Paths the user chose in a native picker or dropped on the window.
+    grants: GrantedPaths,
 }
 
 impl Default for AppState {
@@ -25,6 +27,7 @@ impl Default for AppState {
         Self {
             db: Mutex::new(None),
             watchers: Mutex::new(HashMap::new()),
+            grants: GrantedPaths::default(),
         }
     }
 }
@@ -46,6 +49,14 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        // Native drops are user intent: grant the dropped paths before the
+        // webview relays them to `import_files`.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                let state: State<'_, AppState> = window.state();
+                state.grants.grant(paths);
+            }
+        })
         .setup(|app| {
             // Initialize database (await so it's ready before any invoke)
             let app_handle = app.handle().clone();
@@ -161,6 +172,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // Library
             scan_library,
+            pick_source_folders,
+            pick_media_files,
             cancel_scan,
             cancel_move_to_trash,
             cancel_find_duplicates,

@@ -49,6 +49,12 @@ export const tauri = {
 
     importFiles: (paths: string[]): Promise<ScanResult> => invoke("import_files", { paths }),
 
+    /** Native folder picker owned by the backend; picked roots are trusted. */
+    pickSourceFolders: (): Promise<string[]> => invoke("pick_source_folders"),
+
+    /** Native media-file picker owned by the backend; picked files are trusted. */
+    pickMediaFiles: (): Promise<string[]> => invoke("pick_media_files"),
+
     getItems: (filter: LibraryFilterDTO): Promise<LibraryItemsPage> =>
       invoke("get_library_items", { filter }),
 

@@ -1,3 +1,4 @@
+mod access;
 mod albums;
 mod backup;
 mod batch;
@@ -10,6 +11,7 @@ mod settings;
 mod smart_albums;
 mod update;
 use crate::{models::*, AppState};
+pub use access::*;
 pub use albums::*;
 use anyhow::Result;
 pub use backup::*;

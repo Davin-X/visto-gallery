@@ -16,6 +16,10 @@ pub async fn scan_library(
     state: State<'_, AppState>,
     window: Window,
 ) -> Result<ScanResult, String> {
+    {
+        let db = super::get_db(&state)?;
+        super::authorize_import_path(&root_path, &db, &state.grants).await?;
+    }
     super::SCAN_CANCEL.store(false, Ordering::SeqCst);
     let root = PathBuf::from(&root_path);
     let root_metadata = std::fs::metadata(&root)
@@ -226,9 +230,12 @@ pub async fn import_files(
     window: Window,
     app: tauri::AppHandle,
 ) -> Result<ScanResult, String> {
+    let db = super::get_db(&state)?;
+    for raw in &paths {
+        super::authorize_import_path(raw, &db, &state.grants).await?;
+    }
     super::SCAN_CANCEL.store(false, Ordering::SeqCst);
     let start = std::time::Instant::now();
-    let db = super::get_db(&state)?;
     let now = super::now_ms();
     let mut items = Vec::new();
     let mut total_size: i64 = 0;
@@ -1354,7 +1361,7 @@ pub async fn get_library_roots(state: State<'_, AppState>) -> Result<Vec<String>
 /// volume and first component (`/Applications/Safari.app/...` →
 /// `/Applications/Safari.app`). This keeps the sidebar to a handful of rows
 /// instead of one row per leaf directory.
-fn inferred_folder_root(path: &str) -> Option<String> {
+pub(crate) fn inferred_folder_root(path: &str) -> Option<String> {
     let home = std::env::var("HOME")
         .ok()
         .map(|h| super::normalize_root(&h))?;
