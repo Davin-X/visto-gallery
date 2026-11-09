@@ -1248,17 +1248,20 @@ function LibraryScreen(props: LibraryScreenProps) {
             </div>
             <div className="toolbar-right">
               <div className="toolbar-actions">
-                <button
-                  className="toolbar-button slideshow-action"
-                  type="button"
-                  onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
-                  disabled={props.busy || props.items.length === 0}
-                  title="Play the current view as a slideshow (Space)"
-                  aria-label="Play slideshow"
-                >
-                  <PlayIcon size={14} />
-                  <span className="slideshow-label">Slideshow</span>
-                </button>
+                {/* An album already has a Play button in its header. */}
+                {!props.activeAlbum && (
+                  <button
+                    className="toolbar-button slideshow-action"
+                    type="button"
+                    onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
+                    disabled={props.busy || props.items.length === 0}
+                    title="Play the current view as a slideshow (Space)"
+                    aria-label="Play slideshow"
+                  >
+                    <PlayIcon size={14} />
+                    <span className="slideshow-label">Slideshow</span>
+                  </button>
+                )}
                 {!props.hiddenView && (
                   <button
                     className="toolbar-button"
@@ -1291,42 +1294,50 @@ function LibraryScreen(props: LibraryScreenProps) {
                       );
                     })}
                   </div>
-                  <div className="zoom-control" role="group" aria-label="Thumbnail size">
-                    {(["small", "medium", "large"] as const).map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        className={`zoom-step ${thumbnailSize === s ? "selected" : ""}`}
-                        aria-label={
-                          s === "small"
-                            ? "Small thumbnails"
-                            : s === "medium"
-                              ? "Medium thumbnails"
-                              : "Large thumbnails"
-                        }
-                        aria-pressed={thumbnailSize === s}
-                        onClick={() => updateSettings("thumbnailSize", s)}
-                        title={
-                          s === "small"
-                            ? "Small thumbnails"
-                            : s === "medium"
-                              ? "Medium thumbnails"
-                              : "Large thumbnails"
-                        }
-                      >
-                        <span className={`zoom-glyph zoom-glyph-${s}`} aria-hidden="true">
-                          {Array.from(
-                            {
-                              length: s === "small" ? 6 : s === "medium" ? 4 : 1,
-                            },
-                            (_, index) => (
-                              <i key={index} />
-                            ),
-                          )}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+                  {/* Details rows use a fixed thumbnail, so size only matters
+                      for the visual layouts. A divider keeps the two icon
+                      groups from reading as one six-button control. */}
+                  {props.layout !== "details" && (
+                    <span className="toolbar-divider" aria-hidden="true" />
+                  )}
+                  {props.layout !== "details" && (
+                    <div className="zoom-control" role="group" aria-label="Thumbnail size">
+                      {(["small", "medium", "large"] as const).map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          className={`zoom-step ${thumbnailSize === s ? "selected" : ""}`}
+                          aria-label={
+                            s === "small"
+                              ? "Small thumbnails"
+                              : s === "medium"
+                                ? "Medium thumbnails"
+                                : "Large thumbnails"
+                          }
+                          aria-pressed={thumbnailSize === s}
+                          onClick={() => updateSettings("thumbnailSize", s)}
+                          title={
+                            s === "small"
+                              ? "Small thumbnails"
+                              : s === "medium"
+                                ? "Medium thumbnails"
+                                : "Large thumbnails"
+                          }
+                        >
+                          <span className={`zoom-glyph zoom-glyph-${s}`} aria-hidden="true">
+                            {Array.from(
+                              {
+                                length: s === "small" ? 6 : s === "medium" ? 4 : 1,
+                              },
+                              (_, index) => (
+                                <i key={index} />
+                              ),
+                            )}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {!props.hiddenView && (
                   <div
