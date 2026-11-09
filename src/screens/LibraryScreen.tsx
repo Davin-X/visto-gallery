@@ -2073,7 +2073,11 @@ function LibraryScreen(props: LibraryScreenProps) {
                         ) : null}
                       </span>
                       <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
-                        <b>{displayFileName(item.name, item.extension, showExtensions)}</b>
+                        <b>
+                          <MiddleTruncate
+                            text={displayFileName(item.name, item.extension, showExtensions)}
+                          />
+                        </b>
                         <small className="tile-date">{formatItemDate(item)}</small>
                         <small className="tile-kind">
                           {item.kind === "video" ? "Video" : item.kind === "raw" ? "RAW" : "Photo"}
