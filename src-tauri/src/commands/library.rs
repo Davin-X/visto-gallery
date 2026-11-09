@@ -2387,6 +2387,47 @@ mod filter_and_scale_tests {
         );
     }
 
+    #[tokio::test]
+    async fn shared_album_covers_are_not_consumed_by_the_first_album() {
+        let db = filter_db().await;
+        insert_item(&db, "cover-a", "photo", Some(3), 3, None).await;
+        insert_item(&db, "cover-b", "photo", Some(2), 2, None).await;
+        insert_item(&db, "cover-c", "photo", Some(1), 1, None).await;
+        sqlx::query(
+            "INSERT INTO albums (id, name, created_at, updated_at) VALUES \
+             ('first', 'First', 1, 1), ('second', 'Second', 2, 2)",
+        )
+        .execute(&db)
+        .await
+        .expect("insert albums");
+
+        // The same photos cover both albums. The first album must not take
+        // them out of the shared lookup used by the rest.
+        for album in ["first", "second"] {
+            for id in ["cover-a", "cover-b", "cover-c"] {
+                sqlx::query(
+                    "INSERT INTO album_items (album_id, media_id, added_at) VALUES (?, ?, 1)",
+                )
+                .bind(album)
+                .bind(id)
+                .execute(&db)
+                .await
+                .expect("insert album item");
+            }
+        }
+
+        let overview = load_album_overviews(&db).await.expect("album overview");
+        assert_eq!(overview.len(), 2);
+        for album in &overview {
+            assert_eq!(
+                album.cover_items.len(),
+                3,
+                "album {} lost shared cover items",
+                album.id
+            );
+        }
+    }
+
     /// Not part of the default suite; run with:
     /// `cargo test ten_thousand_item_page_and_album_overview -- --ignored --nocapture`
     #[tokio::test]
