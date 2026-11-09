@@ -2,6 +2,7 @@ mod access;
 mod albums;
 mod backup;
 mod batch;
+mod cancel;
 mod duplicates;
 mod edit_recipes;
 mod finder_tags;
@@ -14,11 +15,13 @@ mod smart_albums;
 mod system;
 mod temp_files;
 mod update;
-use crate::{models::*, AppState, Catalog};
+use crate::{models::*, Catalog};
 pub use albums::*;
 use anyhow::Result;
 pub use backup::*;
 pub use batch::*;
+pub use cancel::{cancel_move_to_trash, cancel_scan};
+pub(crate) use cancel::{BATCH_CANCEL, DUPLICATE_CANCEL, TRASH_CANCEL};
 pub use duplicates::*;
 pub use edit_recipes::*;
 pub use finder_tags::{merge_finder_tags, read_finder_tags, write_finder_tags};
@@ -36,7 +39,7 @@ pub use smart_albums::*;
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 pub use system::{get_version, open_external};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -60,25 +63,6 @@ pub use dto::*;
 pub use repo::{delete_library_database, get_tags};
 pub(crate) use repo::{relink_moved_items, ALBUM_SELECT, TAG_SELECT};
 // ===== Helper Functions =====
-
-/// Cooperative cancellation flags for long operations that are not folder
-/// scans or imports (those use per-job flags in [`ScanJobs`]).
-static TRASH_CANCEL: AtomicBool = AtomicBool::new(false);
-static DUPLICATE_CANCEL: AtomicBool = AtomicBool::new(false);
-static BATCH_CANCEL: AtomicBool = AtomicBool::new(false);
-
-/// Cancel every folder scan and file import that is running now.
-#[tauri::command]
-pub async fn cancel_scan(state: State<'_, AppState>) -> Result<(), String> {
-    state.scan_jobs.cancel_all();
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn cancel_move_to_trash() -> Result<(), String> {
-    TRASH_CANCEL.store(true, Ordering::SeqCst);
-    Ok(())
-}
 
 pub(crate) fn get_db(catalog: &State<'_, Catalog>) -> Result<SqlitePool, String> {
     catalog.pool()
