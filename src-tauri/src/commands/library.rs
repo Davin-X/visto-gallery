@@ -852,14 +852,13 @@ pub async fn get_item_thumbnail(
     let digest = ring::digest::digest(&ring::digest::SHA256, cache_key.as_bytes());
     let cache_path = cache_root.join(format!("{}.jpg", hex::encode(digest.as_ref())));
 
-    let cached = if let Ok(bytes) = tokio::fs::read(&cache_path).await {
-        image::image_dimensions(&cache_path)
-            .ok()
-            .map(|(width, height)| (bytes, width, height))
-    } else {
-        None
+    // A cache hit reads the file once and takes its dimensions from the bytes
+    // already in memory; a miss reuses the bytes the generator just wrote.
+    let cached = match tokio::fs::read(&cache_path).await {
+        Ok(bytes) => jpeg_dimensions(&bytes).map(|(width, height)| (bytes, width, height)),
+        Err(_) => None,
     };
-    let (_bytes, width, height) = if let Some(cached) = cached {
+    let (bytes, width, height) = if let Some(cached) = cached {
         cached
     } else {
         let _ = tokio::fs::remove_file(&cache_path).await;
@@ -883,10 +882,6 @@ pub async fn get_item_thumbnail(
         maybe_prune_thumbnail_cache(cache_root.clone(), max_cache_bytes);
         generated
     };
-
-    let bytes = tokio::fs::read(&cache_path)
-        .await
-        .map_err(|e| e.to_string())?;
 
     Ok(ThumbnailResponse {
         item_id: request.item_id,
@@ -989,6 +984,16 @@ pub(crate) fn prune_thumbnail_cache(root: &Path, max_bytes: u64) -> (usize, u64,
     }
 
     (deleted, bytes_freed, failed)
+}
+
+/// Dimensions of an encoded image held in memory (cached thumbnails are JPEG),
+/// or `None` when the bytes are not a readable image.
+fn jpeg_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?
+        .into_dimensions()
+        .ok()
 }
 
 pub(crate) fn generate_cached_thumbnail(
@@ -2556,5 +2561,28 @@ mod sort_index_tests {
         .await;
         assert!(plan.contains("idx_media_hidden_sort_date_id"), "{plan}");
         assert!(!plan.contains("TEMP B-TREE"), "{plan}");
+    }
+}
+
+#[cfg(test)]
+mod thumbnail_bytes_tests {
+    use super::jpeg_dimensions;
+
+    #[test]
+    fn reads_dimensions_from_encoded_bytes() {
+        let img = image::RgbImage::new(7, 3);
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgb8(img)
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Jpeg,
+            )
+            .unwrap();
+        assert_eq!(jpeg_dimensions(&bytes), Some((7, 3)));
+    }
+
+    #[test]
+    fn rejects_corrupt_bytes() {
+        assert_eq!(jpeg_dimensions(b"not an image"), None);
     }
 }
