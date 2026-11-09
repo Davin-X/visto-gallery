@@ -21,7 +21,13 @@ pub async fn scan_library(
         let db = super::get_db(&state)?;
         super::authorize_import_path(&root_path, &db, &state.grants).await?;
     }
-    super::SCAN_CANCEL.store(false, Ordering::SeqCst);
+    // Register before waiting on the root lock so Cancel also reaches a scan
+    // that is still queued behind another scan of the same root.
+    let job = state.scan_jobs.start();
+    let root_lock = state
+        .scan_jobs
+        .root_lock(&super::normalize_root(&root_path));
+    let _root_guard = root_lock.lock().await;
     let root = PathBuf::from(&root_path);
     let root_metadata = std::fs::metadata(&root)
         .map_err(|error| format!("Cannot access source folder '{}': {error}", root.display()))?;
@@ -66,15 +72,16 @@ pub async fn scan_library(
     // Discover the media paths once, on the blocking pool: a large tree can
     // take minutes to walk and must not pin an async worker.
     let walk_root = root.clone();
+    let walk_cancel = job.flag();
     let (media_paths, walk_error) =
-        tokio::task::spawn_blocking(move || collect_media_paths(&walk_root, &super::SCAN_CANCEL))
+        tokio::task::spawn_blocking(move || collect_media_paths(&walk_root, &walk_cancel))
             .await
             .map_err(|e| format!("Scan worker failed: {e}"))?;
     let had_walk_error = walk_error.is_some();
     for p in &media_paths {
         seen_paths.insert(p.to_string_lossy().into_owned());
     }
-    if media_paths.is_empty() && !super::SCAN_CANCEL.load(Ordering::SeqCst) {
+    if media_paths.is_empty() && !job.is_cancelled() {
         if let Some(error) = walk_error {
             return Err(format!(
                 "Could not read media in '{}': {error}. Check the folder's macOS access permissions.",
@@ -85,7 +92,7 @@ pub async fn scan_library(
     // A file moved or renamed inside this source is the same item, not a delete
     // plus an import: re-key its row (and its album, tag and edit relations) to
     // the new path before the import loop writes anything.
-    if !super::SCAN_CANCEL.load(Ordering::SeqCst) && !had_walk_error {
+    if !job.is_cancelled() && !had_walk_error {
         let relinked = relink_moved_items(&db, &root_path, &seen_paths).await?;
         if relinked > 0 {
             eprintln!("visto: followed {relinked} moved file(s) under {root_path}");
@@ -102,8 +109,9 @@ pub async fn scan_library(
     for paths in media_paths.chunks(SCAN_BATCH_SIZE) {
         let chunk = paths.to_vec();
         let known = Arc::clone(&known_files);
+        let chunk_cancel = job.flag();
         let scanned = tokio::task::spawn_blocking(move || {
-            inspect_scan_chunk(&chunk, &known, force, now, &super::SCAN_CANCEL)
+            inspect_scan_chunk(&chunk, &known, force, now, &chunk_cancel)
         })
         .await
         .map_err(|e| format!("Scan worker failed: {e}"))?;
@@ -111,7 +119,7 @@ pub async fn scan_library(
         let completed_in_batch = scanned.completed;
         total_size += scanned.size;
         discovered_count += scanned.discovered;
-        let cancelled = super::SCAN_CANCEL.load(Ordering::SeqCst);
+        let cancelled = job.is_cancelled();
         items.extend(batch.iter().map(|(item, _, _)| item.clone()));
         upsert_media_batch(&db, &batch).await?;
         processed += completed_in_batch;
@@ -156,7 +164,7 @@ pub async fn scan_library(
     // Prune catalog entries for files that disappeared from this source.
     // Only do this if the walk completed fully without errors. Rows that were
     // re-pointed above now sit at a path this walk saw, so they survive.
-    let cancelled = super::SCAN_CANCEL.load(Ordering::SeqCst);
+    let cancelled = job.is_cancelled();
     let removed_count = if !cancelled && !had_walk_error {
         prune_missing_items(&db, &root_path, &seen_paths).await?
     } else {
@@ -298,7 +306,8 @@ pub async fn import_files(
     for raw in &paths {
         super::authorize_import_path(raw, &db, &state.grants).await?;
     }
-    super::SCAN_CANCEL.store(false, Ordering::SeqCst);
+    let job = state.scan_jobs.start();
+    let walk_cancel = job.flag();
     let start = std::time::Instant::now();
     let now = super::now_ms();
     let mut items = Vec::new();
@@ -311,12 +320,12 @@ pub async fn import_files(
     let all_paths: Vec<PathBuf> = tokio::task::spawn_blocking(move || {
         let mut tmp = Vec::new();
         for raw in &picked {
-            if super::SCAN_CANCEL.load(Ordering::SeqCst) {
+            if walk_cancel.load(Ordering::SeqCst) {
                 break;
             }
             let path = PathBuf::from(raw);
             if path.is_dir() {
-                tmp.extend(collect_media_paths(&path, &super::SCAN_CANCEL).0);
+                tmp.extend(collect_media_paths(&path, &walk_cancel).0);
             } else if path.is_file() {
                 if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
                     if is_media_file(&ext.to_lowercase()) {
@@ -332,7 +341,7 @@ pub async fn import_files(
     let total = all_paths.len() as u64;
 
     for path in all_paths {
-        if super::SCAN_CANCEL.load(Ordering::SeqCst) {
+        if job.is_cancelled() {
             break;
         }
         if let Some((item, size)) = import_media_file(&db, &path, now).await? {
@@ -341,10 +350,7 @@ pub async fn import_files(
         }
 
         processed += 1;
-        if processed.is_multiple_of(200)
-            || processed == total
-            || super::SCAN_CANCEL.load(Ordering::SeqCst)
-        {
+        if processed.is_multiple_of(200) || processed == total || job.is_cancelled() {
             let _ = window.emit(
                 "import-progress",
                 json!({
@@ -390,7 +396,7 @@ pub async fn import_files(
         items,
         discovered_count,
         removed_count: 0,
-        cancelled: super::SCAN_CANCEL.load(Ordering::SeqCst),
+        cancelled: job.is_cancelled(),
         albums,
         tags,
         total_size,

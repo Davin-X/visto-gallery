@@ -20,6 +20,8 @@ struct AppState {
     watchers: Mutex<HashMap<String, notify::RecommendedWatcher>>,
     /// Paths the user chose in a native picker or dropped on the window.
     grants: GrantedPaths,
+    /// Per-operation cancel flags and per-root locks for scans and imports.
+    scan_jobs: ScanJobs,
 }
 
 impl Default for AppState {
@@ -28,6 +30,7 @@ impl Default for AppState {
             db: Mutex::new(None),
             watchers: Mutex::new(HashMap::new()),
             grants: GrantedPaths::default(),
+            scan_jobs: ScanJobs::default(),
         }
     }
 }

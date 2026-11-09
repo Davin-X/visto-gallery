@@ -7,6 +7,7 @@ mod edit_recipes;
 mod library;
 mod media;
 mod roots;
+mod scan_jobs;
 mod settings;
 mod smart_albums;
 mod update;
@@ -26,6 +27,7 @@ pub use library::*;
 pub use media::*;
 use notify::Watcher;
 pub use roots::*;
+pub use scan_jobs::ScanJobs;
 use serde::{Deserialize, Serialize};
 pub use settings::*;
 pub use smart_albums::*;
@@ -346,17 +348,16 @@ const TAG_SELECT: &str = "SELECT t.id, t.name, t.color_index, t.created_at, \
      (SELECT COUNT(*) FROM media_tags mt JOIN media_items m ON m.id = mt.media_id \
       WHERE mt.tag_id = t.id AND m.hidden = 0) AS item_count FROM tags t";
 
-/// Shared cooperative cancellation flag for folder scans, file imports, and
-/// duplicate hashing. Each operation clears it before starting and checks it
-/// between filesystem work units.
-static SCAN_CANCEL: AtomicBool = AtomicBool::new(false);
+/// Cooperative cancellation flags for long operations that are not folder
+/// scans or imports (those use per-job flags in [`ScanJobs`]).
 static TRASH_CANCEL: AtomicBool = AtomicBool::new(false);
 static DUPLICATE_CANCEL: AtomicBool = AtomicBool::new(false);
 static BATCH_CANCEL: AtomicBool = AtomicBool::new(false);
 
+/// Cancel every folder scan and file import that is running now.
 #[tauri::command]
-pub async fn cancel_scan() -> Result<(), String> {
-    SCAN_CANCEL.store(true, Ordering::SeqCst);
+pub async fn cancel_scan(state: State<'_, AppState>) -> Result<(), String> {
+    state.scan_jobs.cancel_all();
     Ok(())
 }
 
