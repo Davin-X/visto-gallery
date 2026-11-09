@@ -35,6 +35,13 @@ jobs:
           languages: ${{ matrix.language }}
           queries: +security-and-quality
 
+      - name: Set up Node.js (JavaScript)
+        if: matrix.language == 'javascript'
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
       - name: Install dependencies (JavaScript)
         if: matrix.language == 'javascript'
         run: npm ci
