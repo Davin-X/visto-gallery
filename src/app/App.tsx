@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import {
   currentMonitor,
   getCurrentWindow,
@@ -30,6 +29,7 @@ import { navigateToBatchExport } from "./exportFlow";
 import { getAdjacentVideo } from "./backgroundVideo";
 import { createAutoImportController, syncFolderWatchers } from "../engine/utils/folderWatcher";
 import { copyTagsToFinder } from "../engine/utils/finderTags";
+import { progressBelongsToOperation } from "../engine/progressPhases";
 import { describeError } from "./utils/describeError";
 import { isWarningNotice } from "./utils/isWarningNotice";
 import { startConfiguredSlideshow } from "./utils/startConfiguredSlideshow";
@@ -48,6 +48,7 @@ import type {
 } from "../engine/types/commands";
 import { SlideshowOverlay } from "../design/components/SlideshowOverlay";
 import { ContextMenu } from "../design/components/ContextMenu";
+import { ShortcutsCheatSheet } from "../design/components/ShortcutsCheatSheet";
 
 /** Modifier glyph for the "focus search" hint - Command on macOS, Ctrl elsewhere. */
 function App() {
@@ -55,9 +56,6 @@ function App() {
   const [screenHistory, setScreenHistory] = useState<Screen[]>([]);
   const [lastFolder, setLastFolder] = useState<string | null>(null);
   const [lastScreen, setLastScreen] = useState<Screen | null>(null);
-  // Supported media extensions, fetched from the backend so the file picker
-  // filter stays in sync with the backend scanner.
-  const supportedExtensionsRef = useRef<string[] | null>(null);
 
   const goBack = () => {
     setScreenHistory((prev) => {
@@ -131,6 +129,7 @@ function App() {
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [updateChecking, setUpdateChecking] = useState(false);
+  const [shortcutsCheatSheetOpen, setShortcutsCheatSheetOpen] = useState(false);
   // The global keydown handler is mounted once, so it reads the dialog state
   // through a ref rather than a stale closure.
   const updateDialogOpenRef = useRef(false);
@@ -194,6 +193,7 @@ function App() {
     photos: 0,
     videos: 0,
     raws: 0,
+    animations: 0,
     uncategorized: 0,
     favorites: 0,
     hidden: 0,
@@ -205,6 +205,19 @@ function App() {
     hiddenSize: 0,
     totalSize: 0,
   });
+
+  const statsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // `library-changed` is only emitted for removals, so imports and rescans have
+  // to refresh the exact counts themselves. Without this the sidebar and the
+  // type-chip counts keep describing the catalog from before the import (a
+  // freshly imported set of GIFs would show in the grid but count as 0).
+  const refreshLibraryStats = useCallback(() => {
+    void tauri.library
+      .getStats()
+      .then(setLibraryStats)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     void refreshDraftMeta();
@@ -218,20 +231,38 @@ function App() {
         if (import.meta.env.DEV) console.error("get_library_stats failed:", e);
       });
 
-    let unlisten: (() => void) | null = null;
-    events
-      .onLibraryChanged(() => {
+    // Removals arrive as `library-changed`; scans and imports as
+    // `library-counts-changed`. Both debounce through one timer so a bulk scan
+    // does not fire a stats query per batch.
+    const scheduleStatsRefresh = () => {
+      if (statsDebounceRef.current) {
+        clearTimeout(statsDebounceRef.current);
+      }
+      statsDebounceRef.current = setTimeout(() => {
+        statsDebounceRef.current = null;
         tauri.library
           .getStats()
           .then(setLibraryStats)
           .catch(() => {});
-      })
-      .then((u) => {
-        unlisten = u;
-      });
+      }, 500);
+    };
+
+    const unlisteners: Array<() => void> = [];
+    events.onLibraryChanged(scheduleStatsRefresh).then((u) => {
+      if (cancelled) u();
+      else unlisteners.push(u);
+    });
+    events.onLibraryCountsChanged(scheduleStatsRefresh).then((u) => {
+      if (cancelled) u();
+      else unlisteners.push(u);
+    });
     return () => {
       cancelled = true;
-      if (unlisten) unlisten();
+      if (statsDebounceRef.current) {
+        clearTimeout(statsDebounceRef.current);
+        statsDebounceRef.current = null;
+      }
+      for (const unlisten of unlisteners) unlisten();
     };
   }, []);
 
@@ -243,9 +274,6 @@ function App() {
   // The player keeps its own selection while the photo viewer has an
   // independent cursor.
   const [backgroundVideo, setBackgroundVideo] = useState<MediaItem | null>(null);
-  // The video whose Now Playing session the user explicitly ended. Sidebar
-  // “Viewer” must not resurrect that session from a stale inspector.
-  const backgroundVideoDismissedRef = useRef<string | null>(null);
   // Locked video queue: captured when playback starts so switching filters
   // mid-playback never changes what plays next.
   const [videoQueue, setVideoQueue] = useState<MediaItem[]>([]);
@@ -265,10 +293,14 @@ function App() {
     [library.items, playbackItemId],
   );
   const playbackItem = backgroundVideo ?? storedPlaybackItem;
-  const photoViewerItems = useMemo(
-    () => library.viewerItems.filter((item) => item.kind !== "video"),
-    [library.viewerItems],
-  );
+  const photoViewerItems = useMemo(() => {
+    const items = library.viewerItems.filter((item) => item.kind !== "video");
+    const selected = library.viewerSelected;
+    if (selected && selected.kind !== "video" && !items.some((item) => item.id === selected.id)) {
+      return [selected, ...items];
+    }
+    return items;
+  }, [library.viewerItems, library.viewerSelected]);
   // Video queue: built from the current browsing scope when playback starts,
   // skipping photos and RAW. Locked during playback so switching filters
   // never changes what plays next.
@@ -376,6 +408,11 @@ function App() {
       );
       if (backgroundVideo && !nextQueue.some((item) => item.id === backgroundVideo.id))
         nextQueue.unshift(backgroundVideo);
+      // Leave the queue empty when this scope has no playable videos yet:
+      // writing a fresh [] reference would retrigger this effect through
+      // its own `videoQueue` dependency until React throws #185. The queue
+      // is rebuilt once `viewerItems` gains a playable video.
+      if (nextQueue.length === 0) return;
       setVideoQueue(nextQueue);
       if (!videoQueuePagingRef.current && state.viewerScope === "library") {
         videoQueuePagingRef.current = {
@@ -662,6 +699,13 @@ function App() {
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
 
+    // ⌘/ / Ctrl+/ toggles the keyboard shortcuts cheat sheet.
+    if (mod && key === "/") {
+      e.preventDefault();
+      setShortcutsCheatSheetOpen((open) => !open);
+      return;
+    }
+
     // A slideshow owns the keyboard while it is open: its overlay handles
     // Escape/arrows/Space itself, and nothing underneath should react.
     if (useSlideshowStore.getState().isOpen) return;
@@ -675,7 +719,8 @@ function App() {
       itemPendingDeleteCount > 0 ||
       folderPendingRemove ||
       sourcesSheetOpen ||
-      updateDialogOpenRef.current
+      updateDialogOpenRef.current ||
+      shortcutsCheatSheetOpen
     )
       return;
 
@@ -808,15 +853,10 @@ function App() {
 
     // Opening the saved catalog is cheap; source scans are always user-started.
     liveRef.current.library.loadLibrary();
+    // Hidden items are filtered out of the main query, so load them
+    // separately to power the Hidden screen's counts and grid.
+    void liveRef.current.library.loadHiddenItems();
     liveRef.current.settings.hydrate();
-
-    // Fetch the canonical list of supported extensions from the backend so the
-    // file picker filter stays in sync with the backend scanner.
-    if (supportedExtensionsRef.current === null) {
-      void tauri.library.supportedExtensions().then((exts) => {
-        supportedExtensionsRef.current = exts;
-      });
-    }
 
     // Listen for native menu events (cleaned up on unmount / StrictMode remount).
     let cancelled = false;
@@ -854,25 +894,61 @@ function App() {
       }
 
       // Listen for native import progress events from scan/import commands.
-      await events.onImportProgress((progress) => {
-        const { phase, processed, total } = progress;
-        liveRef.current.library.setBusy(true);
+      let lastProgressApplyAt = 0;
+      let progressTimer: ReturnType<typeof setTimeout> | null = null;
+      let pendingProgress: any = null;
+      const applyProgress = (p: any) => {
+        const { phase, processed, total } = p;
+        const currentPhase = liveRef.current.library.progress?.phase ?? "";
+        // The command that started an operation owns `busy` and `progress`.
+        // Progress events are presentation-only: don't let a scan/import
+        // event flip the overlay away from an active operation (e.g. trash).
+        // Conversely, allow the active operation's own events to update it —
+        // which needs the phase mapping, because an import reports `scanning`.
+        if (!progressBelongsToOperation(currentPhase, phase)) return;
         liveRef.current.library.setProgress({
           phase,
           processed,
           total,
-          bytesProcessed: progress.bytesProcessed,
-          bytesTotal: progress.bytesTotal,
-          filesProcessed: progress.filesProcessed,
-          filesTotal: progress.filesTotal,
-          currentFile: progress.currentFile,
+          bytesProcessed: p.bytesProcessed,
+          bytesTotal: p.bytesTotal,
+          filesProcessed: p.filesProcessed,
+          filesTotal: p.filesTotal,
+          currentFile: p.currentFile,
         });
-        // Hashing still has a short database/grouping step after the final
-        // progress event; keep its controls disabled until the command returns.
-        if (processed >= total && total > 0 && phase !== "hashing") {
-          liveRef.current.library.setBusy(false);
-          liveRef.current.library.setProgress(null);
+      };
+      const unlistenImportProgress = await events.onImportProgress((progress) => {
+        const now = Date.now();
+        const minIntervalMs = 200;
+        // Always apply terminal/first updates promptly; throttle rapid progress.
+        if (progress.processed === progress.total || now - lastProgressApplyAt >= minIntervalMs) {
+          lastProgressApplyAt = now;
+          if (progressTimer) {
+            clearTimeout(progressTimer);
+            progressTimer = null;
+          }
+          pendingProgress = null;
+          applyProgress(progress);
+          return;
         }
+        pendingProgress = progress;
+        if (!progressTimer) {
+          progressTimer = setTimeout(
+            () => {
+              progressTimer = null;
+              if (pendingProgress) {
+                lastProgressApplyAt = Date.now();
+                applyProgress(pendingProgress);
+                pendingProgress = null;
+              }
+            },
+            minIntervalMs - (now - lastProgressApplyAt),
+          );
+        }
+      });
+      unlisteners.push(() => {
+        if (progressTimer) clearTimeout(progressTimer);
+        unlistenImportProgress();
       });
       autoImportControllerRef.current = createAutoImportController({
         isEnabled: () => useSettingsStore.getState().autoImport,
@@ -925,7 +1001,6 @@ function App() {
       try {
         if (cancelled) return;
         applyTheme({ appearance, accentColor });
-        await getCurrentWindow().setTheme(dark ? "dark" : "light");
       } catch {
         /* browser preview - no native window */
       }
@@ -933,7 +1008,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [dark, appearance, accentColor, systemDark]);
+  }, [dark, appearance, accentColor]);
 
   // Honor the startup_view setting once settings are hydrated: open to the
   // Library, the last screen/folder, or start a slideshow.
@@ -952,7 +1027,9 @@ function App() {
       library.setActiveAlbum(lastFolder);
       library.setFilter("All");
       library.setQuery("");
-      library.loadAlbumItems(lastFolder);
+      library.loadAlbumItems(lastFolder).catch(() => {
+        // The album grid itself still loads through the active-album filter.
+      });
       setScreen("Library");
       return;
     }
@@ -976,12 +1053,9 @@ function App() {
     }
   }, [screen, library.activeAlbum]);
 
-  const showNotice = useCallback(
-    (text: string) => {
-      library.showNotice(text);
-    },
-    [library],
-  );
+  const showNotice = useCallback((text: string) => {
+    useLibraryStore.getState().showNotice(text);
+  }, []);
 
   // File > Export… and Cmd/Ctrl+E share this action. Batch Export already
   // renders a useful empty state, so an empty selection is a prompt, not an
@@ -1206,6 +1280,15 @@ function App() {
   const beginVideoSession = useCallback(
     (item: MediaItem, scope: "library" | "hidden" = "library") => {
       library.setViewerScope(scope);
+      // Silence every other <video> surface (slideshow, compare, inspector)
+      // before this session starts, so the same file can't sound from two
+      // players at once. The inspector preview and thumbnails are muted, so
+      // this only ever hits the slideshow and stale players.
+      document.querySelectorAll("video").forEach((video) => {
+        try {
+          video.pause();
+        } catch {}
+      });
       const libraryState = useLibraryStore.getState();
       const scopedVideos = libraryState.viewerItems.filter(
         (candidate) =>
@@ -1223,7 +1306,6 @@ function App() {
               loading: false,
             }
           : null;
-      backgroundVideoDismissedRef.current = null;
       setBackgroundVideo(item);
     },
     [library],
@@ -1231,24 +1313,27 @@ function App() {
 
   const openViewer = useCallback(
     (id?: string, origin: Screen = "Library", scope: "library" | "hidden" = "library") => {
-      const targetId = id ?? library.inspectedId;
+      const lib = useLibraryStore.getState();
+      const targetId = id ?? lib.inspectedId;
       const item =
-        library.items.find((candidate) => candidate.id === targetId) ??
-        library.hiddenItems.find((candidate) => candidate.id === targetId) ??
+        lib.items.find((candidate) => candidate.id === targetId) ??
+        lib.hiddenItems.find((candidate) => candidate.id === targetId) ??
+        lib.duplicates.flatMap((g) => g.items).find((candidate) => candidate.id === targetId) ??
         null;
       if (!item) return;
       setViewerOrigin(origin);
+      const viewerState = useViewerStore.getState();
       if (item.kind === "video") {
         beginVideoSession(item, scope);
-        viewer.close();
+        viewerState.close();
         setScreen("Video");
       } else {
-        library.setViewerScope(scope);
-        viewer.open(item.id);
+        lib.setViewerScope(scope);
+        viewerState.open(item.id);
         setScreen("Viewer");
       }
     },
-    [library, viewer, beginVideoSession],
+    [beginVideoSession],
   );
 
   // Start a video session without leaving the current screen; the Now
@@ -1453,10 +1538,40 @@ function App() {
     // Run delete in background
     void (async () => {
       try {
-        await library.deleteItems(ids);
-        showNotice(
-          `Moved ${ids.length.toLocaleString()} item${ids.length === 1 ? "" : "s"} to Trash.`,
-        );
+        const result = await library.deleteItems(ids);
+        const moved = result.status === "failed" ? 0 : result.trashed;
+        // The duplicate manager can remove rows that are outside the loaded
+        // page, so refresh canonical source/library totals after the native
+        // transaction rather than estimating them from rendered tiles.
+        if (moved > 0) {
+          void tauri.library
+            .getStats()
+            .then(setLibraryStats)
+            .catch(() => {});
+        }
+        if (result.status === "cancelled") {
+          showNotice("Deletion cancelled.");
+        } else if (result.status === "failed") {
+          showNotice(
+            `Could not move items to Trash: ${result.failures[0]?.error ?? "unknown error"}`,
+          );
+          if (result.failures.length > 1) {
+            console.warn("Trash refusals", result.failures);
+          }
+        } else if (moved > 0) {
+          const suffix = result.failed ? ` ${result.failed} item(s) could not be moved.` : "";
+          const warning = result.catalogWarning
+            ? " The catalog could not be updated; rescan to refresh the library."
+            : "";
+          // Lead with the space that is actually gone from the disk, which is
+          // the number people care about after a duplicate cleanup.
+          const reclaimed =
+            result.bytes > 0 ? ` — ${formatBytesSimple(result.bytes)} reclaimed` : "";
+          showNotice(
+            `Moved ${moved.toLocaleString()} item${moved === 1 ? "" : "s"} to Trash${reclaimed}.${suffix}${warning}`,
+          );
+          if (result.failures.length > 0) console.warn("Trash refusals", result.failures);
+        }
       } catch (error) {
         const msg = String(error);
         if (msg !== "Cancelled") {
@@ -1561,13 +1676,9 @@ function App() {
   const addItemsToAlbum = async (albumId: string) => {
     let paths: string[];
     try {
-      const selected = await openFileDialog({
-        directory: false,
-        multiple: true,
-        filters: [{ name: "Media", extensions: supportedExtensionsRef.current ?? [] }],
-      });
-      if (!selected) return;
-      paths = Array.isArray(selected) ? selected : [selected];
+      // The backend opens the picker so it can trust the paths it imports.
+      paths = await tauri.library.pickMediaFiles();
+      if (!paths.length) return;
     } catch (error) {
       showNotice(`Could not open the file picker: ${describeError(error)}`);
       return;
@@ -1736,36 +1847,40 @@ function App() {
         library.viewerSelected ??
         library.viewerItems.find((item) => item.kind !== "video") ??
         null;
-      // A video whose Now Playing session was closed with its X stays closed:
-      // fall back to the nearest photo instead of reopening the player.
-      if (target?.kind === "video" && backgroundVideoDismissedRef.current === target.id) {
-        target = library.viewerItems.find((item) => item.kind !== "video") ?? null;
-      }
+      // Navigation must never implicitly start playback. If the target is a
+      // video, fall back to the nearest viewable photo (or the empty viewer
+      // state); videos only start from explicit actions — the grid's play
+      // button, double-click, or Now Playing.
       if (target?.kind === "video") {
-        openViewer(target.id, "Library");
-        return;
+        target = library.viewerItems.find((item) => item.kind !== "video") ?? null;
       }
       viewer.open(target?.id);
     }
     if (next === "Hidden") {
       // Hidden is its own collection; do not carry a Library selection or an
-      // inspector for a visible item into it.
+      // inspector for a visible item into it. Load hidden items separately
+      // so the Hidden screen has its own collection without polluting the
+      // main items array.
       library.setViewerScope("library");
       library.clearSelection();
       library.inspectItem(null);
+      await library.loadHiddenItems();
     } else if (screen === "Hidden") {
       // Leaving Hidden drops the hidden selection and any hidden inspector
       // focus, so the next screen cannot show an item it cannot display.
       library.clearSelection();
       const inspected = library.items.find((i: MediaItem) => i.id === library.inspectedId);
       if (inspected?.hidden) library.inspectItem(null);
+      // Reload without the hidden filter so the normal library shows
+      // non-hidden items again.
+      void library.loadLibrary();
     }
     if (next === "Edit") {
-      const selectedItem = library.items.find((i) => i.id === library.inspectedId);
-      if (selectedItem && selectedItem.kind === "photo") {
-        await edit.saveDraft();
-        await edit.open(selectedItem);
-      }
+      // Show the draft picker / empty edit screen. Saving first preserves any
+      // in-progress work; explicit edit actions (Library/Viewer "Edit") still
+      // open a specific item by calling edit.open() and setScreen("Edit").
+      await edit.saveDraft();
+      await edit.close();
     }
     if (next !== screen) {
       setScreenHistory((prev) => [...prev, screen]);
@@ -1776,13 +1891,9 @@ function App() {
   const importFiles = async () => {
     let paths: string[];
     try {
-      const selected = await openFileDialog({
-        directory: false,
-        multiple: true,
-        filters: [{ name: "Media", extensions: supportedExtensionsRef.current ?? [] }],
-      });
-      if (!selected) return;
-      paths = Array.isArray(selected) ? selected : [selected];
+      // The backend opens the picker so it can trust the paths it imports.
+      paths = await tauri.library.pickMediaFiles();
+      if (!paths.length) return;
     } catch (e) {
       showNotice(`Could not open the file picker: ${describeError(e)}`);
       return;
@@ -1798,6 +1909,7 @@ function App() {
       });
       const result = await tauri.library.importFiles(paths);
       await library.loadLibrary();
+      refreshLibraryStats();
       library.setBusy(false);
       library.setProgress(null);
       showNotice(
@@ -1817,13 +1929,8 @@ function App() {
   const importFolder = async () => {
     let selectedPaths: string[];
     try {
-      const selected = await openFileDialog({
-        directory: true,
-        multiple: true,
-        title: "Choose source folders",
-      });
-      if (!selected) return;
-      selectedPaths = Array.isArray(selected) ? selected : [selected];
+      // The backend opens the picker so it can trust the roots it registers.
+      selectedPaths = await tauri.library.pickSourceFolders();
     } catch (e) {
       showNotice(`Could not open the folder picker: ${describeError(e)}`);
       return;
@@ -1857,6 +1964,7 @@ function App() {
       }
       await library.loadLibrary();
       await library.loadFolders();
+      refreshLibraryStats();
       library.setBusy(false);
       library.setProgress(null);
       showNotice(
@@ -1888,6 +1996,7 @@ function App() {
       const result = await tauri.library.scan(folder.path, true);
       await library.loadLibrary();
       await library.loadFolders();
+      refreshLibraryStats();
       library.setProgress(null);
       library.setBusy(false);
       showNotice(
@@ -1988,6 +2097,7 @@ function App() {
       animateTransitions={animateTransitions}
       sidebarWidth={sidebarWidth}
       sidebarOpen={library.sidebarOpen}
+      sidebarCollapsed={library.sidebarCollapsed}
       topbar={
         <AppTopBar
           screen={screen}
@@ -2021,7 +2131,6 @@ function App() {
             void playNextVideo();
           }}
           onNowPlayingStop={() => {
-            if (playbackItem) backgroundVideoDismissedRef.current = playbackItem.id;
             usePlaybackStore.getState().stop();
             setBackgroundVideo(null);
             setVideoQueue([]);
@@ -2044,9 +2153,6 @@ function App() {
       sidebar={
         <AppSidebar
           screen={screen}
-          libraryCount={library.items.length - library.hiddenCount}
-          hiddenCount={library.hiddenCount}
-          albumsCount={library.albums.length}
           folders={library.folders}
           sourcesSheetOpen={sourcesSheetOpen}
           stats={libraryStats}
@@ -2056,6 +2162,11 @@ function App() {
           onOpenScreen={openScreen}
           onOpenSources={() => setSourcesSheetOpen(true)}
           onOpenUpdate={() => setUpdateDialogOpen(true)}
+          sidebarCollapsed={library.sidebarCollapsed}
+          onToggleCollapse={library.toggleSidebarCollapsed}
+          // Video player has its own back control; avoid redundant sidebar back.
+          canGoBack={screenHistory.length > 0 && screen !== "Video"}
+          onGoBack={goBack}
         />
       }
       overlays={
@@ -2235,7 +2346,11 @@ function App() {
               <button
                 className="busy-indicator-cancel"
                 type="button"
-                onClick={() => void library.cancelScan()}
+                onClick={() =>
+                  void (library.progress?.phase === "trashing"
+                    ? library.cancelDelete()
+                    : library.cancelScan())
+                }
                 disabled={library.canceling}
               >
                 {library.canceling ? "Cancelling…" : "Cancel"}
@@ -2334,6 +2449,12 @@ function App() {
               onClose={() => setContextMenu(null)}
             />
           )}
+          {shortcutsCheatSheetOpen && (
+            <ShortcutsCheatSheet
+              open={shortcutsCheatSheetOpen}
+              onClose={() => setShortcutsCheatSheetOpen(false)}
+            />
+          )}
         </>
       }
     >
@@ -2377,6 +2498,8 @@ function App() {
         selectVideoItem={selectVideoItem}
         playPreviousVideo={playPreviousVideo}
         playNextVideo={playNextVideo}
+        queueHasMore={Boolean(videoQueuePagingRef.current?.hasMore)}
+        onLoadMoreQueue={loadNextVideoPage}
         playSlideshow={playSlideshow}
         openAlbumMenu={openAlbumMenu}
         openSmartAlbum={openSmartAlbum}

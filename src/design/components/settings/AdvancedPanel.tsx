@@ -17,6 +17,8 @@ export function AdvancedPanel(props: {
   onChooseRestore: () => void;
   backupBusy: boolean;
   restoring: boolean;
+  vacuuming: boolean;
+  onVacuumCatalog: () => void;
   suggestedOldRoot: string | null;
   onRootMappingApplied: () => void;
   showNotice: (text: string) => void;
@@ -139,6 +141,24 @@ export function AdvancedPanel(props: {
               disabled={props.backupBusy || props.restoring}
             >
               {props.restoring ? "Restoring…" : "Restore Backup…"}
+            </button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div className="settings-row-label">
+            <b>Vacuum Catalog</b>
+            <span className="settings-row-desc">
+              Reclaims disk space by defragmenting the catalog database
+            </span>
+          </div>
+          <div className="settings-row-control">
+            <button
+              className="quiet-button"
+              type="button"
+              onClick={props.onVacuumCatalog}
+              disabled={props.vacuuming}
+            >
+              {props.vacuuming ? "Vacuuming…" : "Vacuum"}
             </button>
           </div>
         </div>

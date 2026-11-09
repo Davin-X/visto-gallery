@@ -3,6 +3,7 @@ export interface AppSettings {
   appearance: "light" | "dark" | "system";
   accentColor: "blue" | "purple" | "green" | "orange" | "pink" | "red";
   sidebarWidth: number;
+  inspectorWidth: number;
   showExtensions: boolean;
   animateTransitions: boolean;
 
@@ -52,6 +53,7 @@ export const defaultSettings: AppSettings = {
   appearance: "system",
   accentColor: "blue",
   sidebarWidth: 240,
+  inspectorWidth: 300,
   showExtensions: false,
   animateTransitions: true,
   startupView: "library",

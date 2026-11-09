@@ -67,6 +67,7 @@ impl SmartAlbumFilter {
             kind: self.kind.clone(),
             favorite: self.favorite,
             hidden: None,
+            animated: None,
             album_id: None,
             query: self.query.clone(),
             tags: self.tags.clone(),

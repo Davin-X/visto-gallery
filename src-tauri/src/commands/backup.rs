@@ -239,6 +239,7 @@ async fn restore_backup_into_catalog(db: &SqlitePool, path: &str) -> Result<(), 
 
         // Clear dependent rows first. Foreign keys are enabled on this pool.
         for statement in [
+            "DELETE FROM edit_backups",
             "DELETE FROM edit_recipes",
             "DELETE FROM smart_albums",
             "DELETE FROM media_tags",
@@ -330,6 +331,21 @@ async fn restore_backup_into_catalog(db: &SqlitePool, path: &str) -> Result<(), 
             )
             .await?;
         }
+        if table_exists(&mut tx, "restore_src", "edit_backups").await? {
+            copy_table(
+                &mut tx,
+                "edit_backups",
+                &[
+                    "media_id",
+                    "original_path",
+                    "backup_path",
+                    "size",
+                    "sha256",
+                    "created_at",
+                ],
+            )
+            .await?;
+        }
 
         tx.commit().await.map_err(|e| e.to_string())?;
         Ok::<(), String>(())
@@ -415,6 +431,8 @@ pub async fn restore_catalog_backup(
     }
 
     restore_backup_into_catalog(&db, &path).await?;
+    // The snapshot just taken is the newest, so it always survives pruning.
+    prune_pre_restore_snapshots(&backup_dir, PRE_RESTORE_SNAPSHOTS_KEPT);
     let missing = report_missing_paths(&db).await?;
 
     Ok(RestoreResult {
@@ -424,6 +442,31 @@ pub async fn restore_catalog_backup(
         missing_paths: missing.missing_paths,
         missing_roots: missing.missing_roots,
     })
+}
+
+/// Pre-restore snapshots are a safety net for the latest restores, not an
+/// archive: keep this many and delete older ones.
+const PRE_RESTORE_SNAPSHOTS_KEPT: usize = 5;
+
+/// Delete all but the `keep` newest `pre-restore-<ms>.db` files in `dir`.
+/// Files with any other name are never touched. Best effort: a file that
+/// cannot be removed is left for the next restore.
+fn prune_pre_restore_snapshots(dir: &Path, keep: usize) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut snapshots: Vec<(i64, PathBuf)> = entries
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            let name = entry.file_name().into_string().ok()?;
+            let stamp = name.strip_prefix("pre-restore-")?.strip_suffix(".db")?;
+            Some((stamp.parse::<i64>().ok()?, entry.path()))
+        })
+        .collect();
+    snapshots.sort_by_key(|(stamp, _)| std::cmp::Reverse(*stamp));
+    for (_, path) in snapshots.into_iter().skip(keep) {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 /// Tests build small in-memory catalogs with the production migration set and
@@ -443,7 +486,7 @@ mod tests {
             .connect_with(options)
             .await
             .expect("open catalog");
-        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)")
+        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)")
             .execute(&db)
             .await
             .unwrap();
@@ -470,6 +513,10 @@ mod tests {
         .await
         .unwrap();
         sqlx::query("CREATE TABLE edit_recipes (media_id TEXT PRIMARY KEY, edits TEXT NOT NULL, crop TEXT, history TEXT NOT NULL, history_index INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)")
+            .execute(&db)
+            .await
+            .unwrap();
+        sqlx::query("CREATE TABLE edit_backups (media_id TEXT PRIMARY KEY, original_path TEXT NOT NULL, backup_path TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT, created_at INTEGER NOT NULL)")
             .execute(&db)
             .await
             .unwrap();
@@ -658,5 +705,28 @@ mod tests {
         db.close().await;
         let _ = std::fs::remove_file(catalog_path);
         let _ = std::fs::remove_file(backup_path);
+    }
+
+    #[test]
+    fn prune_keeps_newest_snapshots_and_ignores_other_files() {
+        let dir = temp_backup("prune-dir");
+        std::fs::create_dir_all(&dir).unwrap();
+        for stamp in [100, 300, 200, 500, 400] {
+            std::fs::write(dir.join(format!("pre-restore-{stamp}.db")), b"x").unwrap();
+        }
+        std::fs::write(dir.join("my-backup.db"), b"keep").unwrap();
+
+        super::prune_pre_restore_snapshots(&dir, 2);
+
+        let mut names: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            ["my-backup.db", "pre-restore-400.db", "pre-restore-500.db"]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

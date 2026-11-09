@@ -1,7 +1,9 @@
 import type { MutableRefObject, RefObject } from "react";
-import { open as openFileDialog, save } from "@tauri-apps/plugin-dialog";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { tauri } from "../engine/commands/tauri";
 import { clearEditDraft } from "../engine/stores";
+import { useLibraryStore } from "../engine/stores/useLibraryStore";
+import { invalidateThumbnailCache } from "../design/components/CachedThumbnail";
 import HiddenScreen from "../screens/HiddenScreen";
 import LibraryScreen from "../screens/LibraryScreen";
 import EditScreen from "../screens/EditScreen";
@@ -55,6 +57,8 @@ interface AppScreenRouterProps {
   selectVideoItem: (id: string) => void;
   playPreviousVideo: () => boolean;
   playNextVideo: () => Promise<boolean>;
+  queueHasMore: boolean;
+  onLoadMoreQueue: () => unknown;
   playSlideshow: (ids?: string[]) => void;
   openAlbumMenu: (album: any, e: React.MouseEvent) => void;
   openSmartAlbum: (albumId: string) => Promise<void>;
@@ -103,6 +107,8 @@ export function AppScreenRouter({
   selectVideoItem,
   playPreviousVideo,
   playNextVideo,
+  queueHasMore,
+  onLoadMoreQueue,
   playSlideshow,
   openAlbumMenu,
   openSmartAlbum,
@@ -113,28 +119,6 @@ export function AppScreenRouter({
 }: AppScreenRouterProps) {
   return (
     <main id="main-content" className="main-content" tabIndex={-1} style={{ position: "relative" }}>
-      {screenHistory.length > 0 && (
-        <button
-          className="icon-button"
-          type="button"
-          aria-label="Go back"
-          title="Go back"
-          onClick={goBack}
-          style={{
-            position: "absolute",
-            top: 10,
-            right: 10,
-            zIndex: 5,
-            width: 32,
-            height: 32,
-            padding: 0,
-            borderRadius: 8,
-            opacity: 0.8,
-          }}
-        >
-          ←
-        </button>
-      )}
       {screen === "Library" && (
         <LibraryScreen
           items={library.visibleItems}
@@ -231,8 +215,14 @@ export function AppScreenRouter({
             library.setActiveAlbum(albumId);
             library.setFilter("All");
             library.setQuery("");
-            await library.loadAlbumItems(albumId);
+            // Navigate immediately; the album grid loads from the same active
+            // album filter. Cover loading must never block opening the album.
             setScreen("Library");
+            try {
+              await library.loadAlbumItems(albumId);
+            } catch (error) {
+              showNotice(`Could not load album items: ${String(error)}`);
+            }
           }}
         />
       )}
@@ -241,7 +231,7 @@ export function AppScreenRouter({
         <ViewerScreen
           active
           items={photoViewerItems}
-          selected={library.viewerSelected?.kind === "video" ? null : library.viewerSelected}
+          selected={library.viewerSelected}
           zoom={viewer.zoom}
           fitMode={viewer.fitMode}
           rotation={viewer.rotation}
@@ -280,6 +270,8 @@ export function AppScreenRouter({
         onSelect={selectVideoItem}
         onPrevious={playPreviousVideo}
         onNext={playNextVideo}
+        queueHasMore={queueHasMore}
+        onLoadMoreQueue={onLoadMoreQueue}
       />
 
       {screen === "Edit" && (
@@ -301,7 +293,10 @@ export function AppScreenRouter({
           onRedo={edit.redo}
           canUndo={edit.canUndo}
           canRedo={edit.canRedo}
-          onClose={edit.close}
+          onClose={async () => {
+            await edit.close();
+            setScreen("Library");
+          }}
           onSaveDraft={edit.saveDraft}
           onBack={() => setScreen("Library")}
           onExport={async (inPlace = false) => {
@@ -329,6 +324,7 @@ export function AppScreenRouter({
               // Build render request for native backend
               const request = {
                 sourcePath: item.path,
+                mediaId: item.id,
                 edits: v,
                 outputFormat: (inPlace ? "in_place" : "image/jpeg") as
                   "jpeg" | "png" | "webp" | "heic" | "avif" | "in_place",
@@ -341,22 +337,44 @@ export function AppScreenRouter({
 
               if (!inPlace) {
                 // For save-copy, backend wrote to temp; now show save dialog
-                const suggestedName = String(item.name).replace(/\.[^.]+$/, "") + "_edited.jpg";
-                const finalPath = await save({
-                  defaultPath: suggestedName,
-                  filters: [{ name: "JPEG image", extensions: ["jpg", "jpeg"] }],
-                });
+                const extension = result.outputPath.split(".").pop() ?? "jpg";
+                const suggestedName =
+                  String(item.name).replace(/\.[^.]+$/, "") + `_edited.${extension}`;
+                // The backend opens the save dialog and moves the staged file,
+                // so the webview never names a source or destination path.
+                const finalPath = await tauri.editing.saveExportedFile(
+                  result.outputPath,
+                  suggestedName,
+                );
                 if (!finalPath) {
                   showNotice("Export cancelled");
                   return;
                 }
-                // Move temp file to final destination
-                await tauri.editing.moveExportedFile(result.outputPath, finalPath);
               }
 
-              clearEditDraft(item.id);
-              if (inPlace) await library.loadLibrary();
-              showNotice(inPlace ? "Replaced original" : "Exported edited copy");
+              if (inPlace) {
+                invalidateThumbnailCache(item.id);
+                // Replace bakes current edits into the file bytes. Clear the
+                // draft and reopen neutral against the refreshed item so the
+                // preview shows the newly baked file without double-applying
+                // adjustment filters (which can look like the edit reverted).
+                await edit.clearDraft();
+                await library.loadLibrary();
+                const fresh =
+                  useLibraryStore.getState().items.find((i: any) => i.id === item.id) ??
+                  ({
+                    ...item,
+                    modifiedAt: Date.now(),
+                  } as any);
+                await edit.open(fresh);
+              } else {
+                clearEditDraft(item.id);
+              }
+              showNotice(
+                inPlace
+                  ? "Replaced original file — preview shows the saved edit"
+                  : "Exported edited copy",
+              );
             } catch (e) {
               if (String(e).includes("cancelled")) {
                 showNotice("Export cancelled");
@@ -367,11 +385,15 @@ export function AppScreenRouter({
           }}
           onClearDraft={edit.clearDraft}
           onNotice={showNotice}
+          onReloadLibrary={library.loadLibrary}
           assetUrl={assetUrl}
           items={library.items.filter((i: any) => i.kind === "photo" && !i.hidden)}
           onOpenEdit={async (item: any) => {
             await edit.saveDraft();
-            await edit.open(item);
+            // Prefer freshest library metadata (size/modifiedAt) after file ops.
+            const fresh =
+              useLibraryStore.getState().items.find((i: any) => i.id === item.id) ?? item;
+            await edit.open(fresh);
           }}
         />
       )}
@@ -458,6 +480,7 @@ export function AppScreenRouter({
           onScan={library.scanDuplicates}
           onClear={library.clearDuplicates}
           busy={library.busy}
+          progress={library.progress ?? null}
           assetUrl={assetUrl}
           onRequestDeleteItems={(ids: string[]) => {
             itemPendingDeleteRef.current = ids;
@@ -470,6 +493,7 @@ export function AppScreenRouter({
             library.showNotice(`Hidden ${ids.length.toLocaleString()} item(s).`);
             await library.scanDuplicates();
           }}
+          onOpenItem={(id: string) => openViewer(id, "Duplicates")}
         />
       )}
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import VideoPlayer from "../design/components/VideoPlayer";
+import { ChevronLeftIcon, FilmstripIcon } from "../design/components/icons";
 import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { formatDuration } from "../engine/utils/time";
 import type { MediaItem } from "../engine/types/media";
@@ -15,6 +16,8 @@ interface VideoPlayerScreenProps {
   onSelect: (id: string) => void;
   onPrevious: () => boolean;
   onNext: () => boolean | Promise<boolean>;
+  queueHasMore?: boolean;
+  onLoadMoreQueue?: () => unknown;
 }
 
 export default function VideoPlayerScreen({
@@ -27,15 +30,16 @@ export default function VideoPlayerScreen({
   onSelect,
   onPrevious,
   onNext,
+  queueHasMore = false,
+  onLoadMoreQueue,
 }: VideoPlayerScreenProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const screenRef = useRef<HTMLElement | null>(null);
+  const queueStripRef = useRef<HTMLDivElement | null>(null);
+  const loadMoreLockRef = useRef(false);
   const currentIndex = queue.findIndex((video) => video.id === item?.id);
   const time = usePlaybackStore((state) => state.time);
   const duration = usePlaybackStore((state) => state.duration);
-  const queueStart =
-    currentIndex < 0 ? 0 : Math.min(Math.max(0, currentIndex - 3), Math.max(0, queue.length - 12));
-  const visibleQueue = queue.slice(queueStart, queueStart + 12);
 
   useEffect(() => {
     const element = screenRef.current;
@@ -43,6 +47,35 @@ export default function VideoPlayerScreen({
     if (active) element.removeAttribute("inert");
     else element.setAttribute("inert", "");
   }, [active]);
+
+  useEffect(() => {
+    loadMoreLockRef.current = false;
+  }, [queue.length]);
+
+  useEffect(() => {
+    if (!active || !item?.id) return;
+    const strip = queueStripRef.current;
+    if (!strip) return;
+    const activeEl = strip.querySelector<HTMLElement>(`[data-queue-id="${CSS.escape(item.id)}"]`);
+    activeEl?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [active, item?.id]);
+
+  const maybeLoadMoreQueue = useCallback(() => {
+    if (!queueHasMore || !onLoadMoreQueue || loadMoreLockRef.current) return;
+    const strip = queueStripRef.current;
+    if (!strip) return;
+    const remaining = strip.scrollWidth - strip.clientWidth - strip.scrollLeft;
+    if (remaining > 240) return;
+    loadMoreLockRef.current = true;
+    Promise.resolve(onLoadMoreQueue()).finally(() => {
+      loadMoreLockRef.current = false;
+    });
+  }, [queueHasMore, onLoadMoreQueue]);
+
+  useEffect(() => {
+    if (!active) return;
+    maybeLoadMoreQueue();
+  }, [active, queue.length, queueHasMore, maybeLoadMoreQueue]);
 
   const toggleFullscreen = useCallback(async () => {
     try {
@@ -72,17 +105,36 @@ export default function VideoPlayerScreen({
           aria-label="Back to previous screen"
           title="Back to previous screen"
         >
-          ‹
+          <ChevronLeftIcon size={17} strokeWidth={2.1} />
         </button>
         <div className="video-player-title">
-          <p className="eyebrow">VIDEO PLAYER</p>
           <h1 title={item.name}>{item.name}</h1>
-          <span>
-            {formatDuration(time)} / {formatDuration(duration || item.duration || 0)}
-            {currentIndex >= 0 ? ` · ${currentIndex + 1} of ${queue.length}` : ""}
+          <span className="video-player-meta">
+            <span
+              className="video-player-meta-chip video-player-meta-chip-time"
+              title="Elapsed / total duration"
+            >
+              <span>{formatDuration(time)}</span>
+              <span className="video-player-meta-sep" aria-hidden="true">
+                /
+              </span>
+              <span>{formatDuration(duration || item.duration || 0)}</span>
+            </span>
+            {currentIndex >= 0 && (
+              <span
+                className="video-player-meta-chip"
+                title={`Video ${currentIndex + 1} of ${queue.length.toLocaleString()} in this queue`}
+              >
+                <FilmstripIcon size={11} strokeWidth={2} />
+                <span>{currentIndex + 1}</span>
+                <span className="video-player-meta-sep" aria-hidden="true">
+                  of
+                </span>
+                <span>{queue.length.toLocaleString()}</span>
+              </span>
+            )}
           </span>
         </div>
-        <span className="video-player-mode-label">VIDEO QUEUE</span>
       </header>
 
       <div className="video-player-stage" ref={stageRef}>
@@ -98,33 +150,26 @@ export default function VideoPlayerScreen({
           forceAutoPlay={queueAutoPlayItemId === item.id}
           onFullscreen={() => void toggleFullscreen()}
           onNext={onNext}
+          onPrevious={onPrevious}
         />
       </div>
 
       <footer className="video-player-queue">
         <div className="video-player-queue-heading">
-          <div>
-            <p className="eyebrow">UP NEXT</p>
+          <div className="video-player-queue-summary">
+            <span className="video-player-queue-label">Up next</span>
             <span>
-              {queue.length === 1
-                ? "1 video in this queue"
-                : `${queue.length} videos in this queue`}
+              {queue.length === 1 ? "1 video" : `${queue.length} videos`}
+              {queueHasMore ? " · scroll for more" : ""}
             </span>
           </div>
-          <div className="video-player-queue-controls">
-            <button type="button" onClick={onPrevious} aria-label="Previous video">
-              ‹
-            </button>
-            <button type="button" onClick={() => void onNext()} aria-label="Next video">
-              ›
-            </button>
-          </div>
         </div>
-        <div className="video-player-queue-strip">
-          {visibleQueue.map((video, index) => (
+        <div className="video-player-queue-strip" ref={queueStripRef} onScroll={maybeLoadMoreQueue}>
+          {queue.map((video, index) => (
             <button
               type="button"
               key={video.id}
+              data-queue-id={video.id}
               className={video.id === item.id ? "video-queue-item active" : "video-queue-item"}
               onClick={() => onSelect(video.id)}
               aria-label={`Play ${video.name}`}
@@ -139,7 +184,7 @@ export default function VideoPlayerScreen({
                   eager={active}
                   placeholderClassName="video-queue-placeholder"
                 />
-                <span className="video-queue-index">{queueStart + index + 1}</span>
+                <span className="video-queue-index">{index + 1}</span>
                 {video.duration ? (
                   <span className="video-queue-duration">{formatDuration(video.duration)}</span>
                 ) : null}
@@ -147,6 +192,17 @@ export default function VideoPlayerScreen({
               <span className="video-queue-name">{video.name}</span>
             </button>
           ))}
+          {queueHasMore ? (
+            <button
+              type="button"
+              className="video-queue-item video-queue-more"
+              onClick={() => void onLoadMoreQueue?.()}
+              aria-label="Load more videos"
+              title="Load more videos"
+            >
+              <span className="video-queue-more-inner">Load more</span>
+            </button>
+          ) : null}
         </div>
       </footer>
     </section>

@@ -8,6 +8,8 @@ import {
   PictureInPictureIcon,
   PlayIcon,
   PauseIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from "./icons";
 import { tauri } from "../../engine/commands/tauri";
 import type { ExternalPlayer } from "../../engine/types/commands";
@@ -33,6 +35,7 @@ function VideoPlayer({
   height,
   onFullscreen,
   onNext,
+  onPrevious,
   compact = false,
   forceAutoPlay = false,
 }: {
@@ -48,6 +51,7 @@ function VideoPlayer({
   /** Render a clean thumbnail-like frame; transport actions are external. */
   compact?: boolean;
   forceAutoPlay?: boolean;
+  onPrevious?: () => void;
 }) {
   const videoAutoPlay = useSettingsStore((s) => s.videoAutoPlay);
   const videoLoop = useSettingsStore((s) => s.videoLoop);
@@ -539,6 +543,28 @@ function VideoPlayer({
           frame, so playback gets a permanent bar of our own instead. */}
       {!compact && (
         <>
+          {onPrevious && (
+            <button
+              type="button"
+              className={`viewer-arrow left video-stage-arrow${controlsVisible ? "" : " hidden"}`}
+              onClick={onPrevious}
+              aria-label="Previous video"
+              title="Previous video"
+            >
+              <ChevronLeftIcon size={21} strokeWidth={2.1} />
+            </button>
+          )}
+          {onNext && (
+            <button
+              type="button"
+              className={`viewer-arrow right video-stage-arrow${controlsVisible ? "" : " hidden"}`}
+              onClick={() => void onNext()}
+              aria-label="Next video"
+              title="Next video"
+            >
+              <ChevronRightIcon size={21} strokeWidth={2.1} />
+            </button>
+          )}
           <div
             ref={controlsRef}
             className={`viewer-video-controls${controlsVisible ? "" : " is-hidden"}${keyboardFocusWithinControls ? " is-keyboard-focused" : ""}`}
