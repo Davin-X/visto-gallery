@@ -583,16 +583,6 @@ fn inspect_media_file_with_metadata(
         .to_string();
     let kind = kind_for_ext(&ext).to_string();
 
-    // Read dimensions from the file header only; no full decode.
-    let (width, height) = if kind == "photo" {
-        match image::image_dimensions(path) {
-            Ok((w, h)) => (Some(w as i32), Some(h as i32)),
-            Err(_) => (None, None),
-        }
-    } else {
-        (None, None)
-    };
-
     // Reads container headers only (GIF blocks, WebP VP8X flags, PNG acTL,
     // ISOBMFF ftyp brands); no pixel decode. Formats that cannot animate are
     // answered without opening the file.
@@ -613,6 +603,7 @@ fn inspect_media_file_with_metadata(
     item.content_signature = crate::media_signature::content_signature(path);
 
     // Populate metadata from EXIF for photos.
+    let mut exif_dims = None;
     if kind == "photo" {
         let exif = crate::commands::media::extract_exif(path);
         item.captured_at = exif.captured_at;
@@ -622,13 +613,21 @@ fn inspect_media_file_with_metadata(
         item.iso = exif.iso;
         item.latitude = exif.latitude;
         item.longitude = exif.longitude;
-        if item.width.is_none() {
-            item.width = exif.width;
-        }
-        if item.height.is_none() {
-            item.height = exif.height;
+        if let (Some(w), Some(h)) = (exif.width, exif.height) {
+            exif_dims = Some((w.max(0) as u32, h.max(0) as u32));
         }
     }
+
+    // Header-only dimension probe for every kind (image headers, HEIF/AVIF
+    // and MP4/MOV boxes, EXIF, then ImageIO). The upsert stores the returned
+    // pair, so it must carry every fallback, not just the first probe.
+    let dims = crate::media_dimensions::probe_dimensions(path, &item.extension, &kind, exif_dims);
+    let (width, height) = match dims {
+        Some((w, h)) => (Some(w as i32), Some(h as i32)),
+        None => (None, None),
+    };
+    item.width = width;
+    item.height = height;
 
     // Upsert on the stable id. `favorite` and `hidden` are left out of the
     // UPDATE clause so a re-import refreshes file facts without discarding the

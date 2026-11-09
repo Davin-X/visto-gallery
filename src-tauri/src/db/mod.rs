@@ -124,28 +124,49 @@ impl Database {
         Ok(())
     }
 
+    /// Fill in width and height for rows imported without them.
+    ///
+    /// Version 2 of this backfill: the first one only covered photos the
+    /// `image` crate can read, so HEIC/AVIF, RAW and video rows, plus JPEGs
+    /// whose dimensions only EXIF knew, stayed empty. Unreadable files are
+    /// skipped and keep NULL; a later rescan fills them in.
     async fn backfill_dimensions(&self) -> Result<()> {
-        // Check if already done
+        const FLAG: &str = "backfill_dimensions_v2";
         let done: Option<i64> = sqlx::query_scalar(
-            "SELECT 1 FROM _migration_flags WHERE name = 'backfill_dimensions' AND completed_at > 0"
+            "SELECT 1 FROM _migration_flags WHERE name = ? AND completed_at > 0",
         )
+        .bind(FLAG)
         .fetch_optional(&self.pool)
         .await?;
-
         if done.is_some() {
             return Ok(());
         }
 
-        // Backfill dimensions for existing photos scanned before the fix.
-        // Only touches rows where width is 0 or NULL.
-        let rows = sqlx::query("SELECT id, path FROM media_items WHERE kind = 'photo' AND (width IS NULL OR width = 0)")
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = sqlx::query(
+            "SELECT id, path, extension, kind FROM media_items \
+             WHERE width IS NULL OR width = 0 OR height IS NULL OR height = 0",
+        )
+        .fetch_all(&self.pool)
+        .await?;
         for row in rows {
             let id: String = row.get("id");
             let path: String = row.get("path");
-            let dims = tokio::task::spawn_blocking(move || image::image_dimensions(&path)).await?;
-            if let Ok((w, h)) = dims {
+            let extension: String = row.get("extension");
+            let kind: String = row.get("kind");
+            let dims = tokio::task::spawn_blocking(move || {
+                let path = std::path::Path::new(&path);
+                let exif = if kind == "photo" {
+                    let exif = crate::commands::extract_exif(path);
+                    exif.width
+                        .zip(exif.height)
+                        .map(|(w, h)| (w.max(0) as u32, h.max(0) as u32))
+                } else {
+                    None
+                };
+                crate::media_dimensions::probe_dimensions(path, &extension, &kind, exif)
+            })
+            .await?;
+            if let Some((w, h)) = dims {
                 sqlx::query("UPDATE media_items SET width = ?, height = ? WHERE id = ?")
                     .bind(w as i32)
                     .bind(h as i32)
@@ -155,14 +176,11 @@ impl Database {
             }
         }
 
-        // Mark as complete
-        sqlx::query(
-            "INSERT OR REPLACE INTO _migration_flags (name, completed_at) VALUES ('backfill_dimensions', ?)"
-        )
-        .bind(Utc::now().timestamp_millis())
-        .execute(&self.pool)
-        .await?;
-
+        sqlx::query("INSERT OR REPLACE INTO _migration_flags (name, completed_at) VALUES (?, ?)")
+            .bind(FLAG)
+            .bind(Utc::now().timestamp_millis())
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
