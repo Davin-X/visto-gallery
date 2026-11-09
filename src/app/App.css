@@ -12885,6 +12885,7 @@ body.is-resizing .photo-inspector {
 
 .smart-albums-heading h2 {
   margin: 3px 0 0;
+  color: var(--ink);
   font-size: 15px;
   font-weight: 650;
   letter-spacing: -0.02em;
