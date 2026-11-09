@@ -2470,3 +2470,44 @@ mod scan_chunk_tests {
         let _ = fs::remove_dir_all(&root);
     }
 }
+
+#[cfg(test)]
+mod sort_index_tests {
+    use sqlx::sqlite::SqlitePoolOptions;
+    use sqlx::Row;
+
+    async fn plan_for(sql: &str) -> String {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory catalog");
+        sqlx::migrate!("./migrations")
+            .run(&db)
+            .await
+            .expect("run migrations");
+        let rows = sqlx::query(&format!("EXPLAIN QUERY PLAN {sql}"))
+            .bind(0i32)
+            .bind(201i64)
+            .fetch_all(&db)
+            .await
+            .expect("explain query");
+        rows.iter()
+            .map(|row| row.get::<String, _>("detail"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// The default page (`get_library_items_page` with no sort) must walk the
+    /// sort index instead of sorting the whole table for every page.
+    #[tokio::test]
+    async fn default_library_sort_uses_index_without_temp_sort() {
+        let plan = plan_for(
+            "SELECT * FROM media_items WHERE 1=1 AND hidden = ? \
+             ORDER BY COALESCE(captured_at, modified_at) DESC, id ASC LIMIT ?",
+        )
+        .await;
+        assert!(plan.contains("idx_media_hidden_sort_date_id"), "{plan}");
+        assert!(!plan.contains("TEMP B-TREE"), "{plan}");
+    }
+}
