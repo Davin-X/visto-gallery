@@ -35,6 +35,7 @@
     "tauri:dev": "tauri dev",
     "test": "vitest run",
     "benchmark:library": "node scripts/benchmark-library-harness.mjs",
+    "test:e2e": "playwright test",
     "perf:check": "node scripts/check-library-harness-perf.mjs",
     "perf:record": "node scripts/check-library-harness-perf.mjs --record",
     "test:watch": "vitest",

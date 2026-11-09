@@ -30,6 +30,7 @@ export default defineConfig({
     globals: true,
     // Local worktrees under .kilo/ contain their own copies of these tests;
     // collecting them inflates counts and can fail on stale code.
-    exclude: ["**/node_modules/**", "**/dist/**", ".kilo/**"],
+    // Playwright e2e specs run under `@playwright/test`, not vitest.
+    exclude: ["**/node_modules/**", "**/dist/**", ".kilo/**", "e2e/**"],
   },
 });
