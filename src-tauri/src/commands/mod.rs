@@ -22,7 +22,8 @@ pub use albums::*;
 use anyhow::Result;
 pub use backup::*;
 pub use batch::*;
-pub(crate) use batch_pipeline::export_batch_item;
+#[allow(unused_imports)]
+pub(crate) use batch_pipeline::{export_batch_item, render_batch_filename};
 pub use cancel::{cancel_move_to_trash, cancel_scan};
 pub(crate) use cancel::{BATCH_CANCEL, DUPLICATE_CANCEL, TRASH_CANCEL};
 pub use duplicates::*;
@@ -31,11 +32,13 @@ pub use finder_tags::{merge_finder_tags, read_finder_tags, write_finder_tags};
 use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, ImageDecoder};
 pub use import_pipeline::supported_extensions;
+#[allow(unused_imports)]
 pub(crate) use import_pipeline::{
-    file_modified_at, import_media_file, inspect_media_file_with_metadata,
-    is_media_file, prune_missing_items, remember_folder, upsert_media_batch,
-    LIBRARY_COUNTS_CHANGED,
+    file_modified_at, import_media_file, inspect_media_file_with_metadata, is_media_file,
+    prune_missing_items, remember_folder, upsert_media_batch, LIBRARY_COUNTS_CHANGED,
 };
+#[allow(unused_imports)]
+pub(crate) use import_pipeline::{inspect_media_file, kind_for_ext};
 pub use library::*;
 pub use media::*;
 use notify::Watcher;
