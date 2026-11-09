@@ -172,8 +172,8 @@ export const tauri = {
   editing: {
     render: (request: RenderRequest): Promise<ExportResult> => invoke("render_edited", { request }),
 
-    moveExportedFile: (sourcePath: string, destinationPath: string): Promise<void> =>
-      invoke("move_exported_file", { sourcePath, destinationPath }),
+    saveExportedFile: (sourcePath: string, suggestedName: string): Promise<string | null> =>
+      invoke("save_exported_file", { sourcePath, suggestedName }),
   },
 
   batch: {

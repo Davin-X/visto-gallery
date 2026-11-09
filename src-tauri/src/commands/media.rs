@@ -1043,7 +1043,7 @@ fn render_edited_blocking(
     } else {
         // Save a copy - caller handles path via dialog
         // We write to a temp location and return the path
-        let tmp_dir = std::env::temp_dir();
+        let tmp_dir = export_staging_dir()?;
         let output_name = format!(
             "{}_edited.{}",
             source_path
@@ -1083,48 +1083,136 @@ fn render_edited_blocking(
     })
 }
 
-/// Move an exported temp file to its final destination.
-#[tauri::command]
-pub async fn move_exported_file(
-    source_path: String,
-    destination_path: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
-    // Validate the source unless it is an app-generated temp file. The
-    // destination is user-chosen via a save dialog and is not constrained.
-    let in_temp = std::path::Path::new(&source_path)
-        .ancestors()
-        .any(|p| p == std::env::temp_dir());
-    if !in_temp {
-        let db = super::get_db(&state)?;
-        let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
-            .fetch_all(&db)
-            .await
-            .map_err(|e| e.to_string())?;
-        super::validate_path_under_registered_roots(&source_path, &registered)?;
+/// Folder that holds "save a copy" renders until the user picks a
+/// destination. Only files inside it may be handed to `save_exported_file`.
+pub(crate) fn export_staging_dir() -> Result<PathBuf, String> {
+    let dir = std::env::temp_dir().join("visto-export");
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("Could not create export staging folder: {}", e))?;
+    Ok(dir)
+}
+
+/// Resolve `source` and require it to be a regular file directly inside the
+/// export staging folder. Canonicalizing first means `..` segments and
+/// symlinks cannot point the move at a file elsewhere on disk.
+pub(crate) fn validate_export_source(source: &str, staging: &Path) -> Result<PathBuf, String> {
+    let staging = staging
+        .canonicalize()
+        .map_err(|e| format!("Export staging folder is unavailable: {}", e))?;
+    let src = Path::new(source)
+        .canonicalize()
+        .map_err(|_| "Exported file no longer exists.".to_string())?;
+    if src.parent() != Some(staging.as_path()) || !src.is_file() {
+        return Err("Source is not an app-generated export.".to_string());
     }
+    Ok(src)
+}
+
+/// Move a staged export to a destination the user picks in a native save
+/// dialog. The backend owns the destination, so the webview can neither name
+/// an arbitrary target nor move a file that the app did not render.
+///
+/// Returns the saved path, or `None` when the user cancels the dialog.
+#[tauri::command]
+pub async fn save_exported_file(
+    app: tauri::AppHandle,
+    source_path: String,
+    suggested_name: String,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let src = validate_export_source(&source_path, &export_staging_dir()?)?;
+    let ext = src
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("jpg")
+        .to_lowercase();
+    let (label, exts): (&str, &[&str]) = match ext.as_str() {
+        "png" => ("PNG image", &["png"]),
+        "webp" => ("WebP image", &["webp"]),
+        _ => ("JPEG image", &["jpg", "jpeg"]),
+    };
+    let Some(picked) = app
+        .dialog()
+        .file()
+        .set_file_name(&suggested_name)
+        .add_filter(label, exts)
+        .blocking_save_file()
+    else {
+        let _ = std::fs::remove_file(&src);
+        return Ok(None);
+    };
+    let dst = picked.into_path().map_err(|e| e.to_string())?;
 
     tokio::task::spawn_blocking(move || {
-        use std::path::PathBuf;
-        let src = PathBuf::from(&source_path);
-        let dst = PathBuf::from(&destination_path);
-
-        if let Some(parent) = dst.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| format!("Could not create destination folder: {}", e))?;
+        // Prefer an atomic rename; fall back to copy+remove across volumes.
+        if std::fs::rename(&src, &dst).is_err() {
+            std::fs::copy(&src, &dst)
+                .map_err(|e| format!("Could not copy exported file: {}", e))?;
+            let _ = std::fs::remove_file(&src);
         }
-
-        // Prefer an atomic rename; fall back to copy+remove for cross-device moves.
-        if std::fs::rename(&src, &dst).is_ok() {
-            return Ok(());
-        }
-
-        std::fs::copy(&src, &dst).map_err(|e| format!("Could not copy exported file: {}", e))?;
-        let _ = std::fs::remove_file(&src);
-        Ok(())
+        Ok(Some(dst.to_string_lossy().into_owned()))
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod export_source_tests {
+    use super::validate_export_source;
+    use std::fs;
+
+    fn staging() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("visto-export-test-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn accepts_file_inside_staging() {
+        let dir = staging();
+        let file = dir.join("a_edited.jpg");
+        fs::write(&file, b"x").unwrap();
+        assert!(validate_export_source(file.to_str().unwrap(), &dir).is_ok());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rejects_dotdot_escape_from_staging() {
+        let dir = staging();
+        let outside =
+            std::env::temp_dir().join(format!("visto-outside-{}.jpg", uuid::Uuid::new_v4()));
+        fs::write(&outside, b"secret").unwrap();
+        let sneaky = dir.join("..").join(outside.file_name().unwrap());
+        assert!(validate_export_source(sneaky.to_str().unwrap(), &dir).is_err());
+        let _ = fs::remove_file(&outside);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_pointing_outside_staging() {
+        let dir = staging();
+        let outside =
+            std::env::temp_dir().join(format!("visto-outside-{}.jpg", uuid::Uuid::new_v4()));
+        fs::write(&outside, b"secret").unwrap();
+        let link = dir.join("link.jpg");
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        assert!(validate_export_source(link.to_str().unwrap(), &dir).is_err());
+        let _ = fs::remove_file(&outside);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rejects_nested_and_directory_paths() {
+        let dir = staging();
+        let nested = dir.join("sub");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(nested.join("b.jpg"), b"x").unwrap();
+        assert!(validate_export_source(nested.join("b.jpg").to_str().unwrap(), &dir).is_err());
+        assert!(validate_export_source(nested.to_str().unwrap(), &dir).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
 
 /// Check if any color adjustments are non-zero

@@ -215,7 +215,7 @@ pub fn run() {
             supported_extensions,
             // Editing
             render_edited,
-            move_exported_file,
+            save_exported_file,
             save_edit_recipe,
             get_edit_recipe,
             list_edit_recipes,
