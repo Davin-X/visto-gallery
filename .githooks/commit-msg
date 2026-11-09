@@ -1,0 +1,28 @@
+#!/bin/sh
+# Strip AI-assistant credit trailers from commit messages so tools such as
+# Claude, Copilot and Codebuff are not credited as repository contributors.
+#
+# Installed by pointing Git at this directory:
+#   git config core.hooksPath .githooks
+# which `npm install` does automatically (see scripts/setup-hooks.sh).
+
+msg_file=$1
+[ -n "$msg_file" ] && [ -f "$msg_file" ] || exit 0
+
+tmp="$msg_file.hook.$$"
+awk '
+  /^[[:space:]]*[Cc][Oo]-[Aa][Uu][Tt][Hh][Oo][Rr][Ee][Dd]-[Bb][Yy]:/ { next }
+  /^[[:space:]]*[^[:alnum:]]*[Gg]enerated with / { next }
+  { line[++n] = $0 }
+  END {
+    while (n > 0 && line[n] ~ /^[[:space:]]*$/) n--
+    for (i = 1; i <= n; i++) print line[i]
+  }
+' "$msg_file" > "$tmp" || { rm -f "$tmp"; exit 0; }
+
+# Keep the original if stripping would leave an empty message.
+if [ -s "$tmp" ]; then
+  cat "$tmp" > "$msg_file"
+fi
+rm -f "$tmp"
+exit 0

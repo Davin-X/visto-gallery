@@ -12,6 +12,8 @@ cd visto-gallery
 npm install
 ```
 
+`npm install` also points Git at the tracked hooks in `.githooks/`, which strip AI-assistant `Co-authored-by` trailers from commit messages so they don't show up as repository contributors. Re-run it with `sh scripts/setup-hooks.sh`.
+
 ## Running the app
 
 `npm run tauri dev` does not start the frontend for you; it expects the Vite dev server on `http://localhost:5173`. Use two terminals.

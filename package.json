@@ -38,7 +38,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
-    "screenshots": "node scripts/capture-all-screenshots.mjs"
+    "screenshots": "node scripts/capture-all-screenshots.mjs",
+    "prepare": "sh scripts/setup-hooks.sh"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
