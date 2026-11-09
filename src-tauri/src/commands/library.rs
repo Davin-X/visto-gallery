@@ -468,6 +468,19 @@ pub async fn get_hidden_items(state: State<'_, AppState>) -> Result<LibraryItems
     })
 }
 
+/// Escape `\\`, `%` and `_` so a search term matches literally inside a
+/// `LIKE ... ESCAPE '\\'` pattern.
+fn escape_like(term: &str) -> String {
+    let mut out = String::with_capacity(term.len());
+    for c in term.chars() {
+        if matches!(c, '\\' | '%' | '_') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
 fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterDTO) {
     if let Some(kind) = &f.kind {
         qb.push(" AND kind = ").push_bind(kind.clone());
@@ -504,22 +517,23 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
         }
     }
     if let Some(query) = &f.query {
-        let like = format!("%{}%", query);
+        // `%` and `_` typed by the user are literal characters, not wildcards.
+        let like = format!("%{}%", escape_like(query));
         qb.push(" AND (name LIKE ")
             .push_bind(like.clone())
-            .push(" OR path LIKE ")
+            .push(" ESCAPE '\\' OR path LIKE ")
             .push_bind(like.clone())
-            .push(" OR extension LIKE ")
+            .push(" ESCAPE '\\' OR extension LIKE ")
             .push_bind(like.clone())
-            .push(" OR kind LIKE ")
+            .push(" ESCAPE '\\' OR kind LIKE ")
             .push_bind(like.clone())
-            .push(" OR COALESCE(camera, '') LIKE ")
+            .push(" ESCAPE '\\' OR COALESCE(camera, '') LIKE ")
             .push_bind(like.clone())
-            .push(" OR COALESCE(lens, '') LIKE ")
+            .push(" ESCAPE '\\' OR COALESCE(lens, '') LIKE ")
             .push_bind(like.clone())
-            .push(" OR EXISTS (SELECT 1 FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.media_id = media_items.id AND t.name LIKE ")
+            .push(" ESCAPE '\\' OR EXISTS (SELECT 1 FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.media_id = media_items.id AND t.name LIKE ")
             .push_bind(like)
-            .push(")")
+            .push(" ESCAPE '\\')")
             .push(")");
     }
     if let Some(from) = f.date_from {
@@ -2277,6 +2291,39 @@ mod filter_and_scale_tests {
         let ids: Vec<&str> = page.items.iter().map(|item| item.id.as_str()).collect();
         assert_eq!(ids, ["secret"]);
         assert_eq!(page.total_count, 1);
+    }
+
+    #[tokio::test]
+    async fn search_treats_percent_and_underscore_literally() {
+        let db = filter_db().await;
+        insert_item(&db, "IMG_0001", "photo", Some(1), 1, None).await;
+        insert_item(&db, "IMGX0002", "photo", Some(2), 2, None).await;
+        insert_item(&db, "sale-100%", "photo", Some(3), 3, None).await;
+        insert_item(&db, "sale-1000", "photo", Some(4), 4, None).await;
+
+        let search = |query: &str| {
+            let db = db.clone();
+            let query = query.to_string();
+            async move {
+                let page = get_library_items_page(
+                    &db,
+                    LibraryFilterDTO {
+                        query: Some(query),
+                        limit: Some(10),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .expect("search");
+                let mut ids: Vec<String> = page.items.into_iter().map(|i| i.id).collect();
+                ids.sort();
+                ids
+            }
+        };
+
+        assert_eq!(search("IMG_").await, ["IMG_0001"]);
+        assert_eq!(search("100%").await, ["sale-100%"]);
+        assert_eq!(search("_").await, ["IMG_0001"]);
     }
 
     #[tokio::test]
