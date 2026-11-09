@@ -1395,11 +1395,18 @@ function LibraryScreen(props: LibraryScreenProps) {
                   key={f}
                   type="button"
                   aria-pressed={props.filter === f}
-                  className={`quick-filter ${props.filter === f ? "active" : ""}`}
+                  className={`quick-filter ${props.filter === f ? "active" : ""} ${
+                    count === 0 && f !== "All" ? "is-empty" : ""
+                  }`}
+                  title={
+                    count === 0 && f !== "All"
+                      ? `No ${f === "RAW" ? "RAW files" : f.toLowerCase()} here`
+                      : undefined
+                  }
                   onClick={() => props.onChangeFilter(f as Filter)}
                 >
                   {f}
-                  <span className="filter-count">{count}</span>
+                  <span className="filter-count">{count.toLocaleString()}</span>
                 </button>
               );
             })}

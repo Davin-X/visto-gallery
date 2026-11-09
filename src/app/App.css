@@ -1047,6 +1047,17 @@ body.is-resizing .photo-inspector {
   font-variant-numeric: tabular-nums;
 }
 
+/* A type with nothing in the current view stays clickable but steps back,
+   so the chips that lead somewhere stand out. */
+.quick-filter.is-empty:not(.active) {
+  opacity: 0.5;
+}
+
+.quick-filter.is-empty:not(.active):hover,
+.quick-filter.is-empty:not(.active):focus-visible {
+  opacity: 0.85;
+}
+
 .quick-filter.active .filter-count {
   background: rgba(0, 0, 0, 0.18);
   color: var(--accent-contrast);
