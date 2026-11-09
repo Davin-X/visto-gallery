@@ -39,17 +39,22 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
-      # RUSTSEC-2023-0071 (rsa, Marvin attack) is ignored because rsa only
-      # reaches Cargo.lock through sqlx-mysql, which sqlx's macros list in the
-      # lockfile but this app never compiles (`cargo tree -i rsa` is empty).
-      # RUSTSEC-2026-0459 (libsqlite3-sys/SQLite WAL info disclosure) is
-      # ignored because exploitation requires opening a database with a crafted
-      # sibling -wal file (mismatched page size) from a less-trusted source.
-      # Catalog restore/validation opens only an isolated temp copy of the chosen
-      # .db file (no sibling -wal/-shm), so untrusted backups cannot supply a WAL.
-      # sqlx-sqlite (0.8/0.9) does not yet accept libsqlite3-sys >=0.39.0 (the
-      # patched release); remove this ignore once sqlx ships a compatible update.
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+      # Advisory ignores (aligned with src-tauri/deny.toml [advisories].ignore).
+      # cargo-audit scans Cargo.lock and also ignores RUSTSEC-2023-0071 (rsa via
+      # sqlx-mysql appears in the lockfile but not the compiled graph cargo-deny
+      # analyzes, so deny.toml omits it to avoid advisory-not-detected).
+      # RUSTSEC-2026-0459 (libsqlite3-sys WAL): restore/validation opens only an
+      # isolated temp copy of the chosen .db (no sibling -wal/-shm). sqlx-sqlite
+      # (0.8/0.9) does not yet accept libsqlite3-sys >= 0.39.0; remove once sqlx
+      # ships a compatible update.
+      # RUSTSEC-2026-0372 (zvariant_derive unmaintained, transitive via
+      # tauri-plugin-single-instance → zbus 5): no safe upgrade in our tree until
+      # upstream migrates to zbus 6.
       - name: cargo audit
-        run: cargo audit --file src-tauri/Cargo.lock --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0459
+        run: cargo audit --file src-tauri/Cargo.lock --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0459 --ignore RUSTSEC-2026-0372
+      - name: cargo deny
+        run: cargo deny --manifest-path src-tauri/Cargo.toml check
       - name: npm audit (production dependencies)
         run: npm audit --omit=dev --audit-level=high
