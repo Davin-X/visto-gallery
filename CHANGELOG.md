@@ -19,6 +19,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Cancelling a scan stays cancelled**: starting another scan used to silently resume a cancelled one. Two scans of the same folder now run one after the other.
 - **Launch survives a damaged catalog**: a locked or corrupt catalog now shows an error instead of crashing, and one-time catalog updates no longer delay launch.
 - **Delete library is all-or-nothing**: it runs as one transaction and also clears Smart Albums, edit records, folder watchers and the thumbnail cache.
+- **Camera names, capture dates and GPS from EXIF**: camera and lens names were stored in quotes, no photo ever got a capture date (so "Date captured" sorting and the Timeline used file modification time), and southern/western GPS coordinates had the wrong sign. All three are read correctly now, and existing photos are corrected in the background on the next launch.
+- **Dates are unambiguous**: dates show a month name ("11 Jul 2026") everywhere, and capture times show exactly what the camera recorded instead of shifting with your time zone.
+- **Show extensions works**: names showed the extension even with the setting off, and twice ("a.jpg.jpg") with it on.
+- Long file names in the grid are shortened in the middle, so names that share a prefix stay distinguishable.
+- Type chips with nothing to show are dimmed; albums no longer show both Play and Slideshow; thumbnail-size buttons are hidden in Details, where they did nothing.
+- The viewer's shortcut legend shows once per session instead of on every mouse move (⌘/ lists every shortcut).
+- The sidebar drops the always-zero "Uncategorized" row and the static "Storage Healthy" badge.
 - "Smart Albums" heading is readable in dark mode.
 - The compare dialog says "1 field differs" instead of "1 fields differ".
 
