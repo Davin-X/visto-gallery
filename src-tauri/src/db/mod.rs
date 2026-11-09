@@ -59,6 +59,67 @@ impl Database {
         // Refine `is_animated` for rows seeded by migration 008 (runs once)
         self.backfill_animation_flags().await?;
 
+        // Re-read EXIF text fields stored with quotes or missing dates (runs once)
+        self.backfill_exif_text().await?;
+
+        Ok(())
+    }
+
+    /// Re-read EXIF for photos imported while text fields were read through
+    /// `display_value()`: camera and lens names were stored in quotes, no
+    /// capture date ever parsed, and southern/western GPS refs never matched.
+    /// Camera, lens and coordinates are replaced outright with what the file
+    /// says now (old values may be quoted, sign-flipped or a bogus 0,0); the
+    /// capture date only when the file yields one.
+    async fn backfill_exif_text(&self) -> Result<()> {
+        const FLAG: &str = "backfill_exif_text_v1";
+        let done: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM _migration_flags WHERE name = ? AND completed_at > 0",
+        )
+        .bind(FLAG)
+        .fetch_optional(&self.pool)
+        .await?;
+        if done.is_some() {
+            return Ok(());
+        }
+
+        let rows = sqlx::query(
+            "SELECT id, path FROM media_items WHERE kind = 'photo' \
+             AND (captured_at IS NULL OR camera LIKE '\"%' OR lens LIKE '\"%' OR latitude IS NOT NULL)",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        for row in rows {
+            let id: String = row.get("id");
+            let path: String = row.get("path");
+            let exif = tokio::task::spawn_blocking(move || {
+                crate::commands::extract_exif(std::path::Path::new(&path))
+            })
+            .await?;
+            if exif.metadata_error.is_some() {
+                continue;
+            }
+            sqlx::query(
+                "UPDATE media_items SET camera = ?, lens = ?, \
+                 captured_at = COALESCE(?, captured_at), \
+                 latitude = ?, longitude = ? \
+                 WHERE id = ?",
+            )
+            .bind(&exif.camera)
+            .bind(&exif.lens)
+            .bind(exif.captured_at)
+            .bind(exif.latitude)
+            .bind(exif.longitude)
+            .bind(&id)
+            .execute(&self.pool)
+            .await?;
+        }
+
+        sqlx::query("INSERT OR REPLACE INTO _migration_flags (name, completed_at) VALUES (?, ?)")
+            .bind(FLAG)
+            .bind(Utc::now().timestamp_millis())
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
