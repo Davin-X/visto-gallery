@@ -1,3 +1,4 @@
+use crate::media_kind::MediaKind;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Row};
 use time::OffsetDateTime;
@@ -13,7 +14,7 @@ pub struct MediaItem {
     pub path: String,
     pub name: String,
     pub extension: String,
-    pub kind: String,
+    pub kind: MediaKind,
     pub size: i64,
     pub modified_at: i64,
     pub captured_at: Option<i64>,
@@ -103,7 +104,10 @@ impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for MediaItem {
             path: row.try_get("path")?,
             name: row.try_get("name")?,
             extension: row.try_get("extension")?,
-            kind: row.try_get("kind")?,
+            kind: {
+                let s: String = row.try_get("kind")?;
+                MediaKind::parse_str(&s).unwrap_or(MediaKind::Photo)
+            },
             size: row.try_get("size")?,
             modified_at: row.try_get("modified_at")?,
             captured_at: row.try_get("captured_at")?,
@@ -150,7 +154,7 @@ impl MediaItem {
         path: String,
         name: String,
         extension: String,
-        kind: String,
+        kind: MediaKind,
         size: i64,
         modified_at: i64,
     ) -> Self {

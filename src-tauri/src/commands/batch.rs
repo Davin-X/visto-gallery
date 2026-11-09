@@ -659,7 +659,7 @@ mod batch_export_tests {
             id: "item-1".to_string(),
             source_path: source.to_string_lossy().to_string(),
             index: 0,
-            kind: Some("photo".to_string()),
+            kind: Some(crate::media_kind::MediaKind::Photo),
             date: Some(1_710_000_000_000),
         }
     }
@@ -686,7 +686,7 @@ mod batch_export_tests {
             id: "1".to_string(),
             source_path: "/tmp/My Photo.JPG".to_string(),
             index: 4,
-            kind: Some("photo".to_string()),
+            kind: Some(crate::media_kind::MediaKind::Photo),
             date: Some(1_710_000_000_000),
         };
 
@@ -754,7 +754,7 @@ mod batch_export_tests {
         std::fs::write(&source, b"not a real video, but a real file").expect("write source");
 
         let mut item = test_item(&source);
-        item.kind = Some("video".to_string());
+        item.kind = Some(crate::media_kind::MediaKind::Video);
         let mut request = test_request(vec![item.clone()], &folder, "source");
         request.max_dimension = None;
         request.strip_metadata = false;

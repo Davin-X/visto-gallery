@@ -216,7 +216,9 @@ impl Database {
             let kind: String = row.get("kind");
             let dims = tokio::task::spawn_blocking(move || {
                 let path = std::path::Path::new(&path);
-                let exif = if kind == "photo" {
+                let kind_enum = crate::media_kind::MediaKind::parse_str(&kind)
+                    .unwrap_or(crate::media_kind::MediaKind::Photo);
+                let exif = if kind_enum == crate::media_kind::MediaKind::Photo {
                     let exif = crate::commands::extract_exif(path);
                     exif.width
                         .zip(exif.height)
@@ -224,7 +226,7 @@ impl Database {
                 } else {
                     None
                 };
-                crate::media_dimensions::probe_dimensions(path, &extension, &kind, exif)
+                crate::media_dimensions::probe_dimensions(path, &extension, kind_enum, exif)
             })
             .await?;
             if let Some((w, h)) = dims {

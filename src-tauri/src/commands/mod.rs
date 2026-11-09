@@ -186,7 +186,7 @@ pub struct BatchExportItem {
     pub index: u32,
     /// `photo`, `video`, or `raw`. Optional so older callers still work.
     #[serde(default)]
-    pub kind: Option<String>,
+    pub kind: Option<crate::media_kind::MediaKind>,
     /// Capture/modification time in milliseconds, used by the `{date}` token.
     #[serde(default)]
     pub date: Option<i64>,
@@ -487,55 +487,21 @@ async fn remember_folder(db: &SqlitePool, root: &str, app: &tauri::AppHandle) {
     let _ = app.asset_protocol_scope().allow_directory(&path, true);
 }
 
-/// The one list of extensions the catalog accepts, by kind. The scanner, the
-/// file picker (`supported_extensions`) and kind detection all read these, so
-/// they cannot drift apart. Entries are lowercase.
-const IMAGE_EXTS: &[&str] = &[
-    "avif", "bmp", "gif", "heic", "heif", "jfif", "jpe", "jpeg", "jpg", "jxl", "png", "tif",
-    "tiff", "webp",
-];
-const RAW_EXTS: &[&str] = &[
-    "3fr", "ari", "arw", "bay", "cap", "cr2", "cr3", "dcs", "dcr", "dng", "drf", "eip", "erf",
-    "fff", "gpr", "iiq", "k25", "kdc", "mdc", "mef", "mos", "mrw", "nef", "nrw", "obm", "orf",
-    "pef", "ptx", "pxn", "r3d", "raf", "raw", "rw2", "rwl", "sr2", "srf", "srw", "x3f",
-];
-const VIDEO_EXTS: &[&str] = &[
-    "3gp", "3g2", "asf", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "mts",
-    "ogv", "ts", "vob", "webm", "wmv",
-];
-
-/// Catalog kind for a supported lowercase extension, or `None` when the
-/// extension is not media.
-fn media_kind(ext: &str) -> Option<&'static str> {
-    if VIDEO_EXTS.contains(&ext) {
-        Some("video")
-    } else if RAW_EXTS.contains(&ext) {
-        Some("raw")
-    } else if IMAGE_EXTS.contains(&ext) {
-        Some("photo")
-    } else {
-        None
-    }
-}
-
+/// Media kinds and extensions are defined once in [`crate::media_kind`].
+/// The scanner, file picker, kind detection and SQL CHECK all derive from it.
 fn is_media_file(ext: &str) -> bool {
-    media_kind(ext).is_some()
+    crate::media_kind::is_media_file(ext)
 }
 
 /// Returns the canonical list of supported media extensions, so the frontend
 /// file picker and the backend scanner stay in sync.
 #[tauri::command]
 pub fn supported_extensions() -> Vec<String> {
-    IMAGE_EXTS
-        .iter()
-        .chain(RAW_EXTS)
-        .chain(VIDEO_EXTS)
-        .map(|ext| ext.to_string())
-        .collect()
+    crate::media_kind::supported_extensions()
 }
 
-fn kind_for_ext(ext: &str) -> &'static str {
-    media_kind(ext).unwrap_or("photo")
+fn kind_for_ext(ext: &str) -> crate::media_kind::MediaKind {
+    crate::media_kind::kind_for_ext(ext)
 }
 
 /// Read file facts needed by the catalog without decoding the image payload.
@@ -569,7 +535,7 @@ fn inspect_media_file_with_metadata(
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
-    let kind = kind_for_ext(&ext).to_string();
+    let kind = kind_for_ext(&ext);
 
     // Reads container headers only (GIF blocks, WebP VP8X flags, PNG acTL,
     // ISOBMFF ftyp brands); no pixel decode. Formats that cannot animate are
@@ -578,8 +544,8 @@ fn inspect_media_file_with_metadata(
     let mut item = MediaItem::new(
         path.to_string_lossy().to_string(),
         name,
-        ext,
-        kind.clone(),
+        ext.clone(),
+        kind,
         size,
         modified_at,
     );
@@ -592,7 +558,7 @@ fn inspect_media_file_with_metadata(
 
     // Populate metadata from EXIF for photos.
     let mut exif_dims = None;
-    if kind == "photo" {
+    if kind == crate::media_kind::MediaKind::Photo {
         let exif = crate::commands::media::extract_exif(path);
         item.captured_at = exif.captured_at;
         item.camera = exif.camera;
@@ -609,7 +575,7 @@ fn inspect_media_file_with_metadata(
     // Header-only dimension probe for every kind (image headers, HEIF/AVIF
     // and MP4/MOV boxes, EXIF, then ImageIO). The upsert stores the returned
     // pair, so it must carry every fallback, not just the first probe.
-    let dims = crate::media_dimensions::probe_dimensions(path, &item.extension, &kind, exif_dims);
+    let dims = crate::media_dimensions::probe_dimensions(path, &item.extension, kind, exif_dims);
     let (width, height) = match dims {
         Some((w, h)) => (Some(w as i32), Some(h as i32)),
         None => (None, None),
@@ -654,7 +620,7 @@ async fn upsert_media_batch(
             .push_bind(&item.path)
             .push_bind(&item.name)
             .push_bind(&item.extension)
-            .push_bind(&item.kind)
+            .push_bind(item.kind.as_str())
             .push_bind(item.size)
             .push_bind(item.modified_at)
             .push_bind(item.captured_at)
@@ -1182,13 +1148,13 @@ fn export_batch_item(
 
     let converting = request.format != "source";
     let resizing = request.max_dimension.map(|dim| dim > 0).unwrap_or(false);
-    let kind = item.kind.as_deref().unwrap_or("photo");
+    let kind = item.kind.unwrap_or(crate::media_kind::MediaKind::Photo);
 
     // Videos and RAW files cannot be decoded by the built-in image encoder.
     // They can still be renamed and copied without modification.
-    if kind == "video" || kind == "raw" {
+    if kind == crate::media_kind::MediaKind::Video || kind == crate::media_kind::MediaKind::Raw {
         if converting || resizing || request.strip_metadata {
-            let message = if kind == "video" {
+            let message = if kind == crate::media_kind::MediaKind::Video {
                 "Video conversion is not supported yet. Choose “Keep source format” and turn off resizing and metadata stripping to copy videos."
             } else {
                 "RAW conversion needs native macOS image support. Choose “Keep source format” and turn off resizing and metadata stripping to copy RAW files."
