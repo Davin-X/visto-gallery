@@ -1,18 +1,28 @@
 #!/bin/sh
-# Strip AI-assistant credit trailers from commit messages so tools such as
-# Claude, Copilot and Codebuff are not credited as repository contributors.
+# Strip AI-assistant credit trailers from commit messages so AI tools are not
+# credited as repository contributors. Human Co-authored-by trailers are kept.
 #
-# Installed by pointing Git at this directory:
-#   git config core.hooksPath .githooks
-# which `npm install` does automatically (see scripts/setup-hooks.sh).
+# Installed by scripts/setup-hooks.sh (run via `npm install`).
 
 msg_file=$1
 [ -n "$msg_file" ] && [ -f "$msg_file" ] || exit 0
 
 tmp="$msg_file.hook.$$"
 awk '
-  /^[[:space:]]*[Cc][Oo]-[Aa][Uu][Tt][Hh][Oo][Rr][Ee][Dd]-[Bb][Yy]:/ { next }
-  /^[[:space:]]*[^[:alnum:]]*[Gg]enerated with / { next }
+  function ai_trailer(s, t) {
+    t = tolower(s)
+    return (t ~ /noreply@anthropic\.com/ ||
+            t ~ /noreply@codebuff\.com/ ||
+            t ~ /223556219\+copilot@users\.noreply\.github\.com/)
+  }
+  function ai_generated(s, t) {
+    t = tolower(s)
+    return (t ~ /generated with/ && (t ~ /codebuff/ || t ~ /claude/))
+  }
+  /^[[:space:]]*[Cc][Oo]-[Aa][Uu][Tt][Hh][Oo][Rr][Ee][Dd]-[Bb][Yy]:/ {
+    if (ai_trailer($0)) next
+  }
+  { if (ai_generated($0)) next }
   { line[++n] = $0 }
   END {
     while (n > 0 && line[n] ~ /^[[:space:]]*$/) n--
