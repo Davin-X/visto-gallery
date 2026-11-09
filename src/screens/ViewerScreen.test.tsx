@@ -138,10 +138,11 @@ describe("photo viewer", () => {
     expect(container.querySelector(".viewer-stage video")).toBeNull();
   });
 
-  it("does not render a video in the photo viewing surface", () => {
+  it("does not render a video in the photo viewing surface, and says so", () => {
     renderPhotoViewer("video");
 
-    expect(screen.getByText("No viewable media yet")).toBeInTheDocument();
+    expect(screen.getByText(/Videos don’t open in the Viewer/)).toBeInTheDocument();
+    expect(screen.getByText(/play button on its tile/)).toBeInTheDocument();
     expect(document.querySelector(".viewer-stage video")).toBeNull();
   });
 });

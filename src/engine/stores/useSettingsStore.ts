@@ -101,6 +101,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       // for (180px - 360px).
       value = Math.min(360, Math.max(180, Number(value) || 220)) as AppSettings["sidebarWidth"];
     }
+    if (key === "inspectorWidth") {
+      // Hard clamp so the inspector stays usable (240px - 480px).
+      value = Math.min(480, Math.max(240, Number(value) || 300)) as AppSettings["inspectorWidth"];
+    }
     const patch: Partial<AppSettings> = {
       [key]: value,
     } as Partial<AppSettings>;
@@ -115,6 +119,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       // Hard clamp so the layout stays within the bounds the CSS was
       // authored for (180px - 360px).
       next.sidebarWidth = Math.min(360, Math.max(180, Number(partial.sidebarWidth) || 220));
+    }
+    if ("inspectorWidth" in partial) {
+      // Hard clamp so the inspector stays usable (240px - 480px).
+      next.inspectorWidth = Math.min(480, Math.max(240, Number(partial.inspectorWidth) || 300));
     }
     // Optimistic update with the fully-clamped merged state.
     set(next);
@@ -138,6 +146,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 export const useAppearance = () => useSettingsStore((s) => s.appearance);
 export const useAccentColor = () => useSettingsStore((s) => s.accentColor);
 export const useSidebarWidth = () => useSettingsStore((s) => s.sidebarWidth);
+export const useInspectorWidth = () => useSettingsStore((s) => s.inspectorWidth);
 export const useDefaultLayout = () => useSettingsStore((s) => s.defaultLayout);
 export const useThumbnailSize = () => useSettingsStore((s) => s.thumbnailSize);
 
@@ -198,7 +207,9 @@ export function applyTheme(settings: Pick<AppSettings, "appearance" | "accentCol
 
   // Sync native window background
   try {
-    void getCurrentWindow().setBackgroundColor(tokens.surface);
+    void getCurrentWindow()
+      .setBackgroundColor(tokens.surface)
+      .catch(() => {});
   } catch {
     // Tauri not available (web preview) or API call failed — ignore.
   }
@@ -207,18 +218,26 @@ export function applyTheme(settings: Pick<AppSettings, "appearance" | "accentCol
 // The accent palette. Each accent has a light-mode and a dark-mode value so
 // the swatch shown in Settings matches the color that will actually be applied
 // to the running theme.
+//
+// Label constraint: an accent fill carries one label color, chosen by
+// `contrastOn`. Every light accent is dark enough to clear 4.5:1 against white,
+// so light mode always labels accents in white; every dark accent is a pastel
+// that clears 4.5:1 against near-black, so dark mode labels them in near-black.
+// Keep those invariants when editing hexes (accentPalette.test.ts enforces
+// them) — otherwise a single hue flips its label and looks broken next to the
+// others, which is what a mid-tone orange (#dd6b16) used to do.
 export const ACCENT_PALETTE: {
   id: string;
   label: string;
   light: string;
   dark: string;
 }[] = [
-  { id: "blue", label: "Blue", light: "#3474d4", dark: "#3b82f6" },
-  { id: "purple", label: "Purple", light: "#8254ea", dark: "#b79bff" },
-  { id: "green", label: "Green", light: "#27845f", dark: "#6bc69a" },
-  { id: "orange", label: "Orange", light: "#dd6b16", dark: "#f0a45c" },
-  { id: "pink", label: "Pink", light: "#db2777", dark: "#f489b8" },
-  { id: "red", label: "Red", light: "#dc2626", dark: "#f28585" },
+  { id: "blue", label: "Blue", light: "#2f6ac4", dark: "#3b82f6" },
+  { id: "purple", label: "Purple", light: "#7440dd", dark: "#b79bff" },
+  { id: "green", label: "Green", light: "#22795a", dark: "#6bc69a" },
+  { id: "orange", label: "Orange", light: "#b85400", dark: "#f0a45c" },
+  { id: "pink", label: "Pink", light: "#c9246c", dark: "#f489b8" },
+  { id: "red", label: "Red", light: "#c81e1e", dark: "#f28585" },
 ];
 
 // Resolve a single accent into its light / dark surface palette value.

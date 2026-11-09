@@ -45,6 +45,7 @@ export function SettingsScreen(props: {
   const [rebuilding, setRebuilding] = useState(false);
   const [backupBusy, setBackupBusy] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [vacuuming, setVacuuming] = useState(false);
   const [pendingRestore, setPendingRestore] = useState<{
     path: string;
     info: BackupInfo;
@@ -212,6 +213,18 @@ export function SettingsScreen(props: {
       setRestoring(false);
     }
   }, [loadLibrary, pendingRestore, showNotice]);
+
+  const handleVacuumCatalog = useCallback(async () => {
+    try {
+      setVacuuming(true);
+      await tauri.edit.vacuumCatalog();
+      showNotice("Catalog vacuumed — disk space reclaimed.");
+    } catch (error) {
+      showNotice(`Vacuum failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setVacuuming(false);
+    }
+  }, [showNotice]);
 
   // Standard ARIA tabs keyboard model: arrows cycle, Home/End jump.
   const handleTabKeyDown = (event: React.KeyboardEvent, index: number) => {
@@ -388,6 +401,8 @@ export function SettingsScreen(props: {
             onChooseRestore={handleChooseRestore}
             backupBusy={backupBusy}
             restoring={restoring}
+            vacuuming={vacuuming}
+            onVacuumCatalog={handleVacuumCatalog}
             suggestedOldRoot={suggestedOldRoot}
             onRootMappingApplied={loadLibrary}
             showNotice={showNotice}

@@ -20,6 +20,8 @@ export interface MediaItem {
   sha256?: string; // Content hash
   favorite: boolean;
   hidden: boolean;
+  /** Catalog treats this item as animated content (orthogonal to `kind`). */
+  isAnimated?: boolean;
   rating?: number; // 0-5 star rating, undefined = unrated
   colorLabel?: string; // 'red' | 'yellow' | 'green' | 'blue' | 'purple', undefined = unlabeled
   tags: string[];
@@ -119,6 +121,7 @@ export interface ExifData {
 
 export interface RenderRequest {
   sourcePath: string;
+  mediaId?: string;
   edits: EditValues;
   outputFormat: "jpeg" | "png" | "webp" | "heic" | "avif";
   quality: number;
@@ -126,7 +129,7 @@ export interface RenderRequest {
   crop?: CropRect;
 }
 
-export type Filter = "All" | "Photos" | "Videos" | "RAW" | "Favorites";
+export type Filter = "All" | "Photos" | "Videos" | "RAW" | "Animations" | "Favorites";
 export type LayoutMode = "grid" | "filmstrip" | "overview" | "details" | "timeline";
 export type Screen =
   | "Library"
