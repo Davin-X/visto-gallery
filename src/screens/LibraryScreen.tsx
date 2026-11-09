@@ -2289,7 +2289,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                           <div className="info-row">
                             <span className="info-label">Dimensions</span>
                             <span className="info-value">
-                              {sel.width && sel.height ? `${sel.width} × ${sel.height}` : "Unknown"}
+                              {sel.width && sel.height ? `${sel.width} × ${sel.height}` : "—"}
                             </span>
                           </div>
                           <div className="info-row">
