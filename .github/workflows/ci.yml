@@ -45,10 +45,10 @@ jobs:
       # RUSTSEC-2026-0459 (libsqlite3-sys/SQLite WAL info disclosure) is
       # ignored because exploitation requires opening a database with a crafted
       # sibling -wal file (mismatched page size) from a less-trusted source.
-      # Visto opens only its own managed SQLite database in app-controlled
-      # storage, not untrusted DB+WAL pairs. sqlx-sqlite (0.8/0.9) does not yet
-      # accept libsqlite3-sys >=0.39.0 (the patched release); remove this
-      # ignore once sqlx ships a compatible update.
+      # Catalog restore/validation opens only an isolated temp copy of the chosen
+      # .db file (no sibling -wal/-shm), so untrusted backups cannot supply a WAL.
+      # sqlx-sqlite (0.8/0.9) does not yet accept libsqlite3-sys >=0.39.0 (the
+      # patched release); remove this ignore once sqlx ships a compatible update.
       - name: cargo audit
         run: cargo audit --file src-tauri/Cargo.lock --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0459
       - name: npm audit (production dependencies)

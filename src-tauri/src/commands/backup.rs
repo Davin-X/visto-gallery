@@ -52,6 +52,18 @@ async fn open_read_only(path: &str) -> Result<SqliteConnection, String> {
         .map_err(|e| format!("Could not open backup '{}': {e}", path))
 }
 
+/// Copy a user-selected catalog database to a temp file and return that path.
+/// Opening/attaching only the isolated copy prevents SQLite from reading a
+/// crafted sibling `-wal` file (RUSTSEC-2026-0459).
+fn isolated_db_copy(path: &str) -> Result<PathBuf, String> {
+    if !Path::new(path).is_file() {
+        return Err(format!("Backup file not found: {path}"));
+    }
+    let tmp = std::env::temp_dir().join(format!("visto-restore-{}.db", uuid::Uuid::new_v4()));
+    std::fs::copy(path, &tmp).map_err(|e| format!("Could not read backup '{}': {e}", path))?;
+    Ok(tmp)
+}
+
 async fn table_exists(
     conn: &mut SqliteConnection,
     schema: &str,
@@ -208,7 +220,10 @@ pub async fn create_catalog_backup(
 /// Validate a path the user picked before showing a destructive confirmation.
 #[tauri::command]
 pub async fn validate_catalog_backup(path: String) -> Result<BackupInfo, String> {
-    inspect_backup(&path).await
+    let isolated = isolated_db_copy(&path)?;
+    let result = inspect_backup(isolated.to_string_lossy().as_ref()).await;
+    let _ = std::fs::remove_file(&isolated);
+    result
 }
 
 async fn copy_table(
@@ -413,7 +428,17 @@ pub async fn restore_catalog_backup(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<RestoreResult, String> {
-    let backup = inspect_backup(&path).await?;
+    // Open/attach only an isolated copy of the user-picked backup so a crafted
+    // sibling -wal file cannot be read (RUSTSEC-2026-0459).
+    let isolated = isolated_db_copy(&path)?;
+    let isolated_path = isolated.to_string_lossy().into_owned();
+    let backup = match inspect_backup(&isolated_path).await {
+        Ok(info) => info,
+        Err(error) => {
+            let _ = std::fs::remove_file(&isolated);
+            return Err(error);
+        }
+    };
     let db = super::get_db(&state)?;
 
     let app_dir = app
@@ -427,10 +452,13 @@ pub async fn restore_catalog_backup(
     let pre_restore_path_string = pre_restore_path.to_string_lossy().into_owned();
     if let Err(error) = annotate_snapshot(&pre_restore_path_string).await {
         let _ = std::fs::remove_file(&pre_restore_path);
+        let _ = std::fs::remove_file(&isolated);
         return Err(error);
     }
 
-    restore_backup_into_catalog(&db, &path).await?;
+    let restore = restore_backup_into_catalog(&db, &isolated_path).await;
+    let _ = std::fs::remove_file(&isolated);
+    restore?;
     // The snapshot just taken is the newest, so it always survives pruning.
     prune_pre_restore_snapshots(&backup_dir, PRE_RESTORE_SNAPSHOTS_KEPT);
     let missing = report_missing_paths(&db).await?;
