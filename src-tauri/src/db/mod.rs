@@ -9,6 +9,10 @@ pub struct Database {
 }
 
 impl Database {
+    pub async fn open(app_handle: &tauri::AppHandle) -> Result<Self> {
+        Self::new(app_handle).await
+    }
+
     pub async fn new(app_handle: &tauri::AppHandle) -> Result<Self> {
         let db_path = get_db_path(app_handle)?;
 

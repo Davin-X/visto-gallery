@@ -1,4 +1,4 @@
-use crate::{models::*, AppState};
+use crate::models::*;
 use serde::Serialize;
 use sqlx::sqlite::Sqlite;
 use sqlx::{QueryBuilder, Row};
@@ -25,8 +25,10 @@ pub struct AlbumOverview {
 const ALBUM_COVER_LIMIT: i64 = 4;
 
 #[tauri::command]
-pub async fn get_album_overviews(state: State<'_, AppState>) -> Result<Vec<AlbumOverview>, String> {
-    let db = super::get_db(&state)?;
+pub async fn get_album_overviews(
+    catalog: State<'_, crate::Catalog>,
+) -> Result<Vec<AlbumOverview>, String> {
+    let db = super::get_db(&catalog)?;
     load_album_overviews(&db).await
 }
 
@@ -121,8 +123,8 @@ pub(crate) async fn load_album_overviews(
 }
 
 #[tauri::command]
-pub async fn get_albums(state: State<'_, AppState>) -> Result<Vec<Album>, String> {
-    let db = super::get_db(&state)?;
+pub async fn get_albums(catalog: State<'_, crate::Catalog>) -> Result<Vec<Album>, String> {
+    let db = super::get_db(&catalog)?;
     let mut albums = sqlx::query_as::<_, Album>(&format!(
         "{} ORDER BY a.created_at ASC",
         super::ALBUM_SELECT
@@ -163,9 +165,9 @@ pub async fn get_albums(state: State<'_, AppState>) -> Result<Vec<Album>, String
 pub async fn create_album(
     name: String,
     color_index: Option<i32>,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<Album, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let name = name.trim().to_string();
     if name.is_empty() {
         return Err("Album name cannot be empty".to_string());
@@ -186,8 +188,11 @@ pub async fn create_album(
 }
 
 #[tauri::command]
-pub async fn delete_album(album_id: String, state: State<'_, AppState>) -> Result<(), String> {
-    let db = super::get_db(&state)?;
+pub async fn delete_album(
+    album_id: String,
+    catalog: State<'_, crate::Catalog>,
+) -> Result<(), String> {
+    let db = super::get_db(&catalog)?;
     sqlx::query("DELETE FROM albums WHERE id = ?")
         .bind(&album_id)
         .execute(&db)
@@ -200,9 +205,9 @@ pub async fn delete_album(album_id: String, state: State<'_, AppState>) -> Resul
 pub async fn rename_album(
     album_id: String,
     name: String,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<(), String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     sqlx::query("UPDATE albums SET name = ?, updated_at = ? WHERE id = ?")
         .bind(&name)
         .bind(super::now_ms())
@@ -237,9 +242,9 @@ async fn fetch_album_items(
 #[tauri::command]
 pub async fn get_album_items(
     album_id: String,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<Vec<MediaItem>, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     fetch_album_items(&db, &album_id).await
 }
 
@@ -247,9 +252,9 @@ pub async fn get_album_items(
 pub async fn add_to_album(
     album_id: String,
     item_ids: Vec<String>,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<(), String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     for item_id in &item_ids {
         sqlx::query(
             "INSERT OR IGNORE INTO album_items (album_id, media_id, added_at) VALUES (?, ?, ?)",
@@ -268,9 +273,9 @@ pub async fn add_to_album(
 pub async fn remove_from_album(
     album_id: String,
     item_ids: Vec<String>,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<(), String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     for item_id in &item_ids {
         sqlx::query("DELETE FROM album_items WHERE album_id = ? AND media_id = ?")
             .bind(&album_id)

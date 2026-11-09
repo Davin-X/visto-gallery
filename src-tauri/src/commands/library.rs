@@ -14,11 +14,12 @@ use walkdir::WalkDir;
 pub async fn scan_library(
     root_path: String,
     force: bool,
+    catalog: State<'_, crate::Catalog>,
     state: State<'_, AppState>,
     window: Window,
 ) -> Result<ScanResult, String> {
     {
-        let db = super::get_db(&state)?;
+        let db = super::get_db(&catalog)?;
         super::authorize_import_path(&root_path, &db, &state.grants).await?;
     }
     // Register before waiting on the root lock so Cancel also reaches a scan
@@ -46,7 +47,7 @@ pub async fn scan_library(
     let mut seen_paths: HashSet<String> = HashSet::new();
 
     // Get database connection
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let now = super::now_ms();
 
     // A normal startup scan only needs to inspect new or changed files. The
@@ -301,11 +302,12 @@ pub(crate) fn inspect_scan_chunk(
 #[tauri::command]
 pub async fn import_files(
     paths: Vec<String>,
+    catalog: State<'_, crate::Catalog>,
     state: State<'_, AppState>,
     window: Window,
     app: tauri::AppHandle,
 ) -> Result<ScanResult, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     for raw in &paths {
         super::authorize_import_path(raw, &db, &state.grants).await?;
     }
@@ -442,9 +444,9 @@ fn cursor_value(item: &MediaItem, sort_by: &str) -> Value {
 #[tauri::command]
 pub async fn get_library_items(
     filter: Option<super::LibraryFilterDTO>,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<LibraryItemsPage, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let f = filter.unwrap_or_default();
     get_library_items_page(&db, f).await
 }
@@ -453,8 +455,10 @@ pub async fn get_library_items(
 /// Unlike `get_library_items`, this does not paginate — the Hidden screen is
 /// a secondary view over a typically small set.
 #[tauri::command]
-pub async fn get_hidden_items(state: State<'_, AppState>) -> Result<LibraryItemsPage, String> {
-    let db = super::get_db(&state)?;
+pub async fn get_hidden_items(
+    catalog: State<'_, crate::Catalog>,
+) -> Result<LibraryItemsPage, String> {
+    let db = super::get_db(&catalog)?;
     let mut items: Vec<MediaItem> = sqlx::query_as(
         "SELECT * FROM media_items WHERE hidden = 1 ORDER BY COALESCE(captured_at, modified_at) DESC",
     )
@@ -817,13 +821,13 @@ static LAST_THUMBNAIL_PRUNE_EPOCH: AtomicU64 = AtomicU64::new(0);
 pub async fn get_item_thumbnail(
     request: ThumbnailRequest,
     app: AppHandle,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<ThumbnailResponse, String> {
     if !matches!(request.size, 64 | 128 | 256 | 512 | 1024) {
         return Err("Unsupported thumbnail size".to_string());
     }
 
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let item = sqlx::query_as::<_, (String, String, i64, i64)>(
         "SELECT path, kind, modified_at, size FROM media_items WHERE id = ?",
     )
@@ -1436,8 +1440,8 @@ pub async fn unwatch_folder(path: String, state: State<'_, AppState>) -> Result<
 /// Only these are safe to watch: inferred buckets are display groupings and
 /// may point at directories the user never added.
 #[tauri::command]
-pub async fn get_library_roots(state: State<'_, AppState>) -> Result<Vec<String>, String> {
-    let db = super::get_db(&state)?;
+pub async fn get_library_roots(catalog: State<'_, crate::Catalog>) -> Result<Vec<String>, String> {
+    let db = super::get_db(&catalog)?;
     sqlx::query_scalar("SELECT path FROM library_folders ORDER BY path ASC")
         .fetch_all(&db)
         .await
@@ -1478,8 +1482,10 @@ pub(crate) fn inferred_folder_root(path: &str) -> Option<String> {
 /// buckets, and each item is counted exactly once under the most specific
 /// folder that contains it.
 #[tauri::command]
-pub async fn get_library_folders(state: State<'_, AppState>) -> Result<Vec<LibraryFolder>, String> {
-    let db = super::get_db(&state)?;
+pub async fn get_library_folders(
+    catalog: State<'_, crate::Catalog>,
+) -> Result<Vec<LibraryFolder>, String> {
+    let db = super::get_db(&catalog)?;
     get_library_folders_inner(&db).await
 }
 
@@ -1586,8 +1592,8 @@ pub struct LibraryStats {
 }
 
 #[tauri::command]
-pub async fn get_library_stats(state: State<'_, AppState>) -> Result<LibraryStats, String> {
-    let db = super::get_db(&state)?;
+pub async fn get_library_stats(catalog: State<'_, crate::Catalog>) -> Result<LibraryStats, String> {
+    let db = super::get_db(&catalog)?;
     let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
         "SELECT
             SUM(CASE WHEN kind = 'photo' AND hidden = 0 THEN 1 ELSE 0 END),
@@ -1654,9 +1660,9 @@ pub async fn get_library_stats(state: State<'_, AppState>) -> Result<LibraryStat
 pub async fn remove_library_folder(
     path: String,
     delete_files: Option<bool>,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<i64, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let root = super::normalize_root(&path);
     if root.is_empty() {
         return Err("Refusing to remove an empty folder path".to_string());
@@ -1762,10 +1768,10 @@ pub async fn remove_library_folder(
 pub async fn toggle_favorite(
     item_id: String,
     favorite: bool,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let changed = sqlx::query("UPDATE media_items SET favorite = ?, updated_at = ? WHERE id = ?")
         .bind(if favorite { 1i32 } else { 0i32 })
         .bind(super::now_ms())
@@ -1787,10 +1793,10 @@ pub async fn toggle_favorite(
 pub async fn toggle_hidden(
     item_id: String,
     hidden: bool,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let changed = sqlx::query("UPDATE media_items SET hidden = ?, updated_at = ? WHERE id = ?")
         .bind(if hidden { 1i32 } else { 0i32 })
         .bind(super::now_ms())
@@ -1812,9 +1818,9 @@ pub async fn toggle_hidden(
 pub async fn set_rating(
     item_id: String,
     rating: i32,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<(), String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     sqlx::query("UPDATE media_items SET rating = ?, updated_at = ? WHERE id = ?")
         .bind(rating)
         .bind(super::now_ms())
@@ -1831,9 +1837,9 @@ pub async fn set_rating(
 pub async fn set_color_label(
     item_id: String,
     color_label: String,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<(), String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     sqlx::query("UPDATE media_items SET color_label = ?, updated_at = ? WHERE id = ?")
         .bind(color_label)
         .bind(super::now_ms())
@@ -1909,9 +1915,9 @@ pub async fn apply_item_tags(
 pub async fn update_item_tags(
     item_id: String,
     tags: Vec<String>,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<(), String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     apply_item_tags(&db, &item_id, &tags).await
 }
 

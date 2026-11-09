@@ -1,5 +1,4 @@
 use super::*;
-use crate::AppState;
 use image::{DynamicImage, ImageEncoder};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
@@ -375,12 +374,12 @@ async fn remove_trashed_rows(
 #[tauri::command]
 pub async fn move_to_trash(
     ids: Vec<String>,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
     window: Window,
 ) -> Result<TrashResult, String> {
     super::TRASH_CANCEL.store(false, Ordering::SeqCst);
 
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
         .fetch_all(&db)
         .await
@@ -444,8 +443,11 @@ pub async fn move_to_trash(
 }
 
 #[tauri::command]
-pub async fn reveal_in_finder(path: String, state: State<'_, AppState>) -> Result<(), String> {
-    let db = super::get_db(&state)?;
+pub async fn reveal_in_finder(
+    path: String,
+    catalog: State<'_, crate::Catalog>,
+) -> Result<(), String> {
+    let db = super::get_db(&catalog)?;
     let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
         .bind(&path)
         .fetch_optional(&db)
@@ -463,8 +465,8 @@ pub async fn reveal_in_finder(path: String, state: State<'_, AppState>) -> Resul
 }
 
 #[tauri::command]
-pub async fn open_file(path: String, state: State<'_, AppState>) -> Result<(), String> {
-    let db = super::get_db(&state)?;
+pub async fn open_file(path: String, catalog: State<'_, crate::Catalog>) -> Result<(), String> {
+    let db = super::get_db(&catalog)?;
     let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
         .bind(&path)
         .fetch_optional(&db)
@@ -535,9 +537,9 @@ pub fn external_video_players() -> Vec<ExternalPlayer> {
 pub async fn open_with_player(
     path: String,
     player: String,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<(), String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
         .bind(&path)
         .fetch_optional(&db)
@@ -807,8 +809,11 @@ pub(crate) fn compute_sha256(path: &std::path::Path) -> Option<String> {
 }
 
 #[tauri::command]
-pub async fn read_exif(path: String, state: State<'_, AppState>) -> Result<ExifData, String> {
-    let db = super::get_db(&state)?;
+pub async fn read_exif(
+    path: String,
+    catalog: State<'_, crate::Catalog>,
+) -> Result<ExifData, String> {
+    let db = super::get_db(&catalog)?;
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
         .fetch_all(&db)
         .await
@@ -943,11 +948,11 @@ async fn ensure_edit_backup(
 pub async fn render_edited(
     request: RenderRequest,
     app: tauri::AppHandle,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<ExportResult, String> {
     // Validate the source path against registered library folders before doing
     // any work, so a crafted request cannot read arbitrary files.
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
         .fetch_all(&db)
         .await
@@ -1770,8 +1775,8 @@ mod exif_tests {
 }
 
 #[tauri::command]
-pub async fn backfill_metadata(state: State<'_, AppState>) -> Result<i64, String> {
-    let db = super::get_db(&state)?;
+pub async fn backfill_metadata(catalog: State<'_, crate::Catalog>) -> Result<i64, String> {
+    let db = super::get_db(&catalog)?;
     let rows: Vec<(String, String)> = sqlx::query_as(
         "SELECT id, path FROM media_items WHERE captured_at IS NULL OR camera IS NULL OR sha256 IS NULL",
     )

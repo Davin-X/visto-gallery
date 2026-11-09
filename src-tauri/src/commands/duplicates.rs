@@ -1,6 +1,5 @@
 use super::DuplicateGroup;
 use super::MediaItem;
-use crate::AppState;
 use serde_json::json;
 use std::collections::HashMap;
 use std::io::{Read, Seek};
@@ -16,11 +15,11 @@ pub async fn cancel_find_duplicates() -> Result<(), String> {
 
 #[tauri::command]
 pub async fn find_duplicates(
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
     window: Window,
 ) -> Result<Vec<DuplicateGroup>, String> {
     super::DUPLICATE_CANCEL.store(false, Ordering::SeqCst);
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
 
     // Load the catalog (hidden items included — a duplicate doesn't stop being
     // one just because it was hidden).

@@ -1,11 +1,10 @@
 use super::*;
-use crate::AppState;
 use sqlx::SqlitePool;
 use tauri::State;
 
 #[tauri::command]
-pub async fn get_settings(state: State<'_, AppState>) -> Result<AppSettings, String> {
-    let db = super::get_db(&state)?;
+pub async fn get_settings(catalog: State<'_, crate::Catalog>) -> Result<AppSettings, String> {
+    let db = super::get_db(&catalog)?;
     load_persisted_settings(&db).await
 }
 
@@ -31,9 +30,9 @@ async fn load_persisted_settings(db: &SqlitePool) -> Result<AppSettings, String>
 #[tauri::command]
 pub async fn save_settings(
     patch: PartialSettings,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<AppSettings, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     // Start from the SETTINGS CURRENTLY PERSISTED, then apply the incoming
     // patch on top. Previously this began from `AppSettings::default()`, which
     // silently reset every key NOT present in a partial patch to its default and
