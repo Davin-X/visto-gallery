@@ -1,5 +1,4 @@
 use super::*;
-use crate::AppState;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -47,10 +46,10 @@ struct GithubAsset {
 /// caller can stay silent on launch and show a message for a manual check.
 #[tauri::command]
 pub async fn check_updates(
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
     force: Option<bool>,
 ) -> Result<UpdateCheck, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let now = super::now_ms();
     let current = env!("CARGO_PKG_VERSION").to_string();
 

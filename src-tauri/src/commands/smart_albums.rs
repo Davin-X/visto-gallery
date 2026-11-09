@@ -1,5 +1,5 @@
 use super::LibraryFilterDTO;
-use crate::{models::MediaItem, AppState};
+use crate::models::MediaItem;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use tauri::State;
@@ -218,8 +218,10 @@ pub(crate) async fn create_smart_album_in_catalog(
 }
 
 #[tauri::command]
-pub async fn get_smart_albums(state: State<'_, AppState>) -> Result<Vec<SmartAlbum>, String> {
-    let db = super::get_db(&state)?;
+pub async fn get_smart_albums(
+    catalog: State<'_, crate::Catalog>,
+) -> Result<Vec<SmartAlbum>, String> {
+    let db = super::get_db(&catalog)?;
     get_smart_albums_in_catalog(&db).await
 }
 
@@ -227,9 +229,9 @@ pub async fn get_smart_albums(state: State<'_, AppState>) -> Result<Vec<SmartAlb
 pub async fn create_smart_album(
     name: String,
     filter: SmartAlbumFilter,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<SmartAlbum, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     create_smart_album_in_catalog(&db, name, filter).await
 }
 
@@ -237,13 +239,13 @@ pub async fn create_smart_album(
 pub async fn rename_smart_album(
     album_id: String,
     name: String,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<(), String> {
     let name = name.trim().to_string();
     if name.is_empty() {
         return Err("Smart Album name cannot be empty".to_string());
     }
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     sqlx::query("UPDATE smart_albums SET name = ?, updated_at = ? WHERE id = ?")
         .bind(&name)
         .bind(super::now_ms())
@@ -257,9 +259,9 @@ pub async fn rename_smart_album(
 #[tauri::command]
 pub async fn delete_smart_album(
     album_id: String,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<(), String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     sqlx::query("DELETE FROM smart_albums WHERE id = ?")
         .bind(&album_id)
         .execute(&db)
@@ -275,9 +277,9 @@ pub async fn get_smart_album_items(
     album_id: String,
     limit: Option<i32>,
     cursor: Option<String>,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<super::LibraryItemsPage, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let row = sqlx::query("SELECT filter_json FROM smart_albums WHERE id = ?")
         .bind(&album_id)
         .fetch_optional(&db)

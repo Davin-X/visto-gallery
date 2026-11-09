@@ -34,9 +34,9 @@ pub async fn save_edit_recipe(
     crop: Option<serde_json::Value>,
     history: serde_json::Value,
     history_index: i32,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<EditRecipe, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let now = chrono::Utc::now().timestamp_millis();
 
     let edits_json = serde_json::to_string(&edits).map_err(|e| e.to_string())?;
@@ -80,16 +80,18 @@ pub async fn save_edit_recipe(
 #[tauri::command]
 pub async fn get_edit_recipe(
     media_id: String,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<Option<EditRecipe>, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     get_edit_recipe_inner(&db, &media_id).await
 }
 
 /// List all edit recipes.
 #[tauri::command]
-pub async fn list_edit_recipes(state: State<'_, AppState>) -> Result<Vec<EditRecipe>, String> {
-    let db = super::get_db(&state)?;
+pub async fn list_edit_recipes(
+    catalog: State<'_, crate::Catalog>,
+) -> Result<Vec<EditRecipe>, String> {
+    let db = super::get_db(&catalog)?;
     let rows = sqlx::query(
         "SELECT media_id, edits, crop, history, history_index, created_at, updated_at FROM edit_recipes ORDER BY updated_at DESC",
     )
@@ -110,9 +112,9 @@ pub async fn list_edit_recipes(state: State<'_, AppState>) -> Result<Vec<EditRec
 #[tauri::command]
 pub async fn revert_edit_recipe(
     media_id: String,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<bool, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     revert_edit_recipe_inner(&db, &media_id).await
 }
 
@@ -244,9 +246,9 @@ async fn revert_edit_recipe_inner(db: &SqlitePool, media_id: &str) -> Result<boo
 #[tauri::command]
 pub async fn delete_edit_recipe(
     media_id: String,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<bool, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let result = sqlx::query("DELETE FROM edit_recipes WHERE media_id = ?")
         .bind(&media_id)
         .execute(&db)
@@ -260,9 +262,9 @@ pub async fn delete_edit_recipe(
 pub async fn copy_edit_recipe(
     from_media_id: String,
     to_media_id: String,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<EditRecipe, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let now = chrono::Utc::now().timestamp_millis();
 
     // Read the source recipe
@@ -312,9 +314,9 @@ pub async fn batch_apply_edit(
     media_ids: Vec<String>,
     edits: serde_json::Value,
     crop: Option<serde_json::Value>,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<usize, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let now = chrono::Utc::now().timestamp_millis();
 
     let edits_json = serde_json::to_string(&edits).map_err(|e| e.to_string())?;
@@ -360,9 +362,9 @@ pub async fn save_edit_preset(
     name: String,
     edits: serde_json::Value,
     crop: Option<serde_json::Value>,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<EditPreset, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let now = chrono::Utc::now().timestamp_millis();
     let id = id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
@@ -810,8 +812,10 @@ mod tests {
 
 /// List all edit presets.
 #[tauri::command]
-pub async fn list_edit_presets(state: State<'_, AppState>) -> Result<Vec<EditPreset>, String> {
-    let db = super::get_db(&state)?;
+pub async fn list_edit_presets(
+    catalog: State<'_, crate::Catalog>,
+) -> Result<Vec<EditPreset>, String> {
+    let db = super::get_db(&catalog)?;
     let rows = sqlx::query(
         "SELECT id, name, edits, crop, created_at, updated_at FROM edit_presets ORDER BY name ASC",
     )
@@ -828,8 +832,11 @@ pub async fn list_edit_presets(state: State<'_, AppState>) -> Result<Vec<EditPre
 
 /// Delete an edit preset.
 #[tauri::command]
-pub async fn delete_edit_preset(id: String, state: State<'_, AppState>) -> Result<bool, String> {
-    let db = super::get_db(&state)?;
+pub async fn delete_edit_preset(
+    id: String,
+    catalog: State<'_, crate::Catalog>,
+) -> Result<bool, String> {
+    let db = super::get_db(&catalog)?;
     let result = sqlx::query("DELETE FROM edit_presets WHERE id = ?")
         .bind(&id)
         .execute(&db)
@@ -843,9 +850,9 @@ pub async fn delete_edit_preset(id: String, state: State<'_, AppState>) -> Resul
 pub async fn apply_edit_preset(
     preset_id: String,
     media_id: String,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<EditRecipe, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let now = chrono::Utc::now().timestamp_millis();
 
     // Read the preset
@@ -954,8 +961,8 @@ fn row_to_edit_preset(row: &sqlx::sqlite::SqliteRow) -> Result<EditPreset, Strin
 /// Vacuum the SQLite library catalog to reclaim disk space and defragment.
 /// Runs `VACUUM` on the catalog database. Original media files are never touched.
 #[tauri::command]
-pub async fn vacuum_catalog(state: State<'_, AppState>) -> Result<(), String> {
-    let db = super::get_db(&state)?;
+pub async fn vacuum_catalog(catalog: State<'_, crate::Catalog>) -> Result<(), String> {
+    let db = super::get_db(&catalog)?;
     sqlx::query("VACUUM")
         .execute(&db)
         .await

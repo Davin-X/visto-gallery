@@ -1,4 +1,3 @@
-use crate::AppState;
 use serde::Serialize;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection, SqlitePool};
 use sqlx::{Connection, Row};
@@ -205,9 +204,9 @@ async fn annotate_snapshot(path: &str) -> Result<(), String> {
 #[tauri::command]
 pub async fn create_catalog_backup(
     destination_path: String,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<BackupInfo, String> {
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     let destination = PathBuf::from(&destination_path);
     snapshot_to(&db, &destination).await?;
     if let Err(error) = annotate_snapshot(&destination_path).await {
@@ -426,7 +425,7 @@ async fn report_missing_paths(db: &SqlitePool) -> Result<MissingPathReport, Stri
 pub async fn restore_catalog_backup(
     path: String,
     app: tauri::AppHandle,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<RestoreResult, String> {
     // Open/attach only an isolated copy of the user-picked backup so a crafted
     // sibling -wal file cannot be read (RUSTSEC-2026-0459).
@@ -439,7 +438,7 @@ pub async fn restore_catalog_backup(
             return Err(error);
         }
     };
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
 
     let app_dir = app
         .path()

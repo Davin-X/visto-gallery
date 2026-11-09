@@ -1,6 +1,7 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
+use sqlx::SqlitePool;
 use tauri::{Emitter, Manager, State};
 
 // Modules
@@ -17,26 +18,48 @@ use commands::*;
 use db::Database;
 use menu::create_menu;
 
-struct AppState {
-    db: Mutex<Option<Database>>,
-    /// Why the catalog could not be opened at launch, shown by every command
-    /// instead of crashing the app.
-    db_error: Mutex<Option<String>>,
-    watchers: Mutex<HashMap<String, notify::RecommendedWatcher>>,
+/// Shared SQLite pool (or the launch-time open error). Managed as Tauri state
+/// so commands take it without locking a mutex. Set exactly once during setup.
+#[derive(Default)]
+pub struct Catalog {
+    inner: OnceLock<Result<SqlitePool, String>>,
+}
+
+impl Catalog {
+    pub fn pool(&self) -> Result<SqlitePool, String> {
+        match self.inner.get() {
+            Some(Ok(pool)) => Ok(pool.clone()),
+            Some(Err(reason)) => Err(format!(
+                "The VistoGallery catalog could not be opened: {reason}. \
+                 Quit other copies of VistoGallery, or restore a catalog backup."
+            )),
+            None => Err(
+                "The VistoGallery catalog could not be opened: it is still starting up. \
+                 Quit other copies of VistoGallery, or restore a catalog backup."
+                    .to_string(),
+            ),
+        }
+    }
+
+    fn set(&self, value: Result<SqlitePool, String>) {
+        let _ = self.inner.set(value);
+    }
+}
+
+pub(crate) struct AppState {
+    pub(crate) watchers: Mutex<HashMap<String, notify::RecommendedWatcher>>,
     /// Paths the user chose in a native picker or dropped on the window.
-    grants: GrantedPaths,
+    pub(crate) grants: commands::GrantedPaths,
     /// Per-operation cancel flags and per-root locks for scans and imports.
-    scan_jobs: ScanJobs,
+    pub(crate) scan_jobs: commands::ScanJobs,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
-            db: Mutex::new(None),
-            db_error: Mutex::new(None),
             watchers: Mutex::new(HashMap::new()),
-            grants: GrantedPaths::default(),
-            scan_jobs: ScanJobs::default(),
+            grants: commands::GrantedPaths::default(),
+            scan_jobs: commands::ScanJobs::default(),
         }
     }
 }
@@ -58,6 +81,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        .manage(Catalog::default())
         // Native drops are user intent: grant the dropped paths before the
         // webview relays them to `import_files`.
         .on_window_event(|window, event| {
@@ -69,22 +93,23 @@ pub fn run() {
         .setup(|app| {
             // Initialize database (await so it's ready before any invoke). A
             // locked or damaged catalog must not crash launch: the error is
-            // kept and returned by every command so the UI can explain it.
+            // returned by every command so the UI can explain it.
             let app_handle = app.handle().clone();
+            let catalog: State<'_, Catalog> = app_handle.state();
             let opened = tauri::async_runtime::block_on(async {
-                let db = Database::new(&app_handle).await?;
-                for folder in db.registered_folders().await {
-                    let _ = app_handle
-                        .asset_protocol_scope()
-                        .allow_directory(&folder, true);
-                }
-                anyhow::Ok(db)
+                let db = Database::open(&app_handle).await?;
+                let folders = db.registered_folders().await;
+                anyhow::Ok((db, folders))
             });
-            let state: State<'_, AppState> = app_handle.state();
             match opened {
-                Ok(db) => {
+                Ok((db, folders)) => {
+                    for folder in folders {
+                        let _ = app_handle
+                            .asset_protocol_scope()
+                            .allow_directory(&folder, true);
+                    }
                     let background = db.handle();
-                    *state.db.lock().unwrap_or_else(|e| e.into_inner()) = Some(db);
+                    catalog.set(Ok(db.pool().clone()));
                     tauri::async_runtime::spawn(async move {
                         if let Err(error) = background.run_backfills().await {
                             tracing::warn!("catalog backfill failed: {error:#}");
@@ -93,8 +118,7 @@ pub fn run() {
                 }
                 Err(error) => {
                     tracing::error!("could not open the catalog: {error:#}");
-                    *state.db_error.lock().unwrap_or_else(|e| e.into_inner()) =
-                        Some(format!("{error:#}"));
+                    catalog.set(Err(format!("{error:#}")));
                 }
             }
 

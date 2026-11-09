@@ -12,7 +12,7 @@ mod settings;
 mod smart_albums;
 mod temp_files;
 mod update;
-use crate::{models::*, AppState};
+use crate::{models::*, AppState, Catalog};
 pub use access::*;
 pub use albums::*;
 use anyhow::Result;
@@ -372,21 +372,8 @@ pub async fn cancel_move_to_trash() -> Result<(), String> {
     Ok(())
 }
 
-fn get_db(state: &State<'_, AppState>) -> Result<SqlitePool, String> {
-    let guard = state.db.lock().map_err(|e| e.to_string())?;
-    if let Some(db) = guard.as_ref() {
-        return Ok(db.pool().clone());
-    }
-    let reason = state
-        .db_error
-        .lock()
-        .ok()
-        .and_then(|e| e.clone())
-        .unwrap_or_else(|| "it is still starting up".to_string());
-    Err(format!(
-        "The VistoGallery catalog could not be opened: {reason}. \
-         Quit other copies of VistoGallery, or restore a catalog backup."
-    ))
+fn get_db(catalog: &State<'_, Catalog>) -> Result<SqlitePool, String> {
+    catalog.pool()
 }
 
 fn now_ms() -> i64 {
@@ -1425,9 +1412,10 @@ pub async fn get_version() -> Result<String, String> {
 #[tauri::command]
 pub async fn delete_library_database(
     app: AppHandle,
+    catalog: State<'_, Catalog>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let db = get_db(&state)?;
+    let db = get_db(&catalog)?;
     purge_catalog(&db).await?;
 
     if let Ok(mut watchers) = state.watchers.lock() {
@@ -1480,8 +1468,8 @@ pub async fn open_external(url: String) -> Result<(), String> {
 /// Secure export: the backend owns path selection via native dialog.
 /// Writes to a temp file next to the destination, then renames atomically.
 #[tauri::command]
-pub async fn get_tags(state: State<'_, AppState>) -> Result<Vec<Tag>, String> {
-    let db = get_db(&state)?;
+pub async fn get_tags(catalog: State<'_, Catalog>) -> Result<Vec<Tag>, String> {
+    let db = get_db(&catalog)?;
     let tags = sqlx::query_as::<_, Tag>(&format!("{} ORDER BY t.name ASC", TAG_SELECT))
         .fetch_all(&db)
         .await

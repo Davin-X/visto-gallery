@@ -1,4 +1,3 @@
-use crate::AppState;
 use serde::Serialize;
 use sqlx::Row;
 use tauri::State;
@@ -132,10 +131,10 @@ async fn find_conflicts(
 pub async fn preview_root_path_mapping(
     old_root: String,
     new_root: String,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<RootPathMappingPreview, String> {
     let (old_root, new_root) = validate_mapping(&old_root, &new_root)?;
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     ensure_registered_root(&db, &old_root).await?;
 
     let affected = find_affected_paths(&db, &old_root).await?;
@@ -162,10 +161,10 @@ pub async fn preview_root_path_mapping(
 pub async fn apply_root_path_mapping(
     old_root: String,
     new_root: String,
-    state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<RootPathMappingResult, String> {
     let (old_root, new_root) = validate_mapping(&old_root, &new_root)?;
-    let db = super::get_db(&state)?;
+    let db = super::get_db(&catalog)?;
     ensure_registered_root(&db, &old_root).await?;
     let affected = find_affected_paths(&db, &old_root).await?;
     let conflicts = find_conflicts(&db, &affected, &new_root, &old_root).await?;
