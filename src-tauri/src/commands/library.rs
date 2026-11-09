@@ -6,6 +6,7 @@ use serde_json::{json, Value};
 use sqlx::{QueryBuilder, SqlitePool};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tauri::{State, Window};
 use walkdir::WalkDir;
 
@@ -41,46 +42,34 @@ pub async fn scan_library(
 
     // A normal startup scan only needs to inspect new or changed files. The
     // explicit Rescan action passes `force` to re-read every file header.
-    let known_files: HashMap<String, (i64, i64)> = if force {
+    // Only rows under this root can match a walked path, so load just those.
+    let known_files: Arc<HashMap<String, (i64, i64)>> = Arc::new(if force {
         HashMap::new()
     } else {
-        sqlx::query_as::<_, (String, i64, i64)>("SELECT path, size, modified_at FROM media_items")
-            .fetch_all(&db)
-            .await
-            .map_err(|e| e.to_string())?
-            .into_iter()
-            .map(|(path, size, modified_at)| (path, (size, modified_at)))
-            .collect()
-    };
+        let prefix = format!(
+            "{}/",
+            super::normalize_root(&root_path).trim_end_matches('/')
+        );
+        sqlx::query_as::<_, (String, i64, i64)>(
+            "SELECT path, size, modified_at FROM media_items WHERE substr(path, 1, length(?)) = ?",
+        )
+        .bind(&prefix)
+        .bind(&prefix)
+        .fetch_all(&db)
+        .await
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|(path, size, modified_at)| (path, (size, modified_at)))
+        .collect()
+    });
 
-    // Discover the media paths once. Keeping only paths avoids retaining the
-    // walker's directory entries while still giving the progress UI a total.
-    let mut media_paths = Vec::new();
-    let mut walk_error: Option<String> = None;
-    for entry in WalkDir::new(&root) {
-        if super::SCAN_CANCEL.load(Ordering::SeqCst) {
-            break;
-        }
-        match entry {
-            Ok(entry) if entry.file_type().is_file() => {
-                let ext = entry
-                    .path()
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .unwrap_or("")
-                    .to_lowercase();
-                if is_media_file(&ext) {
-                    media_paths.push(entry.into_path());
-                }
-            }
-            Ok(_) => {}
-            Err(error) => {
-                if walk_error.is_none() {
-                    walk_error = Some(error.to_string());
-                }
-            }
-        }
-    }
+    // Discover the media paths once, on the blocking pool: a large tree can
+    // take minutes to walk and must not pin an async worker.
+    let walk_root = root.clone();
+    let (media_paths, walk_error) =
+        tokio::task::spawn_blocking(move || collect_media_paths(&walk_root, &super::SCAN_CANCEL))
+            .await
+            .map_err(|e| format!("Scan worker failed: {e}"))?;
     let had_walk_error = walk_error.is_some();
     for p in &media_paths {
         seen_paths.insert(p.to_string_lossy().into_owned());
@@ -107,38 +96,21 @@ pub async fn scan_library(
     let mut discovered_count = 0usize;
 
     // Check metadata for every path, but only decode image headers and write
-    // rows for new/changed files. Writes stay in bounded batches.
+    // rows for new/changed files. File work runs on the blocking pool one
+    // chunk at a time; writes stay in bounded async batches.
     const SCAN_BATCH_SIZE: usize = 100;
     for paths in media_paths.chunks(SCAN_BATCH_SIZE) {
-        let mut batch = Vec::with_capacity(paths.len());
-        let mut completed_in_batch = 0u64;
-        for path in paths {
-            if super::SCAN_CANCEL.load(Ordering::SeqCst) {
-                break;
-            }
-            completed_in_batch += 1;
-            let Some(metadata) = std::fs::metadata(path)
-                .ok()
-                .filter(|metadata| metadata.is_file())
-            else {
-                continue;
-            };
-            let size = metadata.len() as i64;
-            let modified_at = file_modified_at(&metadata);
-            total_size += size;
-            discovered_count += 1;
-            let path_key = path.to_string_lossy().into_owned();
-            if !force
-                && known_files
-                    .get(&path_key)
-                    .is_some_and(|fingerprint| *fingerprint == (size, modified_at))
-            {
-                continue;
-            }
-            if let Some(item) = inspect_media_file_with_metadata(path, &metadata, now) {
-                batch.push(item);
-            }
-        }
+        let chunk = paths.to_vec();
+        let known = Arc::clone(&known_files);
+        let scanned = tokio::task::spawn_blocking(move || {
+            inspect_scan_chunk(&chunk, &known, force, now, &super::SCAN_CANCEL)
+        })
+        .await
+        .map_err(|e| format!("Scan worker failed: {e}"))?;
+        let batch = scanned.batch;
+        let completed_in_batch = scanned.completed;
+        total_size += scanned.size;
+        discovered_count += scanned.discovered;
         let cancelled = super::SCAN_CANCEL.load(Ordering::SeqCst);
         items.extend(batch.iter().map(|(item, _, _)| item.clone()));
         upsert_media_batch(&db, &batch).await?;
@@ -218,6 +190,98 @@ pub async fn scan_library(
     })
 }
 
+/// Walk `root` and return every media file path plus the first walk error.
+/// Blocking: call it from `spawn_blocking`.
+pub(crate) fn collect_media_paths(
+    root: &Path,
+    cancel: &std::sync::atomic::AtomicBool,
+) -> (Vec<PathBuf>, Option<String>) {
+    let mut media_paths = Vec::new();
+    let mut walk_error: Option<String> = None;
+    for entry in WalkDir::new(root) {
+        if cancel.load(Ordering::SeqCst) {
+            break;
+        }
+        match entry {
+            Ok(entry) if entry.file_type().is_file() => {
+                let ext = entry
+                    .path()
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                if is_media_file(&ext) {
+                    media_paths.push(entry.into_path());
+                }
+            }
+            Ok(_) => {}
+            Err(error) => {
+                if walk_error.is_none() {
+                    walk_error = Some(error.to_string());
+                }
+            }
+        }
+    }
+    (media_paths, walk_error)
+}
+
+/// What one chunk of a folder scan found.
+pub(crate) struct ScanChunk {
+    /// New or changed files, ready for `upsert_media_batch`.
+    pub batch: Vec<(MediaItem, Option<i32>, Option<i32>)>,
+    /// Paths looked at (including unchanged ones) before any cancellation.
+    pub completed: u64,
+    /// Paths that still exist as regular files.
+    pub discovered: usize,
+    /// Bytes across `discovered` files.
+    pub size: i64,
+}
+
+/// Stat every path in `paths` and inspect the ones that are new or changed
+/// since `known`. Blocking: call it from `spawn_blocking`.
+pub(crate) fn inspect_scan_chunk(
+    paths: &[PathBuf],
+    known: &HashMap<String, (i64, i64)>,
+    force: bool,
+    now: i64,
+    cancel: &std::sync::atomic::AtomicBool,
+) -> ScanChunk {
+    let mut chunk = ScanChunk {
+        batch: Vec::with_capacity(paths.len()),
+        completed: 0,
+        discovered: 0,
+        size: 0,
+    };
+    for path in paths {
+        if cancel.load(Ordering::SeqCst) {
+            break;
+        }
+        chunk.completed += 1;
+        let Some(metadata) = std::fs::metadata(path)
+            .ok()
+            .filter(|metadata| metadata.is_file())
+        else {
+            continue;
+        };
+        let size = metadata.len() as i64;
+        let modified_at = file_modified_at(&metadata);
+        chunk.size += size;
+        chunk.discovered += 1;
+        let path_key = path.to_string_lossy().into_owned();
+        if !force
+            && known
+                .get(&path_key)
+                .is_some_and(|fingerprint| *fingerprint == (size, modified_at))
+        {
+            continue;
+        }
+        if let Some(item) = inspect_media_file_with_metadata(path, &metadata, now) {
+            chunk.batch.push(item);
+        }
+    }
+    chunk
+}
+
 /// Import exactly the files the user picked.
 ///
 /// Unlike `scan_library`, a selected file is never expanded to its parent
@@ -241,42 +305,30 @@ pub async fn import_files(
     let mut total_size: i64 = 0;
     let mut processed: u64 = 0;
 
-    // Collect all media file paths first so we can report a total.
-    let all_paths: Vec<PathBuf> = {
+    // Collect all media file paths first so we can report a total. Walking
+    // picked folders can take a long time, so it runs on the blocking pool.
+    let picked = paths.clone();
+    let all_paths: Vec<PathBuf> = tokio::task::spawn_blocking(move || {
         let mut tmp = Vec::new();
-        for raw in &paths {
+        for raw in &picked {
             if super::SCAN_CANCEL.load(Ordering::SeqCst) {
                 break;
             }
             let path = PathBuf::from(raw);
             if path.is_dir() {
-                for entry in WalkDir::new(&path) {
-                    if super::SCAN_CANCEL.load(Ordering::SeqCst) {
-                        break;
-                    }
-                    let Ok(entry) = entry else {
-                        continue;
-                    };
-                    if entry.file_type().is_file() {
-                        if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
-                            let ext = ext.to_lowercase();
-                            if is_media_file(&ext) {
-                                tmp.push(entry.path().to_path_buf());
-                            }
-                        }
-                    }
-                }
+                tmp.extend(collect_media_paths(&path, &super::SCAN_CANCEL).0);
             } else if path.is_file() {
                 if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                    let ext = ext.to_lowercase();
-                    if is_media_file(&ext) {
+                    if is_media_file(&ext.to_lowercase()) {
                         tmp.push(path.clone());
                     }
                 }
             }
         }
         tmp
-    };
+    })
+    .await
+    .map_err(|e| format!("Import worker failed: {e}"))?;
     let total = all_paths.len() as u64;
 
     for path in all_paths {
@@ -2285,5 +2337,73 @@ mod filter_and_scale_tests {
         assert_eq!(overview.len(), 1);
         assert_eq!(overview[0].item_count, 10_000);
         assert!(overview[0].cover_items.len() <= 4);
+    }
+}
+
+#[cfg(test)]
+mod scan_chunk_tests {
+    use super::{collect_media_paths, file_modified_at, inspect_scan_chunk};
+    use std::collections::HashMap;
+    use std::fs;
+    use std::sync::atomic::AtomicBool;
+
+    fn tree() -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!("visto-scan-chunk-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(root.join("nested")).unwrap();
+        fs::write(root.join("a.jpg"), b"not really a jpeg").unwrap();
+        fs::write(root.join("nested/b.PNG"), b"not really a png").unwrap();
+        fs::write(root.join("notes.txt"), b"skip me").unwrap();
+        root
+    }
+
+    #[test]
+    fn walk_keeps_only_media_extensions() {
+        let root = tree();
+        let (mut paths, error) = collect_media_paths(&root, &AtomicBool::new(false));
+        paths.sort();
+        assert!(error.is_none());
+        assert_eq!(paths, vec![root.join("a.jpg"), root.join("nested/b.PNG")]);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn walk_stops_when_cancelled() {
+        let root = tree();
+        let (paths, _) = collect_media_paths(&root, &AtomicBool::new(true));
+        assert!(paths.is_empty());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn unchanged_files_are_counted_but_not_reinspected() {
+        let root = tree();
+        let a = root.join("a.jpg");
+        let meta = fs::metadata(&a).unwrap();
+        let known = HashMap::from([(
+            a.to_string_lossy().into_owned(),
+            (meta.len() as i64, file_modified_at(&meta)),
+        )]);
+        let chunk = inspect_scan_chunk(
+            std::slice::from_ref(&a),
+            &known,
+            false,
+            0,
+            &AtomicBool::new(false),
+        );
+        assert_eq!(chunk.completed, 1);
+        assert_eq!(chunk.discovered, 1);
+        assert_eq!(chunk.size, meta.len() as i64);
+        assert!(chunk.batch.is_empty());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn missing_files_are_completed_but_not_discovered() {
+        let root = tree();
+        let gone = root.join("gone.jpg");
+        let chunk = inspect_scan_chunk(&[gone], &HashMap::new(), false, 0, &AtomicBool::new(false));
+        assert_eq!(chunk.completed, 1);
+        assert_eq!(chunk.discovered, 0);
+        let _ = fs::remove_dir_all(&root);
     }
 }

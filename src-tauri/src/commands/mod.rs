@@ -924,7 +924,11 @@ async fn import_media_file(
     path: &Path,
     now: i64,
 ) -> Result<Option<(MediaItem, i64)>, String> {
-    let Some((item, width, height)) = inspect_media_file(path, now) else {
+    let owned = path.to_path_buf();
+    let inspected = tokio::task::spawn_blocking(move || inspect_media_file(&owned, now))
+        .await
+        .map_err(|e| format!("Import worker failed: {e}"))?;
+    let Some((item, width, height)) = inspected else {
         return Ok(None);
     };
     let size = item.size;
