@@ -1,0 +1,45 @@
+name: perf
+
+on:
+  pull_request:
+    paths:
+      - "harness.html"
+      - "scripts/benchmark-library-harness.mjs"
+      - "scripts/check-library-harness-perf.mjs"
+      - "perf/**"
+      - "src/engine/stores/**"
+      - "src/engine/hooks/**"
+      - "src/engine/commands/**"
+      - "src/design/components/CachedThumbnail*"
+      - "src/design/components/Library*"
+      - "src/design/components/Albums*"
+      - "src/design/styles/**"
+      - "src/app/**"
+      - "src-tauri/src/commands/**"
+      - "src-tauri/src/scanner*"
+      - "src-tauri/src/lib.rs"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.*"
+  workflow_dispatch:
+
+jobs:
+  library-harness-perf:
+    name: Library harness perf gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build frontend (includes harness)
+        run: npm run build
+      - name: Run performance regression gate
+        env:
+          LIBRARY_BENCHMARK_ITEMS: "50000"
+        run: npm run perf:check
