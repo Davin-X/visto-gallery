@@ -89,14 +89,14 @@ interface AppDialogsProps {
   importFolder: () => void;
   checkForUpdates: (manual: boolean) => void;
 
-  albumDialogRef: RefObject<HTMLFormElement>;
-  updateDialogRef: RefObject<HTMLDivElement>;
-  aboutDialogRef: RefObject<HTMLDivElement>;
-  deleteAlbumDialogRef: RefObject<HTMLDivElement>;
-  deleteItemDialogRef: RefObject<HTMLDivElement>;
-  removeFolderDialogRef: RefObject<HTMLDivElement>;
-  albumInputRef: RefObject<HTMLInputElement>;
-  albumSearchRef: RefObject<HTMLInputElement>;
+  albumDialogRef: RefObject<HTMLFormElement | null>;
+  updateDialogRef: RefObject<HTMLDivElement | null>;
+  aboutDialogRef: RefObject<HTMLDivElement | null>;
+  deleteAlbumDialogRef: RefObject<HTMLDivElement | null>;
+  deleteItemDialogRef: RefObject<HTMLDivElement | null>;
+  removeFolderDialogRef: RefObject<HTMLDivElement | null>;
+  albumInputRef: RefObject<HTMLInputElement | null>;
+  albumSearchRef: RefObject<HTMLInputElement | null>;
   itemPendingDeleteRef: MutableRefObject<string[] | null>;
 }
 
@@ -180,7 +180,7 @@ function UpdateDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  dialogRef: RefObject<HTMLDivElement>;
+  dialogRef: RefObject<HTMLDivElement | null>;
   info: UpdateCheckResult | null;
 }) {
   useFocusTrap(open, dialogRef);
@@ -248,7 +248,7 @@ function AboutDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  dialogRef: RefObject<HTMLDivElement>;
+  dialogRef: RefObject<HTMLDivElement | null>;
   version: string;
   updateAvailable: boolean;
   onCheckForUpdates: (manual: boolean) => void;
@@ -315,8 +315,8 @@ function AlbumDialog({
   creating: boolean;
   onClose: () => void;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => Promise<void>;
-  dialogRef: RefObject<HTMLFormElement>;
-  inputRef: RefObject<HTMLInputElement>;
+  dialogRef: RefObject<HTMLFormElement | null>;
+  inputRef: RefObject<HTMLInputElement | null>;
   library: any;
   setName: (name: string) => void;
 }) {
@@ -414,7 +414,7 @@ function AlbumPickerDialog({
   onClearSearch: () => void;
   onAddToAlbum: (album: AlbumPickerTarget) => Promise<void>;
   onCreateAlbum: () => void;
-  searchRef: RefObject<HTMLInputElement>;
+  searchRef: RefObject<HTMLInputElement | null>;
   library: any;
 }) {
   useFocusTrap(open, searchRef);
@@ -551,7 +551,7 @@ function DeleteAlbumDialog({
   deleting: boolean;
   onClose: () => void;
   onConfirm: () => Promise<void>;
-  dialogRef: RefObject<HTMLDivElement>;
+  dialogRef: RefObject<HTMLDivElement | null>;
 }) {
   useFocusTrap(open, dialogRef);
   useEscape(onClose, open && !deleting);
@@ -620,7 +620,7 @@ function DeleteItemDialog({
   count: number;
   onClose: () => void;
   onConfirm: () => void;
-  dialogRef: RefObject<HTMLDivElement>;
+  dialogRef: RefObject<HTMLDivElement | null>;
 }) {
   useFocusTrap(open, dialogRef);
   useEscape(onClose, open);
@@ -824,7 +824,7 @@ function RemoveFolderDialog({
   removing: boolean;
   onClose: () => void;
   onConfirm: () => Promise<void>;
-  dialogRef: RefObject<HTMLDivElement>;
+  dialogRef: RefObject<HTMLDivElement | null>;
 }) {
   useFocusTrap(open, dialogRef);
   useEscape(onClose, open && !removing);

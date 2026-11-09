@@ -13,7 +13,7 @@ vi.mock("../engine/commands/tauri", () => ({
   tauri: { app: { openExternal: mocks.openExternal } },
 }));
 
-function Thrower(): JSX.Element {
+function Thrower(): React.ReactElement {
   throw new Error("boom");
 }
 

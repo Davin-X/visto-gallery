@@ -33,7 +33,7 @@ interface AppScreenRouterProps {
   openAlbumDialog: (seedIds?: string[]) => void;
   openAlbumPicker: (itemIds?: string[]) => void;
   openContextMenu: (items: any[], e: React.MouseEvent) => void;
-  searchInputRef: RefObject<HTMLInputElement>;
+  searchInputRef: RefObject<HTMLInputElement | null>;
   itemPendingDeleteRef: MutableRefObject<string[] | null>;
   setItemPendingDeleteCount: (count: number) => void;
   setFolderPendingRemove: (folder: LibraryFolder | null) => void;
