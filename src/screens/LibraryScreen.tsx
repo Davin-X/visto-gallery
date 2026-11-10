@@ -160,7 +160,7 @@ interface LibraryScreenProps {
   onSetHiddenForIds: (ids: string[], hidden: boolean) => void | Promise<void>;
   onSetSelection: (ids: string[]) => void;
   onSetRatingForIds: (ids: string[], rating: number) => void | Promise<void>;
-  onSetColorLabelForIds: (ids: string[], colorLabel: string) => void | Promise<void>;
+  onSetColorLabelForIds: (ids: string[], colorLabel: string | null) => void | Promise<void>;
   onToggleFavorite: (id: string) => void | Promise<void>;
   onToggleHidden: (id: string) => void | Promise<void>;
   onToggleInspector: () => void;
@@ -982,7 +982,7 @@ function LibraryScreen(props: LibraryScreenProps) {
         {
           label: "None",
           icon: <span className="ctx-dot ctx-dot-none" />,
-          onClick: () => props.onSetColorLabelForIds?.([item.id], ""),
+          onClick: () => props.onSetColorLabelForIds?.([item.id], null),
         },
         {
           label: "Red",
@@ -2325,6 +2325,21 @@ function LibraryScreen(props: LibraryScreenProps) {
                         })}
                       </div>
                       <div className="inspector-color-row" role="group" aria-label="Color label">
+                        {(() => {
+                          const noneActive = !sel.colorLabel;
+                          return (
+                            <button
+                              type="button"
+                              className={`inspector-color inspector-color-none${noneActive ? " active" : ""}`}
+                              aria-label="No color label"
+                              aria-pressed={noneActive}
+                              title="No color label"
+                              onClick={() => props.onSetColorLabelForIds([sel.id], null)}
+                            >
+                              <span className="ctx-dot ctx-dot-none" aria-hidden="true" />
+                            </button>
+                          );
+                        })()}
                         {["red", "yellow", "green", "blue", "purple"].map((color) => {
                           const active = sel.colorLabel === color;
                           const label = color[0].toUpperCase() + color.slice(1);
@@ -2337,7 +2352,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                               aria-pressed={active}
                               title={active ? `Clear ${color} label` : `${label} label`}
                               onClick={() =>
-                                props.onSetColorLabelForIds([sel.id], active ? "" : color)
+                                props.onSetColorLabelForIds([sel.id], active ? null : color)
                               }
                             >
                               <span className={`ctx-dot ctx-dot-${color}`} />
