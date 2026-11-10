@@ -3325,6 +3325,7 @@ body.is-resizing .photo-inspector {
   color: var(--accent-text);
 }
 
+
 .icon-button:active {
   transform: scale(0.94);
 }
