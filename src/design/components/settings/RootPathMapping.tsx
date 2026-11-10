@@ -27,6 +27,19 @@ export function RootPathMapping(props: {
   const applyDialogRef = useRef<HTMLDivElement | null>(null);
   useFocusTrap(applyOpen, applyDialogRef);
 
+  // Escape closes the apply dialog while it isn't mid-remap.
+  useEffect(() => {
+    if (!applyOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) {
+        e.preventDefault();
+        setApplyOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [applyOpen, busy]);
+
   useEffect(() => {
     if (props.suggestedOldRoot && !oldRoot.trim()) {
       setOldRoot(props.suggestedOldRoot);
@@ -215,12 +228,17 @@ export function RootPathMapping(props: {
           <div
             ref={applyDialogRef}
             className="album-dialog delete-album-dialog confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="root-path-apply-title"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="dialog-heading">
               <div>
                 <p className="eyebrow">MAP SOURCE</p>
-                <h2>Remap {preview.itemCount.toLocaleString()} catalog paths?</h2>
+                <h2 id="root-path-apply-title">
+                  Remap {preview.itemCount.toLocaleString()} catalog paths?
+                </h2>
               </div>
             </div>
             <p className="dialog-body">
