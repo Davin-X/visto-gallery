@@ -2319,6 +2319,16 @@ body.is-resizing .photo-inspector {
   color: #b64059;
 }
 
+.app-frame.dark .inspector-action.favorite.active {
+  background: #38252b;
+  border-color: #77424d;
+  color: #ff8ba0;
+}
+
+.app-frame.dark .inspector-action.favorite.active span {
+  color: #ff8ba0;
+}
+
 /* Generic "already applied" state (e.g. the item is in the selection). */
 .inspector-action.active {
   background: var(--blue-soft);

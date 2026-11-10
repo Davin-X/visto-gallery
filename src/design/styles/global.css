@@ -716,15 +716,6 @@ kbd {
   white-space: nowrap;
   min-width: 0;
 }
-.inspector-top > button {
-  width: 21px;
-  height: 21px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 14px;
-}
 .inspector-image {
   position: relative;
   display: block;
@@ -3341,7 +3332,7 @@ kbd {
 }
 
 .app-frame
-  :is(
+  :where(
     h1,
     h2,
     h3,
@@ -3361,11 +3352,11 @@ kbd {
   font-kerning: normal;
 }
 
-.app-frame :is(h1, h2, h3, h4) {
+.app-frame :where(h1, h2, h3, h4) {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-.app-frame :is(.page-heading h1, .content-heading h1) {
+.app-frame :where(.page-heading h1, .content-heading h1) {
   font-size: 28px;
   font-weight: 650;
   letter-spacing: -0.035em;
@@ -3373,7 +3364,7 @@ kbd {
 }
 
 .app-frame
-  :is(
+  :where(
     .page-heading h2,
     .page-heading h3,
     .main-header h2,
@@ -3388,7 +3379,7 @@ kbd {
 }
 
 .app-frame
-  :is(
+  :where(
     .date-group-heading h2,
     .batch-options h2,
     .slideshow-settings h2,
@@ -3399,133 +3390,6 @@ kbd {
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.3;
-}
-
-.app-frame
-  :is(
-    .topbar-brand,
-    .topbar-context,
-    .nav-item,
-    .album-nav button,
-    .search-field input,
-    .toolbar-button,
-    .quick-filter,
-    .filter-chip,
-    .date-button,
-    .select-button,
-    .photo-caption,
-    .tile-caption,
-    .inspector-actions button,
-    .settings-row,
-    .batch-option,
-    .duplicate-card,
-    .slideshow-settings,
-    .edit-controls,
-    .first-run > p,
-    .feature-card p,
-    .location-preview b,
-    .location-preview small,
-    .capture-time,
-    .finder-tags,
-    .semantic-search input,
-    .search-suggestions button,
-    .batch-form-row,
-    .batch-form-check,
-    .viewer-caption,
-    .keyboard-hint,
-    .primary-button,
-    .quiet-button,
-    .outline-button,
-    .danger-button,
-    .inspector-section-head,
-    .settings-row b,
-    .memory-open,
-    .edit-tabs button,
-    .auto-adjust button,
-    .canvas-actions button,
-    .batch-form-row > input,
-    .batch-form-row select
-  ) {
-  font-size: 13px;
-}
-
-.app-frame
-  :is(
-    .page-subtitle,
-    .nav-count,
-    .nav-badge,
-    .tile-caption small,
-    .photo-caption small,
-    .metadata,
-    .location-row small,
-    .finder-tags > small,
-    .feature-body-note,
-    .settings-row small,
-    .batch-form-row small,
-    .batch-form-check small,
-    .slideshow-settings small,
-    .duplicate-card small,
-    .inspector-top small,
-    .tile-caption b,
-    .profile-copy strong,
-    .storage-label,
-    .batch-selection button,
-    .batch-group-head button,
-    .inspector-section-head button,
-    .format-hint,
-    .format-hint b,
-    .album-active-banner,
-    .album-active-banner button,
-    .raw-tile small,
-    .raw-viewer span,
-    .quiet-button,
-    .app-tag,
-    .filmstrip button > span,
-    .duplicate-nonimage,
-    .duplicate-card-meta span,
-    .batch-selection,
-    .batch-form-check b,
-    .empty-page p,
-    .settings-row select
-  ) {
-  font-size: 12px;
-}
-
-.app-frame
-  :is(
-    .eyebrow,
-    .sidebar-label,
-    .smart-label,
-    .inspector-kicker,
-    .overline,
-    .live-pill,
-    .beta-badge,
-    .native-feature-badge,
-    .search-suggestions,
-    .metadata-list,
-    .browser-capability-warning,
-    .native-limit-note,
-    .similarity-note,
-    .batch-stepper,
-    .batch-warning,
-    .export-destination,
-    .profile-copy small,
-    .storage-widget small,
-    .privacy-note small,
-    .metadata dt,
-    .metadata dd,
-    .format-hint small,
-    .raw-tile small,
-    .raw-viewer span,
-    .format-label,
-    .rule-line button,
-    .native-feature-badge,
-    .batch-form-row small,
-    .batch-form-check small,
-    .export-destination small,
-    .browser-capability-warning
-  ) {
-  font-size: 13px;
 }
 
 .app-frame
@@ -3557,57 +3421,6 @@ kbd {
   .app-frame .content-heading h1 {
     font-size: 24px;
   }
-}
-
-.app-frame .inspector-actions {
-  gap: 7px;
-  margin: 11px 0 17px;
-}
-
-.app-frame .inspector-actions button {
-  min-width: 0;
-  min-height: 56px;
-  align-content: center;
-  gap: 4px;
-  padding: 7px 3px;
-  border-color: var(--line-strong);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 18px;
-  transition:
-    background-color 120ms ease,
-    border-color 120ms ease;
-}
-
-.app-frame .inspector-actions button:hover {
-  border-color: var(--blue);
-  background: var(--blue-soft);
-}
-
-.app-frame .inspector-actions button span {
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 550;
-  line-height: 1.2;
-}
-
-.app-frame .inspector-actions .favorite-action {
-  color: #b64059;
-}
-
-.app-frame.dark .inspector-actions .favorite-action {
-  color: #ff8ba0;
-}
-
-.app-frame .inspector-actions .favorite-action.is-active {
-  border-color: #e6a5b1;
-  background: #fff1f3;
-}
-
-.app-frame.dark .inspector-actions .favorite-action.is-active {
-  border-color: #77424d;
-  background: #38252b;
 }
 
 .app-frame .finder-tags {
@@ -3816,7 +3629,7 @@ body {
 }
 
 .app-frame
-  :is(
+  :where(
     .sidebar-label,
     .eyebrow,
     .smart-label,
