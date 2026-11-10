@@ -235,7 +235,7 @@ export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
         position: "fixed",
         left: adjustedX,
         top: adjustedY,
-        zIndex: 1000,
+        zIndex: "var(--z-context-menu)",
         pointerEvents: "none",
       }}
     >

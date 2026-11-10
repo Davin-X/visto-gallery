@@ -5047,7 +5047,7 @@ body.is-resizing .photo-inspector {
   right: 24px;
   /* Notices must remain visible over the Sources and Settings dialogs that
      often trigger them. */
-  z-index: 410;
+  z-index: var(--z-toast);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -5092,7 +5092,7 @@ body.is-resizing .photo-inspector {
   position: fixed;
   top: 72px;
   left: 50%;
-  z-index: 410;
+  z-index: var(--z-toast);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -5545,7 +5545,7 @@ body.is-resizing .photo-inspector {
 .dialog-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 300;
+  z-index: var(--z-overlay);
   display: grid;
   place-items: center;
   padding: 24px;
@@ -6007,7 +6007,7 @@ body.is-resizing .photo-inspector {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 200;
+  z-index: var(--z-slideshow);
   display: grid;
   overflow: hidden;
   place-items: center;
@@ -9063,7 +9063,7 @@ body.is-resizing .photo-inspector {
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  z-index: 100;
+  z-index: var(--z-popover);
   min-width: 170px;
   padding: 6px;
   border: 1px solid var(--line);
@@ -10949,7 +10949,7 @@ body.is-resizing .photo-inspector {
 /* Compare overlay ------------------------------------------------------ */
 
 .compare-backdrop {
-  z-index: 320;
+  z-index: var(--z-compare);
 }
 
 .compare-dialog {

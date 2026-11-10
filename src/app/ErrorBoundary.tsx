@@ -101,7 +101,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             background: "light-dark(#ffffff, #111827)",
             color: "light-dark(#111827, #f9fafb)",
             colorScheme: "light dark",
-            zIndex: 10000,
+            zIndex: "var(--z-error)",
             padding: 24,
             textAlign: "center",
           }}
