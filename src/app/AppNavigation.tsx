@@ -24,6 +24,7 @@ import {
 import { ACCENT_PALETTE } from "../engine/stores";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { LibraryFolder, LibraryStats } from "../engine/types/commands";
+import type { Appearance } from "../engine/types/generated/ipc";
 import type { Screen } from "./screen";
 
 const NAV_ITEMS: Array<{
@@ -40,6 +41,17 @@ const NAV_ITEMS: Array<{
   { label: "Hidden", Icon: EyeOffIcon, screen: "Hidden" },
 ];
 
+/** The top-bar button cycles light → dark → system → light. */
+export function cycleAppearance(appearance: Appearance): Appearance {
+  return appearance === "light" ? "dark" : appearance === "dark" ? "system" : "light";
+}
+
+const APPEARANCE_LABEL: Record<Appearance, string> = {
+  light: "Light",
+  dark: "Dark",
+  system: "System",
+};
+
 interface AppTopBarProps {
   screen: Screen;
   activeAlbumName: string | null;
@@ -48,6 +60,7 @@ interface AppTopBarProps {
   sidebarOpen: boolean;
   showInspector: boolean;
   dark: boolean;
+  appearance: Appearance;
   accentColor: string;
   onToggleSidebar: () => void;
   onToggleInspector: () => void;
@@ -73,6 +86,7 @@ export function AppTopBar({
   sidebarOpen,
   showInspector,
   dark,
+  appearance,
   accentColor,
   onToggleSidebar,
   onToggleInspector,
@@ -89,6 +103,7 @@ export function AppTopBar({
   onNowPlayingNext,
 }: AppTopBarProps) {
   const inspectorAvailable = screen === "Library" || screen === "Hidden";
+  const appearanceNextLabel = APPEARANCE_LABEL[cycleAppearance(appearance)];
 
   return (
     <header className="topbar" onMouseDown={onMouseDown} onDoubleClick={onDoubleClick}>
@@ -136,7 +151,7 @@ export function AppTopBar({
           type="button"
           aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
           aria-pressed={sidebarOpen}
-          title={sidebarOpen ? "Hide sidebar (⌘\)" : "Show sidebar (⌘\)"}
+          title={sidebarOpen ? "Hide sidebar (⌘\\)" : "Show sidebar (⌘\\)"}
           onClick={onToggleSidebar}
         >
           <PanelLeftIcon size={18} />
@@ -167,8 +182,8 @@ export function AppTopBar({
         <button
           className="icon-button"
           type="button"
-          aria-label={dark ? "Switch to light appearance" : "Switch to dark appearance"}
-          title={dark ? "Switch to light appearance" : "Switch to dark appearance"}
+          aria-label={`Appearance: ${APPEARANCE_LABEL[appearance]}. Switch to ${appearanceNextLabel}`}
+          title={`Appearance: ${APPEARANCE_LABEL[appearance]} — switch to ${appearanceNextLabel}`}
           onClick={onToggleAppearance}
         >
           {dark ? <SunIcon size={18} /> : <MoonIcon size={18} />}

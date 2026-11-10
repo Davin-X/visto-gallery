@@ -4,6 +4,7 @@ import {
   getKindBadgeClass,
   getKindDotClass,
   canPlayVideoInApp,
+  classifyVideoFailure,
   fileExtension,
 } from "./mediaTypes";
 
@@ -30,4 +31,16 @@ test("only WebKit-decodable video containers play in-app", () => {
   // Items without an extension stay optimistic: the <video> error handler
   // still catches failures at playback time.
   expect(canPlayVideoInApp("")).toBe(true);
+});
+
+test("only an unsupported container or a decode error blames the format", () => {
+  // A container the app never hands to <video>.
+  expect(classifyVideoFailure(undefined, "/lib/a.mkv")).toBe("format");
+  // MEDIA_ERR_DECODE means the container was read but the stream is bad.
+  expect(classifyVideoFailure(3, "/lib/a.mp4")).toBe("format");
+  // SRC_NOT_SUPPORTED is what a missing/offline file looks like too, and a
+  // network error never says anything about the format.
+  expect(classifyVideoFailure(4, "/lib/a.mp4")).toBe("unavailable");
+  expect(classifyVideoFailure(2, "/lib/a.mp4")).toBe("unavailable");
+  expect(classifyVideoFailure(undefined, "/lib/a.mp4")).toBe("unavailable");
 });

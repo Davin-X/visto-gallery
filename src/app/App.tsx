@@ -34,7 +34,7 @@ import { errorCode } from "../engine/types/errors";
 import { describeError } from "./utils/describeError";
 import { startConfiguredSlideshow } from "./utils/startConfiguredSlideshow";
 import { AppDialogs } from "./AppDialogs";
-import { AppSidebar, AppTopBar } from "./AppNavigation";
+import { AppSidebar, AppTopBar, cycleAppearance } from "./AppNavigation";
 import { AppShell } from "./AppShell";
 import { AppScreenRouter } from "./AppScreenRouter";
 import type { Screen } from "./screen";
@@ -2172,7 +2172,8 @@ function App() {
           }}
           onToggleSidebar={() => library.toggleSidebar()}
           onToggleInspector={() => library.toggleInspector()}
-          onToggleAppearance={() => settings.update("appearance", dark ? "light" : "dark")}
+          appearance={appearance}
+          onToggleAppearance={() => settings.update("appearance", cycleAppearance(appearance))}
           onCycleAccent={() => {
             const index = ACCENT_PALETTE.findIndex((c) => c.id === accentColor);
             const next = ACCENT_PALETTE[(index + 1) % ACCENT_PALETTE.length].id;

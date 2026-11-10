@@ -177,6 +177,10 @@ function ViewerScreen(props: ViewerScreenProps) {
       // Ignore if typing in an input, or if the slideshow overlay is driving.
       if ((e.target as HTMLElement).closest("input, textarea, select")) return;
       if (useSlideshowStore.getState().isOpen) return;
+      // These are bare-key shortcuts. A ⌘/Ctrl/⌥ combination belongs to the
+      // global map (⌘F focuses search, ⌘R reloads), so it must not also
+      // favorite or rotate the photo behind it.
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       switch (e.key) {
         case "ArrowUp":
@@ -391,6 +395,7 @@ function ViewerScreen(props: ViewerScreenProps) {
           }}
           onClick={() => props.onNavigate(-1)}
           aria-label="Previous"
+          title="Previous item (←)"
         >
           <ChevronLeftIcon size={21} strokeWidth={2.1} />
         </button>
@@ -494,6 +499,7 @@ function ViewerScreen(props: ViewerScreenProps) {
           }}
           onClick={() => props.onNavigate(1)}
           aria-label="Next"
+          title="Next item (→)"
         >
           <ChevronRightIcon size={21} strokeWidth={2.1} />
         </button>
@@ -537,6 +543,11 @@ function ViewerScreen(props: ViewerScreenProps) {
           <span>
             <kbd>0</kbd> Reset zoom
           </span>
+          {selected.kind === "photo" && (
+            <span>
+              <kbd>1</kbd> 200%
+            </span>
+          )}
           <span>
             <kbd>F</kbd> Favorite
           </span>
@@ -587,6 +598,7 @@ function ViewerScreen(props: ViewerScreenProps) {
                   type="button"
                   onClick={() => props.onSetZoom(Math.max(25, props.zoom - 25))}
                   aria-label="Zoom out"
+                  title="Zoom out (↓)"
                 >
                   <MinusIcon size={15} />
                 </button>
@@ -594,6 +606,7 @@ function ViewerScreen(props: ViewerScreenProps) {
                   type="button"
                   onClick={() => props.onSetZoom(Math.min(300, props.zoom + 25))}
                   aria-label="Zoom in"
+                  title="Zoom in (↑)"
                 >
                   <PlusIcon size={15} />
                 </button>

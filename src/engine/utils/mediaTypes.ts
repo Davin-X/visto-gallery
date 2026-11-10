@@ -40,6 +40,28 @@ export function canPlayVideoInApp(path?: string, name?: string): boolean {
   return !ext || IN_APP_VIDEO_EXTENSIONS.has(ext);
 }
 
+/** Why a video failed to play in the app. */
+export type VideoFailureKind = "format" | "unavailable";
+
+/**
+ * Classify a <video> load failure from `HTMLMediaElement.error.code`:
+ * 1 aborted, 2 network, 3 decode, 4 src not supported.
+ *
+ * Only an unsupported container or a decode error (3) is a format problem.
+ * MEDIA_ERR_SRC_NOT_SUPPORTED (4) is also what a missing file, a disconnected
+ * drive or a permission error looks like, so it must not be reported as a
+ * format problem. Callers should ignore MEDIA_ERR_ABORTED (1), which is a
+ * navigation race rather than a failure.
+ */
+export function classifyVideoFailure(
+  code: number | undefined,
+  path?: string,
+  name?: string,
+): VideoFailureKind {
+  if (!canPlayVideoInApp(path, name)) return "format";
+  return code === 3 ? "format" : "unavailable";
+}
+
 export const TYPE_IDENTITY: Record<MediaKind, TypeIdentity> = {
   photo: {
     label: "Photo",

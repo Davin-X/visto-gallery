@@ -2299,6 +2299,59 @@ function LibraryScreen(props: LibraryScreenProps) {
                       <span>Select</span>
                     </button>
                   </div>
+                  {!masked(sel) && (
+                    <div className="inspector-section">
+                      <div className="inspector-section-head">
+                        <b>Rating &amp; Label</b>
+                      </div>
+                      <div className="inspector-star-row" role="group" aria-label="Rating">
+                        {[1, 2, 3, 4, 5].map((value) => {
+                          const active = (sel.rating ?? 0) >= value;
+                          const clears = sel.rating === value;
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              className={`inspector-star${active ? " filled" : ""}`}
+                              aria-label={
+                                clears ? "Clear rating" : `${value} star${value === 1 ? "" : "s"}`
+                              }
+                              aria-pressed={clears}
+                              title={
+                                clears
+                                  ? "Clear rating"
+                                  : `Rate ${value} star${value === 1 ? "" : "s"}`
+                              }
+                              onClick={() => props.onSetRatingForIds([sel.id], clears ? 0 : value)}
+                            >
+                              ★
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="inspector-color-row" role="group" aria-label="Color label">
+                        {["red", "yellow", "green", "blue", "purple"].map((color) => {
+                          const active = sel.colorLabel === color;
+                          const label = color[0].toUpperCase() + color.slice(1);
+                          return (
+                            <button
+                              key={color}
+                              type="button"
+                              className={`inspector-color${active ? " active" : ""}`}
+                              aria-label={active ? `Clear ${color} label` : `${label} label`}
+                              aria-pressed={active}
+                              title={active ? `Clear ${color} label` : `${label} label`}
+                              onClick={() =>
+                                props.onSetColorLabelForIds([sel.id], active ? "" : color)
+                              }
+                            >
+                              <span className={`ctx-dot ctx-dot-${color}`} />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   <div className="inspector-section">
                     <div className="inspector-section-head">
                       <b>File Info</b>
@@ -2310,12 +2363,8 @@ function LibraryScreen(props: LibraryScreenProps) {
                         </div>
                       ) : (
                         <>
-                          <div className="info-row">
-                            <span className="info-label">Name</span>
-                            <span className="info-value" title={sel.name}>
-                              {sel.name}
-                            </span>
-                          </div>
+                          {/* The name is already the inspector heading; repeating
+                              it here was redundant. */}
                           <div className="info-row">
                             <span className="info-label">Kind</span>
                             <span className="info-value">

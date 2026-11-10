@@ -14,7 +14,11 @@ import {
 import { tauri } from "../../engine/commands/tauri";
 import type { ExternalPlayer } from "../../engine/types/commands";
 import { formatDuration } from "../../engine/utils/time";
-import { canPlayVideoInApp, fileExtension } from "../../engine/utils/mediaTypes";
+import {
+  canPlayVideoInApp,
+  classifyVideoFailure,
+  fileExtension,
+} from "../../engine/utils/mediaTypes";
 import {
   observePictureInPicture,
   supportsPictureInPicture,
@@ -461,16 +465,10 @@ function VideoPlayer({
 
   if (failed) {
     const ext = fileExtension(path) || fileExtension(name);
-    // Only call it a format problem when the extension is genuinely
-    // unsupported or the error is SRC_NOT_SUPPORTED. A missing file, an
-    // unplugged drive or a permission error gets the availability copy.
-    // SRC_NOT_SUPPORTED (4) and DECODE (3) point at the codec; everything
-    // else (network, aborted, unknown) means the file is unavailable.
-    const isFormatFailure =
-      !canPlayVideoInApp(path, name) ||
-      !videoError ||
-      videoError.code === 4 ||
-      videoError.code === 3;
+    // SRC_NOT_SUPPORTED (4) is also what a missing file, an unplugged drive
+    // or a permission error looks like, so only an unsupported extension or
+    // a real decode error (3) may be reported as a format problem.
+    const isFormatFailure = classifyVideoFailure(videoError?.code, path, name) === "format";
     const player = players[0];
     return (
       <div className="viewer-video-fallback" role="alert">
@@ -493,7 +491,7 @@ function VideoPlayer({
         <p className="viewer-video-fallback-copy">
           {isFormatFailure
             ? `${ext ? `.${ext} files` : "This file"} can't be decoded by macOS's built-in web player. Open it in a desktop player that supports this format.`
-            : "This video could not be played. The file may be missing or the source drive may be disconnected — check the source and try again."}
+            : "VistoGallery couldn't open this video. The file may have been moved, deleted, or be on a disconnected drive — or its codec may not be playable here. Check the source, then try a desktop player."}
         </p>
         <div className="viewer-video-fallback-actions">
           {player ? (
@@ -547,7 +545,11 @@ function VideoPlayer({
           onFullscreen?.();
         }}
         onError={(event) => {
-          setVideoError(event.currentTarget.error ?? null);
+          const error = event.currentTarget.error ?? null;
+          // MEDIA_ERR_ABORTED fires when src changes mid-load (moving to the
+          // next video); it is a navigation race, not a broken file.
+          if (error?.code === 1) return;
+          setVideoError(error);
           setFailed(true);
         }}
         tabIndex={0}
