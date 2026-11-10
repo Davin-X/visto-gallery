@@ -1141,7 +1141,21 @@ function LibraryScreen(props: LibraryScreenProps) {
                 <p className="eyebrow">
                   {props.hiddenView ? "OUT OF THE GALLERY" : "YOUR COLLECTION"}
                 </p>
-                <h1>{props.hiddenView ? "Hidden" : "All Photos"}</h1>
+                <h1>
+                  {props.hiddenView
+                    ? "Hidden"
+                    : props.filter === "Photos"
+                      ? "Photos"
+                      : props.filter === "Videos"
+                        ? "Videos"
+                        : props.filter === "RAW"
+                          ? "RAW"
+                          : props.filter === "Animations"
+                            ? "Animations"
+                            : props.filter === "Favorites"
+                              ? "Favorites"
+                              : "All Media"}
+                </h1>
                 {/* The hidden-view note lives in the heading instead of a
                     banner row so the sticky header stays short. When nothing is
                     hidden the empty state already says the same thing. */}
@@ -1705,7 +1719,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                           )}
                           {item.favorite && !masked(item) ? (
                             <span className="tile-favorite" aria-label="Favorite">
-                              <HeartIcon size={11} filled />
+                              <HeartIcon size={10} filled />
                             </span>
                           ) : null}
                           {item.colorLabel && !masked(item) ? (
@@ -1887,7 +1901,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                                     )}
                                     {item.favorite && !masked(item) ? (
                                       <span className="tile-favorite" aria-label="Favorite">
-                                        <HeartIcon size={11} filled />
+                                        <HeartIcon size={10} filled />
                                       </span>
                                     ) : null}
                                     {item.colorLabel && !masked(item) ? (
@@ -2045,7 +2059,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                         )}
                         {item.favorite && !masked(item) ? (
                           <span className="tile-favorite" aria-label="Favorite">
-                            <HeartIcon size={11} filled />
+                            <HeartIcon size={10} filled />
                           </span>
                         ) : null}
                         {item.colorLabel && !masked(item) ? (
@@ -2180,18 +2194,35 @@ function LibraryScreen(props: LibraryScreenProps) {
                       {...holdHandlers(sel.id)}
                     >
                       {sel.kind === "photo" ? (
-                        // A cached 512px preview, not the original: a 40 MB
-                        // photo does not need a full decode for this frame,
-                        // and a missing or offline file shows "Preview
-                        // unavailable" instead of a broken image.
-                        <CachedThumbnail
-                          itemId={sel.id}
-                          name={tileAlt(sel)}
-                          size={512}
-                          eager
-                          showStatus
-                          style={draftImageStyle(draftTransforms, sel.id)}
-                        />
+                        (() => {
+                          const ext = (sel.extension || "").toLowerCase();
+                          const isAnimatedPhoto =
+                            !!(sel as any).isAnimated || !!(sel as any).animated || ext === "gif" || ext === "webp" || ext === "apng";
+                          return isAnimatedPhoto ? (
+                            <span className="inspector-video-preview">
+                              <img
+                                src={assetUrl(sel.path)}
+                                alt={tileAlt(sel)}
+                                draggable={false}
+                                style={draftImageStyle(draftTransforms, sel.id)}
+                              />
+                            </span>
+                          ) : (
+                            // A cached 512px preview, not the original: a 40 MB
+                            // photo does not need a full decode for this frame,
+                            // and a missing or offline file shows "Preview
+                            // unavailable" instead of a broken image.
+                            <CachedThumbnail
+                              itemId={sel.id}
+                              name={tileAlt(sel)}
+                              size={512}
+                              eager
+                              showStatus
+                              fallbackSrc={assetUrl(sel.path)}
+                              style={draftImageStyle(draftTransforms, sel.id)}
+                            />
+                          );
+                        })()
                       ) : sel.kind === "video" ? (
                         <span className="inspector-video-preview">
                           <video
@@ -2211,7 +2242,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                       )}
                       <span>Double-click to view</span>
                       <span className="inspector-type-badge">
-                        {sel.kind === "video" ? "Video" : sel.kind === "raw" ? "RAW" : "Photo"}
+                        {sel.kind === "video"
+                          ? "Video"
+                          : sel.kind === "raw"
+                            ? "RAW"
+                            : (sel as any).isAnimated ||
+                                !!(sel as any).animated ||
+                                ["gif", "webp", "apng"].includes((sel.extension || "").toLowerCase())
+                              ? "Animation"
+                              : "Photo"}
                       </span>
                     </button>
                     {sel.kind === "video" && props.onPlayBackground && (
@@ -2325,21 +2364,6 @@ function LibraryScreen(props: LibraryScreenProps) {
                         })}
                       </div>
                       <div className="inspector-color-row" role="group" aria-label="Color label">
-                        {(() => {
-                          const noneActive = !sel.colorLabel;
-                          return (
-                            <button
-                              type="button"
-                              className={`inspector-color inspector-color-none${noneActive ? " active" : ""}`}
-                              aria-label="No color label"
-                              aria-pressed={noneActive}
-                              title="No color label"
-                              onClick={() => props.onSetColorLabelForIds([sel.id], null)}
-                            >
-                              <span className="ctx-dot ctx-dot-none" aria-hidden="true" />
-                            </button>
-                          );
-                        })()}
                         {["red", "yellow", "green", "blue", "purple"].map((color) => {
                           const active = sel.colorLabel === color;
                           const label = color[0].toUpperCase() + color.slice(1);

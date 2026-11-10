@@ -1771,17 +1771,17 @@ body.is-resizing .photo-inspector {
 
 .tile-favorite {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  top: 7px;
+  left: 7px;
   z-index: 4;
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
   background: color-mix(in srgb, #f43f5e 90%, transparent);
   color: #fff;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(6px);
 }
 
@@ -2419,6 +2419,8 @@ body.is-resizing .photo-inspector {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-top: 8px;
+  margin-bottom: 10px;
 }
 
 .inspector-color {
@@ -3171,7 +3173,7 @@ body.is-resizing .photo-inspector {
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   column-gap: 10px;
-  height: 48px;
+  height: 40px;
   padding: 0 12px 0 14px;
   border-bottom: 1px solid transparent;
   background: color-mix(in srgb, var(--surface) 86%, transparent);
