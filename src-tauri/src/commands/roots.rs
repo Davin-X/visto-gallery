@@ -76,6 +76,78 @@ async fn ensure_registered_root(db: &sqlx::SqlitePool, old_root: &str) -> Result
     Ok(())
 }
 
+async fn rekey_moved_paths(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    old_root: &str,
+    new_root: &str,
+    affected: &[String],
+) -> Result<(), CommandError> {
+    // Re-keying ids rewrites rows the foreign keys point at, so the check is
+    // deferred to commit; both the parent and its children move together.
+    sqlx::query("PRAGMA defer_foreign_keys = ON")
+        .execute(&mut **tx)
+        .await?;
+    let now = super::now_ms();
+    for old_path in affected {
+        let new_path = mapped_path(old_root, new_root, old_path)
+            .ok_or_else(|| format!("Internal mapping failure for {old_path}"))?;
+        new_path_for(tx, old_path, &new_path, now).await?;
+    }
+    Ok(())
+}
+
+async fn new_path_for(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    old_path: &String,
+    new_path: &String,
+    now: i64,
+) -> Result<(), CommandError> {
+    // The catalog key (`id`) is a function of the path, so a moved
+    // source has to move its ids too or the catalog becomes
+    // inconsistent and refuses to scan. Re-key dependent tables in the
+    // same transaction.
+    let new_id = crate::models::stable_id(new_path);
+    let old_id: Option<String> = sqlx::query_scalar("SELECT id FROM media_items WHERE path = ?")
+        .bind(old_path)
+        .fetch_optional(&mut **tx)
+        .await?;
+    sqlx::query("UPDATE media_items SET id = ?, path = ?, updated_at = ? WHERE path = ?")
+        .bind(&new_id)
+        .bind(new_path)
+        .bind(now)
+        .bind(old_path)
+        .execute(&mut **tx)
+        .await
+        .map_err(|e| {
+            format!("Could not update {old_path} to {new_path}; the mapping was rolled back: {e}")
+        })?;
+    if let Some(old_id) = old_id {
+        if old_id != new_id {
+            for statement in [
+                "UPDATE media_tags SET media_id = ? WHERE media_id = ?",
+                "UPDATE album_items SET media_id = ? WHERE media_id = ?",
+                "UPDATE edit_recipes SET media_id = ? WHERE media_id = ?",
+                "UPDATE edit_backups SET media_id = ? WHERE media_id = ?",
+            ] {
+                sqlx::query(statement)
+                    .bind(&new_id)
+                    .bind(&old_id)
+                    .execute(&mut **tx)
+                    .await?;
+            }
+            // The journaled original path is the path the file had when it
+            // was backed up, so it must track the remap too.
+            sqlx::query("UPDATE edit_backups SET original_path = ? WHERE media_id = ?")
+                .bind(new_path)
+                .bind(&new_id)
+                .execute(&mut **tx)
+                .await?;
+        }
+    }
+
+    Ok(())
+}
+
 fn mapped_path(old_root: &str, new_root: &str, path: &str) -> Option<String> {
     if path == old_root {
         return Some(new_root.to_string());
@@ -183,7 +255,6 @@ pub async fn apply_root_path_mapping(
         )));
     }
 
-    let now = super::now_ms();
     let mut tx = db.begin().await?;
     let updated_root = sqlx::query("UPDATE library_folders SET path = ? WHERE path = ?")
         .bind(&new_root)
@@ -199,21 +270,9 @@ pub async fn apply_root_path_mapping(
         )));
     }
 
-    for old_path in &affected {
-        let new_path = mapped_path(&old_root, &new_root, old_path)
-            .ok_or_else(|| format!("Internal mapping failure for {old_path}"))?;
-        sqlx::query("UPDATE media_items SET path = ?, updated_at = ? WHERE path = ?")
-            .bind(&new_path)
-            .bind(now)
-            .bind(old_path)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| {
-                format!(
-                    "Could not update {old_path} to {new_path}; the mapping was rolled back: {e}"
-                )
-            })?;
-    }
+    rekey_moved_paths(&mut tx, &old_root, &new_root, &affected)
+        .await
+        .map_err(|e| format!("{e}; the mapping was rolled back"))?;
 
     tx.commit().await.map_err(|e| {
         format!("Could not commit the root mapping; the mapping was rolled back: {e}")
@@ -258,6 +317,96 @@ mod tests {
             .await
             .unwrap();
         (db, path)
+    }
+
+    #[tokio::test]
+    async fn remap_rekeys_ids_and_dependent_rows() {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&db).await.unwrap();
+        sqlx::query("INSERT INTO library_folders (path, added_at) VALUES ('/old-root', 1)")
+            .execute(&db)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at) VALUES ('oldid', '/old-root/a.jpg', 'a.jpg', 'jpg', 'photo', 1, 1, 1, 1)")
+            .execute(&db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO tags (id, name, color_index, created_at) VALUES ('t1', 'tag', 0, 1)",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        sqlx::query("INSERT INTO media_tags (media_id, tag_id) VALUES ('oldid', 't1')")
+            .execute(&db)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO albums (id, name, color_index, created_at, updated_at) VALUES ('alb', 'album', 0, 1, 1)")
+            .execute(&db)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO album_items (album_id, media_id, added_at) VALUES ('alb', 'oldid', 1)",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        sqlx::query("INSERT INTO edit_recipes (media_id, edits, crop, history, history_index, created_at, updated_at) VALUES ('oldid', '{}', NULL, '[]', 0, 1, 1)")
+            .execute(&db)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO edit_backups (media_id, original_path, backup_path, size, sha256, created_at) VALUES ('oldid', '/old-root/a.jpg', '/tmp/visto-backup/a.jpg', 1, NULL, 1)")
+            .execute(&db)
+            .await
+            .unwrap();
+
+        let mut tx = db.begin().await.unwrap();
+        rekey_moved_paths(
+            &mut tx,
+            "/old-root",
+            "/new-root",
+            &["/old-root/a.jpg".to_string()],
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+
+        let new_id = crate::models::stable_id("/new-root/a.jpg");
+        let fetched: String =
+            sqlx::query_scalar("SELECT id FROM media_items WHERE path = '/new-root/a.jpg'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(fetched, new_id);
+        let tag: String = sqlx::query_scalar("SELECT media_id FROM media_tags")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(tag, new_id);
+        let item: String = sqlx::query_scalar("SELECT media_id FROM album_items")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(item, new_id);
+        let recipe: String = sqlx::query_scalar("SELECT media_id FROM edit_recipes")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(recipe, new_id);
+        let bak: String = sqlx::query_scalar("SELECT media_id FROM edit_backups")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(bak, new_id);
+        let orig: String = sqlx::query_scalar("SELECT original_path FROM edit_backups")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(orig, "/new-root/a.jpg");
     }
 
     #[tokio::test]

@@ -1711,6 +1711,20 @@ pub async fn remove_library_folder(
             "Refusing to remove an empty folder path".to_string(),
         ));
     }
+    remove_library_folder_inner(&db, &root, delete_files.unwrap_or(false)).await
+}
+
+async fn remove_library_folder_inner(
+    db: &sqlx::SqlitePool,
+    root: &str,
+    delete_files: bool,
+) -> Result<i64, CommandError> {
+    let db = db.clone();
+    if root.is_empty() {
+        return Err(CommandError::invalid(
+            "Refusing to remove an empty folder path".to_string(),
+        ));
+    }
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
         .fetch_all(&db)
         .await?;
@@ -1728,7 +1742,7 @@ pub async fn remove_library_folder(
          WHERE substr(path, 1, ?1) = ?2 AND length(path) > ?1 AND substr(path, ?1 + 1, 1) = '/'",
     )
     .bind(root.len() as i64)
-    .bind(&root)
+    .bind(root)
     .fetch_all(&db)
     .await?;
 
@@ -1737,7 +1751,11 @@ pub async fn remove_library_folder(
         .map(|row| (row.get::<String, _>("id"), row.get::<String, _>("path")))
         .collect();
 
-    if delete_files.unwrap_or(false) && !targets.is_empty() {
+    // Move the files when asked. Files that cannot be trashed keep their
+    // catalog rows, so the user loses nothing and a retry can converge. Files
+    // that are already missing are treated as success for the catalog work.
+    let mut keep_rows = std::collections::HashSet::new();
+    if delete_files && !targets.is_empty() {
         const TRASH_CHUNK: usize = 50;
         for chunk in targets.chunks(TRASH_CHUNK) {
             let chunk_paths: Vec<String> = chunk
@@ -1748,34 +1766,33 @@ pub async fn remove_library_folder(
             let result =
                 tokio::task::spawn_blocking(move || trash::delete_all(&chunk_paths_for_delete))
                     .await;
-            if result.as_ref().map(|r| r.is_err()).unwrap_or(true) {
-                for path in &chunk_paths {
-                    let p = path.clone();
-                    let r = tokio::task::spawn_blocking(move || trash::delete(&p)).await;
-                    if r.is_err() || r.unwrap().is_err() {
-                        return Err(CommandError::io(
-                            "Could not move files to Trash".to_string(),
-                        ));
-                    }
+            let batch_ok = matches!(result, Ok(Ok(())));
+            if batch_ok {
+                continue;
+            }
+            for (id, path) in chunk {
+                if !std::path::Path::new(path).exists() {
+                    continue; // file already gone — row is safe to drop
                 }
-            } else if false {
-                for path in &chunk_paths {
-                    let p = path.clone();
-                    let r = tokio::task::spawn_blocking(move || trash::delete(&p)).await;
-                    if r.is_err() || r.unwrap().is_err() {
-                        return Err(CommandError::io(
-                            "Could not move files to Trash".to_string(),
-                        ));
+                let p = path.clone();
+                match tokio::task::spawn_blocking(move || trash::delete(&p)).await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(_)) | Err(_) => {
+                        keep_rows.insert(id.clone());
                     }
                 }
             }
         }
     }
+    let dropped: Vec<&(String, String)> = targets
+        .iter()
+        .filter(|(id, _)| !keep_rows.contains(id))
+        .collect();
     let mut tx = db.begin().await?;
 
     // Clean up join rows explicitly instead of relying on foreign-key cascades
     // being enabled on this particular pooled connection.
-    for (id, _) in &targets {
+    for (id, _) in &dropped {
         for statement in [
             "DELETE FROM media_tags WHERE media_id = ?",
             "DELETE FROM album_items WHERE media_id = ?",
@@ -1787,23 +1804,34 @@ pub async fn remove_library_folder(
 
     // Forget the folder itself, plus any registered subfolder that lived
     // inside it, so a later import is not shadowed by stale entries.
-    let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
-        .fetch_all(&mut *tx)
-        .await?;
-    for registered_path in registered {
-        if super::normalize_root(&registered_path) == root
-            || super::path_is_inside(&registered_path, &root)
-        {
-            sqlx::query("DELETE FROM library_folders WHERE path = ?")
-                .bind(&registered_path)
-                .execute(&mut *tx)
-                .await?;
+    // Only forget the folder if nothing remains under it; rows that kept
+    // their file stay registered so a retry can finish the job.
+    let remaining: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM media_items WHERE substr(path, 1, ?1) = ?2 AND length(path) > ?1 AND substr(path, ?1 + 1, 1) = '/'",
+    )
+    .bind(root.len() as i64)
+    .bind(root)
+    .fetch_one(&mut *tx)
+    .await?;
+    if remaining == 0 {
+        let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
+            .fetch_all(&mut *tx)
+            .await?;
+        for registered_path in registered {
+            if super::normalize_root(&registered_path) == root
+                || super::path_is_inside(&registered_path, root)
+            {
+                sqlx::query("DELETE FROM library_folders WHERE path = ?")
+                    .bind(&registered_path)
+                    .execute(&mut *tx)
+                    .await?;
+            }
         }
     }
 
     tx.commit().await?;
 
-    Ok(targets.len() as i64)
+    Ok(dropped.len() as i64)
 }
 
 #[tauri::command]
@@ -2682,6 +2710,79 @@ mod thumbnail_bytes_tests {
     #[test]
     fn rejects_corrupt_bytes() {
         assert_eq!(jpeg_dimensions(b"not an image"), None);
+    }
+}
+
+#[cfg(test)]
+mod remove_library_folder_tests {
+    use super::remove_library_folder_inner;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn seeded_db() -> sqlx::SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&db).await.unwrap();
+        db
+    }
+
+    async fn seed_folder_and_rows(db: &sqlx::SqlitePool, root: &str, count: usize) {
+        sqlx::query("INSERT INTO library_folders (path, added_at) VALUES (?, 1)")
+            .bind(root)
+            .execute(db)
+            .await
+            .unwrap();
+        for i in 0..count {
+            sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at) VALUES (?, ?, 'a.jpg', 'jpg', 'photo', 1, 1, 1, 1)")
+                .bind(format!("id-{i}"))
+                .bind(format!("{root}/inner/{i}.jpg"))
+                .execute(db)
+                .await
+                .unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn missing_files_drop_rows_and_forget_the_folder() {
+        let db = seeded_db().await;
+        let root = "/visto-does-not-exist-b3-test";
+        seed_folder_and_rows(&db, root, 2).await;
+        // Files do not exist: rows drop and the folder is forgotten.
+        let dropped = remove_library_folder_inner(&db, root, true).await.unwrap();
+        assert_eq!(dropped, 2);
+        let rows: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM media_items WHERE path LIKE '/visto-does-not-exist-b3-test/%'",
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap();
+        assert_eq!(rows, 0);
+        let folders: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM library_folders WHERE path = ?")
+                .bind(root)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(folders, 0);
+    }
+
+    #[tokio::test]
+    async fn rerun_is_idempotent() {
+        let db = seeded_db().await;
+        let root = "/visto-does-not-exist-b3-retry";
+        seed_folder_and_rows(&db, root, 2).await;
+        assert_eq!(
+            remove_library_folder_inner(&db, root, true).await.unwrap(),
+            2
+        );
+        // Folder is forgotten, so a retry refuses cleanly instead of
+        // silently succeeding again.
+        let err = remove_library_folder_inner(&db, root, true)
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, crate::errors::ErrorCode::PathNotAllowed);
     }
 }
 

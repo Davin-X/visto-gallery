@@ -1080,17 +1080,33 @@ fn render_edited_blocking(
     let _format = reader
         .format()
         .ok_or_else(|| CommandError::new(ErrorCode::UnsupportedFormat, "Unknown image format"))?;
-    let mut img = reader.decode().map_err(|e| {
+    // Orientation must be baked in once, before cropping, so the pixel
+    // space matches the oriented preview the editor shows. Otherwise crop and
+    // rotate get applied to the wrong axis and the file saves sideways.
+    let mut decoder = reader.into_decoder().map_err(|e| {
         CommandError::new(
             ErrorCode::UnsupportedFormat,
             format!("Could not decode image: {}", e),
         )
     })?;
+    let orientation = decoder
+        .orientation()
+        .unwrap_or(image::metadata::Orientation::NoTransforms);
+    let mut img = DynamicImage::from_decoder(decoder).map_err(|e| {
+        CommandError::new(
+            ErrorCode::UnsupportedFormat,
+            format!("Could not decode image: {}", e),
+        )
+    })?;
+    img.apply_orientation(orientation);
 
     let (orig_width, orig_height) = (img.width(), img.height());
 
-    // 2. Read EXIF data before any modifications (for preservation)
-    let exif_data = read_exif_bytes(&source_path);
+    // 2. Read EXIF data before any modifications, and clear the Orientation
+    // tag so EXIF-aware viewers do not rotate the already-oriented pixels
+    // a second time.
+    let exif_data =
+        read_exif_bytes(&source_path).and_then(|bytes| rewrite_orientation_to_one(&bytes));
 
     // 3. Apply crop in SOURCE space (before rotation/flip)
     // CropRect is normalized (0-1) against source dimensions
@@ -1490,6 +1506,72 @@ pub(crate) fn read_exif_bytes(path: &PathBuf) -> Option<Vec<u8>> {
     None
 }
 
+/// Clear the EXIF `Orientation` (0x0112) tag to `1` in place.
+///
+/// Edit writes the pixels the renderer already oriented, so a stale
+/// `Orientation` would make EXIF-aware viewers rotate the image a second
+/// time. Rewriting the tag in place keeps the APP1 layout, all offsets
+/// inside the TIFF block, and every unrelated tag intact.
+/// Returns `None` if the payload is not a recognizable EXIF TIFF block.
+pub(crate) fn rewrite_orientation_to_one(exif: &[u8]) -> Option<Vec<u8>> {
+    let mut buf = exif.to_vec();
+    if buf.len() < 14 || &buf[0..4] != b"Exif" {
+        return None;
+    }
+    let little_endian = match &buf[6..8] {
+        b"II" => true,
+        b"MM" => false,
+        _ => return None,
+    };
+    let u16_at = |buf: &[u8], at: usize| -> Option<u16> {
+        let end = at.checked_add(2)?;
+        buf.get(at..end).map(|b| {
+            if little_endian {
+                u16::from_le_bytes([b[0], b[1]])
+            } else {
+                u16::from_be_bytes([b[0], b[1]])
+            }
+        })
+    };
+    let u32_at = |buf: &[u8], at: usize| -> Option<u32> {
+        let end = at.checked_add(4)?;
+        buf.get(at..end).map(|b| {
+            if little_endian {
+                u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+            } else {
+                u32::from_be_bytes([b[0], b[1], b[2], b[3]])
+            }
+        })
+    };
+    // TIFF header: byte order (2) | magic (2) | IFD0 offset (4).
+    let ifd0_offset = u32_at(&buf, 10)? as usize;
+    let ifd0_pos = 6usize.checked_add(ifd0_offset)?;
+    let entry_count = u16_at(&buf, ifd0_pos)? as usize;
+    let entries_start = ifd0_pos.checked_add(2)?;
+    for index in 0..entry_count {
+        let entry = entries_start.checked_add(index.checked_mul(12)?)?;
+        if entry.checked_add(12)? > buf.len() {
+            break;
+        }
+        let tag = u16_at(&buf, entry)?;
+        if tag != 0x0112 {
+            continue;
+        }
+        // SHORT (type 3), count 1: the value lives in the first two bytes of
+        // the 4-byte value cell, so rewriting in place never moves any
+        // offset elsewhere in the TIFF block.
+        if little_endian {
+            buf[entry + 8] = 0x01;
+            buf[entry + 9] = 0x00;
+        } else {
+            buf[entry + 8] = 0x00;
+            buf[entry + 9] = 0x01;
+        }
+        return Some(buf);
+    }
+    Some(buf)
+}
+
 /// Write image with format-specific options, optionally preserving EXIF
 fn write_image(
     img: &DynamicImage,
@@ -1703,7 +1785,9 @@ pub(crate) fn write_jpeg_with_exif(
 
 #[cfg(test)]
 mod exif_tests {
-    use super::{compute_sha256, read_exif_bytes, write_jpeg_with_exif};
+    use super::{
+        compute_sha256, read_exif_bytes, rewrite_orientation_to_one, write_jpeg_with_exif,
+    };
     use image::ImageEncoder;
     use image::RgbImage;
 
@@ -1727,6 +1811,48 @@ mod exif_tests {
 
         assert!(read_exif_bytes(&path).is_none());
         let _ = std::fs::remove_file(&path);
+    }
+
+    fn exif_with_orientation(orientation: u16) -> Vec<u8> {
+        // "Exif\0\0" + little-endian TIFF header with one SHORT entry:
+        // tag 0x0112 (Orientation), type 3 (SHORT), count 1, value `orientation`.
+        let mut exif = b"Exif\0\0II*\0\x08\0\0\0".to_vec();
+        exif.extend(&1u16.to_le_bytes()); // one entry
+        exif.extend(&0x0112u16.to_le_bytes()); // tag
+        exif.extend(&3u16.to_le_bytes()); // type SHORT
+        exif.extend(&1u32.to_le_bytes()); // count
+        exif.extend(&orientation.to_le_bytes()); // value cell
+        exif.extend(&[0, 0]); // value cell padding
+        exif
+    }
+
+    #[test]
+    fn rewrite_orientation_to_one_sets_orientation_to_one() {
+        let exif = exif_with_orientation(6);
+        let out = rewrite_orientation_to_one(&exif).expect("valid payload");
+        // Orientation value is at offset 14 + 8 = 22 (TIFF header 8 bytes, entry 12).
+        let entry = 6 + 8 + 2;
+        assert_eq!(&out[entry + 8..entry + 10], &[0x01, 0x00]);
+        assert_eq!(out.len(), exif.len());
+    }
+
+    #[test]
+    fn rewrite_orientation_to_one_preserves_unrelated_tags_and_length() {
+        let mut exif = exif_with_orientation(8);
+        // Add a second entry: tag 0x010F (Make), type ASCII, count 4, value "x86\0".
+        exif.extend(&0x010Fu16.to_le_bytes());
+        exif.extend(&2u16.to_le_bytes());
+        exif.extend(&4u32.to_le_bytes());
+        exif.extend(b"x86\0");
+        let out = rewrite_orientation_to_one(&exif).expect("valid payload");
+        assert_eq!(out.len(), exif.len());
+        assert_eq!(&out[0..6], b"Exif\0\0");
+    }
+
+    #[test]
+    fn rewrite_orientation_to_one_rejects_malformed_payloads() {
+        assert!(rewrite_orientation_to_one(b"not-exif").is_none());
+        assert!(rewrite_orientation_to_one(b"").is_none());
     }
 
     #[test]
