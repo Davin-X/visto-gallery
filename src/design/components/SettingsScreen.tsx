@@ -299,8 +299,7 @@ export function SettingsScreen(props: {
         const next = (current + direction + ACCENT_PALETTE.length) % ACCENT_PALETTE.length;
         event.preventDefault();
         onChange(ACCENT_PALETTE[next].id);
-        event.currentTarget
-          .querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+        event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
       }}
     >
       {ACCENT_PALETTE.map((c) => {
