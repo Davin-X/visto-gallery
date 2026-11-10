@@ -8952,14 +8952,27 @@ body.is-resizing .photo-inspector {
   right: -7px;
   bottom: -7px;
   z-index: 12;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+/* The visible dot stays 14px; the transparent box around it gives the
+   handle a 24px hit target. */
+.crop-overlay .crop-handle::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
   width: 14px;
   height: 14px;
   background: #ffffff;
   border: 1px solid #1f2937;
   border-radius: 3px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-  cursor: nwse-resize;
-  touch-action: none;
 }
 
 /* Canvas Floating Action Toolbar */
