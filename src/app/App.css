@@ -2154,7 +2154,6 @@ body.is-resizing .photo-inspector {
   font-weight: 600;
   color: var(--ink);
   max-width: 200px;
-  /* overflow: hidden; */
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2163,7 +2162,6 @@ body.is-resizing .photo-inspector {
   position: relative;
   display: block;
   width: 100%;
-  aspect-ratio: 4/3;
   overflow: hidden;
   border-radius: 10px;
   background: var(--surface-3);
@@ -3842,10 +3840,10 @@ body.is-resizing .photo-inspector {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 36px;
+  height: 32px;
   padding: 0 8px 0 10px;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--surface);
   color: var(--faint);
   cursor: pointer;
@@ -8435,14 +8433,14 @@ body.is-resizing .photo-inspector {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  min-height: 32px;
-  padding: 0 11px 0 9px;
+  gap: 4px;
+  min-height: 26px;
+  padding: 0 8px 0 7px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   flex: 0 0 auto;
