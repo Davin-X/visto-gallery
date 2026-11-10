@@ -10,6 +10,12 @@ describe("describeError", () => {
     expect(describeError(new Error("boom"))).toBe("boom");
   });
 
+  test("returns the message of a serialized command error", () => {
+    expect(describeError({ code: "database", message: "database is locked" })).toBe(
+      "database is locked",
+    );
+  });
+
   test("stringifies plain objects", () => {
     expect(describeError({ code: "E_FAIL", detail: 1 })).toBe('{"code":"E_FAIL","detail":1}');
   });

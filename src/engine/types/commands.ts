@@ -1,4 +1,6 @@
 export type {
+  CommandError,
+  ErrorCode,
   MediaKind,
   Album,
   Tag,

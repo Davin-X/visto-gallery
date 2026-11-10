@@ -1,9 +1,10 @@
 use super::*;
+use crate::errors::CommandError;
 use std::path::PathBuf;
 use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
-pub async fn cancel_batch_export() -> Result<(), String> {
+pub async fn cancel_batch_export() -> Result<(), CommandError> {
     super::BATCH_CANCEL.store(true, Ordering::SeqCst);
     Ok(())
 }
@@ -14,7 +15,7 @@ pub async fn export_bytes(
     suggested_name: String,
     bytes: Vec<u8>,
     backup: Option<bool>,
-) -> Result<String, String> {
+) -> Result<String, CommandError> {
     use std::io::Write;
 
     // 1. User confirms destination via native dialog (no arbitrary path from frontend)
@@ -27,9 +28,11 @@ pub async fn export_bytes(
         .add_filter("WebP Image", &["webp"])
         .add_filter("All Images", &["jpg", "jpeg", "png", "webp"])
         .blocking_save_file()
-        .ok_or("Export cancelled by user")?;
+        .ok_or_else(|| CommandError::new(ErrorCode::Cancelled, "Export cancelled by user"))?;
 
-    let path = picked.into_path().map_err(|e| e.to_string())?;
+    let path = picked
+        .into_path()
+        .map_err(|e| CommandError::new(ErrorCode::Dialog, e.to_string()))?;
 
     // 2. Optional backup of existing file (only if user chose to replace).
     // Kept next to the photo (not moved/pruned) so a user who asked for a
@@ -46,10 +49,10 @@ pub async fn export_bytes(
     // removes the temp file on any error (create/write/sync/rename).
     let mut guard =
         super::TempFileGuard::new(path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4())));
-    let mut file = std::fs::File::create(guard.path()).map_err(|e| e.to_string())?;
-    file.write_all(&bytes).map_err(|e| e.to_string())?;
-    file.sync_all().map_err(|e| e.to_string())?;
-    std::fs::rename(guard.path(), &path).map_err(|e| e.to_string())?;
+    let mut file = std::fs::File::create(guard.path())?;
+    file.write_all(&bytes)?;
+    file.sync_all()?;
+    std::fs::rename(guard.path(), &path)?;
     guard.commit();
 
     Ok(path.to_string_lossy().into_owned())
@@ -775,23 +778,29 @@ mod batch_export_tests {
 pub async fn batch_export(
     app: tauri::AppHandle,
     request: BatchExportRequest,
-) -> Result<BatchExportResult, String> {
+) -> Result<BatchExportResult, CommandError> {
     // A new run always starts un-cancelled.
     super::BATCH_CANCEL.store(false, Ordering::SeqCst);
 
     let total = request.items.len() as u32;
     if total == 0 {
-        return Err("Select at least one item to export.".to_string());
+        return Err(CommandError::invalid(
+            "Select at least one item to export.".to_string(),
+        ));
     }
 
     let folder = PathBuf::from(request.output_folder.trim());
     if request.output_folder.trim().is_empty() {
-        return Err("Choose an output folder first.".to_string());
+        return Err(CommandError::io(
+            "Choose an output folder first.".to_string(),
+        ));
     }
     std::fs::create_dir_all(&folder)
-        .map_err(|e| format!("Could not create the output folder: {}", e))?;
+        .map_err(|e| CommandError::io(format!("Could not create the output folder: {}", e)))?;
     if !folder.is_dir() {
-        return Err("The chosen output location is not a folder.".to_string());
+        return Err(CommandError::invalid(
+            "The chosen output location is not a folder.".to_string(),
+        ));
     }
 
     // Decoding and encoding are CPU/disk bound; keep them off the async runtime.
@@ -818,7 +827,8 @@ pub async fn batch_export(
                 Ok(path) => outputs.push(path.to_string_lossy().to_string()),
                 Err(error) => failed.push(BatchExportError {
                     item_id: item.id.clone(),
-                    error,
+                    code: error.code,
+                    error: error.message,
                 }),
             }
 
@@ -850,5 +860,5 @@ pub async fn batch_export(
         })
     })
     .await
-    .map_err(|e| format!("Batch export stopped unexpectedly: {}", e))?
+    .map_err(|e| CommandError::internal(format!("Batch export stopped unexpectedly: {}", e)))?
 }

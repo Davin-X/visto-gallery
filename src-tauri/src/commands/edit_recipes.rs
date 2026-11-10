@@ -1,4 +1,5 @@
 use super::*;
+use crate::errors::CommandError;
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -49,16 +50,16 @@ pub async fn save_edit_recipe(
     history: serde_json::Value,
     history_index: i32,
     catalog: State<'_, crate::Catalog>,
-) -> Result<EditRecipe, String> {
+) -> Result<EditRecipe, CommandError> {
     let db = super::get_db(&catalog)?;
     let now = chrono::Utc::now().timestamp_millis();
 
-    let edits_json = serde_json::to_string(&edits).map_err(|e| e.to_string())?;
+    let edits_json = serde_json::to_string(&edits)?;
     let crop_json = crop
         .as_ref()
-        .map(|c| serde_json::to_string(c).map_err(|e| e.to_string()))
+        .map(|c| serde_json::to_string(c).map_err(CommandError::from))
         .transpose()?;
-    let history_json = serde_json::to_string(&history).map_err(|e| e.to_string())?;
+    let history_json = serde_json::to_string(&history)?;
 
     // Upsert: insert or update existing recipe
     sqlx::query(
@@ -82,12 +83,12 @@ pub async fn save_edit_recipe(
     .bind(now)
     .execute(&db)
     .await
-    .map_err(|e| e.to_string())?;
+    ?;
 
     // Return the saved recipe
-    get_edit_recipe_inner(&db, &media_id)
-        .await?
-        .ok_or_else(|| format!("Failed to read back saved recipe for {}", media_id))
+    get_edit_recipe_inner(&db, &media_id).await?.ok_or_else(|| {
+        CommandError::database(format!("Failed to read back saved recipe for {}", media_id))
+    })
 }
 
 /// Get an edit recipe for a media item.
@@ -95,7 +96,7 @@ pub async fn save_edit_recipe(
 pub async fn get_edit_recipe(
     media_id: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<Option<EditRecipe>, String> {
+) -> Result<Option<EditRecipe>, CommandError> {
     let db = super::get_db(&catalog)?;
     get_edit_recipe_inner(&db, &media_id).await
 }
@@ -104,14 +105,14 @@ pub async fn get_edit_recipe(
 #[tauri::command]
 pub async fn list_edit_recipes(
     catalog: State<'_, crate::Catalog>,
-) -> Result<Vec<EditRecipe>, String> {
+) -> Result<Vec<EditRecipe>, CommandError> {
     let db = super::get_db(&catalog)?;
     let rows = sqlx::query(
         "SELECT media_id, edits, crop, history, history_index, created_at, updated_at FROM edit_recipes ORDER BY updated_at DESC",
     )
     .fetch_all(&db)
     .await
-    .map_err(|e| e.to_string())?;
+    ?;
 
     let mut recipes = Vec::new();
     for row in rows {
@@ -127,18 +128,17 @@ pub async fn list_edit_recipes(
 pub async fn revert_edit_recipe(
     media_id: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<bool, String> {
+) -> Result<bool, CommandError> {
     let db = super::get_db(&catalog)?;
     revert_edit_recipe_inner(&db, &media_id).await
 }
 
-async fn revert_edit_recipe_inner(db: &SqlitePool, media_id: &str) -> Result<bool, String> {
+async fn revert_edit_recipe_inner(db: &SqlitePool, media_id: &str) -> Result<bool, CommandError> {
     let row = sqlx::query("SELECT path FROM media_items WHERE id = ?")
         .bind(media_id)
         .fetch_optional(db)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("No media item found for id {media_id}"))?;
+        .await?
+        .ok_or_else(|| CommandError::not_found(format!("No media item found for id {media_id}")))?;
     let source_path: String = row.get("path");
 
     // Prefer the journaled original. Only fall back to the legacy sidecar for
@@ -147,16 +147,15 @@ async fn revert_edit_recipe_inner(db: &SqlitePool, media_id: &str) -> Result<boo
         sqlx::query("SELECT backup_path, size, sha256 FROM edit_backups WHERE media_id = ?")
             .bind(media_id)
             .fetch_optional(db)
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
 
     let (backup_path, expected_size, expected_hash) = if let Some(row) = journal {
         let recorded: String = row.get("backup_path");
         let backup_path = PathBuf::from(&recorded);
         if !backup_path.is_file() {
-            return Err(format!(
+            return Err(CommandError::internal(format!(
                 "The journaled original for {media_id} is missing. Nothing to revert."
-            ));
+            )));
         }
         (
             backup_path,
@@ -186,25 +185,24 @@ async fn revert_edit_recipe_inner(db: &SqlitePool, media_id: &str) -> Result<boo
     let (actual_size, actual_hash) = tokio::task::spawn_blocking(move || {
         let size = std::fs::metadata(&verify_path)
             .map(|meta| meta.len() as i64)
-            .map_err(|e| format!("Could not read the backup: {e}"))?;
-        Ok::<_, String>((size, compute_sha256(&verify_path)))
+            .map_err(|e| CommandError::io(format!("Could not read the backup: {e}")))?;
+        Ok::<_, CommandError>((size, compute_sha256(&verify_path)))
     })
     .await
-    .map_err(|e| format!("Backup verification failed: {e}"))??;
+    .map_err(|e| CommandError::internal(format!("Backup verification failed: {e}")))??;
 
     if let Some(expected) = expected_size {
         if actual_size != expected {
-            return Err(
-                "The journaled original is incomplete; refusing to restore it.".to_string(),
-            );
+            return Err(CommandError::invalid(
+                "The journaled original is incomplete; refusing to restore it.",
+            ));
         }
     }
     if let Some(expected) = expected_hash.as_deref() {
         if actual_hash.as_deref() != Some(expected) {
-            return Err(
-                "The journaled original does not match its recorded fingerprint; refusing to restore it."
-                    .to_string(),
-            );
+            return Err(CommandError::invalid(
+                "The journaled original does not match its recorded fingerprint; refusing to restore it.",
+            ));
         }
     }
 
@@ -212,8 +210,8 @@ async fn revert_edit_recipe_inner(db: &SqlitePool, media_id: &str) -> Result<boo
     let backup = backup_path.clone();
     tokio::task::spawn_blocking(move || std::fs::copy(&backup, &source))
         .await
-        .map_err(|e| format!("Restore task failed: {e}"))?
-        .map_err(|e| format!("Failed to restore backup: {}", e))?;
+        .map_err(|e| CommandError::internal(format!("Restore task failed: {e}")))?
+        .map_err(|e| CommandError::internal(format!("Failed to restore backup: {}", e)))?;
 
     // Refresh the catalog row so thumbnails regenerate for the restored bytes.
     if let Ok(meta) = std::fs::metadata(&source_path) {
@@ -241,15 +239,13 @@ async fn revert_edit_recipe_inner(db: &SqlitePool, media_id: &str) -> Result<boo
     sqlx::query("DELETE FROM edit_backups WHERE media_id = ?")
         .bind(media_id)
         .execute(db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     // Delete the edit recipe
     sqlx::query("DELETE FROM edit_recipes WHERE media_id = ?")
         .bind(media_id)
         .execute(db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     let _ = std::fs::remove_file(&backup_path);
 
@@ -261,13 +257,12 @@ async fn revert_edit_recipe_inner(db: &SqlitePool, media_id: &str) -> Result<boo
 pub async fn delete_edit_recipe(
     media_id: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<bool, String> {
+) -> Result<bool, CommandError> {
     let db = super::get_db(&catalog)?;
     let result = sqlx::query("DELETE FROM edit_recipes WHERE media_id = ?")
         .bind(&media_id)
         .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(result.rows_affected() > 0)
 }
 
@@ -277,22 +272,24 @@ pub async fn copy_edit_recipe(
     from_media_id: String,
     to_media_id: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<EditRecipe, String> {
+) -> Result<EditRecipe, CommandError> {
     let db = super::get_db(&catalog)?;
     let now = chrono::Utc::now().timestamp_millis();
 
     // Read the source recipe
     let source = get_edit_recipe_inner(&db, &from_media_id).await?;
-    let source = source.ok_or_else(|| format!("No edit recipe found for {}", from_media_id))?;
+    let source = source.ok_or_else(|| {
+        CommandError::not_found(format!("No edit recipe found for {}", from_media_id))
+    })?;
 
     // Upsert into destination
-    let edits_json = serde_json::to_string(&source.edits).map_err(|e| e.to_string())?;
+    let edits_json = serde_json::to_string(&source.edits)?;
     let crop_json = source
         .crop
         .as_ref()
-        .map(|c| serde_json::to_string(c).map_err(|e| e.to_string()))
+        .map(|c| serde_json::to_string(c).map_err(CommandError::from))
         .transpose()?;
-    let history_json = serde_json::to_string(&source.history).map_err(|e| e.to_string())?;
+    let history_json = serde_json::to_string(&source.history)?;
 
     sqlx::query(
         r#"
@@ -315,11 +312,16 @@ pub async fn copy_edit_recipe(
     .bind(now)
     .execute(&db)
     .await
-    .map_err(|e| e.to_string())?;
+    ?;
 
     get_edit_recipe_inner(&db, &to_media_id)
         .await?
-        .ok_or_else(|| format!("Failed to read back copied recipe for {}", to_media_id))
+        .ok_or_else(|| {
+            CommandError::internal(format!(
+                "Failed to read back copied recipe for {}",
+                to_media_id
+            ))
+        })
 }
 
 /// Batch-apply edits to multiple media items.
@@ -329,16 +331,16 @@ pub async fn batch_apply_edit(
     edits: serde_json::Value,
     crop: Option<serde_json::Value>,
     catalog: State<'_, crate::Catalog>,
-) -> Result<usize, String> {
+) -> Result<usize, CommandError> {
     let db = super::get_db(&catalog)?;
     let now = chrono::Utc::now().timestamp_millis();
 
-    let edits_json = serde_json::to_string(&edits).map_err(|e| e.to_string())?;
+    let edits_json = serde_json::to_string(&edits)?;
     let crop_json = crop
         .as_ref()
-        .map(|c| serde_json::to_string(c).map_err(|e| e.to_string()))
+        .map(|c| serde_json::to_string(c).map_err(CommandError::from))
         .transpose()?;
-    let history_json = serde_json::to_string(&edits).map_err(|e| e.to_string())?;
+    let history_json = serde_json::to_string(&edits)?;
 
     let mut count = 0usize;
     for media_id in &media_ids {
@@ -363,7 +365,7 @@ pub async fn batch_apply_edit(
         .bind(now)
         .execute(&db)
         .await
-        .map_err(|e| e.to_string())?;
+        ?;
         count += 1;
     }
     Ok(count)
@@ -377,15 +379,15 @@ pub async fn save_edit_preset(
     edits: serde_json::Value,
     crop: Option<serde_json::Value>,
     catalog: State<'_, crate::Catalog>,
-) -> Result<EditPreset, String> {
+) -> Result<EditPreset, CommandError> {
     let db = super::get_db(&catalog)?;
     let now = chrono::Utc::now().timestamp_millis();
     let id = id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-    let edits_json = serde_json::to_string(&edits).map_err(|e| e.to_string())?;
+    let edits_json = serde_json::to_string(&edits)?;
     let crop_json = crop
         .as_ref()
-        .map(|c| serde_json::to_string(c).map_err(|e| e.to_string()))
+        .map(|c| serde_json::to_string(c).map_err(CommandError::from))
         .transpose()?;
 
     sqlx::query(
@@ -406,8 +408,7 @@ pub async fn save_edit_preset(
     .bind(now)
     .bind(now)
     .execute(&db)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     Ok(EditPreset {
         id,
@@ -792,7 +793,7 @@ mod tests {
         let error = revert_edit_recipe_inner(&db, "item-2")
             .await
             .expect_err("wrong-size backup should be refused");
-        assert!(error.contains("incomplete"));
+        assert!(error.message.contains("incomplete"));
         assert_eq!(std::fs::read(&source).unwrap(), b"edited-bytes");
     }
 
@@ -820,7 +821,7 @@ mod tests {
         let error = revert_edit_recipe_inner(&db, "item-3")
             .await
             .expect_err("wrong-hash backup should be refused");
-        assert!(error.contains("fingerprint"));
+        assert!(error.message.contains("fingerprint"));
         assert_eq!(std::fs::read(&source).unwrap(), b"edited-bytes");
     }
 
@@ -870,14 +871,13 @@ mod tests {
 #[tauri::command]
 pub async fn list_edit_presets(
     catalog: State<'_, crate::Catalog>,
-) -> Result<Vec<EditPreset>, String> {
+) -> Result<Vec<EditPreset>, CommandError> {
     let db = super::get_db(&catalog)?;
     let rows = sqlx::query(
         "SELECT id, name, edits, crop, created_at, updated_at FROM edit_presets ORDER BY name ASC",
     )
     .fetch_all(&db)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     let mut presets = Vec::new();
     for row in rows {
@@ -891,13 +891,12 @@ pub async fn list_edit_presets(
 pub async fn delete_edit_preset(
     id: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<bool, String> {
+) -> Result<bool, CommandError> {
     let db = super::get_db(&catalog)?;
     let result = sqlx::query("DELETE FROM edit_presets WHERE id = ?")
         .bind(&id)
         .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(result.rows_affected() > 0)
 }
 
@@ -907,7 +906,7 @@ pub async fn apply_edit_preset(
     preset_id: String,
     media_id: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<EditRecipe, String> {
+) -> Result<EditRecipe, CommandError> {
     let db = super::get_db(&catalog)?;
     let now = chrono::Utc::now().timestamp_millis();
 
@@ -915,18 +914,19 @@ pub async fn apply_edit_preset(
     let preset_row = sqlx::query("SELECT edits, crop FROM edit_presets WHERE id = ?")
         .bind(&preset_id)
         .fetch_optional(&db)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("No edit preset found with id {}", preset_id))?;
+        .await?
+        .ok_or_else(|| {
+            CommandError::not_found(format!("No edit preset found with id {}", preset_id))
+        })?;
 
     let edits: serde_json::Value = preset_row.get("edits");
     let crop: Option<serde_json::Value> = preset_row.get("crop");
 
-    let edits_json = serde_json::to_string(&edits).map_err(|e| e.to_string())?;
+    let edits_json = serde_json::to_string(&edits)?;
     let crop_json = crop
-        .map(|c| serde_json::to_string(&c).map_err(|e| e.to_string()))
+        .map(|c| serde_json::to_string(&c).map_err(CommandError::from))
         .transpose()?;
-    let history_json = serde_json::to_string(&edits).map_err(|e| e.to_string())?;
+    let history_json = serde_json::to_string(&edits)?;
 
     sqlx::query(
         r#"
@@ -949,11 +949,14 @@ pub async fn apply_edit_preset(
     .bind(now)
     .execute(&db)
     .await
-    .map_err(|e| e.to_string())?;
+    ?;
 
-    get_edit_recipe_inner(&db, &media_id)
-        .await?
-        .ok_or_else(|| format!("Failed to read back applied recipe for {}", media_id))
+    get_edit_recipe_inner(&db, &media_id).await?.ok_or_else(|| {
+        CommandError::internal(format!(
+            "Failed to read back applied recipe for {}",
+            media_id
+        ))
+    })
 }
 
 // ---- Internal helpers ----
@@ -961,14 +964,14 @@ pub async fn apply_edit_preset(
 async fn get_edit_recipe_inner(
     db: &SqlitePool,
     media_id: &str,
-) -> Result<Option<EditRecipe>, String> {
+) -> Result<Option<EditRecipe>, CommandError> {
     let row = sqlx::query(
         "SELECT media_id, edits, crop, history, history_index, created_at, updated_at FROM edit_recipes WHERE media_id = ?",
     )
     .bind(media_id)
     .fetch_optional(db)
     .await
-    .map_err(|e| e.to_string())?;
+    ?;
 
     match row {
         Some(r) => Ok(Some(row_to_edit_recipe(&r)?)),
@@ -976,7 +979,7 @@ async fn get_edit_recipe_inner(
     }
 }
 
-fn row_to_edit_recipe(row: &sqlx::sqlite::SqliteRow) -> Result<EditRecipe, String> {
+fn row_to_edit_recipe(row: &sqlx::sqlite::SqliteRow) -> Result<EditRecipe, CommandError> {
     let media_id: String = row.get("media_id");
     let edits: serde_json::Value = row.get("edits");
     let crop: Option<serde_json::Value> = row.get("crop");
@@ -996,7 +999,7 @@ fn row_to_edit_recipe(row: &sqlx::sqlite::SqliteRow) -> Result<EditRecipe, Strin
     })
 }
 
-fn row_to_edit_preset(row: &sqlx::sqlite::SqliteRow) -> Result<EditPreset, String> {
+fn row_to_edit_preset(row: &sqlx::sqlite::SqliteRow) -> Result<EditPreset, CommandError> {
     let id: String = row.get("id");
     let name: String = row.get("name");
     let edits: serde_json::Value = row.get("edits");
@@ -1017,11 +1020,11 @@ fn row_to_edit_preset(row: &sqlx::sqlite::SqliteRow) -> Result<EditPreset, Strin
 /// Vacuum the SQLite library catalog to reclaim disk space and defragment.
 /// Runs `VACUUM` on the catalog database. Original media files are never touched.
 #[tauri::command]
-pub async fn vacuum_catalog(catalog: State<'_, crate::Catalog>) -> Result<(), String> {
+pub async fn vacuum_catalog(catalog: State<'_, crate::Catalog>) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
     sqlx::query("VACUUM")
         .execute(&db)
         .await
-        .map_err(|e| format!("VACUUM failed: {}", e))?;
+        .map_err(|e| CommandError::internal(format!("VACUUM failed: {}", e)))?;
     Ok(())
 }

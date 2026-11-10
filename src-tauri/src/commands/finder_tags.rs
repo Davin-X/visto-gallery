@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use tauri::State;
 
+use crate::errors::CommandError;
 use crate::AppState;
 
 const FINDER_TAGS_ATTRIBUTE: &str = "com.apple.metadata:_kMDItemUserTags";
@@ -43,12 +44,12 @@ fn merge_finder_tag_values(existing: &[String], incoming: &[String]) -> Vec<Stri
     merged
 }
 
-fn read_raw_finder_tags(path: &str) -> Result<Vec<String>, String> {
-    let value = xattr::get(path, FINDER_TAGS_ATTRIBUTE).map_err(|e| e.to_string())?;
+fn read_raw_finder_tags(path: &str) -> Result<Vec<String>, CommandError> {
+    let value = xattr::get(path, FINDER_TAGS_ATTRIBUTE)?;
     let Some(bytes) = value else {
         return Ok(vec![]);
     };
-    let plist_value: plist::Value = plist::from_bytes(&bytes).map_err(|e| e.to_string())?;
+    let plist_value: plist::Value = plist::from_bytes(&bytes)?;
     let mut tags = Vec::new();
     if let Some(arr) = plist_value.as_array() {
         for value in arr {
@@ -60,15 +61,14 @@ fn read_raw_finder_tags(path: &str) -> Result<Vec<String>, String> {
     Ok(tags)
 }
 
-fn write_raw_finder_tags(path: &str, tags: &[String]) -> Result<(), String> {
+fn write_raw_finder_tags(path: &str, tags: &[String]) -> Result<(), CommandError> {
     let plist_tags: Vec<plist::Value> = tags
         .iter()
         .map(|tag| plist::Value::String(tag.clone()))
         .collect();
     let mut buf = Vec::new();
-    plist::to_writer_binary(&mut buf, &plist::Value::Array(plist_tags))
-        .map_err(|e| e.to_string())?;
-    xattr::set(path, FINDER_TAGS_ATTRIBUTE, &buf).map_err(|e| e.to_string())
+    plist::to_writer_binary(&mut buf, &plist::Value::Array(plist_tags))?;
+    xattr::set(path, FINDER_TAGS_ATTRIBUTE, &buf).map_err(CommandError::from)
 }
 
 #[tauri::command]
@@ -76,7 +76,7 @@ pub async fn write_finder_tags(
     path: String,
     tags: Vec<String>,
     _state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     tokio::task::spawn_blocking(move || {
         let values: Vec<String> = tags
             .into_iter()
@@ -85,8 +85,7 @@ pub async fn write_finder_tags(
             .collect();
         write_raw_finder_tags(&path, &values)
     })
-    .await
-    .map_err(|e| e.to_string())?
+    .await?
 }
 
 /// Merge VistoGallery tags into a file's existing Finder tags and return the
@@ -96,12 +95,12 @@ pub async fn merge_finder_tags(
     path: String,
     tags: Vec<String>,
     _state: State<'_, AppState>,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, CommandError> {
     tokio::task::spawn_blocking(move || {
         let existing = read_raw_finder_tags(&path)?;
         let merged = merge_finder_tag_values(&existing, &tags);
         write_raw_finder_tags(&path, &merged)?;
-        Ok::<Vec<String>, String>(
+        Ok::<Vec<String>, CommandError>(
             merged
                 .iter()
                 .map(|raw| finder_tag_name(raw).trim().to_string())
@@ -109,15 +108,14 @@ pub async fn merge_finder_tags(
                 .collect(),
         )
     })
-    .await
-    .map_err(|e| e.to_string())?
+    .await?
 }
 
 #[tauri::command]
 pub async fn read_finder_tags(
     path: String,
     _state: State<'_, AppState>,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, CommandError> {
     tokio::task::spawn_blocking(move || {
         let raw = read_raw_finder_tags(&path)?;
         let mut tags = Vec::new();
@@ -130,8 +128,7 @@ pub async fn read_finder_tags(
         }
         Ok(tags)
     })
-    .await
-    .map_err(|e| e.to_string())?
+    .await?
 }
 
 #[cfg(test)]

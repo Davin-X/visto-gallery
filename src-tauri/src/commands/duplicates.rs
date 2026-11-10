@@ -1,5 +1,6 @@
 use super::DuplicateGroup;
 use super::MediaItem;
+use crate::errors::CommandError;
 use serde_json::json;
 use std::collections::HashMap;
 use std::io::{Read, Seek};
@@ -8,7 +9,7 @@ use std::sync::Arc;
 use tauri::{Emitter, State, Window};
 
 #[tauri::command]
-pub async fn cancel_find_duplicates() -> Result<(), String> {
+pub async fn cancel_find_duplicates() -> Result<(), CommandError> {
     super::DUPLICATE_CANCEL.store(true, Ordering::SeqCst);
     Ok(())
 }
@@ -17,7 +18,7 @@ pub async fn cancel_find_duplicates() -> Result<(), String> {
 pub async fn find_duplicates(
     catalog: State<'_, crate::Catalog>,
     window: Window,
-) -> Result<Vec<DuplicateGroup>, String> {
+) -> Result<Vec<DuplicateGroup>, CommandError> {
     super::DUPLICATE_CANCEL.store(false, Ordering::SeqCst);
     let db = super::get_db(&catalog)?;
 
@@ -25,8 +26,7 @@ pub async fn find_duplicates(
     // one just because it was hidden).
     let mut items: Vec<MediaItem> = sqlx::query_as::<_, MediaItem>("SELECT * FROM media_items")
         .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     // Only files that share a size with at least one other file can be exact
     // duplicates, so hash only those — this keeps a full-library scan cheap.
@@ -80,7 +80,7 @@ pub async fn find_duplicates(
                 .collect::<Vec<_>>()
         })
         .await
-        .map_err(|e| format!("Fingerprint task failed: {e}"))?;
+        .map_err(|e| CommandError::internal(format!("Fingerprint task failed: {e}")))?;
 
         for (index, fp, prefix) in fps {
             quick_fingerprints.push((index, fp));
@@ -194,16 +194,15 @@ pub async fn find_duplicates(
     // Persist newly computed hashes in one transaction. This avoids a durable
     // SQLite commit for every candidate while retaining each per-file hash.
     if !hash_updates.is_empty() {
-        let mut transaction = db.begin().await.map_err(|e| e.to_string())?;
+        let mut transaction = db.begin().await?;
         for (id, hash) in hash_updates {
             sqlx::query("UPDATE media_items SET sha256 = ? WHERE id = ?")
                 .bind(hash)
                 .bind(id)
                 .execute(&mut *transaction)
-                .await
-                .map_err(|e| e.to_string())?;
+                .await?;
         }
-        transaction.commit().await.map_err(|e| e.to_string())?;
+        transaction.commit().await?;
     }
 
     // Group by content hash.

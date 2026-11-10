@@ -7,6 +7,7 @@ use sqlx::SqlitePool;
 use tauri::{AppHandle, Manager, State};
 
 use crate::commands::{file_modified_at, now_ms, path_is_inside};
+use crate::errors::CommandError;
 use crate::models::{stable_id, Tag};
 use crate::{AppState, Catalog};
 
@@ -24,8 +25,8 @@ pub(crate) const TAG_SELECT: &str = "SELECT t.id, t.name, t.color_index, t.creat
 
 /// Delete every catalog row in one transaction: a failure part-way leaves the
 /// catalog exactly as it was instead of half-deleted.
-pub(crate) async fn purge_catalog(db: &SqlitePool) -> Result<(), String> {
-    let mut tx = db.begin().await.map_err(|e| e.to_string())?;
+pub(crate) async fn purge_catalog(db: &SqlitePool) -> Result<(), CommandError> {
+    let mut tx = db.begin().await?;
     // Children first, so this also works without foreign-key cascades.
     for table in [
         "media_tags",
@@ -41,9 +42,9 @@ pub(crate) async fn purge_catalog(db: &SqlitePool) -> Result<(), String> {
         sqlx::query(&format!("DELETE FROM {table}"))
             .execute(&mut *tx)
             .await
-            .map_err(|e| format!("Could not clear {table}: {e}"))?;
+            .map_err(|e| CommandError::database(format!("Could not clear {table}: {e}")))?;
     }
-    tx.commit().await.map_err(|e| e.to_string())
+    tx.commit().await.map_err(CommandError::from)
 }
 
 /// The single unused entry in `candidates`, or `None` when the match is
@@ -74,11 +75,10 @@ pub(crate) async fn relink_moved_items(
     db: &SqlitePool,
     root: &str,
     seen_paths: &HashSet<String>,
-) -> Result<usize, String> {
+) -> Result<usize, CommandError> {
     let existing: Vec<(String, String)> = sqlx::query_as("SELECT id, path FROM media_items")
         .fetch_all(db)
-        .await
-        .map_err(|error| error.to_string())?;
+        .await?;
     let existing_paths: HashSet<&str> = existing.iter().map(|(_, path)| path.as_str()).collect();
     let existing_ids: HashSet<&str> = existing.iter().map(|(id, _)| id.as_str()).collect();
     let mut added: Vec<&String> = seen_paths
@@ -92,8 +92,7 @@ pub(crate) async fn relink_moved_items(
     let rows: Vec<(String, String, i64, i64, Option<String>)> =
         sqlx::query_as("SELECT id, path, size, modified_at, content_signature FROM media_items")
             .fetch_all(db)
-            .await
-            .map_err(|error| error.to_string())?;
+            .await?;
     // Rows whose file this walk did not see are the only move candidates.
     let vanished: Vec<(&str, i64, i64, Option<String>)> = rows
         .iter()
@@ -158,13 +157,12 @@ pub(crate) async fn relink_moved_items(
     }
 
     let now = now_ms();
-    let mut transaction = db.begin().await.map_err(|error| error.to_string())?;
+    let mut transaction = db.begin().await?;
     // Relations point at the row being re-keyed, so enforcement is deferred to
     // COMMIT and every table is updated inside the same transaction.
     sqlx::query("PRAGMA defer_foreign_keys = ON")
         .execute(&mut *transaction)
-        .await
-        .map_err(|error| error.to_string())?;
+        .await?;
     for (old_id, new_path) in &moves {
         let path = Path::new(new_path);
         let new_id = stable_id(new_path);
@@ -193,7 +191,7 @@ pub(crate) async fn relink_moved_items(
         .bind(old_id)
         .execute(&mut *transaction)
         .await
-        .map_err(|error| error.to_string())?;
+        ?;
         for table in ["media_tags", "album_items", "edit_recipes", "edit_backups"] {
             sqlx::query(&format!(
                 "UPDATE {table} SET media_id = ? WHERE media_id = ?"
@@ -201,14 +199,10 @@ pub(crate) async fn relink_moved_items(
             .bind(&new_id)
             .bind(old_id)
             .execute(&mut *transaction)
-            .await
-            .map_err(|error| error.to_string())?;
+            .await?;
         }
     }
-    transaction
-        .commit()
-        .await
-        .map_err(|error| error.to_string())?;
+    transaction.commit().await?;
 
     Ok(moves.len())
 }
@@ -216,12 +210,11 @@ pub(crate) async fn relink_moved_items(
 /// Secure export: the backend owns path selection via native dialog.
 /// Writes to a temp file next to the destination, then renames atomically.
 #[tauri::command]
-pub async fn get_tags(catalog: State<'_, Catalog>) -> Result<Vec<Tag>, String> {
+pub async fn get_tags(catalog: State<'_, Catalog>) -> Result<Vec<Tag>, CommandError> {
     let db = crate::commands::get_db(&catalog)?;
     let tags = sqlx::query_as::<_, Tag>(&format!("{} ORDER BY t.name ASC", TAG_SELECT))
         .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(tags)
 }
 
@@ -238,7 +231,7 @@ pub async fn delete_library_database(
     app: AppHandle,
     catalog: State<'_, Catalog>,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let db = crate::commands::get_db(&catalog)?;
     purge_catalog(&db).await?;
 

@@ -1,9 +1,10 @@
 use super::*;
+use crate::errors::CommandError;
 use sqlx::SqlitePool;
 use tauri::State;
 
 #[tauri::command]
-pub async fn get_settings(catalog: State<'_, crate::Catalog>) -> Result<AppSettings, String> {
+pub async fn get_settings(catalog: State<'_, crate::Catalog>) -> Result<AppSettings, CommandError> {
     let db = super::get_db(&catalog)?;
     load_persisted_settings(&db).await
 }
@@ -13,11 +14,10 @@ pub async fn get_settings(catalog: State<'_, crate::Catalog>) -> Result<AppSetti
 /// yet stored. Shared by `get_settings` and `save_settings` so the read contract
 /// lives in one place and a partial save can merge onto the *real* persisted
 /// state instead of `AppSettings::default()`.
-async fn load_persisted_settings(db: &SqlitePool) -> Result<AppSettings, String> {
+async fn load_persisted_settings(db: &SqlitePool) -> Result<AppSettings, CommandError> {
     let rows = sqlx::query("SELECT key, value FROM settings")
         .fetch_all(db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     let mut settings = AppSettings::default();
     for row in rows {
         let key: String = row.get("key");
@@ -31,7 +31,7 @@ async fn load_persisted_settings(db: &SqlitePool) -> Result<AppSettings, String>
 pub async fn save_settings(
     patch: PartialSettings,
     catalog: State<'_, crate::Catalog>,
-) -> Result<AppSettings, String> {
+) -> Result<AppSettings, CommandError> {
     let db = super::get_db(&catalog)?;
     // Start from the SETTINGS CURRENTLY PERSISTED, then apply the incoming
     // patch on top. Previously this began from `AppSettings::default()`, which
@@ -180,8 +180,7 @@ pub async fn save_settings(
             .bind(key)
             .bind(value)
             .execute(&db)
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
     }
 
     Ok(settings)

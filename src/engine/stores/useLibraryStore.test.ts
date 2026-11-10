@@ -607,7 +607,7 @@ test("deleteItems reports an id that the backend refused instead of claiming suc
   useLibraryStore.setState({ hiddenItems: [hidden], hiddenCount: 1 });
   vi.mocked(tauri.items.moveToTrash).mockResolvedValueOnce({
     trashed: [],
-    failed: [{ id: hidden.id, error: "File no longer exists on disk." }],
+    failed: [{ id: hidden.id, code: "notFound", error: "File no longer exists on disk." }],
   });
 
   const result = await useLibraryStore.getState().deleteItems([hidden.id]);
@@ -625,7 +625,7 @@ test("a fully cancelled delete reports cancellation, not failure", async () => {
   useLibraryStore.setState({ items: [visible] });
   vi.mocked(tauri.items.moveToTrash).mockResolvedValueOnce({
     trashed: [],
-    failed: [{ id: visible.id, error: "Operation cancelled" }],
+    failed: [{ id: visible.id, code: "cancelled", error: "Operation cancelled" }],
   });
 
   const result = await useLibraryStore.getState().deleteItems([visible.id]);
@@ -639,7 +639,7 @@ test("a partial cancel keeps the moved items and reports the rest", async () => 
   useLibraryStore.setState({ items: [a, b], totalCount: 2 });
   vi.mocked(tauri.items.moveToTrash).mockResolvedValueOnce({
     trashed: [a.id],
-    failed: [{ id: b.id, error: "Operation cancelled" }],
+    failed: [{ id: b.id, code: "cancelled", error: "Operation cancelled" }],
   });
 
   const result = await useLibraryStore.getState().deleteItems([a.id, b.id]);

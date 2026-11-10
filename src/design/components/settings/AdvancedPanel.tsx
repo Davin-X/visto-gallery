@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { CpuIcon, TrashIcon } from "../icons";
+import type { ErrorCode } from "../../../engine/types/commands";
 import { RootPathMapping } from "./RootPathMapping";
 
 export function AdvancedPanel(props: {
@@ -21,7 +22,7 @@ export function AdvancedPanel(props: {
   onVacuumCatalog: () => void;
   suggestedOldRoot: string | null;
   onRootMappingApplied: () => void;
-  showNotice: (text: string) => void;
+  showNotice: (text: string, code?: ErrorCode) => void;
 }) {
   return (
     <>

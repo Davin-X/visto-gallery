@@ -24,6 +24,7 @@ mod tests {
         ThumbnailRequest, ThumbnailResponse, ThumbnailSize, TrashError, TrashResult, UpdateCheck,
         ViewerZoomBehavior,
     };
+    use crate::errors::{CommandError, ErrorCode};
     use crate::media_kind::MediaKind;
     use crate::models::{Album, MediaItem, Tag};
 
@@ -52,6 +53,8 @@ mod tests {
         }
 
         emit!(
+            ErrorCode,
+            CommandError,
             Appearance,
             AccentColor,
             StartupView,

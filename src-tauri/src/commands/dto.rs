@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::errors::ErrorCode;
 use crate::models::{Album, MediaItem, Tag};
 
 #[derive(Serialize, TS)]
@@ -197,6 +198,8 @@ pub struct BatchExportResult {
 #[serde(rename_all = "camelCase")]
 pub struct BatchExportError {
     pub item_id: String,
+    /// Stable class of the failure, so the UI can branch without reading text.
+    pub code: ErrorCode,
     pub error: String,
 }
 
@@ -216,6 +219,8 @@ pub struct TrashResult {
 #[serde(rename_all = "camelCase")]
 pub struct TrashError {
     pub id: String,
+    /// Stable class of the failure, so the UI can branch without reading text.
+    pub code: ErrorCode,
     pub error: String,
 }
 

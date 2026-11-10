@@ -1,3 +1,4 @@
+use crate::errors::{CommandError, ErrorCode};
 use serde::Serialize;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection, SqlitePool};
 use sqlx::{Connection, Row};
@@ -42,25 +43,28 @@ pub struct RestoreResult {
     pub missing_roots: Vec<String>,
 }
 
-async fn open_read_only(path: &str) -> Result<SqliteConnection, String> {
+async fn open_read_only(path: &str) -> Result<SqliteConnection, CommandError> {
     let options = SqliteConnectOptions::new()
         .filename(path)
         .read_only(true)
         .create_if_missing(false);
     SqliteConnection::connect_with(&options)
         .await
-        .map_err(|e| format!("Could not open backup '{}': {e}", path))
+        .map_err(|e| CommandError::database(format!("Could not open backup '{}': {e}", path)))
 }
 
 /// Copy a user-selected catalog database to a temp file and return that path.
 /// Opening/attaching only the isolated copy prevents SQLite from reading a
 /// crafted sibling `-wal` file (RUSTSEC-2026-0459).
-fn isolated_db_copy(path: &str) -> Result<PathBuf, String> {
+fn isolated_db_copy(path: &str) -> Result<PathBuf, CommandError> {
     if !Path::new(path).is_file() {
-        return Err(format!("Backup file not found: {path}"));
+        return Err(CommandError::not_found(format!(
+            "Backup file not found: {path}"
+        )));
     }
     let tmp = std::env::temp_dir().join(format!("visto-restore-{}.db", uuid::Uuid::new_v4()));
-    std::fs::copy(path, &tmp).map_err(|e| format!("Could not read backup '{}': {e}", path))?;
+    std::fs::copy(path, &tmp)
+        .map_err(|e| CommandError::io(format!("Could not read backup '{}': {e}", path)))?;
     Ok(tmp)
 }
 
@@ -68,71 +72,75 @@ async fn table_exists(
     conn: &mut SqliteConnection,
     schema: &str,
     table: &str,
-) -> Result<bool, String> {
+) -> Result<bool, CommandError> {
     let sql =
         format!("SELECT 1 FROM {schema}.sqlite_master WHERE type = 'table' AND name = ? LIMIT 1");
     let found: Option<i64> = sqlx::query_scalar(&sql)
         .bind(table)
         .fetch_optional(&mut *conn)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(found.is_some())
 }
 
 /// Validate a snapshot without modifying it. Returns metadata only when the
 /// file is a structurally sound, supported catalog backup.
-async fn inspect_backup(path: &str) -> Result<BackupInfo, String> {
+async fn inspect_backup(path: &str) -> Result<BackupInfo, CommandError> {
     if !Path::new(path).is_file() {
-        return Err(format!("Backup file not found: {path}"));
+        return Err(CommandError::not_found(format!(
+            "Backup file not found: {path}"
+        )));
     }
     let mut conn = open_read_only(path).await?;
 
     let integrity: String = sqlx::query_scalar("PRAGMA integrity_check")
         .fetch_one(&mut conn)
         .await
-        .map_err(|e| format!("Could not verify backup: {e}"))?;
+        .map_err(|e| CommandError::database(format!("Could not verify backup: {e}")))?;
     if integrity != "ok" {
-        return Err(format!("Backup failed its integrity check: {integrity}"));
+        return Err(CommandError::database(format!(
+            "Backup failed its integrity check: {integrity}"
+        )));
     }
 
     for table in REQUIRED_TABLES {
         if !table_exists(&mut conn, "main", table).await? {
-            return Err(format!(
+            return Err(CommandError::invalid(format!(
                 "This file is not a VistoGallery catalog backup (missing {table})."
-            ));
+            )));
         }
     }
     if !table_exists(&mut conn, "main", META_TABLE).await? {
-        return Err("This file is not a versioned VistoGallery backup.".to_string());
+        return Err(CommandError::invalid(
+            "This file is not a versioned VistoGallery backup.".to_string(),
+        ));
     }
 
     let (version, app_version, created_at): (i64, String, i64) =
         sqlx::query_as("SELECT version, app_version, created_at FROM visto_backup_meta LIMIT 1")
             .fetch_one(&mut conn)
             .await
-            .map_err(|e| format!("Could not read backup metadata: {e}"))?;
+            .map_err(|e| CommandError::database(format!("Could not read backup metadata: {e}")))?;
     if version != BACKUP_FORMAT_VERSION {
-        return Err(format!(
-            "Unsupported backup format {version}; this build restores version {BACKUP_FORMAT_VERSION}."
+        return Err(CommandError::new(
+            ErrorCode::UnsupportedFormat,
+            format!(
+                "Unsupported backup format {version}; this build restores version {BACKUP_FORMAT_VERSION}."
+            ),
         ));
     }
 
     let item_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_items")
         .fetch_one(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     let album_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM albums")
         .fetch_one(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     let tag_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tags")
         .fetch_one(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     let folder_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM library_folders")
         .fetch_one(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     Ok(BackupInfo {
         path: path.to_string(),
@@ -148,32 +156,30 @@ async fn inspect_backup(path: &str) -> Result<BackupInfo, String> {
 
 /// Create a consistent snapshot (including committed WAL content) without
 /// touching original media or the live catalog.
-async fn snapshot_to(db: &SqlitePool, destination: &Path) -> Result<(), String> {
+async fn snapshot_to(db: &SqlitePool, destination: &Path) -> Result<(), CommandError> {
     if destination.exists() {
-        return Err(format!(
+        return Err(CommandError::invalid(format!(
             "A file already exists at '{}'. Choose a new backup name.",
             destination.display()
-        ));
+        )));
     }
     if let Some(parent) = destination.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(parent)?;
     }
     let destination = destination.to_string_lossy().into_owned();
     let escaped = destination.replace('\'', "''");
     sqlx::query(&format!("VACUUM INTO '{escaped}'"))
         .execute(db)
         .await
-        .map_err(|e| format!("Could not create catalog snapshot: {e}"))?;
+        .map_err(|e| CommandError::database(format!("Could not create catalog snapshot: {e}")))?;
     Ok(())
 }
 
-async fn annotate_snapshot(path: &str) -> Result<(), String> {
+async fn annotate_snapshot(path: &str) -> Result<(), CommandError> {
     let options = SqliteConnectOptions::new()
         .filename(path)
         .create_if_missing(false);
-    let mut conn = SqliteConnection::connect_with(&options)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut conn = SqliteConnection::connect_with(&options).await?;
     sqlx::query(&format!(
         "CREATE TABLE IF NOT EXISTS {META_TABLE} (
             version INTEGER NOT NULL,
@@ -182,12 +188,10 @@ async fn annotate_snapshot(path: &str) -> Result<(), String> {
         )"
     ))
     .execute(&mut conn)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     sqlx::query(&format!("DELETE FROM {META_TABLE}"))
         .execute(&mut conn)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     sqlx::query(&format!(
         "INSERT INTO {META_TABLE} (version, app_version, created_at) VALUES (?, ?, ?)"
     ))
@@ -195,9 +199,8 @@ async fn annotate_snapshot(path: &str) -> Result<(), String> {
     .bind(env!("CARGO_PKG_VERSION"))
     .bind(super::now_ms())
     .execute(&mut conn)
-    .await
-    .map_err(|e| e.to_string())?;
-    conn.close().await.map_err(|e| e.to_string())?;
+    .await?;
+    conn.close().await?;
     Ok(())
 }
 
@@ -206,7 +209,7 @@ async fn annotate_snapshot(path: &str) -> Result<(), String> {
 pub async fn create_catalog_backup(
     destination_path: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<BackupInfo, String> {
+) -> Result<BackupInfo, CommandError> {
     let db = super::get_db(&catalog)?;
     let destination = PathBuf::from(&destination_path);
     snapshot_to(&db, &destination).await?;
@@ -219,7 +222,7 @@ pub async fn create_catalog_backup(
 
 /// Validate a path the user picked before showing a destructive confirmation.
 #[tauri::command]
-pub async fn validate_catalog_backup(path: String) -> Result<BackupInfo, String> {
+pub async fn validate_catalog_backup(path: String) -> Result<BackupInfo, CommandError> {
     let isolated = isolated_db_copy(&path)?;
     let result = inspect_backup(isolated.to_string_lossy().as_ref()).await;
     let _ = std::fs::remove_file(&isolated);
@@ -230,27 +233,27 @@ async fn copy_table(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     table: &str,
     columns: &[&str],
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let columns = columns.join(", ");
     sqlx::query(&format!(
         "INSERT INTO {table} ({columns}) SELECT {columns} FROM restore_src.{table}"
     ))
     .execute(&mut **tx)
     .await
-    .map_err(|e| format!("Could not restore {table}: {e}"))?;
+    .map_err(|e| CommandError::database(format!("Could not restore {table}: {e}")))?;
     Ok(())
 }
 
-async fn restore_backup_into_catalog(db: &SqlitePool, path: &str) -> Result<(), String> {
-    let mut conn = db.acquire().await.map_err(|e| e.to_string())?;
+async fn restore_backup_into_catalog(db: &SqlitePool, path: &str) -> Result<(), CommandError> {
+    let mut conn = db.acquire().await?;
     sqlx::query("ATTACH DATABASE ? AS restore_src")
         .bind(path)
         .execute(&mut *conn)
         .await
-        .map_err(|e| format!("Could not attach the backup: {e}"))?;
+        .map_err(|e| CommandError::database(format!("Could not attach the backup: {e}")))?;
 
     let restore = async {
-        let mut tx = conn.begin().await.map_err(|e| e.to_string())?;
+        let mut tx = conn.begin().await?;
 
         // Clear dependent rows first. Foreign keys are enabled on this pool.
         for statement in [
@@ -267,7 +270,7 @@ async fn restore_backup_into_catalog(db: &SqlitePool, path: &str) -> Result<(), 
             sqlx::query(statement)
                 .execute(&mut *tx)
                 .await
-                .map_err(|e| format!("Could not clear {statement}: {e}"))?;
+                .map_err(|e| CommandError::database(format!("Could not clear {statement}: {e}")))?;
         }
 
         copy_table(
@@ -362,8 +365,8 @@ async fn restore_backup_into_catalog(db: &SqlitePool, path: &str) -> Result<(), 
             .await?;
         }
 
-        tx.commit().await.map_err(|e| e.to_string())?;
-        Ok::<(), String>(())
+        tx.commit().await?;
+        Ok::<(), CommandError>(())
     }
     .await;
 
@@ -382,11 +385,10 @@ struct MissingPathReport {
 
 /// Report media/roots that are no longer at the path stored in the backup.
 /// Restore itself never rewrites paths.
-async fn report_missing_paths(db: &SqlitePool) -> Result<MissingPathReport, String> {
+async fn report_missing_paths(db: &SqlitePool) -> Result<MissingPathReport, CommandError> {
     let rows = sqlx::query("SELECT path FROM media_items ORDER BY path")
         .fetch_all(db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     let mut missing_paths = Vec::new();
     let mut missing_item_count = 0i64;
     for row in rows {
@@ -401,8 +403,7 @@ async fn report_missing_paths(db: &SqlitePool) -> Result<MissingPathReport, Stri
 
     let root_rows = sqlx::query("SELECT path FROM library_folders ORDER BY path")
         .fetch_all(db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     let missing_roots: Vec<String> = root_rows
         .into_iter()
         .map(|row| row.get::<String, _>("path"))
@@ -427,7 +428,7 @@ pub async fn restore_catalog_backup(
     path: String,
     app: tauri::AppHandle,
     catalog: State<'_, crate::Catalog>,
-) -> Result<RestoreResult, String> {
+) -> Result<RestoreResult, CommandError> {
     // Open/attach only an isolated copy of the user-picked backup so a crafted
     // sibling -wal file cannot be read (RUSTSEC-2026-0459).
     let isolated = isolated_db_copy(&path)?;
@@ -444,9 +445,9 @@ pub async fn restore_catalog_backup(
     let app_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Could not locate the app data folder: {e}"))?;
+        .map_err(|e| CommandError::io(format!("Could not locate the app data folder: {e}")))?;
     let backup_dir = app_dir.join("backups");
-    std::fs::create_dir_all(&backup_dir).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&backup_dir)?;
     let pre_restore_path = backup_dir.join(format!("pre-restore-{}.db", super::now_ms()));
     snapshot_to(&db, &pre_restore_path).await?;
     let pre_restore_path_string = pre_restore_path.to_string_lossy().into_owned();
@@ -610,7 +611,8 @@ mod tests {
         conn.close().await.unwrap();
 
         let error = inspect_backup(path.to_str().unwrap()).await.unwrap_err();
-        assert!(error.contains("not a VistoGallery catalog backup"));
+        assert_eq!(error.code, ErrorCode::InvalidInput);
+        assert!(error.message.contains("not a VistoGallery catalog backup"));
         let _ = std::fs::remove_file(path);
     }
 
@@ -629,7 +631,8 @@ mod tests {
         conn.close().await.unwrap();
 
         let error = inspect_backup(path.to_str().unwrap()).await.unwrap_err();
-        assert!(error.contains("Unsupported backup format 99"));
+        assert_eq!(error.code, ErrorCode::UnsupportedFormat);
+        assert!(error.message.contains("Unsupported backup format 99"));
         db.close().await;
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_file(catalog_path);
@@ -721,7 +724,10 @@ mod tests {
         let error = restore_backup_into_catalog(&db, backup_path.to_str().unwrap())
             .await
             .unwrap_err();
-        assert!(error.contains("smart_albums"), "unexpected error: {error}");
+        assert!(
+            error.message.contains("smart_albums"),
+            "unexpected error: {error}"
+        );
 
         let current_path: String =
             sqlx::query_scalar("SELECT path FROM media_items WHERE id = 'm1'")

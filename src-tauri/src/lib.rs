@@ -7,6 +7,7 @@ use tauri::{Emitter, Manager, State};
 // Modules
 mod commands;
 mod db;
+mod errors;
 mod ipc_types_export;
 mod media_animation;
 mod media_dimensions;
@@ -17,32 +18,32 @@ mod models;
 
 use commands::*;
 use db::Database;
+use errors::CommandError;
 use menu::create_menu;
 
 /// Shared SQLite pool (or the launch-time open error). Managed as Tauri state
 /// so commands take it without locking a mutex. Set exactly once during setup.
 #[derive(Default)]
 pub struct Catalog {
-    inner: OnceLock<Result<SqlitePool, String>>,
+    inner: OnceLock<Result<SqlitePool, CommandError>>,
 }
 
 impl Catalog {
-    pub fn pool(&self) -> Result<SqlitePool, String> {
+    pub fn pool(&self) -> Result<SqlitePool, CommandError> {
         match self.inner.get() {
             Some(Ok(pool)) => Ok(pool.clone()),
-            Some(Err(reason)) => Err(format!(
+            Some(Err(reason)) => Err(CommandError::catalog_unavailable(format!(
                 "The VistoGallery catalog could not be opened: {reason}. \
                  Quit other copies of VistoGallery, or restore a catalog backup."
-            )),
-            None => Err(
+            ))),
+            None => Err(CommandError::catalog_unavailable(
                 "The VistoGallery catalog could not be opened: it is still starting up. \
-                 Quit other copies of VistoGallery, or restore a catalog backup."
-                    .to_string(),
-            ),
+                 Quit other copies of VistoGallery, or restore a catalog backup.",
+            )),
         }
     }
 
-    fn set(&self, value: Result<SqlitePool, String>) {
+    fn set(&self, value: Result<SqlitePool, CommandError>) {
         let _ = self.inner.set(value);
     }
 }
@@ -119,7 +120,7 @@ pub fn run() {
                 }
                 Err(error) => {
                     tracing::error!("could not open the catalog: {error:#}");
-                    catalog.set(Err(format!("{error:#}")));
+                    catalog.set(Err(CommandError::internal(format!("{error:#}"))));
                 }
             }
 

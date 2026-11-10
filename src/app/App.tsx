@@ -30,8 +30,8 @@ import { getAdjacentVideo } from "./backgroundVideo";
 import { createAutoImportController, syncFolderWatchers } from "../engine/utils/folderWatcher";
 import { copyTagsToFinder } from "../engine/utils/finderTags";
 import { progressBelongsToOperation } from "../engine/progressPhases";
+import { errorCode } from "../engine/types/errors";
 import { describeError } from "./utils/describeError";
-import { isWarningNotice } from "./utils/isWarningNotice";
 import { startConfiguredSlideshow } from "./utils/startConfiguredSlideshow";
 import { AppDialogs } from "./AppDialogs";
 import { AppSidebar, AppTopBar } from "./AppNavigation";
@@ -45,6 +45,7 @@ import type {
   LibraryFilterDTO,
   LibraryStats,
   UpdateCheckResult,
+  ErrorCode,
 } from "../engine/types/commands";
 import { SlideshowOverlay } from "../design/components/SlideshowOverlay";
 import { ContextMenu } from "../design/components/ContextMenu";
@@ -337,7 +338,7 @@ function App() {
       return videos;
     } catch (error) {
       videoQueuePagingRef.current = { ...paging, loading: false };
-      useLibraryStore.getState().showNotice(`Failed to load more videos: ${String(error)}`);
+      useLibraryStore.getState().showErrorNotice(error, "Failed to load more videos");
       return [];
     }
   }, [videoQueue]);
@@ -662,7 +663,7 @@ function App() {
     importFolder: () => void;
     importFiles: () => void;
     exportToBatch: () => void;
-    showNotice: (text: string) => void;
+    showNotice: (text: string, code?: ErrorCode) => void;
     checkUpdates: (manual?: boolean) => void;
     navigateViewer: (delta: number) => void;
     navigateVideo: (delta: -1 | 1) => void;
@@ -958,9 +959,9 @@ function App() {
           await liveRef.current.library.loadFolders();
         },
         onError: (path, error) => {
-          liveRef.current.library.showNotice(
-            `Could not auto-import changes from ${path}: ${describeError(error)}`,
-          );
+          useLibraryStore
+            .getState()
+            .showErrorNotice(error, `Could not auto-import changes from ${path}`);
         },
       });
       const unlistenFolderChanged = await events.onFolderChanged((path) => {
@@ -971,6 +972,7 @@ function App() {
         if (folder && !folder.available) return;
         liveRef.current.library.showNotice(
           `Folder watching stopped for ${path}: ${message}. Check the folder's macOS access permissions and restore or remove the source if needed.`,
+          "io",
         );
       });
       unlisteners.push(unlistenFolderChanged, unlistenWatchError);
@@ -1055,8 +1057,12 @@ function App() {
     }
   }, [screen, library.activeAlbum]);
 
-  const showNotice = useCallback((text: string) => {
-    useLibraryStore.getState().showNotice(text);
+  const showNotice = useCallback((text: string, code?: ErrorCode) => {
+    useLibraryStore.getState().showNotice(text, code);
+  }, []);
+
+  const showErrorNotice = useCallback((error: unknown, prefix?: string) => {
+    useLibraryStore.getState().showErrorNotice(error, prefix);
   }, []);
 
   // File > Export… and Cmd/Ctrl+E share this action. Batch Export already
@@ -1092,13 +1098,13 @@ function App() {
         setUpdateDialogOpen(true);
       } catch (error) {
         if (manual) {
-          showNotice(`Could not check for updates: ${describeError(error)}`);
+          showErrorNotice(error, "Could not check for updates");
         }
       } finally {
         if (manual) setUpdateChecking(false);
       }
     },
-    [showNotice],
+    [showErrorNotice, showNotice],
   );
 
   // Automatic launch checks are opt-in and default off. The explicit Help menu
@@ -1135,9 +1141,7 @@ function App() {
       const roots = autoImport
         ? await tauri.library.getRoots().catch((error) => {
             if (!cancelled) {
-              showNotice(
-                `Could not read library sources for folder watching: ${describeError(error)}`,
-              );
+              showErrorNotice(error, "Could not read library sources for folder watching");
             }
             return [] as string[];
           })
@@ -1162,9 +1166,10 @@ function App() {
         const detail = describeError(failure.error);
         // Missing sources are handled by the Sources UI; don't spam a
         // permissions-style error while the folder is gone or mid-remount.
-        if (detail.includes("MISSING_SOURCE:")) continue;
+        if (errorCode(failure.error) === "missingSource") continue;
         showNotice(
           `Could not ${watchable.includes(failure.path) ? "watch" : "stop watching"} ${failure.path}: ${detail}. Check macOS folder access permissions.`,
+          "io",
         );
       }
     };
@@ -1173,7 +1178,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [settingsHydrated, autoImport, folderSignature, showNotice]);
+  }, [settingsHydrated, autoImport, folderSignature, showErrorNotice, showNotice]);
 
   // Startup deletion scan: detect files removed from Finder while the app was
   // closed, so they never linger as stale catalog rows. This runs once per
@@ -1221,6 +1226,7 @@ function App() {
           .join("; ");
         showNotice(
           `Copied tags to ${result.updated} of ${items.length} file(s). ${result.failed.length} failed: ${details}${result.failed.length > 3 ? "; …" : ""}`,
+          "io",
         );
       } else if (result.updated > 0) {
         showNotice(
@@ -1490,8 +1496,9 @@ function App() {
       setRenamingAlbumId(null);
       setAlbumDialogMode("create");
     } catch (error) {
-      showNotice(
-        `Could not ${albumDialogMode === "rename" ? "rename" : "create"} album: ${describeError(error)}`,
+      showErrorNotice(
+        error,
+        `Could not ${albumDialogMode === "rename" ? "rename" : "create"} album`,
       );
     } finally {
       setCreatingAlbum(false);
@@ -1525,7 +1532,7 @@ function App() {
       await library.addToAlbum(album.id, albumPickerItemIds);
       setAlbumPickerOpen(false);
     } catch (error) {
-      showNotice(`Could not add to album: ${describeError(error)}`);
+      showErrorNotice(error, "Could not add to album");
     } finally {
       setAddingToAlbumId(null);
     }
@@ -1546,7 +1553,7 @@ function App() {
       );
       setAlbumRemovePending(null);
     } catch (error) {
-      showNotice(`Could not remove: ${describeError(error)}`);
+      showErrorNotice(error, "Could not remove");
     }
   };
   const confirmDeleteItem = () => {
@@ -1574,6 +1581,7 @@ function App() {
         } else if (result.status === "failed") {
           showNotice(
             `Could not move items to Trash: ${result.failures[0]?.error ?? "unknown error"}`,
+            result.failures[0]?.code ?? "internal",
           );
           if (result.failures.length > 1) {
             console.warn("Trash refusals", result.failures);
@@ -1593,9 +1601,8 @@ function App() {
           if (result.failures.length > 0) console.warn("Trash refusals", result.failures);
         }
       } catch (error) {
-        const msg = String(error);
-        if (msg !== "Cancelled") {
-          showNotice(`Could not delete: ${describeError(error)}`);
+        if (errorCode(error) !== "cancelled") {
+          showErrorNotice(error, "Could not delete");
         }
       }
     })();
@@ -1611,7 +1618,7 @@ function App() {
       showNotice(`Deleted album "${albumPendingDelete.name}". Your photos remain in the library.`);
       setAlbumPendingDelete(null);
     } catch (error) {
-      showNotice(`Could not delete album: ${describeError(error)}`);
+      showErrorNotice(error, "Could not delete album");
     } finally {
       setDeletingAlbum(false);
     }
@@ -1629,7 +1636,7 @@ function App() {
       );
       setFolderPendingRemove(null);
     } catch (error) {
-      showNotice(`Could not remove folder: ${describeError(error)}`);
+      showErrorNotice(error, "Could not remove folder");
     } finally {
       setRemovingFolder(false);
     }
@@ -1689,7 +1696,7 @@ function App() {
     } catch (error) {
       library.setBusy(false);
       library.setProgress(null);
-      showNotice(`Could not add items to the album: ${describeError(error)}`);
+      showErrorNotice(error, "Could not add items to the album");
     }
   };
 
@@ -1700,7 +1707,7 @@ function App() {
       paths = await tauri.library.pickMediaFiles();
       if (!paths.length) return;
     } catch (error) {
-      showNotice(`Could not open the file picker: ${describeError(error)}`);
+      showErrorNotice(error, "Could not open the file picker");
       return;
     }
     await importPathsIntoAlbum(paths, albumId);
@@ -1915,7 +1922,7 @@ function App() {
       paths = await tauri.library.pickMediaFiles();
       if (!paths.length) return;
     } catch (e) {
-      showNotice(`Could not open the file picker: ${describeError(e)}`);
+      showErrorNotice(e, "Could not open the file picker");
       return;
     }
 
@@ -1942,7 +1949,7 @@ function App() {
     } catch (e) {
       library.setBusy(false);
       library.setProgress(null);
-      showNotice(`Import failed: ${describeError(e)}`);
+      showErrorNotice(e, "Import failed");
     }
   };
 
@@ -1952,7 +1959,7 @@ function App() {
       // The backend opens the picker so it can trust the roots it registers.
       selectedPaths = await tauri.library.pickSourceFolders();
     } catch (e) {
-      showNotice(`Could not open the folder picker: ${describeError(e)}`);
+      showErrorNotice(e, "Could not open the folder picker");
       return;
     }
     if (!selectedPaths.length) return;
@@ -1997,7 +2004,7 @@ function App() {
     } catch (e) {
       library.setBusy(false);
       library.setProgress(null);
-      showNotice(`Scan failed: ${describeError(e)}`);
+      showErrorNotice(e, "Scan failed");
     }
   };
 
@@ -2023,7 +2030,7 @@ function App() {
         result?.cancelled ? `Rescan cancelled for ${folder.name}.` : `Rescanned ${folder.name}.`,
       );
     } catch (e) {
-      showNotice(`Rescan failed: ${describeError(e)}`);
+      showErrorNotice(e, "Rescan failed");
     } finally {
       library.setBusy(false);
       library.setProgress(null);
@@ -2041,7 +2048,7 @@ function App() {
       }
       library.showNotice(`Removed ${folders.length} source(s).`);
     } catch (e) {
-      library.showNotice(`Could not remove sources: ${String(e)}`);
+      library.showErrorNotice(e, "Could not remove sources");
     } finally {
       library.setBusy(false);
     }
@@ -2088,7 +2095,7 @@ function App() {
           : `Sources rescanned. ${totalDiscovered.toLocaleString()} ${totalDiscovered === 1 ? "item" : "items"} processed.`,
       );
     } catch (e) {
-      showNotice(`Rescan failed: ${describeError(e)}`);
+      showErrorNotice(e, "Rescan failed");
     } finally {
       library.setBusy(false);
       library.setProgress(null);
@@ -2380,12 +2387,12 @@ function App() {
 
           {library.notice && (
             <div
-              className={`toast ${isWarningNotice(library.notice) ? "toast-warning" : ""}`}
-              role={isWarningNotice(library.notice) ? "alert" : "status"}
-              aria-live={isWarningNotice(library.notice) ? "assertive" : "polite"}
+              className={`toast ${library.noticeCode ? "toast-warning" : ""}`}
+              role={library.noticeCode ? "alert" : "status"}
+              aria-live={library.noticeCode ? "assertive" : "polite"}
               onClick={() => library.showNotice("")}
             >
-              <span aria-hidden="true">{isWarningNotice(library.notice) ? "!" : "✓"}</span>
+              <span aria-hidden="true">{library.noticeCode ? "!" : "✓"}</span>
               {library.notice}
             </div>
           )}
@@ -2504,6 +2511,7 @@ function App() {
         importFiles={importFiles}
         importFolder={importFolder}
         showNotice={showNotice}
+        showErrorNotice={showErrorNotice}
         exportToBatch={exportToBatch}
         addItemsToAlbum={addItemsToAlbum}
         albumDragOver={albumDragOver}

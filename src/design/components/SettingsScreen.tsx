@@ -92,6 +92,7 @@ export function SettingsScreen(props: {
   const resetSettings = useSettingsStore((s) => s.reset);
   const loadLibrary = useLibraryStore((s) => s.loadLibrary);
   const showNotice = useLibraryStore((s) => s.showNotice);
+  const showErrorNotice = useLibraryStore((s) => s.showErrorNotice);
 
   // Settings hydration and theme application are owned by App.tsx, which is
   // always mounted; Settings only reads and writes.
@@ -113,13 +114,11 @@ export function SettingsScreen(props: {
       await loadLibrary();
       showNotice("Library database deleted. Original files were left untouched.");
     } catch (e) {
-      showNotice(
-        `Could not delete the library database: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      showErrorNotice(e, "Could not delete the library database");
     } finally {
       setDeletingLibrary(false);
     }
-  }, [loadLibrary, showNotice]);
+  }, [loadLibrary, showErrorNotice, showNotice]);
 
   // Re-scan every registered source through the existing scan path. There is no
   // thumbnail cache yet, so this is the honest replacement for "Clear Cache".
@@ -137,11 +136,11 @@ export function SettingsScreen(props: {
       await loadLibrary();
       showNotice(`Rebuilt ${folders.length} folder${folders.length === 1 ? "" : "s"}.`);
     } catch (e) {
-      showNotice(`Rebuild failed: ${e instanceof Error ? e.message : String(e)}`);
+      showErrorNotice(e, "Rebuild failed");
     } finally {
       setRebuilding(false);
     }
-  }, [loadLibrary, showNotice]);
+  }, [loadLibrary, showErrorNotice, showNotice]);
 
   const handleCreateBackup = useCallback(async () => {
     try {
@@ -157,15 +156,11 @@ export function SettingsScreen(props: {
         `Catalog backup saved (${info.itemCount.toLocaleString()} items, ${info.albumCount.toLocaleString()} albums). Original media files were not touched.`,
       );
     } catch (error) {
-      showNotice(
-        `Could not create the catalog backup: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+      showErrorNotice(error, "Could not create the catalog backup");
     } finally {
       setBackupBusy(false);
     }
-  }, [showNotice]);
+  }, [showErrorNotice, showNotice]);
 
   const handleChooseRestore = useCallback(async () => {
     try {
@@ -204,15 +199,11 @@ export function SettingsScreen(props: {
         `Catalog restored (${result.backup.itemCount.toLocaleString()} items, ${result.backup.albumCount.toLocaleString()} albums). Pre-restore backup: ${result.preRestoreBackup}.${missing} Original media files were not modified.`,
       );
     } catch (error) {
-      showNotice(
-        `Restore failed; the active catalog was left in place: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+      showErrorNotice(error, "Restore failed; the active catalog was left in place");
     } finally {
       setRestoring(false);
     }
-  }, [loadLibrary, pendingRestore, showNotice]);
+  }, [loadLibrary, pendingRestore, showErrorNotice, showNotice]);
 
   const handleVacuumCatalog = useCallback(async () => {
     try {
@@ -220,11 +211,11 @@ export function SettingsScreen(props: {
       await tauri.edit.vacuumCatalog();
       showNotice("Catalog vacuumed — disk space reclaimed.");
     } catch (error) {
-      showNotice(`Vacuum failed: ${error instanceof Error ? error.message : String(error)}`);
+      showErrorNotice(error, "Vacuum failed");
     } finally {
       setVacuuming(false);
     }
-  }, [showNotice]);
+  }, [showErrorNotice, showNotice]);
 
   // Standard ARIA tabs keyboard model: arrows cycle, Home/End jump.
   const handleTabKeyDown = (event: React.KeyboardEvent, index: number) => {
