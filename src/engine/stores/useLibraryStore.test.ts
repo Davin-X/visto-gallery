@@ -718,3 +718,29 @@ test("Animations filter is sent to the backend as an animated flag, not a kind",
     kind: undefined,
   });
 });
+
+test("one failing catalog list does not blank the others", async () => {
+  vi.mocked(tauri.albums.getOverviews).mockResolvedValueOnce([
+    {
+      id: "album-1",
+      name: "Trip",
+      colorIndex: 0,
+      itemCount: 3,
+      coverItems: [],
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ] as never);
+  vi.mocked(tauri.albums.getTags).mockResolvedValueOnce([
+    { id: "tag-1", name: "travel", colorIndex: 0, itemCount: 1, createdAt: 1 },
+  ] as never);
+  vi.mocked(tauri.smartAlbums.get).mockRejectedValueOnce(new Error("near ?: syntax error"));
+
+  await useLibraryStore.getState().loadCatalogMetadata();
+
+  const state = useLibraryStore.getState();
+  expect(state.albums.map((album) => album.name)).toEqual(["Trip"]);
+  expect(state.tags.map((tag) => tag.name)).toEqual(["travel"]);
+  expect(state.notice).toMatch(/Smart Albums/);
+  expect(state.notice).not.toMatch(/albums, |tags|sources/);
+});
