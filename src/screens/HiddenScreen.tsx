@@ -1,7 +1,9 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { EyeOffIcon, ImageOffIcon } from "../design/components/icons";
 import { BrandMark } from "../design/components/BrandMark";
 import LibraryScreen from "./LibraryScreen";
+import { useFocusTrap } from "../design/hooks/useFocusTrap";
+import { useKeyboard } from "../engine/hooks/useKeyboard";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
 import { useShallow } from "zustand/react/shallow";
 import type { MediaItem } from "../engine/types/media";
@@ -186,6 +188,8 @@ function HiddenScreen(props: HiddenScreenProps) {
     };
   })();
 
+  const mergeUnique = (base: string[], extra: string[]) => [...new Set([...base, ...extra])];
+
   const toggleSelectAll = () => {
     const allSelected =
       items.length > 0 && items.every((item) => library.selectedIds.includes(item.id));
@@ -193,7 +197,7 @@ function HiddenScreen(props: HiddenScreenProps) {
       const visible = new Set(items.map((item) => item.id));
       library.setSelectedIds(library.selectedIds.filter((id) => !visible.has(id)));
     } else {
-      library.setSelectedIds([...library.selectedIds, ...items.map((item) => item.id)]);
+      library.setSelectedIds(mergeUnique(library.selectedIds, items.map((item) => item.id)));
     }
   };
 
@@ -202,11 +206,26 @@ function HiddenScreen(props: HiddenScreenProps) {
     const end = items.findIndex((item) => item.id === endId);
     if (start < 0 || end < 0) return;
     const [from, to] = start <= end ? [start, end] : [end, start];
-    library.setSelectedIds([
-      ...library.selectedIds,
-      ...items.slice(from, to + 1).map((item) => item.id),
-    ]);
+    library.setSelectedIds(
+      mergeUnique(
+        library.selectedIds,
+        items.slice(from, to + 1).map((item) => item.id),
+      ),
+    );
   };
+
+  const revealDialogRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(pendingReveal !== null, revealDialogRef);
+  useKeyboard([
+    useCallback(
+      (e: KeyboardEvent) => {
+        if (e.key !== "Escape" || pendingReveal === null) return;
+        e.preventDefault();
+        setPendingReveal(null);
+      },
+      [pendingReveal],
+    ),
+  ]);
 
   return (
     <>
@@ -271,6 +290,7 @@ function HiddenScreen(props: HiddenScreenProps) {
       {pendingReveal && (
         <div className="dialog-backdrop" onClick={() => setPendingReveal(null)}>
           <div
+            ref={revealDialogRef}
             className="album-dialog confirm-dialog"
             role="dialog"
             aria-modal="true"
@@ -296,7 +316,7 @@ function HiddenScreen(props: HiddenScreenProps) {
               <button className="quiet-button" type="button" onClick={() => setPendingReveal(null)}>
                 Cancel
               </button>
-              <button className="primary-button" type="button" autoFocus onClick={confirmReveal}>
+              <button className="primary-button" type="button" onClick={confirmReveal}>
                 {revealCopy.action}
               </button>
             </div>
