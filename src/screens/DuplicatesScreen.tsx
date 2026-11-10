@@ -661,8 +661,8 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
             <div className="duplicate-selection-bar">
               <div className="duplicate-selection-copy">
                 <span>
-                  <b>{selectedCopyCount.toLocaleString()}</b> of {totalCopies.toLocaleString()} extra
-                  copies selected
+                  <b>{selectedCopyCount.toLocaleString()}</b> of {totalCopies.toLocaleString()}{" "}
+                  extra copies selected
                 </span>
                 {selectedCopyCount > 0 && (
                   <span className="duplicate-selection-savings">

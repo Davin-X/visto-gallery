@@ -197,7 +197,12 @@ function HiddenScreen(props: HiddenScreenProps) {
       const visible = new Set(items.map((item) => item.id));
       library.setSelectedIds(library.selectedIds.filter((id) => !visible.has(id)));
     } else {
-      library.setSelectedIds(mergeUnique(library.selectedIds, items.map((item) => item.id)));
+      library.setSelectedIds(
+        mergeUnique(
+          library.selectedIds,
+          items.map((item) => item.id),
+        ),
+      );
     }
   };
 
