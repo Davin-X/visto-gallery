@@ -4431,13 +4431,18 @@ body.is-resizing .photo-inspector {
 .viewer-overlay-top.hidden,
 .viewer-overlay-bottom.hidden {
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.35s ease;
+  transition:
+    opacity 0.35s ease,
+    visibility 0.35s ease;
 }
 .viewer-arrow,
 .viewer-overlay-top,
 .viewer-overlay-bottom {
-  transition: opacity 0.35s ease;
+  transition:
+    opacity 0.35s ease,
+    visibility 0.35s ease;
 }
 .viewer-hints span {
   display: inline-flex;
