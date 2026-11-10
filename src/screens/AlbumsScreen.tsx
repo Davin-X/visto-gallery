@@ -3,7 +3,7 @@ import { AlbumsIcon, PlusIcon } from "../design/components/icons";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
-import type { Album, MediaItem, MediaKind } from "../engine/types/media";
+import type { Album, MediaItem } from "../engine/types/media";
 import type { SmartAlbum } from "../engine/types/commands";
 
 interface AlbumsScreenProps {
@@ -16,6 +16,14 @@ interface AlbumsScreenProps {
   onOpenAlbum: (albumId: string) => void;
   onOpenSmartAlbum?: (albumId: string) => void;
   onSmartAlbumContextMenu?: (album: SmartAlbum, e: React.MouseEvent) => void;
+}
+
+/** Counts in smart-album overviews can arrive undefined; treat anything
+ *  missing or non-finite as empty instead of printing NaN. */
+function formatAlbumCount(itemCount: unknown): string {
+  const count = Number(itemCount);
+  if (!Number.isFinite(count) || count <= 0) return "Empty";
+  return `${count.toLocaleString()} ${count === 1 ? "item" : "items"}`;
 }
 
 function AlbumsScreen(props: AlbumsScreenProps) {
@@ -105,7 +113,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                     tailLength={6}
                   />
                   <span className="smart-album-tile-count">
-                    {album.itemCount.toLocaleString()} {album.itemCount === 1 ? "item" : "items"}
+                    {formatAlbumCount(album.itemCount)}
                   </span>
                 </button>
               );
@@ -182,82 +190,6 @@ function AlbumsScreen(props: AlbumsScreenProps) {
       )}
     </div>
   );
-}
-
-async function createMediaItemsBrowser(files: FileList | File[]): Promise<MediaItem[]> {
-  const items: MediaItem[] = [];
-  for (const file of Array.from(files)) {
-    if (!file.name || file.name.startsWith(".")) continue;
-    const relativePath =
-      (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
-    const ext = relativePath.split(".").pop()?.toLowerCase() ?? "";
-    const videoExts = new Set(["m4v", "mov", "mp4", "mpeg", "mpg", "webm"]);
-    const rawExts = new Set(["arw", "cr2", "cr3", "dng", "nef", "raf", "raw", "rw2"]);
-    const imageExts = new Set([
-      "avif",
-      "bmp",
-      "gif",
-      "heic",
-      "heif",
-      "jpeg",
-      "jpg",
-      "png",
-      "tif",
-      "tiff",
-      "webp",
-    ]);
-    // "unsupported" is a sentinel for "no known kind" - it is not a MediaKind.
-    let kind: MediaKind | "unsupported" = "unsupported";
-    if (videoExts.has(ext)) kind = "video";
-    else if (rawExts.has(ext)) kind = "raw";
-    else if (imageExts.has(ext)) kind = "photo";
-    if (kind === "unsupported") continue;
-
-    const url = URL.createObjectURL(file);
-    let width: number | undefined;
-    let height: number | undefined;
-    if (kind === "photo") {
-      const img = new Image();
-      await new Promise<void>((resolve) => {
-        img.onload = () => {
-          width = img.naturalWidth;
-          height = img.naturalHeight;
-          resolve();
-        };
-        img.onerror = () => resolve();
-        img.src = url;
-      });
-      if (!width || !height) {
-        // Could not read the dimensions - treat as unsupported and skip.
-        URL.revokeObjectURL(url);
-        continue;
-      }
-    }
-
-    items.push({
-      id: `${file.name}:${file.size}:${file.lastModified}:${Math.random().toString(36).slice(2)}`,
-      // Browser has no real absolute path; keep a session-relative stand-in.
-      path: relativePath,
-      name: file.name,
-      extension: ext,
-      kind,
-      isAnimated: false,
-      size: file.size,
-      modifiedAt: file.lastModified,
-      // In-memory import: the browser exposes no true capture time or camera
-      // data, so fall back to the file's mtime for ordering.
-      capturedAt: file.lastModified,
-      width,
-      height,
-      favorite: false,
-      hidden: false,
-      tags: [],
-      albumIds: [],
-      createdAt: file.lastModified,
-      updatedAt: file.lastModified,
-    });
-  }
-  return items;
 }
 
 export default AlbumsScreen;

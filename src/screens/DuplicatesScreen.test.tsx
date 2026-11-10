@@ -99,8 +99,11 @@ describe("DuplicatesScreen", () => {
   });
 
   it("prunes the selection when the selected copy disappears", () => {
-    const jpg = item({ id: "keep" });
-    const copy = item({ id: "copy" });
+    // The larger file wins the keeper slot deterministically; otherwise the
+    // name tie-break would crown "copy.jpg" and the assertion below would be
+    // testing the keeper, not an extra copy.
+    const jpg = item({ id: "keep", size: 4_200_000 });
+    const copy = item({ id: "copy", size: 4_000_000 });
     const group = makeGroup([jpg, copy]);
 
     const { rerender, props, onRequestDeleteItems } = renderScreen([group]);

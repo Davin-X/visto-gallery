@@ -72,6 +72,19 @@ const SORT_LABELS: Record<SortBy, string> = {
   name: "Name",
 };
 
+/** True when a key event originates from an editable field (input, textarea,
+ *  select, contenteditable) — the duplicates shortcuts must not hijack typing. */
+function isEditableTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  return (
+    el.isContentEditable ||
+    el.tagName === "INPUT" ||
+    el.tagName === "TEXTAREA" ||
+    el.tagName === "SELECT"
+  );
+}
+
 function parentFolder(path: string): string {
   const index = path.lastIndexOf("/");
   return index > 0 ? path.slice(0, index) : path;
@@ -154,15 +167,26 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     () => (compare ? groupViews.find((view) => view.group.sha256 === compare.sha) : undefined),
     [compare, groupViews],
   );
+  const copyIdSet = useMemo(() => {
+    const ids = new Set<string>();
+    groupViews.forEach((view) => view.copies.forEach((item) => ids.add(item.id)));
+    return ids;
+  }, [groupViews]);
+
+  const selectedCopyCount = useMemo(
+    () => [...selected].filter((id) => copyIdSet.has(id)).length,
+    [selected, copyIdSet],
+  );
+
   const selectedBytes = useMemo(() => {
     let total = 0;
     groupViews.forEach((view) => {
       view.ordered.forEach((item) => {
-        if (selected.has(item.id)) total += item.size;
+        if (selected.has(item.id) && copyIdSet.has(item.id)) total += item.size;
       });
     });
     return total;
-  }, [groupViews, selected]);
+  }, [groupViews, selected, copyIdSet]);
 
   const libraryTotals = useMemo(() => {
     let copies = 0;
@@ -273,6 +297,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     useCallback(
       (e: KeyboardEvent) => {
         if (busy) return;
+        if (isEditableTarget(e.target)) return;
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
           e.preventDefault();
           selectAllCopies();
@@ -504,7 +529,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const isDuplicateScan = busy && progress?.phase === "hashing";
   const isTrashing = busy && progress?.phase === "trashing";
   const canAct = !busy && selected.size > 0;
-  const allCopiesSelected = totalCopies > 0 && selected.size >= totalCopies;
+  const allCopiesSelected = totalCopies > 0 && selectedCopyCount >= totalCopies;
 
   const pageHeading = (
     <div className="page-heading">
@@ -541,17 +566,12 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
 
           {hasGroups && (
             <div className="duplicate-toolbar">
-              <div
-                className="duplicate-filter-tabs"
-                role="tablist"
-                aria-label="Filter by media type"
-              >
+              <div className="duplicate-filter-tabs" role="group" aria-label="Filter by media type">
                 {(Object.keys(KIND_LABELS) as KindFilter[]).map((kind) => (
                   <button
                     key={kind}
                     type="button"
-                    role="tab"
-                    aria-selected={filterKind === kind}
+                    aria-pressed={filterKind === kind}
                     className={[
                       filterKind === kind ? "is-active" : "",
                       kindCounts[kind] === 0 ? "is-empty" : "",
@@ -641,10 +661,10 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
             <div className="duplicate-selection-bar">
               <div className="duplicate-selection-copy">
                 <span>
-                  <b>{selected.size.toLocaleString()}</b> of {totalCopies.toLocaleString()} extra
-                  copies selected
+                  <b>{selectedCopyCount.toLocaleString()}</b> of {totalCopies.toLocaleString()}{" "}
+                  extra copies selected
                 </span>
-                {selected.size > 0 && (
+                {selectedCopyCount > 0 && (
                   <span className="duplicate-selection-savings">
                     {formatBytesSimple(selectedBytes)} reclaimable
                   </span>
