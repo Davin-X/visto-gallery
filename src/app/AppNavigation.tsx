@@ -18,6 +18,8 @@ import {
   PanelRightIcon,
   ChartIcon,
   ChevronLeftIcon,
+  ChevronsLeftIcon,
+  ChevronsRightIcon,
 } from "../design/components/icons";
 import { ACCENT_PALETTE } from "../engine/stores";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
@@ -410,11 +412,17 @@ export function AppSidebar({
               type="button"
               className="sidebar-collapse-toggle"
               onClick={onToggleCollapse}
-              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar to icons"}
               aria-pressed={sidebarCollapsed}
-              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar to icons"}
             >
-              <PanelLeftIcon size={14} strokeWidth={2} />
+              {/* A different icon from the title bar's Hide sidebar button:
+                  that one removes the sidebar, this one shrinks it to a rail. */}
+              {sidebarCollapsed ? (
+                <ChevronsRightIcon size={14} strokeWidth={2} />
+              ) : (
+                <ChevronsLeftIcon size={14} strokeWidth={2} />
+              )}
             </button>
           </div>
           {canGoBack && onGoBack && (
