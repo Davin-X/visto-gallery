@@ -3194,13 +3194,14 @@ body.is-resizing .photo-inspector {
   background: #28c840;
 }
 
-.topbar-brand {
+.app-frame .topbar-brand {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 650;
+  letter-spacing: 0.012em;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -3278,7 +3279,23 @@ body.is-resizing .photo-inspector {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+}
+
+/* One size for every top-bar control: the toggle buttons, the theme picker,
+   and the settings gear. 28px matches the standard toolbar metrics. */
+.topbar-actions .icon-button,
+.topbar-actions .theme-button {
+  width: 28px;
+  height: 28px;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  border-radius: 7px;
+}
+
+.topbar-actions .theme-button span {
+  display: none;
 }
 
 .icon-button {
