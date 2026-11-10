@@ -516,16 +516,16 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
     }
     if let Some(tags) = &f.tags {
         if !tags.is_empty() {
-            let placeholders = std::iter::repeat_n("?", tags.len())
-                .collect::<Vec<_>>()
-                .join(",");
-            qb.push(format!(
-                " AND id IN (SELECT mt.media_id FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE t.name IN ({}))",
-                placeholders
-            ));
+            // push_bind writes its own `?`, so the IN list is built from binds
+            // only; writing literal placeholders as well produced `IN (?)) ?`.
+            qb.push(
+                " AND id IN (SELECT mt.media_id FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE t.name IN (",
+            );
+            let mut names = qb.separated(", ");
             for tag in tags {
-                qb.push_bind(tag.clone());
+                names.push_bind(tag.clone());
             }
+            qb.push("))");
         }
     }
     if let Some(query) = &f.query {
@@ -2353,6 +2353,50 @@ mod filter_and_scale_tests {
         let ids: Vec<&str> = page.items.iter().map(|item| item.id.as_str()).collect();
         assert_eq!(ids, ["secret"]);
         assert_eq!(page.total_count, 1);
+    }
+
+    #[tokio::test]
+    async fn tag_filter_matches_any_of_the_given_tags() {
+        let db = filter_db().await;
+        insert_item(&db, "beach", "photo", Some(3), 3, None).await;
+        insert_item(&db, "party", "photo", Some(2), 2, None).await;
+        insert_item(&db, "plain", "photo", Some(1), 1, None).await;
+        for (id, name) in [("t-travel", "travel"), ("t-family", "family")] {
+            sqlx::query("INSERT INTO tags (id, name) VALUES (?, ?)")
+                .bind(id)
+                .bind(name)
+                .execute(&db)
+                .await
+                .expect("insert tag");
+        }
+        for (media, tag) in [("beach", "t-travel"), ("party", "t-family")] {
+            sqlx::query("INSERT INTO media_tags (media_id, tag_id) VALUES (?, ?)")
+                .bind(media)
+                .bind(tag)
+                .execute(&db)
+                .await
+                .expect("tag item");
+        }
+
+        for (tags, expected) in [
+            (vec!["travel"], vec!["beach"]),
+            (vec!["travel", "family"], vec!["beach", "party"]),
+        ] {
+            let page = get_library_items_page(
+                &db,
+                LibraryFilterDTO {
+                    tags: Some(tags.iter().map(|t| t.to_string()).collect()),
+                    limit: Some(10),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("tag filter query must be valid SQL");
+            let mut ids: Vec<&str> = page.items.iter().map(|i| i.id.as_str()).collect();
+            ids.sort();
+            assert_eq!(ids, expected);
+            assert_eq!(page.total_count, expected.len() as i64);
+        }
     }
 
     #[tokio::test]
