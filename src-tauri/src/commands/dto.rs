@@ -65,7 +65,7 @@ pub struct LibraryFilterDTO {
 
 #[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(optional_fields)]
+#[ts(optional_fields = nullable)]
 pub struct ExifData {
     pub captured_at: Option<i64>,
     pub camera: Option<String>,
@@ -79,7 +79,6 @@ pub struct ExifData {
     pub metadata_error: Option<String>,
 }
 
-#[allow(dead_code)]
 #[derive(Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(optional_fields)]
@@ -118,9 +117,15 @@ pub struct CropRect {
     pub height: f32,
 }
 
-#[allow(dead_code)]
 /// Client-side crop state attached to an edit recipe or preset. `aspectRatio`
 /// is either a concrete ratio or the literal `"free"`.
+///
+/// Edit recipes keep their edits and crop as opaque JSON in SQLite, so nothing
+/// in Rust constructs this type. It exists so `EditRecipe`/`EditPreset` can
+/// name the shape the frontend persists via `#[ts(type = "CropState")]`; the
+/// editor validates values before saving, and the render path that actually
+/// applies them takes typed `EditValues`/`CropRect` arguments.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CropState {
@@ -197,7 +202,7 @@ pub struct BatchExportError {
 
 #[derive(Serialize, Debug, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(optional_fields)]
+#[ts(optional_fields = nullable)]
 pub struct TrashResult {
     /// Catalog ids that were moved to Trash.
     pub trashed: Vec<String>,

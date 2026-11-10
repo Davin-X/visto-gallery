@@ -14,7 +14,7 @@ use uuid::Uuid;
 /// interpolated into a statement.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[ts(optional_fields)]
+#[ts(optional_fields = nullable)]
 pub struct SmartAlbumFilter {
     #[ts(optional, type = "\"photo\" | \"video\" | \"raw\"")]
     pub kind: Option<String>,

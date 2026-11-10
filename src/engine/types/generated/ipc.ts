@@ -15,7 +15,7 @@ export type ViewerZoomBehavior = "fit" | "actual" | "last";
 
 export type MediaKind = "photo" | "video" | "raw";
 
-export type MediaItem = { id: string, path: string, name: string, extension: string, kind: MediaKind, size: number, modifiedAt: number, capturedAt?: number, width?: number, height?: number, camera?: string, lens?: string, exposure?: string, iso?: number, latitude?: number, longitude?: number, sha256?: string, favorite: boolean, hidden: boolean, 
+export type MediaItem = { id: string, path: string, name: string, extension: string, kind: MediaKind, size: number, modifiedAt: number, capturedAt?: number | null, width?: number | null, height?: number | null, camera?: string | null, lens?: string | null, exposure?: string | null, iso?: number | null, latitude?: number | null, longitude?: number | null, sha256?: string | null, favorite: boolean, hidden: boolean, 
 /**
  * Whether the catalog treats this item as animated content, i.e. the file
  * contains more than one frame or an animation sequence.
@@ -23,7 +23,7 @@ export type MediaItem = { id: string, path: string, name: string, extension: str
  * Orthogonal to `kind` (which stays photo | video | raw). Detected from
  * container headers by `media_animation::detect_animation`.
  */
-isAnimated: boolean, rating?: number, colorLabel?: string, importSessionId?: string, createdAt: number, updatedAt: number, tags: Array<string>, albumIds: Array<string>, };
+isAnimated: boolean, rating?: number | null, colorLabel?: string | null, importSessionId?: string | null, createdAt: number, updatedAt: number, tags: Array<string>, albumIds: Array<string>, };
 
 export type Album = { id: string, name: string, colorIndex: number, createdAt: number, updatedAt: number, itemCount: number, itemIds: Array<string>, };
 
@@ -53,7 +53,7 @@ animated?: boolean, albumId?: string, query?: string, tags?: Array<string>, date
  */
 cursor?: string, sortBy?: "capturedAt" | "modifiedAt" | "name" | "size" | "kind", sortOrder?: "asc" | "desc", };
 
-export type LibraryItemsPage = { items: Array<MediaItem>, hasMore: boolean, nextCursor?: string, totalCount: number, };
+export type LibraryItemsPage = { items: Array<MediaItem>, hasMore: boolean, nextCursor?: string | null, totalCount: number, };
 
 export type LibraryStats = { photos: number, videos: number, raws: number, 
 /**
@@ -73,7 +73,7 @@ maxCacheBytes?: number, };
 
 export type ThumbnailResponse = { itemId: string, dataUrl: string, width: number, height: number, };
 
-export type ExifData = { capturedAt?: number, camera?: string, lens?: string, exposure?: string, iso?: number, latitude?: number, longitude?: number, width?: number, height?: number, metadataError?: string, };
+export type ExifData = { capturedAt?: number | null, camera?: string | null, lens?: string | null, exposure?: string | null, iso?: number | null, latitude?: number | null, longitude?: number | null, width?: number | null, height?: number | null, metadataError?: string | null, };
 
 export type RenderRequest = { sourcePath: string, 
 /**
@@ -117,13 +117,13 @@ trashed: Array<string>, failed: Array<TrashError>,
  * Set when the files reached the Trash but the catalog could not be
  * updated. The move succeeded; the rows are stale until a rescan.
  */
-catalogError?: string, };
+catalogError?: string | null, };
 
 export type TrashError = { id: string, error: string, };
 
 export type DuplicateGroup = { id: string, sha256: string, size: number, items: Array<MediaItem>, };
 
-export type SmartAlbumFilter = { kind?: "photo" | "video" | "raw", favorite?: boolean, query?: string, tags?: Array<string>, dateFrom?: number, dateTo?: number, sourcePath?: string, rating?: number, colorLabel?: string, camera?: string, lens?: string, sortBy?: "capturedAt" | "modifiedAt" | "name" | "size" | "kind", sortOrder?: "asc" | "desc", };
+export type SmartAlbumFilter = { kind?: "photo" | "video" | "raw", favorite?: boolean | null, query?: string | null, tags?: Array<string> | null, dateFrom?: number | null, dateTo?: number | null, sourcePath?: string | null, rating?: number | null, colorLabel?: string | null, camera?: string | null, lens?: string | null, sortBy?: "capturedAt" | "modifiedAt" | "name" | "size" | "kind", sortOrder?: "asc" | "desc", };
 
 export type SmartAlbum = { id: string, name: string, filter: SmartAlbumFilter, itemCount: number, coverItems: Array<MediaItem>, createdAt: number, updatedAt: number, };
 
@@ -137,13 +137,13 @@ export type RootPathMappingResult = { oldRoot: string, newRoot: string, updatedI
 
 export type AlbumOverview = { id: string, name: string, colorIndex: number, createdAt: number, updatedAt: number, itemCount: number, coverItems: Array<MediaItem>, };
 
-export type EditRecipe = { mediaId: string, edits: EditValues, crop?: CropState, history: EditValues[], historyIndex: number, createdAt: number, updatedAt: number, };
+export type EditRecipe = { mediaId: string, edits: EditValues, crop?: CropState | null, history: EditValues[], historyIndex: number, createdAt: number, updatedAt: number, };
 
-export type EditPreset = { id: string, name: string, edits: EditValues, crop?: CropState, createdAt: number, updatedAt: number, };
+export type EditPreset = { id: string, name: string, edits: EditValues, crop?: CropState | null, createdAt: number, updatedAt: number, };
 
 export type ExternalPlayer = { name: string, path: string, };
 
-export type UpdateCheck = { available: boolean, currentVersion: string, latestVersion: string, notes: string, releaseUrl: string, downloadUrl?: string, publishedAt?: string, checkedAt: number, };
+export type UpdateCheck = { available: boolean, currentVersion: string, latestVersion: string, notes: string, releaseUrl: string, downloadUrl?: string | null, publishedAt?: string | null, checkedAt: number, };
 
 export type AppSettings = { appearance: Appearance, accentColor: AccentColor, sidebarWidth: number, inspectorWidth: number, showExtensions: boolean, animateTransitions: boolean, startupView: StartupView, openLastFolder: boolean, restoreWindowState: boolean, defaultLayout: DefaultLayout, thumbnailSize: ThumbnailSize, viewerZoomBehavior: ViewerZoomBehavior, slideshowInterval: number, slideshowShuffle: boolean, slideshowLoop: boolean, videoAutoPlay: boolean, videoLoop: boolean, watchFolders: Array<string>, autoImport: boolean, 
 /**

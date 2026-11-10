@@ -421,7 +421,7 @@ struct LibraryCursor {
 
 #[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(optional_fields)]
+#[ts(optional_fields = nullable)]
 pub struct LibraryItemsPage {
     pub(crate) items: Vec<MediaItem>,
     has_more: bool,

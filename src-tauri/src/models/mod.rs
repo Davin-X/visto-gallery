@@ -10,7 +10,7 @@ use uuid::Uuid;
 // field names for row mapping, so the attributes never affect the database.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(optional_fields)]
+#[ts(optional_fields = nullable)]
 pub struct MediaItem {
     pub id: String,
     pub path: String,

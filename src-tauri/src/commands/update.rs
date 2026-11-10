@@ -11,7 +11,7 @@ const CACHE_TTL_MS: i64 = 24 * 60 * 60 * 1000;
 /// launch without hitting GitHub's unauthenticated rate limit.
 #[derive(Serialize, Deserialize, Clone, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(optional_fields)]
+#[ts(optional_fields = nullable)]
 pub struct UpdateCheck {
     pub available: bool,
     pub current_version: String,
