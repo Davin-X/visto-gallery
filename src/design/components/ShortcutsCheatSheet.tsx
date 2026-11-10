@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 
 /**
  * Keyboard shortcuts cheat sheet modal. Triggered with ⌘/ (Mac) or Ctrl+/ (Win/Linux).
@@ -53,6 +54,7 @@ export function ShortcutsCheatSheet({ open, onClose }: { open: boolean; onClose:
   ];
 
   const cheatSheetRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(open, cheatSheetRef);
 
   // Close on Escape
   useEffect(() => {
@@ -67,15 +69,6 @@ export function ShortcutsCheatSheet({ open, onClose }: { open: boolean; onClose:
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  // Focus the close button on mount for keyboard users
-  useEffect(() => {
-    if (!open) return;
-    const btn = cheatSheetRef.current?.querySelector(
-      'button[aria-label="Close"]',
-    ) as HTMLElement | null;
-    btn?.focus();
-  }, [open]);
-
   if (!open) return null;
 
   return (
@@ -87,6 +80,7 @@ export function ShortcutsCheatSheet({ open, onClose }: { open: boolean; onClose:
       }}
     >
       <div
+        ref={cheatSheetRef}
         className="album-dialog shortcuts-cheat-sheet"
         role="dialog"
         aria-modal="true"

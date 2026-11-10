@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   type MutableRefObject,
   type ReactNode,
   type RefObject,
@@ -417,7 +418,8 @@ function AlbumPickerDialog({
   searchRef: RefObject<HTMLInputElement | null>;
   library: any;
 }) {
-  useFocusTrap(open, searchRef);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(open, dialogRef);
   useEscape(onClose, open);
 
   useEffect(() => {
@@ -437,6 +439,7 @@ function AlbumPickerDialog({
   return (
     <Backdrop open={open} onClose={onClose} className="album-picker-backdrop">
       <div
+        ref={dialogRef}
         className="album-dialog album-picker-dialog"
         role="dialog"
         aria-modal="true"
@@ -474,7 +477,7 @@ function AlbumPickerDialog({
             </button>
           )}
         </div>
-        <div className="album-picker-list" role="listbox" aria-label="Albums">
+        <div className="album-picker-list" role="group" aria-label="Albums">
           {!matching.length ? (
             <div className="album-picker-empty">
               <AlbumsIcon size={24} />
@@ -499,8 +502,6 @@ function AlbumPickerDialog({
                   className="album-picker-row"
                   onClick={() => onAddToAlbum(album)}
                   disabled={Boolean(addingToAlbumId) || alreadyAdded}
-                  role="option"
-                  aria-selected="false"
                 >
                   <i className={`album-dot ${["coral", "violet", "blue", "green"][index % 4]}`} />
                   <span className="album-picker-name">{album.name}</span>
