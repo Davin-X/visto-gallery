@@ -589,15 +589,20 @@ export const useLibraryStore = create<LibraryState>()(
       // change.
       loadCatalogMetadata: async () => {
         const generation = ++libraryLoadGeneration;
-        try {
-          const [albumOverviews, smartAlbums, tags, folders] = await Promise.all([
-            tauri.albums.getOverviews(),
-            tauri.smartAlbums.get(),
-            tauri.albums.getTags(),
-            tauri.library.getFolders(),
-          ]);
-          if (generation !== libraryLoadGeneration) return;
-          const albums: Album[] = albumOverviews.map((album) => ({
+        // Each list loads on its own: one failing command (say, a Smart Album
+        // the backend cannot evaluate) must not blank albums, tags and
+        // folders that loaded fine. Lists that fail keep their last value.
+        const [albumOverviews, smartAlbums, tags, folders] = await Promise.allSettled([
+          tauri.albums.getOverviews(),
+          tauri.smartAlbums.get(),
+          tauri.albums.getTags(),
+          tauri.library.getFolders(),
+        ]);
+        if (generation !== libraryLoadGeneration) return;
+        const update: Partial<LibraryState> = {};
+        if (albumOverviews.status === "fulfilled") {
+          update.albumOverviews = albumOverviews.value;
+          update.albums = albumOverviews.value.map((album) => ({
             id: album.id,
             name: album.name,
             colorIndex: album.colorIndex,
@@ -606,18 +611,26 @@ export const useLibraryStore = create<LibraryState>()(
             createdAt: album.createdAt,
             updatedAt: album.updatedAt,
           }));
-          set({
-            albums,
-            albumOverviews,
-            smartAlbums,
-            tags,
-            folders,
-          });
-          get().refreshDerived();
-        } catch (e) {
-          if (generation !== libraryLoadGeneration) return;
-          if (import.meta.env.DEV) console.error("loadCatalogMetadata failed:", e);
-          get().showErrorNotice(e, "Failed to load catalog metadata");
+        }
+        if (smartAlbums.status === "fulfilled") update.smartAlbums = smartAlbums.value;
+        if (tags.status === "fulfilled") update.tags = tags.value;
+        if (folders.status === "fulfilled") update.folders = folders.value;
+        set(update);
+        get().refreshDerived();
+
+        const failures = [
+          ["albums", albumOverviews],
+          ["Smart Albums", smartAlbums],
+          ["tags", tags],
+          ["sources", folders],
+        ].filter(([, result]) => (result as PromiseSettledResult<unknown>).status === "rejected");
+        if (failures.length > 0) {
+          const first = failures[0][1] as PromiseRejectedResult;
+          if (import.meta.env.DEV) console.error("loadCatalogMetadata failed:", failures);
+          get().showErrorNotice(
+            first.reason,
+            `Could not load ${failures.map(([label]) => label).join(", ")}`,
+          );
         }
       },
 
