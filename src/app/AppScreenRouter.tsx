@@ -405,14 +405,12 @@ export function AppScreenRouter({
         <BatchScreen
           items={library.items.filter((i: any) => library.selectedIds.includes(i.id))}
           selectedIds={library.selectedIds}
-          config={batch}
           state={batch}
           onSetPattern={batch.setPattern}
           onSetFormat={batch.setFormat}
           onSetQuality={batch.setQuality}
           onSetStripMetadata={batch.setStripMetadata}
           onSetMaxDimension={batch.setMaxDimension}
-          onSetStep={batch.setStep}
           onChooseFolder={async () => {
             const folder = await openFileDialog({
               directory: true,
@@ -432,11 +430,6 @@ export function AppScreenRouter({
           onSelectAll={library.selectAll}
           onSetSelection={library.setSelectedIds}
           onRemoveItem={library.toggleSelection}
-          busy={batch.busy}
-          cancelRequested={batch.cancelRequested}
-          progress={batch.progress}
-          result={batch.result}
-          error={batch.error}
           assetUrl={assetUrl}
         />
       )}

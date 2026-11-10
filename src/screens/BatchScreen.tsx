@@ -87,20 +87,13 @@ function folderDisplayName(path: string) {
 interface BatchScreenProps {
   items: MediaItem[];
   selectedIds: string[];
-  config: ReturnType<typeof useBatchStore.getState>;
   state: ReturnType<typeof useBatchStore.getState>;
-  busy: boolean;
-  cancelRequested: boolean;
-  progress: ReturnType<typeof useBatchStore.getState>["progress"];
-  result: ReturnType<typeof useBatchStore.getState>["result"];
-  error: ReturnType<typeof useBatchStore.getState>["error"];
   assetUrl: (path: string) => string;
   onSetPattern: ReturnType<typeof useBatchStore.getState>["setPattern"];
   onSetFormat: ReturnType<typeof useBatchStore.getState>["setFormat"];
   onSetQuality: ReturnType<typeof useBatchStore.getState>["setQuality"];
   onSetStripMetadata: ReturnType<typeof useBatchStore.getState>["setStripMetadata"];
   onSetMaxDimension: ReturnType<typeof useBatchStore.getState>["setMaxDimension"];
-  onSetStep: ReturnType<typeof useBatchStore.getState>["setStep"];
   onChooseFolder: () => void | Promise<void>;
   onOpenFolder: () => void;
   onExportBatch: () => void | Promise<void>;
@@ -121,9 +114,9 @@ function BatchScreen(props: BatchScreenProps) {
   const result = props.state.result;
   const progress = props.state.progress;
   const error = props.state.error;
-  const cancelRequested = Boolean(props.cancelRequested);
+  const cancelRequested = Boolean(props.state.cancelRequested);
   const stalled = Boolean(props.state.stalled);
-  const config = props.config;
+  const config = props.state;
   const outputFolder = String(config.outputFolder || "");
   const step = result ? 3 : busy ? 3 : total > 0 ? 2 : 1;
 
@@ -227,6 +220,12 @@ function BatchScreen(props: BatchScreenProps) {
           <div
             className="batch-progress-bar"
             role="progressbar"
+            aria-label="Batch export progress"
+            aria-valuetext={
+              progress?.total
+                ? `${progress.current || 0} of ${progress.total} files exported`
+                : "Preparing the first file"
+            }
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={
