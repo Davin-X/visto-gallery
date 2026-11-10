@@ -88,7 +88,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       const savedLayout = (saved as Partial<AppSettings>)?.defaultLayout;
       const defaultLayout =
         savedLayout === "details" || savedLayout === "timeline" ? savedLayout : "grid";
-      set({ ...saved, defaultLayout, _hydrated: true, _loading: false });
+      // "slideshow" was a retired startup view; it opens the library.
+      const savedStartupView = (saved as Partial<AppSettings>)?.startupView;
+      const startupView = savedStartupView === "last" ? "last" : "library";
+      set({ ...saved, defaultLayout, startupView, _hydrated: true, _loading: false });
     } catch {
       // Tauri not available (web preview) - use persisted or defaults
       set({ _hydrated: true, _loading: false });

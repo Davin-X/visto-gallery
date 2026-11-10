@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { GearIcon } from "../icons";
+import { GearIcon, ChevronDownIcon } from "../icons";
 
 export function GeneralPanel(props: {
   appearance: string;
@@ -116,18 +116,21 @@ export function GeneralPanel(props: {
             <b>Open On Launch</b>
           </div>
           <div className="settings-row-control">
-            <select
-              className="settings-select"
-              aria-label="Open on launch"
-              value={props.startupView}
-              onChange={(e) => props.onChange("startupView", e.target.value)}
-            >
-              {STARTUP_VIEWS.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.label}
-                </option>
-              ))}
-            </select>
+            <span className="settings-select-wrap">
+              <select
+                className="settings-select"
+                aria-label="Open on launch"
+                value={props.startupView}
+                onChange={(e) => props.onChange("startupView", e.target.value)}
+              >
+                {STARTUP_VIEWS.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDownIcon size={16} className="settings-select-chevron" />
+            </span>
           </div>
         </div>
         <div className="settings-row">
