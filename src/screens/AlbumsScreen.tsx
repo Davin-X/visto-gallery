@@ -112,7 +112,9 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                     text={album.name}
                     tailLength={6}
                   />
-                  <span className="smart-album-tile-count">{formatAlbumCount(album.itemCount)}</span>
+                  <span className="smart-album-tile-count">
+                    {formatAlbumCount(album.itemCount)}
+                  </span>
                 </button>
               );
             })}
@@ -189,6 +191,5 @@ function AlbumsScreen(props: AlbumsScreenProps) {
     </div>
   );
 }
-
 
 export default AlbumsScreen;
