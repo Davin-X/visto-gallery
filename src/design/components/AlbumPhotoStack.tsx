@@ -59,10 +59,12 @@ function AlbumPhotoStack({
                 <CachedThumbnail itemId={item.id} name={item.name} size={128} />
               )
             ) : (
-              <img
-                src={assetUrl(item.path)}
-                alt=""
-                loading="lazy"
+              // Covers are small: a cached 256px thumbnail instead of the
+              // original, with a quiet placeholder when the file is missing.
+              <CachedThumbnail
+                itemId={item.id}
+                name=""
+                size={256}
                 style={draftImageStyle(draftTransforms, item.id)}
               />
             )}

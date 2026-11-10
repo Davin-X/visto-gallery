@@ -2185,9 +2185,16 @@ function LibraryScreen(props: LibraryScreenProps) {
                       {...holdHandlers(sel.id)}
                     >
                       {sel.kind === "photo" ? (
-                        <img
-                          src={assetUrl(sel.path)}
-                          alt={tileAlt(sel)}
+                        // A cached 512px preview, not the original: a 40 MB
+                        // photo does not need a full decode for this frame,
+                        // and a missing or offline file shows "Preview
+                        // unavailable" instead of a broken image.
+                        <CachedThumbnail
+                          itemId={sel.id}
+                          name={tileAlt(sel)}
+                          size={512}
+                          eager
+                          showStatus
                           style={draftImageStyle(draftTransforms, sel.id)}
                         />
                       ) : sel.kind === "video" ? (

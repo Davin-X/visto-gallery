@@ -13128,3 +13128,21 @@ body.is-resizing .photo-inspector {
     overflow: visible;
   }
 }
+
+/* Cached-thumbnail placeholders inside the inspector frame and album covers
+   fill their frame. Without this the inspector's badge rule (any direct span
+   child) shrank the placeholder into a small bottom-right label. */
+.inspector-image > span.cached-thumb-placeholder,
+.photo-inspector .inspector-image > span.cached-thumb-placeholder,
+.album-stack-photo > span.cached-thumb-placeholder {
+  position: static;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background-color: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+}
