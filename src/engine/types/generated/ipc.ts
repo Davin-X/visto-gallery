@@ -61,7 +61,8 @@ export type LibraryItemsPage = { items: Array<MediaItem>, hasMore: boolean, next
 
 export type LibraryStats = { photos: number, videos: number, raws: number, 
 /**
- * Animated items; counted within `photos` until the split ships, but kept separate for the UI.
+ * Animated items. Counted here and not in `photos`, so the kind counts
+ * (photos, videos, raws, animations, uncategorized) add up to the total.
  */
 animations: number, 
 /**

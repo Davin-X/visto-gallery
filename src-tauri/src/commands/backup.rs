@@ -56,16 +56,54 @@ async fn open_read_only(path: &str) -> Result<SqliteConnection, CommandError> {
 /// Copy a user-selected catalog database to a temp file and return that path.
 /// Opening/attaching only the isolated copy prevents SQLite from reading a
 /// crafted sibling `-wal` file (RUSTSEC-2026-0459).
-fn isolated_db_copy(path: &str) -> Result<PathBuf, CommandError> {
+fn isolated_db_copy(path: &str) -> Result<IsolatedBackup, CommandError> {
     if !Path::new(path).is_file() {
         return Err(CommandError::not_found(format!(
             "Backup file not found: {path}"
         )));
     }
-    let tmp = std::env::temp_dir().join(format!("visto-restore-{}.db", uuid::Uuid::new_v4()));
-    std::fs::copy(path, &tmp)
+    let copy = IsolatedBackup {
+        path: std::env::temp_dir().join(format!("visto-restore-{}.db", uuid::Uuid::new_v4())),
+    };
+    std::fs::copy(path, &copy.path)
         .map_err(|e| CommandError::io(format!("Could not read backup '{}': {e}", path)))?;
-    Ok(tmp)
+    Ok(copy)
+}
+
+/// A temporary copy of a user-picked backup. Dropping it deletes the copy and
+/// any `-wal`, `-shm` or `-journal` file SQLite created next to it, on every
+/// exit path, so a full catalog (with every file path in it) never lingers in
+/// the temp folder.
+struct IsolatedBackup {
+    path: PathBuf,
+}
+
+impl IsolatedBackup {
+    fn path_str(&self) -> String {
+        self.path.to_string_lossy().into_owned()
+    }
+
+    fn files(&self) -> [PathBuf; 4] {
+        let side = |suffix: &str| {
+            let mut name = self.path.clone().into_os_string();
+            name.push(suffix);
+            PathBuf::from(name)
+        };
+        [
+            self.path.clone(),
+            side("-wal"),
+            side("-shm"),
+            side("-journal"),
+        ]
+    }
+}
+
+impl Drop for IsolatedBackup {
+    fn drop(&mut self) {
+        for file in self.files() {
+            let _ = std::fs::remove_file(file);
+        }
+    }
 }
 
 async fn table_exists(
@@ -224,9 +262,7 @@ pub async fn create_catalog_backup(
 #[tauri::command]
 pub async fn validate_catalog_backup(path: String) -> Result<BackupInfo, CommandError> {
     let isolated = isolated_db_copy(&path)?;
-    let result = inspect_backup(isolated.to_string_lossy().as_ref()).await;
-    let _ = std::fs::remove_file(&isolated);
-    result
+    inspect_backup(&isolated.path_str()).await
 }
 
 async fn copy_table(
@@ -431,15 +467,10 @@ pub async fn restore_catalog_backup(
 ) -> Result<RestoreResult, CommandError> {
     // Open/attach only an isolated copy of the user-picked backup so a crafted
     // sibling -wal file cannot be read (RUSTSEC-2026-0459).
+    // The guard deletes the copy and its side files however this returns.
     let isolated = isolated_db_copy(&path)?;
-    let isolated_path = isolated.to_string_lossy().into_owned();
-    let backup = match inspect_backup(&isolated_path).await {
-        Ok(info) => info,
-        Err(error) => {
-            let _ = std::fs::remove_file(&isolated);
-            return Err(error);
-        }
-    };
+    let isolated_path = isolated.path_str();
+    let backup = inspect_backup(&isolated_path).await?;
     let db = super::get_db(&catalog)?;
 
     let app_dir = app
@@ -453,13 +484,11 @@ pub async fn restore_catalog_backup(
     let pre_restore_path_string = pre_restore_path.to_string_lossy().into_owned();
     if let Err(error) = annotate_snapshot(&pre_restore_path_string).await {
         let _ = std::fs::remove_file(&pre_restore_path);
-        let _ = std::fs::remove_file(&isolated);
         return Err(error);
     }
 
-    let restore = restore_backup_into_catalog(&db, &isolated_path).await;
-    let _ = std::fs::remove_file(&isolated);
-    restore?;
+    restore_backup_into_catalog(&db, &isolated_path).await?;
+    drop(isolated);
     // The snapshot just taken is the newest, so it always survives pruning.
     prune_pre_restore_snapshots(&backup_dir, PRE_RESTORE_SNAPSHOTS_KEPT);
     let missing = report_missing_paths(&db).await?;
@@ -739,6 +768,29 @@ mod tests {
         db.close().await;
         let _ = std::fs::remove_file(catalog_path);
         let _ = std::fs::remove_file(backup_path);
+    }
+
+    #[test]
+    fn isolated_copy_removes_itself_and_sqlite_side_files() {
+        let source = temp_backup("isolated-source");
+        std::fs::write(&source, b"not really sqlite").unwrap();
+        let copy = super::isolated_db_copy(source.to_str().unwrap()).expect("copy");
+        let files = copy.files();
+        for side in &files[1..] {
+            std::fs::write(side, b"side").unwrap();
+        }
+        assert!(files.iter().all(|f| f.exists()));
+
+        drop(copy);
+
+        assert!(files.iter().all(|f| !f.exists()), "{files:?}");
+        assert!(source.exists(), "the user's backup is never touched");
+        let _ = std::fs::remove_file(&source);
+    }
+
+    #[test]
+    fn isolated_copy_of_missing_backup_is_not_found() {
+        assert!(super::isolated_db_copy("/visto/no/such/backup.db").is_err());
     }
 
     #[test]

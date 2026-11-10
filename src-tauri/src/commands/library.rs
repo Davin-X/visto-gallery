@@ -44,9 +44,6 @@ pub async fn scan_library(
             root.display()
         )));
     }
-    // Remove app-created temp exports left by a crash/failed write. Only files
-    // matching `<name>.tmp-<uuid>` and older than the grace period are touched.
-    super::sweep_stale_export_temps(&root, std::time::Duration::from_secs(300));
     let start = std::time::Instant::now();
     let mut items = Vec::new();
     let mut total_size: i64 = 0;
@@ -82,13 +79,16 @@ pub async fn scan_library(
     });
 
     // Discover the media paths once, on the blocking pool: a large tree can
-    // take minutes to walk and must not pin an async worker.
+    // take minutes to walk and must not pin an async worker. The same walk
+    // removes app-created export temps (`<name>.tmp-<uuid>`) left by a crash or
+    // failed write; only ones older than the grace period are touched.
     let walk_root = root.clone();
     let walk_cancel = job.flag();
-    let (media_paths, walk_error) =
-        tokio::task::spawn_blocking(move || collect_media_paths(&walk_root, &walk_cancel))
-            .await
-            .map_err(|e| CommandError::internal(format!("Scan worker failed: {e}")))?;
+    let (media_paths, walk_error) = tokio::task::spawn_blocking(move || {
+        collect_media_paths(&walk_root, &walk_cancel, Some(STALE_EXPORT_TEMP_AGE))
+    })
+    .await
+    .map_err(|e| CommandError::internal(format!("Scan worker failed: {e}")))?;
     let had_walk_error = walk_error.is_some();
     for p in &media_paths {
         seen_paths.insert(p.to_string_lossy().into_owned());
@@ -208,20 +208,31 @@ pub async fn scan_library(
     })
 }
 
+/// Export temps younger than this may still be in the middle of a write.
+const STALE_EXPORT_TEMP_AGE: std::time::Duration = std::time::Duration::from_secs(300);
+
 /// Walk `root` and return every media file path plus the first walk error.
-/// Blocking: call it from `spawn_blocking`.
+/// With `sweep_temps_older_than`, app export temps at least that old are
+/// removed during the same walk. Blocking: call it from `spawn_blocking`.
 pub(crate) fn collect_media_paths(
     root: &Path,
     cancel: &std::sync::atomic::AtomicBool,
+    sweep_temps_older_than: Option<std::time::Duration>,
 ) -> (Vec<PathBuf>, Option<String>) {
     let mut media_paths = Vec::new();
     let mut walk_error: Option<String> = None;
+    let temp_cutoff = sweep_temps_older_than.and_then(super::stale_temp_cutoff);
     for entry in WalkDir::new(root) {
         if cancel.load(Ordering::SeqCst) {
             break;
         }
         match entry {
             Ok(entry) if entry.file_type().is_file() => {
+                if let Some(cutoff) = temp_cutoff {
+                    if super::remove_if_stale_export_temp(&entry, cutoff) {
+                        continue;
+                    }
+                }
                 let ext = entry
                     .path()
                     .extension()
@@ -336,7 +347,7 @@ pub async fn import_files(
             }
             let path = PathBuf::from(raw);
             if path.is_dir() {
-                tmp.extend(collect_media_paths(&path, &walk_cancel).0);
+                tmp.extend(collect_media_paths(&path, &walk_cancel, None).0);
             } else if path.is_file() {
                 if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
                     if is_media_file(&ext.to_lowercase()) {
@@ -1612,7 +1623,8 @@ pub struct LibraryStats {
     photos: i64,
     videos: i64,
     raws: i64,
-    /// Animated items; counted within `photos` until the split ships, but kept separate for the UI.
+    /// Animated items. Counted here and not in `photos`, so the kind counts
+    /// (photos, videos, raws, animations, uncategorized) add up to the total.
     animations: i64,
     /// Total bytes of the animated subset.
     animations_size: i64,
@@ -1633,6 +1645,10 @@ pub async fn get_library_stats(
     catalog: State<'_, crate::Catalog>,
 ) -> Result<LibraryStats, CommandError> {
     let db = super::get_db(&catalog)?;
+    library_stats(&db).await
+}
+
+pub(crate) async fn library_stats(db: &SqlitePool) -> Result<LibraryStats, CommandError> {
     let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
         "SELECT
             SUM(CASE WHEN kind = 'photo' AND hidden = 0 AND is_animated = 0 THEN 1 ELSE 0 END),
@@ -1651,7 +1667,7 @@ pub async fn get_library_stats(
             SUM(CASE WHEN hidden = 1 THEN size ELSE 0 END)
         FROM media_items",
     )
-    .fetch_one(&db)
+    .fetch_one(db)
     .await
     ?;
 
@@ -1672,7 +1688,9 @@ pub async fn get_library_stats(
         hidden_size,
     ) = row;
 
-    let total_size = photo_size + video_size + raw_size + uncategorized_size;
+    // Every visible item lands in exactly one of these buckets; animated items
+    // left `photo_size` when they got their own row, so they are added back here.
+    let total_size = photo_size + video_size + raw_size + animations_size + uncategorized_size;
 
     Ok(LibraryStats {
         photos,
@@ -2600,7 +2618,7 @@ mod scan_chunk_tests {
     #[test]
     fn walk_keeps_only_media_extensions() {
         let root = tree();
-        let (mut paths, error) = collect_media_paths(&root, &AtomicBool::new(false));
+        let (mut paths, error) = collect_media_paths(&root, &AtomicBool::new(false), None);
         paths.sort();
         assert!(error.is_none());
         assert_eq!(paths, vec![root.join("a.jpg"), root.join("nested/b.PNG")]);
@@ -2608,9 +2626,37 @@ mod scan_chunk_tests {
     }
 
     #[test]
+    fn walk_sweeps_stale_export_temps_only_when_asked() {
+        let root = tree();
+        let stale = root.join(format!("a.tmp-{}", uuid::Uuid::new_v4()));
+        let fresh = root.join(format!("b.tmp-{}", uuid::Uuid::new_v4()));
+        fs::write(&stale, b"partial").unwrap();
+        fs::write(&fresh, b"in progress").unwrap();
+        let old = filetime::FileTime::from_unix_time(1_000_000_000, 0);
+        filetime::set_file_mtime(&stale, old).unwrap();
+
+        // Imports pass None: nothing is removed.
+        collect_media_paths(&root, &AtomicBool::new(false), None);
+        assert!(stale.exists());
+
+        // Scans pass a grace period: the old temp goes, the fresh one stays,
+        // and media discovery is unchanged.
+        let (mut paths, _) = collect_media_paths(
+            &root,
+            &AtomicBool::new(false),
+            Some(std::time::Duration::from_secs(300)),
+        );
+        paths.sort();
+        assert!(!stale.exists());
+        assert!(fresh.exists());
+        assert_eq!(paths, vec![root.join("a.jpg"), root.join("nested/b.PNG")]);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn walk_stops_when_cancelled() {
         let root = tree();
-        let (paths, _) = collect_media_paths(&root, &AtomicBool::new(true));
+        let (paths, _) = collect_media_paths(&root, &AtomicBool::new(true), None);
         assert!(paths.is_empty());
         let _ = fs::remove_dir_all(&root);
     }
@@ -2839,5 +2885,44 @@ mod library_folders_tests {
         assert_eq!(missing_row.item_count, 0);
 
         let _ = fs::remove_dir_all(&existing);
+    }
+}
+
+#[cfg(test)]
+mod library_stats_tests {
+    use super::library_stats;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    #[tokio::test]
+    async fn total_size_includes_animated_items() {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&db).await.unwrap();
+        for (id, ext, kind, size, animated) in [
+            ("still", "jpg", "photo", 100, 0),
+            ("loop", "gif", "photo", 40, 1),
+            ("clip", "mp4", "video", 1000, 0),
+        ] {
+            sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at, is_animated) VALUES (?, ?, ?, ?, ?, ?, 1, 1, 1, ?)")
+                .bind(id)
+                .bind(format!("/lib/{id}.{ext}"))
+                .bind(format!("{id}.{ext}"))
+                .bind(ext)
+                .bind(kind)
+                .bind(size)
+                .bind(animated)
+                .execute(&db)
+                .await
+                .unwrap();
+        }
+
+        let stats = library_stats(&db).await.unwrap();
+        assert_eq!((stats.photos, stats.animations, stats.videos), (1, 1, 1));
+        assert_eq!(stats.photo_size, 100);
+        assert_eq!(stats.animations_size, 40);
+        assert_eq!(stats.total_size, 1140);
     }
 }
