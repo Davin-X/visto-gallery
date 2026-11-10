@@ -15,6 +15,7 @@ export function makeMediaItem(overrides: Partial<MediaItem> = {}): MediaItem {
     capturedAt: NOW,
     favorite: false,
     hidden: false,
+    isAnimated: false,
     tags: [],
     albumIds: [],
     createdAt: NOW,
@@ -42,6 +43,7 @@ export function makeTag(overrides: Partial<Tag> = {}): Tag {
     name: "Travel",
     colorIndex: 0,
     itemCount: 0,
+    createdAt: NOW,
   };
   return { ...base, ...overrides };
 }

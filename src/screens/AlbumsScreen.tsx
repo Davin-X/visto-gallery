@@ -234,6 +234,7 @@ async function createMediaItemsBrowser(files: FileList | File[]): Promise<MediaI
       name: file.name,
       extension: ext,
       kind,
+      isAnimated: false,
       size: file.size,
       modifiedAt: file.lastModified,
       // In-memory import: the browser exposes no true capture time or camera

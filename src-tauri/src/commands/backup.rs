@@ -3,6 +3,7 @@ use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection, SqlitePool};
 use sqlx::{Connection, Row};
 use std::path::{Path, PathBuf};
 use tauri::{Manager, State};
+use ts_rs::TS;
 
 /// Bump only when the on-disk backup contract changes. Restore rejects any
 /// other version instead of guessing.
@@ -18,7 +19,7 @@ const REQUIRED_TABLES: &[&str] = &[
     "library_folders",
 ];
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupInfo {
     pub path: String,
@@ -31,7 +32,7 @@ pub struct BackupInfo {
     pub folder_count: i64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct RestoreResult {
     pub backup: BackupInfo,

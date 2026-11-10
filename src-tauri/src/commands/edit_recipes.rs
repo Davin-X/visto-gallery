@@ -1,13 +1,17 @@
 use super::*;
 use serde::Serialize;
+use ts_rs::TS;
 
 /// Response: a single edit recipe.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct EditRecipe {
     pub media_id: String,
+    #[ts(type = "EditValues")]
     pub edits: serde_json::Value,
+    #[ts(optional, type = "CropState")]
     pub crop: Option<serde_json::Value>,
+    #[ts(type = "EditValues[]")]
     pub history: serde_json::Value,
     pub history_index: i32,
     pub created_at: i64,
@@ -15,12 +19,14 @@ pub struct EditRecipe {
 }
 
 /// Response: a named edit preset.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct EditPreset {
     pub id: String,
     pub name: String,
+    #[ts(type = "EditValues")]
     pub edits: serde_json::Value,
+    #[ts(optional, type = "CropState")]
     pub crop: Option<serde_json::Value>,
     pub created_at: i64,
     pub updated_at: i64,

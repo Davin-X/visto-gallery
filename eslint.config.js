@@ -47,6 +47,6 @@ export default [
     },
   },
   {
-    ignores: ["dist/", "node_modules/", ".kilo/", "untracked/", "src-tauri/target/", "*.config.js", "*.config.mjs"],
+    ignores: ["dist/", "node_modules/", ".kilo/", "untracked/", "src-tauri/target/", "src/engine/types/generated/", "*.config.js", "*.config.mjs"],
   },
 ];

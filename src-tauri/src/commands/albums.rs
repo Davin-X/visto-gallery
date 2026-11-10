@@ -4,13 +4,14 @@ use sqlx::sqlite::Sqlite;
 use sqlx::{QueryBuilder, Row};
 use std::collections::HashMap;
 use tauri::State;
+use ts_rs::TS;
 
 /// Bounded card data for the Albums overview.
 ///
 /// `item_count` is the full visible membership, while `cover_items` contains at
 /// most four poster candidates. Opening an album fetches the complete, paged
 /// membership through the normal library query.
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AlbumOverview {
     pub id: String,

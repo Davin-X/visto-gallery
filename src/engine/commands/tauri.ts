@@ -28,6 +28,7 @@ import type {
   ImportProgressEvent,
   ThumbnailReadyEvent,
   AppSettings,
+  PartialSettings,
   EditValues,
   CropRect,
   CropState,
@@ -209,7 +210,7 @@ export const tauri = {
   settings: {
     get: (): Promise<AppSettings> => invoke("get_settings"),
 
-    save: (settings: Partial<AppSettings>): Promise<AppSettings> =>
+    save: (settings: PartialSettings): Promise<AppSettings> =>
       invoke("save_settings", { patch: settings }),
   },
 

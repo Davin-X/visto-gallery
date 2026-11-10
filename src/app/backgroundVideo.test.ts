@@ -13,6 +13,7 @@ const item = (id: string, kind: MediaItem["kind"]): MediaItem => ({
   modifiedAt: 1,
   favorite: false,
   hidden: false,
+  isAnimated: false,
   tags: [],
   albumIds: [],
   createdAt: 1,
