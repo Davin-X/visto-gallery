@@ -4,8 +4,6 @@ import { SourcesManager } from "../SourcesManager";
 
 export function LibraryPanel(props: {
   autoImport: boolean;
-  pairRawJpeg: boolean;
-  stackBursts: boolean;
   onAddFolder?: () => void;
   onRemoveFolder?: (folder: LibraryFolder) => void;
   onRescan?: () => void;
@@ -36,28 +34,6 @@ export function LibraryPanel(props: {
               />
               <span className="toggle-track" />
             </label>
-          </div>
-        </div>
-        <div className="settings-row settings-row-unavailable">
-          <div className="settings-row-label">
-            <b>
-              Pair RAW + JPEG <span className="settings-unavailable">Not implemented</span>
-            </b>
-            <span className="settings-row-desc">
-              RAW and JPEG files from the same shot are imported as separate items. This control is
-              hidden until pairing is fully implemented.
-            </span>
-          </div>
-        </div>
-        <div className="settings-row settings-row-unavailable">
-          <div className="settings-row-label">
-            <b>
-              Stack Burst Photos <span className="settings-unavailable">Not implemented</span>
-            </b>
-            <span className="settings-row-desc">
-              Burst sequences are shown individually. Stacking will return once grouping is
-              supported end to end.
-            </span>
           </div>
         </div>
       </section>

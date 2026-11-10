@@ -17,6 +17,17 @@ export function ShortcutsCheatSheet({ open, onClose }: { open: boolean; onClose:
       ],
     },
     {
+      group: "Viewer",
+      items: [
+        { key: "↑ / ↓", label: "Zoom in / out" },
+        { key: "0", label: "Zoom to 100%" },
+        { key: "1", label: "Zoom to 200%" },
+        { key: "R", label: "Rotate 90°" },
+        { key: "X", label: "Flip horizontally" },
+        { key: "F", label: "Favorite the current item" },
+      ],
+    },
+    {
       group: "Selection",
       items: [{ key: "⌘/Ctrl + A", label: "Select all / deselect all" }],
     },

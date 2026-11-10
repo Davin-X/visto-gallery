@@ -53,7 +53,10 @@ export function PrivacyPanel(props: {
         <div>
           <span>Exports</span>
           <b>Re-encoded locally</b>
-          <small>Edited copies are re-encoded and do not retain embedded source metadata.</small>
+          <small>
+            Edited copies keep the source's embedded metadata (camera details, GPS). Batch export is
+            stripped by default.
+          </small>
         </div>
         <div>
           <span>Network</span>

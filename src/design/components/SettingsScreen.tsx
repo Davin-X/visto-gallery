@@ -68,8 +68,6 @@ export function SettingsScreen(props: {
   const isDark = appearance === "dark" || (appearance === "system" && systemDark);
   const defaultLayout = useDefaultLayout();
   const autoImport = useSettingsStore((s) => s.autoImport);
-  const pairRawJpeg = useSettingsStore((s) => s.pairRawJpeg);
-  const stackBursts = useSettingsStore((s) => s.stackBursts);
   const animateTransitions = useSettingsStore((s) => s.animateTransitions);
   const showExtensions = useSettingsStore((s) => s.showExtensions);
   const openLastFolder = useSettingsStore((s) => s.openLastFolder);
@@ -363,8 +361,6 @@ export function SettingsScreen(props: {
         {activeTab === "library" && (
           <LibraryPanel
             autoImport={autoImport}
-            pairRawJpeg={pairRawJpeg}
-            stackBursts={stackBursts}
             onAddFolder={props.onAddFolder}
             onRemoveFolder={props.onRemoveFolder}
             onRescan={props.onRescan}

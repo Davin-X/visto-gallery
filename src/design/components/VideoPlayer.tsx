@@ -14,7 +14,11 @@ import {
 import { tauri } from "../../engine/commands/tauri";
 import type { ExternalPlayer } from "../../engine/types/commands";
 import { formatDuration } from "../../engine/utils/time";
-import { canPlayVideoInApp, fileExtension } from "../../engine/utils/mediaTypes";
+import {
+  canPlayVideoInApp,
+  classifyVideoFailure,
+  fileExtension,
+} from "../../engine/utils/mediaTypes";
 import {
   observePictureInPicture,
   supportsPictureInPicture,
@@ -78,6 +82,7 @@ function VideoPlayer({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [autoAdvance, setAutoAdvance] = useState(false);
   const [failed, setFailed] = useState(() => !canPlayVideoInApp(path, name));
+  const [videoError, setVideoError] = useState<MediaError | null>(null);
   const [players, setPlayers] = useState<ExternalPlayer[]>([]);
   const [openError, setOpenError] = useState<string | null>(null);
 
@@ -460,6 +465,10 @@ function VideoPlayer({
 
   if (failed) {
     const ext = fileExtension(path) || fileExtension(name);
+    // SRC_NOT_SUPPORTED (4) is also what a missing file, an unplugged drive
+    // or a permission error looks like, so only an unsupported extension or
+    // a real decode error (3) may be reported as a format problem.
+    const isFormatFailure = classifyVideoFailure(videoError?.code, path, name) === "format";
     const player = players[0];
     return (
       <div className="viewer-video-fallback" role="alert">
@@ -480,8 +489,9 @@ function VideoPlayer({
         </div>
         <h3 className="viewer-video-fallback-title">{name || "This video"}</h3>
         <p className="viewer-video-fallback-copy">
-          {ext ? `.${ext} files` : "This file"} can't be decoded by macOS's built-in web player.
-          Open it in a desktop player that supports this format.
+          {isFormatFailure
+            ? `${ext ? `.${ext} files` : "This file"} can't be decoded by macOS's built-in web player. Open it in a desktop player that supports this format.`
+            : "VistoGallery couldn't open this video. The file may have been moved, deleted, or be on a disconnected drive — or its codec may not be playable here. Check the source, then try a desktop player."}
         </p>
         <div className="viewer-video-fallback-actions">
           {player ? (
@@ -500,7 +510,7 @@ function VideoPlayer({
             Reveal in Finder
           </button>
         </div>
-        {!player && (
+        {isFormatFailure && !player && (
           <p className="viewer-video-feedback">
             Tip: IINA, VLC, or Elmedia Video Player all play MKV natively.
           </p>
@@ -534,7 +544,14 @@ function VideoPlayer({
           event.stopPropagation();
           onFullscreen?.();
         }}
-        onError={() => setFailed(true)}
+        onError={(event) => {
+          const error = event.currentTarget.error ?? null;
+          // MEDIA_ERR_ABORTED fires when src changes mid-load (moving to the
+          // next video); it is a navigation race, not a broken file.
+          if (error?.code === 1) return;
+          setVideoError(error);
+          setFailed(true);
+        }}
         tabIndex={0}
         aria-keyshortcuts="Space ArrowLeft ArrowRight ArrowUp ArrowDown F M"
         title={`${name || "Video"} — focus for shortcuts: Space play/pause, ←/→ seek, F fullscreen`}
