@@ -184,8 +184,8 @@ function BatchScreen(props: BatchScreenProps) {
     <div className="feature-page batch-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">BATCH EXPORT</p>
-          <h1>Prepare a batch export.</h1>
+          <p className="eyebrow">EXPORT</p>
+          <h1>Batch export</h1>
           <p className="page-subtitle">
             Rename, convert, resize, or strip metadata. Originals are never modified.
           </p>

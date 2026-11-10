@@ -7,6 +7,7 @@ import {
   ChevronDownIcon,
   CropIcon,
   DownloadIcon,
+  EditIcon,
   FlipIcon,
   GridIcon,
   RotateCcwIcon,
@@ -775,30 +776,18 @@ function EditScreen(props: EditScreenProps) {
 
     return (
       <div className="edit-page">
-        <header className="page-heading edit-page-heading">
-          <div className="edit-title-block">
-            <button
-              className="quiet-button edit-back-btn"
-              type="button"
-              onClick={() => props.onBack?.()}
-              title="Return to Library"
-            >
-              <ArrowLeftIcon size={15} />
-              <span>Library</span>
-            </button>
-            <div className="edit-title-group">
-              <div className="edit-title-row">
-                <h1>Select a photo to edit</h1>
-                <span className="edit-status-chip is-safe">
-                  <CheckIcon size={11} /> Original safe
-                </span>
-              </div>
-              <p className="page-subtitle">
-                Open any photo from your Library. Adjustments stay non-destructive until export.
-              </p>
-            </div>
+        {/* No photo is open yet, so this uses the same plain heading as the
+            other screens. The boxed toolbar (back button, "Original safe"
+            chip) belongs to an open photo. */}
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">ADJUST</p>
+            <h1>Edit</h1>
+            <p className="page-subtitle">
+              Adjust light and color, crop and rotate. Your original is kept until you replace it.
+            </p>
           </div>
-        </header>
+        </div>
 
         {savedDraftItems.length > 0 ? (
           <section className="edit-saved-drafts-section">
@@ -809,10 +798,15 @@ function EditScreen(props: EditScreenProps) {
             <div className="edit-picker-grid">{draftTiles}</div>
           </section>
         ) : (
-          <div className="viewer-empty-state">
-            <p>
-              No draft edits in progress. Select a photo in your library and click <b>Edit</b>.
-            </p>
+          <div className="duplicate-empty">
+            <span className="duplicate-empty-icon" aria-hidden="true">
+              <EditIcon size={26} />
+            </span>
+            <h2>No photo open</h2>
+            <p>Choose a photo in your Library, then click Edit in the viewer or inspector.</p>
+            <button type="button" className="primary-button" onClick={() => props.onBack?.()}>
+              Go to Library
+            </button>
           </div>
         )}
       </div>
