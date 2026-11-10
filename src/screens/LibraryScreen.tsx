@@ -2414,7 +2414,7 @@ function LibraryScreen(props: LibraryScreenProps) {
               <div className="inspector-top">
                 <div>
                   <small>INSPECTOR</small>
-                  <h2>No Inspection</h2>
+                  <h2>Nothing selected</h2>
                 </div>
                 <button
                   type="button"
@@ -2430,8 +2430,8 @@ function LibraryScreen(props: LibraryScreenProps) {
                   <DetailsIcon size={26} />
                 </span>
                 <p>
-                  Single-click a photo or video to inspect its details. Selection is separate — use
-                  the checkbox or + to multi-select.
+                  Click a photo or video to see its details here. To pick several for an action, use
+                  the checkbox on each one.
                 </p>
               </div>
             </div>
