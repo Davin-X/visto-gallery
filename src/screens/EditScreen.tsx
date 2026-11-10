@@ -15,6 +15,8 @@ import {
   SparkleIcon,
 } from "../design/components/icons";
 import { CachedThumbnail, invalidateThumbnailCache } from "../design/components/CachedThumbnail";
+import { useFocusTrap } from "../design/hooks/useFocusTrap";
+import { useKeyboard } from "../engine/hooks/useKeyboard";
 import { tauri, formatDimensions } from "../engine/commands/tauri";
 import {
   useDraftTransforms,
@@ -288,6 +290,27 @@ function EditScreen(props: EditScreenProps) {
   const [showOriginalPreview, setShowOriginalPreview] = useState(false);
   const [confirmReplace, setConfirmReplace] = useState(false);
   const [confirmRevert, setConfirmRevert] = useState(false);
+  const confirmReplaceDialogRef = useRef<HTMLDivElement | null>(null);
+  const confirmRevertDialogRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(confirmReplace, confirmReplaceDialogRef);
+  useFocusTrap(confirmRevert, confirmRevertDialogRef);
+
+  // Escape cancels whichever confirm modal is open (only one at a time).
+  useKeyboard([
+    useCallback(
+      (e: KeyboardEvent) => {
+        if (e.key !== "Escape") return;
+        if (confirmReplace) {
+          e.preventDefault();
+          setConfirmReplace(false);
+        } else if (confirmRevert) {
+          e.preventDefault();
+          setConfirmRevert(false);
+        }
+      },
+      [confirmReplace, confirmRevert],
+    ),
+  ]);
   const [draftTrayOpen, setDraftTrayOpen] = useState(false);
   const [fileRevision, setFileRevision] = useState(0);
   const [showGrid, setShowGrid] = useState(false);
@@ -1684,9 +1707,22 @@ function EditScreen(props: EditScreenProps) {
 
       {/* CONFIRM REPLACE MODAL */}
       {confirmReplace && (
-        <div className="edit-modal-backdrop">
-          <div className="edit-modal-dialog">
-            <h3 style={{ margin: "0 0 8px", color: "var(--text)" }}>Replace original file?</h3>
+        <div
+          className="edit-modal-backdrop"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setConfirmReplace(false);
+          }}
+        >
+          <div
+            ref={confirmReplaceDialogRef}
+            className="edit-modal-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-confirm-replace-title"
+          >
+            <h3 id="edit-confirm-replace-title" style={{ margin: "0 0 8px", color: "var(--text)" }}>
+              Replace original file?
+            </h3>
             <p
               style={{
                 margin: "0 0 16px",
@@ -1723,9 +1759,22 @@ function EditScreen(props: EditScreenProps) {
 
       {/* CONFIRM REVERT MODAL */}
       {confirmRevert && (
-        <div className="edit-modal-backdrop">
-          <div className="edit-modal-dialog">
-            <h3 style={{ margin: "0 0 8px", color: "var(--text)" }}>Restore original file?</h3>
+        <div
+          className="edit-modal-backdrop"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setConfirmRevert(false);
+          }}
+        >
+          <div
+            ref={confirmRevertDialogRef}
+            className="edit-modal-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-confirm-revert-title"
+          >
+            <h3 id="edit-confirm-revert-title" style={{ margin: "0 0 8px", color: "var(--text)" }}>
+              Restore original file?
+            </h3>
             <p
               style={{
                 margin: "0 0 16px",
