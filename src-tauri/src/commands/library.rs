@@ -1623,7 +1623,8 @@ pub struct LibraryStats {
     photos: i64,
     videos: i64,
     raws: i64,
-    /// Animated items; counted within `photos` until the split ships, but kept separate for the UI.
+    /// Animated items. Counted here and not in `photos`, so the kind counts
+    /// (photos, videos, raws, animations, uncategorized) add up to the total.
     animations: i64,
     /// Total bytes of the animated subset.
     animations_size: i64,
@@ -1644,6 +1645,10 @@ pub async fn get_library_stats(
     catalog: State<'_, crate::Catalog>,
 ) -> Result<LibraryStats, CommandError> {
     let db = super::get_db(&catalog)?;
+    library_stats(&db).await
+}
+
+pub(crate) async fn library_stats(db: &SqlitePool) -> Result<LibraryStats, CommandError> {
     let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
         "SELECT
             SUM(CASE WHEN kind = 'photo' AND hidden = 0 AND is_animated = 0 THEN 1 ELSE 0 END),
@@ -1662,7 +1667,7 @@ pub async fn get_library_stats(
             SUM(CASE WHEN hidden = 1 THEN size ELSE 0 END)
         FROM media_items",
     )
-    .fetch_one(&db)
+    .fetch_one(db)
     .await
     ?;
 
@@ -1683,7 +1688,9 @@ pub async fn get_library_stats(
         hidden_size,
     ) = row;
 
-    let total_size = photo_size + video_size + raw_size + uncategorized_size;
+    // Every visible item lands in exactly one of these buckets; animated items
+    // left `photo_size` when they got their own row, so they are added back here.
+    let total_size = photo_size + video_size + raw_size + animations_size + uncategorized_size;
 
     Ok(LibraryStats {
         photos,
@@ -2777,5 +2784,44 @@ mod library_folders_tests {
         assert_eq!(missing_row.item_count, 0);
 
         let _ = fs::remove_dir_all(&existing);
+    }
+}
+
+#[cfg(test)]
+mod library_stats_tests {
+    use super::library_stats;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    #[tokio::test]
+    async fn total_size_includes_animated_items() {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&db).await.unwrap();
+        for (id, ext, kind, size, animated) in [
+            ("still", "jpg", "photo", 100, 0),
+            ("loop", "gif", "photo", 40, 1),
+            ("clip", "mp4", "video", 1000, 0),
+        ] {
+            sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at, is_animated) VALUES (?, ?, ?, ?, ?, ?, 1, 1, 1, ?)")
+                .bind(id)
+                .bind(format!("/lib/{id}.{ext}"))
+                .bind(format!("{id}.{ext}"))
+                .bind(ext)
+                .bind(kind)
+                .bind(size)
+                .bind(animated)
+                .execute(&db)
+                .await
+                .unwrap();
+        }
+
+        let stats = library_stats(&db).await.unwrap();
+        assert_eq!((stats.photos, stats.animations, stats.videos), (1, 1, 1));
+        assert_eq!(stats.photo_size, 100);
+        assert_eq!(stats.animations_size, 40);
+        assert_eq!(stats.total_size, 1140);
     }
 }
