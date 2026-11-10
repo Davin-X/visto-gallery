@@ -124,7 +124,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
               position: "fixed",
               top: position.top,
               left: position.left,
-              zIndex: 100000,
+              zIndex: "var(--z-dropdown)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
