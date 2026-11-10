@@ -512,22 +512,6 @@ body.is-resizing .photo-inspector {
   min-width: 0;
 }
 
-.header-actions .icon-only {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  min-height: 32px;
-  padding: 0;
-  border-radius: 8px;
-}
-
-.header-actions .action-divider {
-  width: 1px;
-  height: 18px;
-  margin: 0 2px;
-  background: var(--line);
-}
-
 .header-actions .primary-button,
 .header-actions .quiet-button {
   height: 32px;
@@ -590,44 +574,6 @@ body.is-resizing .photo-inspector {
     justify-content: center;
     padding: 0 10px;
   }
-}
-.source-select {
-  position: relative;
-  display: inline-flex;
-  max-width: 100%;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 10px 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-3);
-  color: var(--text);
-  font-size: 12px;
-  cursor: pointer;
-  transition:
-    border-color 0.12s ease,
-    background 0.12s ease;
-}
-
-.source-select:hover {
-  border-color: var(--blue);
-}
-
-.source-select select {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 13px;
-  padding-right: 24px;
-  cursor: pointer;
-}
-
-.source-select-label {
-  display: none;
 }
 
 @media (max-width: 760px) {
@@ -3250,36 +3196,13 @@ body.is-resizing .photo-inspector {
   grid-column: 4;
 }
 
-.traffic-lights {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.light {
-  width: 12px;
-  height: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 50%;
-}
-
-.light.red {
-  background: #ff5f57;
-}
-.light.yellow {
-  background: #febc2e;
-}
-.light.green {
-  background: #28c840;
-}
-
 .app-frame .topbar-brand {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
-  font-size: 15px !important;
-  font-weight: 650 !important;
+  font-size: 15px;
+  font-weight: 650;
   letter-spacing: 0.012em;
   user-select: none;
   -webkit-user-select: none;
@@ -3364,18 +3287,6 @@ body.is-resizing .photo-inspector {
 /* One size for every top-bar control: the toggle buttons, the theme picker,
    and the settings gear. 28px matches the standard toolbar metrics. */
 .topbar-actions .icon-button,
-.topbar-actions .theme-button {
-  width: 28px;
-  height: 28px;
-  justify-content: center;
-  gap: 0;
-  padding: 0;
-  border-radius: 7px;
-}
-
-.topbar-actions .theme-button span {
-  display: none;
-}
 
 .icon-button {
   display: grid;
@@ -5007,6 +4918,10 @@ body.is-resizing .photo-inspector {
 .album-detail-copy {
   min-width: 0;
   flex: 1 1 260px;
+}
+
+.album-detail-copy .eyebrow {
+  font-size: 10px;
 }
 
 .album-detail-copy h1 {

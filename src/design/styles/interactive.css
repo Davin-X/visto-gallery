@@ -58,10 +58,8 @@
     .toolbar-button,
     .quiet-button,
     .outline-button,
-    .theme-button,
     .icon-button,
     .inspector-action,
-    .selection-toolbar button,
     .duplicate-group-head button,
     .auto-adjust button,
     .album-label button,
@@ -230,9 +228,7 @@
     .quiet-button,
     .toolbar-button,
     .outline-button,
-    .theme-button,
     .inspector-action,
-    .selection-toolbar button,
     .duplicate-group-head button,
     .auto-adjust button,
     .quick-filter,
@@ -255,7 +251,6 @@
     .toolbar-button,
     .outline-button,
     .icon-button,
-    .theme-button,
     .inspector-action,
     .settings-select
   ):disabled {
