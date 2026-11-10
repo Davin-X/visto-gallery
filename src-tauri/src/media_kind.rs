@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
+use ts_rs::TS;
 
 /// Canonical catalog media kind. Serialized as `"photo" | "video" | "raw"`
 /// over IPC and stored as the same lowercase strings in SQLite (`media_items.kind`
@@ -8,7 +9,7 @@ use std::str::FromStr;
 ///
 /// This is the single source of truth for kind values and extension mapping.
 /// Adding a supported extension or a kind must happen here.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum MediaKind {
     Photo,

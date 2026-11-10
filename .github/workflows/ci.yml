@@ -19,6 +19,8 @@ jobs:
         run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
       - name: cargo test
         run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: generated IPC types are up to date
+        run: test -z "$(git status --porcelain -- src/engine/types/generated)"
   frontend:
     runs-on: ubuntu-latest
     steps:

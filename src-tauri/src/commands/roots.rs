@@ -1,6 +1,7 @@
 use serde::Serialize;
 use sqlx::Row;
 use tauri::State;
+use ts_rs::TS;
 
 /// Explicit, reviewable repair for a source root that moved on disk.
 ///
@@ -9,7 +10,7 @@ use tauri::State;
 /// and only direct descendants of that root are rewritten inside one
 /// transaction. Original media files are never modified.
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct RootPathMappingPreview {
     pub old_root: String,
@@ -21,7 +22,7 @@ pub struct RootPathMappingPreview {
     pub existing_new_path_count: i64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct RootPathMappingResult {
     pub old_root: String,

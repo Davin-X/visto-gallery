@@ -7,6 +7,7 @@ use tauri::{Emitter, Manager, State};
 // Modules
 mod commands;
 mod db;
+mod ipc_types_export;
 mod media_animation;
 mod media_dimensions;
 mod media_kind;

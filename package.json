@@ -40,6 +40,7 @@
     "perf:record": "node scripts/check-library-harness-perf.mjs --record",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "gen:types": "cargo test --manifest-path src-tauri/Cargo.toml --lib export_ipc_types",
     "lint": "eslint src --ext .ts,.tsx",
     "screenshots": "node scripts/capture-all-screenshots.mjs",
     "prepare": "sh scripts/setup-hooks.sh"

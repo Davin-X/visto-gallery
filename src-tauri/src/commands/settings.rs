@@ -48,6 +48,9 @@ pub async fn save_settings(
     if let Some(v) = patch.sidebar_width {
         settings.sidebar_width = v;
     }
+    if let Some(v) = patch.inspector_width {
+        settings.inspector_width = v;
+    }
     if let Some(v) = patch.show_extensions {
         settings.show_extensions = v;
     }
@@ -119,25 +122,26 @@ pub async fn save_settings(
     }
 
     let settings_map = vec![
-        ("appearance", settings.appearance.clone()),
-        ("accent_color", settings.accent_color.clone()),
+        ("appearance", settings.appearance.to_string()),
+        ("accent_color", settings.accent_color.to_string()),
         ("sidebar_width", settings.sidebar_width.to_string()),
+        ("inspector_width", settings.inspector_width.to_string()),
         ("show_extensions", settings.show_extensions.to_string()),
         (
             "animate_transitions",
             settings.animate_transitions.to_string(),
         ),
-        ("startup_view", settings.startup_view.clone()),
+        ("startup_view", settings.startup_view.to_string()),
         ("open_last_folder", settings.open_last_folder.to_string()),
         (
             "restore_window_state",
             settings.restore_window_state.to_string(),
         ),
-        ("default_layout", settings.default_layout.clone()),
-        ("thumbnail_size", settings.thumbnail_size.clone()),
+        ("default_layout", settings.default_layout.to_string()),
+        ("thumbnail_size", settings.thumbnail_size.to_string()),
         (
             "viewer_zoom_behavior",
-            settings.viewer_zoom_behavior.clone(),
+            settings.viewer_zoom_behavior.to_string(),
         ),
         (
             "slideshow_interval",

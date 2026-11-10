@@ -1,145 +1,49 @@
-import type { CropState, EditRecipe, EditPreset } from "./media";
 export type {
+  MediaKind,
+  Album,
+  Tag,
+  ScanResult,
+  LibraryFolder,
+  LibraryFilterDTO,
+  LibraryItemsPage,
+  LibraryStats,
+  ThumbnailRequest,
+  ThumbnailResponse,
+  ExifData,
+  RenderRequest,
+  EditValues,
+  CropRect,
   CropState,
+  ExportResult,
+  BatchExportRequest,
+  BatchExportItem,
+  BatchExportProgress,
+  BatchExportResult,
+  BatchExportError,
+  TrashResult,
+  TrashError,
+  DuplicateGroup,
+  SmartAlbumFilter,
+  SmartAlbum,
+  BackupInfo,
+  RestoreResult,
+  RootPathMappingPreview,
+  RootPathMappingResult,
+  AlbumOverview,
   EditRecipe,
   EditPreset,
-  MediaItem,
-  Album,
-  Tag,
-  ImportSession,
-  LibraryFilter,
-  DuplicateGroup,
-} from "./media";
-export type { AppSettings } from "./settings";
+  ExternalPlayer,
+  UpdateCheck,
+  AppSettings,
+  PartialSettings,
+} from "./generated/ipc";
 
-import type {
-  MediaItem,
-  Album,
-  Tag,
-  ImportSession,
-  LibraryFilter,
-  DuplicateGroup,
-  MediaKind,
-} from "./media";
-import type { AppSettings } from "./settings";
+export type { UpdateCheck as UpdateCheckResult } from "./generated/ipc";
+export type { ImportSession, LibraryFilter, MediaItem } from "./media";
+/** `batch-progress` event payload. */
+export type { BatchExportProgress as BatchProgressEvent } from "./generated/ipc";
 
-export interface ScanResult {
-  items: MediaItem[];
-  discoveredCount: number;
-  removedCount: number;
-  cancelled: boolean;
-  albums: Album[];
-  tags: Tag[];
-  totalSize: number;
-  duration: number;
-}
-
-export interface LibraryFilterDTO {
-  kind?: string;
-  favorite?: boolean;
-  hidden?: boolean;
-  /** Narrow to animated (true) or still (false) items; independent of `kind`. */
-  animated?: boolean;
-  albumId?: string;
-  query?: string;
-  tags?: string[];
-  dateFrom?: number;
-  dateTo?: number;
-  sourcePath?: string;
-  rating?: number;
-  colorLabel?: string;
-  camera?: string;
-  lens?: string;
-  limit?: number;
-  /** Opaque keyset cursor returned by the preceding page. */
-  cursor?: string;
-  sortBy?: "capturedAt" | "modifiedAt" | "name" | "size" | "kind";
-  sortOrder?: "asc" | "desc";
-}
-
-/** A bounded page of library items. `nextCursor` is opaque to the client. */
-export interface LibraryItemsPage {
-  items: MediaItem[];
-  hasMore: boolean;
-  nextCursor?: string;
-  totalCount: number;
-}
-
-/** Bounded album-card data. Full membership is fetched only on open. */
-export interface AlbumOverview {
-  id: string;
-  name: string;
-  colorIndex: number;
-  createdAt: number;
-  updatedAt: number;
-  itemCount: number;
-  coverItems: MediaItem[];
-}
-
-/**
- * A saved Smart Album is a validated filter definition, never SQL or a copied
- * item list. Unknown fields are rejected by the backend.
- */
-export interface SmartAlbumFilter {
-  kind?: "photo" | "video" | "raw";
-  favorite?: boolean;
-  query?: string;
-  tags?: string[];
-  dateFrom?: number;
-  dateTo?: number;
-  sourcePath?: string;
-  rating?: number;
-  colorLabel?: string;
-  camera?: string;
-  lens?: string;
-  sortBy?: "capturedAt" | "modifiedAt" | "name" | "size" | "kind";
-  sortOrder?: "asc" | "desc";
-}
-
-export interface SmartAlbum {
-  id: string;
-  name: string;
-  filter: SmartAlbumFilter;
-  itemCount: number;
-  coverItems?: MediaItem[];
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface BackupInfo {
-  path: string;
-  version: number;
-  appVersion: string;
-  createdAt: number;
-  itemCount: number;
-  albumCount: number;
-  tagCount: number;
-  folderCount: number;
-}
-
-export interface RestoreResult {
-  backup: BackupInfo;
-  preRestoreBackup: string;
-  missingItemCount: number;
-  missingPaths: string[];
-  missingRoots: string[];
-}
-
-export interface RootPathMappingPreview {
-  oldRoot: string;
-  newRoot: string;
-  itemCount: number;
-  rootCount: number;
-  samplePaths: string[];
-  conflictingPaths: string[];
-  existingNewPathCount: number;
-}
-
-export interface RootPathMappingResult {
-  oldRoot: string;
-  newRoot: string;
-  updatedItemCount: number;
-}
+import type { TrashError } from "./generated/ipc";
 
 export interface FinderTagFailure {
   path: string;
@@ -151,110 +55,6 @@ export interface FinderTagCopyResult {
   skipped: number;
   failed: FinderTagFailure[];
   tagsByPath: Record<string, string[]>;
-}
-
-export interface ThumbnailRequest {
-  itemId: string;
-  size: 64 | 128 | 256 | 512 | 1024;
-  format?: "jpeg" | "webp" | "avif";
-  quality?: number;
-  maxCacheBytes?: number;
-}
-
-export interface ThumbnailResponse {
-  itemId: string;
-  dataUrl: string;
-  width: number;
-  height: number;
-}
-
-export interface ExifData {
-  capturedAt?: number;
-  camera?: string;
-  lens?: string;
-  exposure?: string;
-  iso?: number;
-  latitude?: number;
-  longitude?: number;
-  width?: number;
-  height?: number;
-  metadataError?: string;
-}
-
-export interface RenderRequest {
-  sourcePath: string;
-  /** Catalog id; required for in-place edits so the original can be journaled. */
-  mediaId?: string;
-  edits: EditValues;
-  outputFormat: "jpeg" | "png" | "webp" | "heic" | "avif" | "in_place";
-  quality: number;
-  stripMetadata: boolean;
-  crop?: CropRect;
-}
-
-export interface EditValues {
-  exposure: number;
-  contrast: number;
-  warmth: number;
-  shadows: number;
-  highlights: number;
-  saturation: number;
-  rotation: number;
-  flip: boolean;
-}
-
-export interface CropRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-export interface ExportResult {
-  outputPath: string;
-  size: number;
-  width: number;
-  height: number;
-}
-
-export interface BatchExportRequest {
-  items: BatchExportItem[];
-  outputFolder: string;
-  pattern: string;
-  format: "jpeg" | "png" | "webp" | "heic" | "avif" | "source";
-  quality: number;
-  stripMetadata: boolean;
-  maxDimension?: number;
-}
-
-export interface BatchExportItem {
-  id: string;
-  sourcePath: string;
-  index: number;
-  kind?: MediaKind;
-  date?: number;
-}
-
-export interface BatchExportResult {
-  exported: number;
-  failed: Array<{ itemId: string; error: string }>;
-  outputs: string[];
-}
-
-export interface TrashResult {
-  /** Catalog ids that were moved to Trash. */
-  trashed: string[];
-  failed: TrashError[];
-  /**
-   * Set when the files reached the Trash but the catalog rows could not be
-   * removed. The delete itself succeeded; a rescan clears the stale rows.
-   */
-  catalogError?: string | null;
-}
-
-export interface TrashError {
-  id: string;
-  error: string;
 }
 
 /** Phases the Rust backend emits on the `import-progress` event. */
@@ -305,142 +105,3 @@ export interface ThumbnailReadyEvent {
   size: number;
   dataUrl: string;
 }
-
-export interface BatchProgressEvent {
-  current: number;
-  total: number;
-  currentFile: string;
-}
-
-/**
- * A folder the library is made of. `itemCount`/`totalSize` are computed from
- * the catalog, not stored, so they always match what the grid shows.
- */
-export interface LibraryFolder {
-  path: string;
-  name: string;
-  itemCount: number;
-  totalSize: number;
-  /** False when the folder no longer exists on disk. */
-  available: boolean;
-}
-
-export interface UpdateCheckResult {
-  available: boolean;
-  currentVersion: string;
-  latestVersion: string;
-  notes: string;
-  releaseUrl: string;
-  downloadUrl: string | null;
-  publishedAt: string | null;
-  checkedAt: number;
-}
-
-/** A desktop app that can play video containers WebKit cannot (MKV, AVI, ...). */
-export interface ExternalPlayer {
-  name: string;
-  path: string;
-}
-
-/** Exact library statistics computed from the catalog (not from loaded pages). */
-export interface LibraryStats {
-  photos: number;
-  videos: number;
-  raws: number;
-  /** Subset of `photos`: items the catalog treats as animated content. */
-  animations: number;
-  uncategorized: number;
-  favorites: number;
-  hidden: number;
-  photoSize: number;
-  videoSize: number;
-  rawSize: number;
-  uncategorizedSize: number;
-  favoriteSize: number;
-  hiddenSize: number;
-  totalSize: number;
-}
-
-// Tauri Command Signatures (for type-safe invoke)
-// Using a mapped type for command signatures
-export type TauriCommandSignature = {
-  // Library
-  scan_library: (rootPath: string, force: boolean) => ScanResult;
-  cancel_scan: () => void;
-  cancel_move_to_trash: () => void;
-  import_files: (paths: string[]) => ScanResult;
-  get_library_items: (filter: LibraryFilterDTO) => MediaItem[];
-  get_item_thumbnail: (request: ThumbnailRequest) => ThumbnailResponse;
-  watch_folder: (path: string) => void;
-  unwatch_folder: (path: string) => void;
-  get_library_folders: () => LibraryFolder[];
-  get_library_stats: () => LibraryStats;
-  remove_library_folder: (path: string, deleteFiles?: boolean) => number;
-
-  // Items
-  toggle_favorite: (itemId: string, favorite: boolean) => void;
-  toggle_hidden: (itemId: string, hidden: boolean) => void;
-  set_rating: (itemId: string, rating: number) => void;
-  set_color_label: (itemId: string, colorLabel: string) => void;
-  update_item_tags: (itemId: string, tags: string[]) => void;
-  move_to_trash: (paths: string[]) => void;
-  reveal_in_finder: (path: string) => void;
-  open_file: (path: string) => void;
-  open_folder: (path: string) => void;
-
-  // Albums
-  create_album: (name: string, colorIndex?: number) => Album;
-  delete_album: (albumId: string) => void;
-  rename_album: (albumId: string, name: string) => void;
-  add_to_album: (albumId: string, itemIds: string[]) => void;
-  remove_from_album: (albumId: string, itemIds: string[]) => void;
-
-  // Metadata
-  read_exif: (path: string) => ExifData;
-  backfill_metadata: () => number;
-
-  // Editing
-  render_edited: (request: RenderRequest) => ExportResult;
-  save_edit_recipe: (req: {
-    mediaId: string;
-    edits: EditValues;
-    crop?: CropState;
-    history: EditValues[];
-    historyIndex: number;
-  }) => EditRecipe;
-  get_edit_recipe: (mediaId: string) => EditRecipe | null;
-  list_edit_recipes: () => EditRecipe[];
-  delete_edit_recipe: (mediaId: string) => boolean;
-  copy_edit_recipe: (req: { fromMediaId: string; toMediaId: string }) => EditRecipe;
-  batch_apply_edit: (req: { mediaIds: string[]; edits: EditValues; crop?: CropState }) => number;
-  save_edit_preset: (req: {
-    id?: string;
-    name: string;
-    edits: EditValues;
-    crop?: CropState;
-  }) => EditPreset;
-  list_edit_presets: () => EditPreset[];
-  delete_edit_preset: (id: string) => boolean;
-  apply_edit_preset: (req: { presetId: string; mediaId: string }) => EditRecipe;
-
-  // Batch
-  batch_export: (request: BatchExportRequest) => BatchExportResult;
-  cancel_batch_export: () => void;
-
-  // Duplicates
-  find_duplicates: () => DuplicateGroup[];
-  cancel_find_duplicates: () => void;
-
-  // Finder
-  write_finder_tags: (path: string, tags: string[]) => void;
-  read_finder_tags: (path: string) => string[];
-
-  // Settings
-  get_settings: () => AppSettings;
-  save_settings: (settings: Partial<AppSettings>) => AppSettings;
-
-  // App
-  get_version: () => string;
-  check_updates: (force?: boolean) => UpdateCheckResult;
-  open_external: (url: string) => void;
-};

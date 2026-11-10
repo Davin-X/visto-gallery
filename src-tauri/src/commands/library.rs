@@ -8,6 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{State, Window};
+use ts_rs::TS;
 use walkdir::WalkDir;
 
 #[tauri::command]
@@ -418,8 +419,9 @@ struct LibraryCursor {
     id: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(optional_fields = nullable)]
 pub struct LibraryItemsPage {
     pub(crate) items: Vec<MediaItem>,
     has_more: bool,
@@ -790,10 +792,12 @@ async fn hydrate_relations(db: &SqlitePool, items: &mut [MediaItem]) -> Result<(
     Ok(())
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(optional_fields)]
 pub struct ThumbnailRequest {
     item_id: String,
+    #[ts(type = "64 | 128 | 256 | 512 | 1024")]
     size: u32,
     /// JPEG quality 1-100; defaults to 78.
     quality: Option<u8>,
@@ -801,7 +805,7 @@ pub struct ThumbnailRequest {
     max_cache_bytes: Option<u64>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ThumbnailResponse {
     item_id: String,
@@ -1571,7 +1575,7 @@ pub(crate) async fn get_library_folders_inner(
     Ok(folders)
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryStats {
     photos: i64,

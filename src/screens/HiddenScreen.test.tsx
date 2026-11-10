@@ -34,6 +34,7 @@ function makeHiddenItem(
     modifiedAt: 1_700_000_000_000,
     favorite,
     hidden: true,
+    isAnimated: false,
     tags: [],
     albumIds: [],
     createdAt: 1_700_000_000_000,

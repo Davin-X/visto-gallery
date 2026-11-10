@@ -3,6 +3,7 @@ use crate::models::MediaItem;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use tauri::State;
+use ts_rs::TS;
 use uuid::Uuid;
 
 /// The only fields a saved Smart Album may contain.
@@ -11,9 +12,11 @@ use uuid::Uuid;
 /// corrupted build fails visibly instead of being silently ignored. The
 /// resulting SQL always binds these values; no part of a definition is ever
 /// interpolated into a statement.
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(optional_fields = nullable)]
 pub struct SmartAlbumFilter {
+    #[ts(optional, type = "\"photo\" | \"video\" | \"raw\"")]
     pub kind: Option<String>,
     pub favorite: Option<bool>,
     pub query: Option<String>,
@@ -25,7 +28,12 @@ pub struct SmartAlbumFilter {
     pub color_label: Option<String>,
     pub camera: Option<String>,
     pub lens: Option<String>,
+    #[ts(
+        optional,
+        type = "\"capturedAt\" | \"modifiedAt\" | \"name\" | \"size\" | \"kind\""
+    )]
     pub sort_by: Option<String>,
+    #[ts(optional, type = "\"asc\" | \"desc\"")]
     pub sort_order: Option<String>,
 }
 
@@ -86,7 +94,7 @@ impl SmartAlbumFilter {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SmartAlbum {
     pub id: String,

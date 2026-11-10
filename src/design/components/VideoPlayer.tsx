@@ -44,8 +44,8 @@ function VideoPlayer({
   src: string;
   path?: string;
   name?: string;
-  width?: number;
-  height?: number;
+  width?: number | null;
+  height?: number | null;
   onFullscreen?: () => void;
   onNext?: () => boolean | Promise<boolean>;
   /** Render a clean thumbnail-like frame; transport actions are external. */
@@ -520,8 +520,8 @@ function VideoPlayer({
         ref={ref}
         className={`viewer-video${compact ? " viewer-video-compact" : ""}`}
         src={src}
-        width={width}
-        height={height}
+        width={width ?? undefined}
+        height={height ?? undefined}
         style={{
           aspectRatio: width && height ? `auto ${width} / ${height}` : "auto",
         }}

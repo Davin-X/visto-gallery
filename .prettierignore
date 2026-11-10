@@ -5,3 +5,4 @@ untracked/
 src-tauri/target/
 *.config.js
 *.config.mjs
+src/engine/types/generated/

@@ -1,6 +1,7 @@
 use super::*;
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use ts_rs::TS;
 
 const RELEASES_URL: &str = "https://api.github.com/repos/Davin-X/visto-gallery/releases/latest";
 const CACHE_KEY: &str = "update_check_cache";
@@ -8,8 +9,9 @@ const CACHE_TTL_MS: i64 = 24 * 60 * 60 * 1000;
 
 /// Result of a release check. Cached for a day so the app can call this on
 /// launch without hitting GitHub's unauthenticated rate limit.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(optional_fields = nullable)]
 pub struct UpdateCheck {
     pub available: bool,
     pub current_version: String,

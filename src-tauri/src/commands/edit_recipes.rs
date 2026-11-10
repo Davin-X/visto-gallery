@@ -1,13 +1,22 @@
 use super::*;
 use serde::Serialize;
+use ts_rs::TS;
 
 /// Response: a single edit recipe.
-#[derive(Debug, Serialize)]
+///
+/// `edits`, `crop`, and `history` stay opaque JSON so recipes written by older
+/// builds keep loading; the `#[ts(type = ...)]` overrides describe what the
+/// editor writes. The applied edit path (`RenderRequest`) is fully typed, so
+/// values are validated where they are used rather than when they are stored.
+#[derive(Debug, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct EditRecipe {
     pub media_id: String,
+    #[ts(type = "EditValues")]
     pub edits: serde_json::Value,
+    #[ts(optional, type = "CropState | null")]
     pub crop: Option<serde_json::Value>,
+    #[ts(type = "EditValues[]")]
     pub history: serde_json::Value,
     pub history_index: i32,
     pub created_at: i64,
@@ -15,12 +24,17 @@ pub struct EditRecipe {
 }
 
 /// Response: a named edit preset.
-#[derive(Debug, Serialize)]
+///
+/// Like `EditRecipe`, the values are opaque JSON with TypeScript-only shape
+/// overrides; see the note there.
+#[derive(Debug, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct EditPreset {
     pub id: String,
     pub name: String,
+    #[ts(type = "EditValues")]
     pub edits: serde_json::Value,
+    #[ts(optional, type = "CropState | null")]
     pub crop: Option<serde_json::Value>,
     pub created_at: i64,
     pub updated_at: i64,
@@ -458,6 +472,48 @@ mod tests {
         .expect("create edit tables");
 
         db
+    }
+
+    /// `EditRecipe`/`EditPreset` store opaque JSON but advertise `EditValues`
+    /// and `CropState` to TypeScript. Keep those overrides honest: the shapes
+    /// the editor sends must deserialize into the Rust types.
+    #[test]
+    fn ts_override_shapes_deserialize() {
+        let edits: EditValues = serde_json::from_value(serde_json::json!({
+            "exposure": 25,
+            "contrast": -10,
+            "warmth": 0,
+            "shadows": 0,
+            "highlights": 0,
+            "saturation": 0,
+            "rotation": 90,
+            "flip": false
+        }))
+        .expect("EditValues shape");
+        assert_eq!(edits.rotation, 90);
+        assert!(!edits.flip);
+
+        let numeric: CropState = serde_json::from_value(serde_json::json!({
+            "enabled": true,
+            "x": 0.1,
+            "y": 0.1,
+            "width": 0.8,
+            "height": 0.8,
+            "aspectRatio": 1.5
+        }))
+        .expect("CropState with a numeric ratio");
+        assert_eq!(numeric.aspect_ratio, serde_json::json!(1.5));
+
+        let free: CropState = serde_json::from_value(serde_json::json!({
+            "enabled": true,
+            "x": 0.0,
+            "y": 0.0,
+            "width": 1.0,
+            "height": 1.0,
+            "aspectRatio": "free"
+        }))
+        .expect("CropState with a free ratio");
+        assert_eq!(free.aspect_ratio, serde_json::json!("free"));
     }
 
     #[tokio::test]

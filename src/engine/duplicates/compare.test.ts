@@ -15,6 +15,7 @@ function item(overrides: Partial<MediaItem> = {}): MediaItem {
     height: 3024,
     favorite: false,
     hidden: false,
+    isAnimated: false,
     tags: [],
     albumIds: [],
     createdAt: 1_700_000_000_000,

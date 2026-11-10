@@ -2,13 +2,15 @@ use crate::media_kind::MediaKind;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Row};
 use time::OffsetDateTime;
+use ts_rs::TS;
 use uuid::Uuid;
 
 // All structs that cross the IPC boundary serialise as camelCase, matching the
 // TypeScript interfaces in src/engine/types. `sqlx` keeps using the snake_case
 // field names for row mapping, so the attributes never affect the database.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(optional_fields = nullable)]
 pub struct MediaItem {
     pub id: String,
     pub path: String,
@@ -53,7 +55,7 @@ pub struct MediaItem {
     pub album_ids: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Album {
     pub id: String,
@@ -81,7 +83,7 @@ impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for Album {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Tag {
     pub id: String,

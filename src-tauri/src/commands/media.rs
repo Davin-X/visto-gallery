@@ -485,7 +485,7 @@ pub async fn open_file(path: String, catalog: State<'_, crate::Catalog>) -> Resu
 /// A desktop video player that can decode containers WebKit cannot (notably
 /// Matroska/`.mkv` and `.avi`), exposed to the viewer so unsupported videos can
 /// be handed off instead of failing silently.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ExternalPlayer {
     name: String,
