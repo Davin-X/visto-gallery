@@ -1024,11 +1024,6 @@ function App() {
   useEffect(() => {
     if (!settingsHydrated || didRunStartup.current) return;
     didRunStartup.current = true;
-    if (startupView === "slideshow") {
-      // Slideshow needs items; open Library first so the user can pick one.
-      setScreen("Library");
-      return;
-    }
     if (startupView === "last" && openLastFolder && lastScreen === "Albums" && lastFolder) {
       library.setActiveAlbum(lastFolder);
       library.setFilter("All");

@@ -286,17 +286,36 @@ export function SettingsScreen(props: {
   );
 
   const renderAccentPicker = (value: string, onChange: (v: string) => void) => (
-    <div className="accent-picker" role="radiogroup" aria-label="Accent color">
+    <div
+      className="accent-picker"
+      role="radiogroup"
+      aria-label="Accent color"
+      onKeyDown={(event) => {
+        const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
+        if (!keys.includes(event.key)) return;
+        const current = ACCENT_PALETTE.findIndex((c) => c.id === value);
+        if (current < 0) return;
+        const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
+        const next = (current + direction + ACCENT_PALETTE.length) % ACCENT_PALETTE.length;
+        event.preventDefault();
+        onChange(ACCENT_PALETTE[next].id);
+        event.currentTarget
+          .querySelectorAll<HTMLButtonElement>('[role="radio"]')
+          [next]?.focus();
+      }}
+    >
       {ACCENT_PALETTE.map((c) => {
         const selected = value === c.id;
         return (
           <button
             key={c.id}
             type="button"
+            role="radio"
+            aria-checked={selected}
+            tabIndex={selected ? 0 : -1}
             className={`accent-option ${selected ? "selected" : ""}`}
             onClick={() => onChange(c.id)}
             aria-label={c.label}
-            aria-pressed={selected}
             title={c.label}
           >
             <span
