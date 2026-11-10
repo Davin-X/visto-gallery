@@ -124,6 +124,10 @@ pub fn run() {
                 }
             }
 
+            // Clear stale "save a copy" staging files from previous sessions.
+            // Cheap, best effort; a missing folder is not an error.
+            let _ = commands::sweep_export_staging(std::time::Duration::from_secs(3600));
+
             // Create and set menu
             let app_handle = app.handle();
             let menu = create_menu(app_handle)?;

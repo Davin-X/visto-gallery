@@ -107,6 +107,42 @@ pub fn remove_if_stale_export_temp(entry: &walkdir::DirEntry, cutoff: SystemTime
     stale && std::fs::remove_file(entry.path()).is_ok()
 }
 
+/// Remove stale files from the export staging folder (`$TMPDIR/visto-export`).
+/// Anything older than `min_age` is removed; the staging folder only holds
+/// transient "save a copy" renders awaiting a destination dialog.
+pub fn sweep_export_staging(min_age: Duration) -> Result<usize, std::io::Error> {
+    sweep_dir(
+        &std::env::temp_dir().join("visto-export"),
+        stale_temp_cutoff(min_age),
+    )
+}
+
+/// Remove every file in `dir` older than `cutoff`. Missing directories and
+/// individual I/O failures are ignored so a partial sweep still cleans.
+/// Returns the number of files removed.
+pub fn sweep_dir(dir: &Path, cutoff: Option<SystemTime>) -> Result<usize, std::io::Error> {
+    let Some(cutoff) = cutoff else {
+        return Ok(0);
+    };
+    let mut removed = 0usize;
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let age_ok = entry
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .is_some_and(|modified| modified <= cutoff);
+            if entry.file_type().map(|t| t.is_file()).unwrap_or(false)
+                && age_ok
+                && std::fs::remove_file(entry.path()).is_ok()
+            {
+                removed += 1;
+            }
+        }
+    }
+    Ok(removed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,6 +177,50 @@ mod tests {
             guard.commit();
         }
         assert!(path.exists());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn sweep_dir_removes_only_files_older_than_cutoff() {
+        let dir = tmpdir("staging");
+        let old = dir.join("stale_edited.jpg");
+        let fresh = dir.join("fresh_edited.jpg");
+        fs::write(&old, b"data").unwrap();
+        fs::write(&fresh, b"data").unwrap();
+        let age =
+            filetime::FileTime::from_system_time(SystemTime::now() - Duration::from_secs(7200));
+        filetime::set_file_mtime(&old, age).unwrap();
+
+        let removed = sweep_dir(&dir, stale_temp_cutoff(Duration::from_secs(3600))).unwrap();
+        assert_eq!(removed, 1);
+        assert!(!old.exists());
+        assert!(fresh.exists());
+        // Subdirectories are ignored, not recursed into.
+        let nested = dir.join("nested");
+        fs::create_dir_all(&nested).unwrap();
+        let nested_old = nested.join("stale.jpg");
+        fs::write(&nested_old, b"data").unwrap();
+        let nested_age =
+            filetime::FileTime::from_system_time(SystemTime::now() - Duration::from_secs(7200));
+        filetime::set_file_mtime(&nested_old, nested_age).unwrap();
+        assert_eq!(
+            sweep_dir(&dir, stale_temp_cutoff(Duration::from_secs(3600))).unwrap(),
+            0
+        );
+        assert!(nested_old.exists());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn sweep_dir_on_missing_dir_is_zero() {
+        let dir = tmpdir("staging-missing");
+        let missing = dir.join("nope");
+        assert_eq!(
+            sweep_dir(&missing, stale_temp_cutoff(Duration::from_secs(1))).unwrap(),
+            0
+        );
+
         let _ = fs::remove_dir_all(dir);
     }
 
