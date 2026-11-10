@@ -1213,6 +1213,10 @@ fn render_edited_blocking(
         );
         let output_path = tmp_dir.join(output_name);
 
+        // Hold the staging file with an RAII guard so a failure while
+        // writing cannot leave a 0- or partial-byte render behind.
+        let mut staging_guard = super::TempFileGuard::new(output_path.clone());
+
         write_image(
             &img,
             &output_path,
@@ -1222,6 +1226,9 @@ fn render_edited_blocking(
             &exif_data,
         )?;
 
+        // Render succeeded; the file must survive until the user picks a
+        // destination (or discards it).
+        staging_guard.commit();
         output_path.to_string_lossy().into_owned()
     };
 

@@ -227,6 +227,7 @@ VistoGallery is a [Tauri 2](https://tauri.app/) app: a React and TypeScript inte
 - **Scanning.** Rescans only inspect new or changed files, judged by size and modification time. File reads run off the main async runtime, so large libraries don't stall the app.
 - **Thumbnails.** Generated on demand and cached in the app's cache folder, with a size budget.
 - **Safety.** The backend only accepts folders you picked or dropped, only opens files that are in the catalog, and moves deleted files to the macOS Trash so you can put them back.
+- **.bak files.** When you confirm "Replace original" and a file already exists at the destination, the previous version is copied to `<name>.<ext>.bak` next to the new one before the save. These backups are never deleted automatically — when you're happy with the new render, remove the `.bak` files yourself.
 
 ## Troubleshooting
 
