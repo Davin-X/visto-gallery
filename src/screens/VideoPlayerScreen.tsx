@@ -117,7 +117,7 @@ export default function VideoPlayerScreen({
       className={`video-player-screen${active ? " video-player-screen-active" : " video-player-screen-background"}`}
       aria-hidden={!active}
     >
-      <header className="video-player-heading">
+      <header className="page-heading video-player-heading">
         <button
           type="button"
           className="video-player-back"

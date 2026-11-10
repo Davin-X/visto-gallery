@@ -80,7 +80,7 @@ function CameraLensBrowserScreen(props: CameraLensBrowserScreenProps) {
 
   return (
     <div className="feature-page camera-lens-page">
-      <div className="page-header">
+      <div className="page-heading">
         <button
           type="button"
           className="icon-button camera-lens-back"

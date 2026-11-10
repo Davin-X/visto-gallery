@@ -21,7 +21,7 @@ import { tauri, thumbnailToDataUrl } from "../engine/commands/tauri";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import { formatDuration } from "../engine/utils/time";
 import { draftImageStyle } from "../engine/utils/draftImage";
-import type { MediaItem, EditValues } from "../engine/types/media";
+import type { MediaItem } from "../engine/types/media";
 import { formatItemDate } from "../engine/utils/mediaDate";
 
 /** Whether the viewer's shortcut legend has been shown in this app session. */
@@ -263,14 +263,13 @@ function ViewerScreen(props: ViewerScreenProps) {
     <div className="viewer-screen">
       <div className="page-heading viewer-heading">
         <div className="viewer-title-block">
+          <p className="eyebrow">VIEW</p>
           <h1 title={selected.name}>{selected.name}</h1>
           <div className="viewer-meta">
             <div className="meta-row">
               <span className="meta-chip">
                 <svg
                   className="meta-icon"
-                  width="10"
-                  height="10"
                   viewBox="0 0 16 16"
                   fill="none"
                   stroke="currentColor"
@@ -284,8 +283,6 @@ function ViewerScreen(props: ViewerScreenProps) {
               <span className="meta-chip">
                 <svg
                   className="meta-icon"
-                  width="10"
-                  height="10"
                   viewBox="0 0 16 16"
                   fill="none"
                   stroke="currentColor"
@@ -299,8 +296,6 @@ function ViewerScreen(props: ViewerScreenProps) {
               <span className="meta-chip">
                 <svg
                   className="meta-icon"
-                  width="10"
-                  height="10"
                   viewBox="0 0 16 16"
                   fill="none"
                   stroke="currentColor"
@@ -315,8 +310,6 @@ function ViewerScreen(props: ViewerScreenProps) {
                 <span className="meta-chip">
                   <svg
                     className="meta-icon"
-                    width="10"
-                    height="10"
                     viewBox="0 0 16 16"
                     fill="none"
                     stroke="currentColor"
@@ -332,8 +325,6 @@ function ViewerScreen(props: ViewerScreenProps) {
                 <span className="meta-chip">
                   <svg
                     className="meta-icon"
-                    width="10"
-                    height="10"
                     viewBox="0 0 16 16"
                     fill="none"
                     stroke="currentColor"
@@ -720,51 +711,6 @@ function ViewerScreen(props: ViewerScreenProps) {
       </div>
     </div>
   );
-}
-
-interface EditScreenProps {
-  item: MediaItem | null;
-  values: EditValues | null;
-  crop: {
-    enabled: boolean;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    aspectRatio?: number | "free";
-  };
-  history: EditValues[];
-  historyIndex: number;
-  items: MediaItem[];
-  assetUrl: (path: string) => string;
-  canUndo: boolean;
-  canRedo: boolean;
-  onSetValue: (key: keyof EditValues, value: EditValues[keyof EditValues]) => void;
-  onSetValues: (values: EditValues) => void;
-  onReset: () => void;
-  onAuto: () => void;
-  onRotate: (deg: number) => void;
-  onFlip: () => void;
-  onSetCrop: (
-    crop: Partial<{
-      enabled: boolean;
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-      aspectRatio?: number | "free";
-    }>,
-  ) => void;
-  onResetCrop: () => void;
-  onUndo: () => void;
-  onRedo: () => void;
-  onClose: () => void;
-  onSaveDraft: () => Promise<void>;
-  onBack: () => void;
-  onExport: (inPlace?: boolean) => void | Promise<void>;
-  onClearDraft: (id: string) => void;
-  onNotice: (text: string) => void;
-  onOpenEdit: (item: MediaItem) => void;
 }
 
 export default ViewerScreen;
