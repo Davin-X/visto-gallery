@@ -6,6 +6,28 @@ import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { formatDuration } from "../engine/utils/time";
 import type { MediaItem } from "../engine/types/media";
 
+/**
+ * The elapsed / total readout is the only per-tick value on the screen.
+ * Isolating it in its own component keeps the header row and the queue strip
+ * from re-rendering on every playback timeupdate.
+ */
+function PlaybackTimeChip({ itemDuration }: { itemDuration?: number | null }) {
+  const time = usePlaybackStore((state) => state.time);
+  const duration = usePlaybackStore((state) => state.duration);
+  return (
+    <span
+      className="video-player-meta-chip video-player-meta-chip-time"
+      title="Elapsed / total duration"
+    >
+      <span>{formatDuration(time)}</span>
+      <span className="video-player-meta-sep" aria-hidden="true">
+        /
+      </span>
+      <span>{formatDuration(duration || itemDuration || 0)}</span>
+    </span>
+  );
+}
+
 interface VideoPlayerScreenProps {
   active: boolean;
   item: MediaItem | null;
@@ -38,8 +60,6 @@ export default function VideoPlayerScreen({
   const queueStripRef = useRef<HTMLDivElement | null>(null);
   const loadMoreLockRef = useRef(false);
   const currentIndex = queue.findIndex((video) => video.id === item?.id);
-  const time = usePlaybackStore((state) => state.time);
-  const duration = usePlaybackStore((state) => state.duration);
 
   useEffect(() => {
     const element = screenRef.current;
@@ -110,16 +130,7 @@ export default function VideoPlayerScreen({
         <div className="video-player-title">
           <h1 title={item.name}>{item.name}</h1>
           <span className="video-player-meta">
-            <span
-              className="video-player-meta-chip video-player-meta-chip-time"
-              title="Elapsed / total duration"
-            >
-              <span>{formatDuration(time)}</span>
-              <span className="video-player-meta-sep" aria-hidden="true">
-                /
-              </span>
-              <span>{formatDuration(duration || item.duration || 0)}</span>
-            </span>
+            <PlaybackTimeChip itemDuration={item.duration} />
             {currentIndex >= 0 && (
               <span
                 className="video-player-meta-chip"
