@@ -346,6 +346,14 @@ export function AppSidebar({
       </div>
       <div className="stat-row">
         <KindDot kind="photo" />
+        <span className="stat-label">Animations</span>
+        <span className="stat-value">
+          {stats.animations.toLocaleString()}
+          <span className="stat-size">· {formatBytesSimple(stats.animationsSize)}</span>
+        </span>
+      </div>
+      <div className="stat-row">
+        <KindDot kind="photo" />
         <span className="stat-label">Favorites</span>
         <span className="stat-value">
           {stats.favorites.toLocaleString()}
@@ -375,8 +383,14 @@ export function AppSidebar({
       <div className="stat-row size">
         <span className="stat-label">Total</span>
         <span className="stat-value">
-          {(stats.photos + stats.videos + stats.raws + stats.uncategorized).toLocaleString()} ·{" "}
-          {formatBytesSimple(stats.totalSize)}
+          {(
+            stats.photos +
+            stats.videos +
+            stats.raws +
+            stats.animations +
+            stats.uncategorized
+          ).toLocaleString()}{" "}
+          · {formatBytesSimple(stats.totalSize)}
         </span>
       </div>
     </>

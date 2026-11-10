@@ -61,9 +61,13 @@ export type LibraryItemsPage = { items: Array<MediaItem>, hasMore: boolean, next
 
 export type LibraryStats = { photos: number, videos: number, raws: number, 
 /**
- * Subset of `photos`: items the catalog treats as animated content.
+ * Animated items; counted within `photos` until the split ships, but kept separate for the UI.
  */
-animations: number, uncategorized: number, favorites: number, hidden: number, photoSize: number, videoSize: number, rawSize: number, uncategorizedSize: number, favoriteSize: number, hiddenSize: number, totalSize: number, };
+animations: number, 
+/**
+ * Total bytes of the animated subset.
+ */
+animationsSize: number, uncategorized: number, favorites: number, hidden: number, photoSize: number, videoSize: number, rawSize: number, uncategorizedSize: number, favoriteSize: number, hiddenSize: number, totalSize: number, };
 
 export type ThumbnailRequest = { itemId: string, size: 64 | 128 | 256 | 512 | 1024, 
 /**

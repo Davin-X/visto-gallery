@@ -195,6 +195,7 @@ function App() {
     videos: 0,
     raws: 0,
     animations: 0,
+    animationsSize: 0,
     uncategorized: 0,
     favorites: 0,
     hidden: 0,
@@ -1244,7 +1245,11 @@ function App() {
   useEffect(() => {
     if (!showNativeWarnings) return;
     const total =
-      libraryStats.photos + libraryStats.videos + libraryStats.raws + libraryStats.uncategorized;
+      libraryStats.photos +
+      libraryStats.videos +
+      libraryStats.raws +
+      libraryStats.animations +
+      libraryStats.uncategorized;
     if (total > 10000) {
       showNotice(
         `Large library (${total.toLocaleString()} items) — thumbnail generation and scrolling may be slower on this system.`,
@@ -1255,6 +1260,7 @@ function App() {
     libraryStats.photos,
     libraryStats.videos,
     libraryStats.raws,
+    libraryStats.animations,
     libraryStats.uncategorized,
     showNotice,
   ]);
