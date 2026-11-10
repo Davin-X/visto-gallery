@@ -5566,6 +5566,9 @@ body.is-resizing .photo-inspector {
 
 .album-dialog {
   width: min(420px, 100%);
+  max-height: min(720px, calc(100vh - 64px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 20px;
   border: 1px solid var(--line);
   border-radius: 14px;
