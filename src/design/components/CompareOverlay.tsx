@@ -155,30 +155,38 @@ export function CompareOverlay({
     [copies, copy?.id, reset],
   );
 
+  // Capture phase + stopPropagation so the viewer underneath never sees
+  // the keys the compare surface handles.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopPropagation();
         onClose();
       } else if (event.key === "+" || event.key === "=") {
         event.preventDefault();
+        event.stopPropagation();
         applyZoom(zoom * 1.5);
       } else if (event.key === "-") {
         event.preventDefault();
+        event.stopPropagation();
         applyZoom(zoom / 1.5);
       } else if (event.key === "0") {
         event.preventDefault();
+        event.stopPropagation();
         reset();
       } else if (event.key === "ArrowRight") {
         event.preventDefault();
+        event.stopPropagation();
         step(1);
       } else if (event.key === "ArrowLeft") {
         event.preventDefault();
+        event.stopPropagation();
         step(-1);
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [applyZoom, onClose, reset, step, zoom]);
 
   // React registers `onWheel` passively, so preventDefault() throws there and
