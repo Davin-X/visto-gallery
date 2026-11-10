@@ -23,6 +23,9 @@ interface DuplicatesScreenProps {
   groups: DuplicateGroup[];
   items: MediaItem[];
   onScan: () => void | Promise<void>;
+  /** Whether a scan has run. Before that, an empty list means "not checked",
+   *  not "no duplicates". Defaults to true for callers that only show results. */
+  scanned?: boolean;
   onClear: () => void;
   busy: boolean;
   progress?: {
@@ -85,6 +88,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     progress: progressProp,
     busy,
     onScan,
+    scanned = true,
     onClear,
     onRequestDeleteItems,
     onHideIds,
@@ -519,15 +523,12 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
             Clear
           </button>
         )}
-        <button type="button" className="primary-button" onClick={onScan} disabled={busy}>
-          {isTrashing
-            ? "Moving to Trash…"
-            : isDuplicateScan
-              ? "Scanning…"
-              : hasGroups
-                ? "Rescan"
-                : "Scan library"}
-        </button>
+        {/* With no results the empty state carries the only scan button. */}
+        {(hasGroups || busy) && (
+          <button type="button" className="primary-button" onClick={onScan} disabled={busy}>
+            {isTrashing ? "Moving to Trash…" : isDuplicateScan ? "Scanning…" : "Rescan"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -699,18 +700,22 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               ? "Moving selected files to Trash"
               : isDuplicateScan
                 ? "Scanning your library"
-                : EMPTY_TITLES[hasGroups ? filterKind : "all"]}
+                : !hasGroups && !scanned
+                  ? "Find duplicate files"
+                  : EMPTY_TITLES[hasGroups ? filterKind : "all"]}
           </h2>
           <p>
             {isTrashing
               ? "The selected copies are being moved to Finder Trash. You can use Put Back in Finder if needed."
               : isDuplicateScan
                 ? "Comparing files by content hash. Large libraries can take a moment."
-                : hasGroups
-                  ? otherKinds.length > 0
-                    ? `Found ${otherKindsLabel} instead. Use the media tabs above to switch.`
-                    : "Nothing in this scan matches the selected media type."
-                  : "Every file in your library is unique by content. Identical-looking photos that differ by even one byte are not flagged."}
+                : !hasGroups && !scanned
+                  ? "Scan compares every file in your library by content (SHA-256). Nothing is moved until you choose which copies to remove."
+                  : hasGroups
+                    ? otherKinds.length > 0
+                      ? `Found ${otherKindsLabel} instead. Use the media tabs above to switch.`
+                      : "Nothing in this scan matches the selected media type."
+                    : "Every file in your library is unique by content. Identical-looking photos that differ by even one byte are not flagged."}
           </p>
           {!busy &&
             (hasGroups ? (
@@ -719,7 +724,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               </button>
             ) : (
               <button type="button" className="primary-button" onClick={onScan}>
-                Scan library
+                {scanned ? "Scan again" : "Scan library"}
               </button>
             ))}
         </div>

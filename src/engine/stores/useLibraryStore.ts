@@ -54,6 +54,9 @@ export interface LibraryState {
   smartAlbums: SmartAlbum[];
   tags: Tag[];
   duplicates: DuplicateGroup[];
+  /** True once a duplicate scan has finished (or been cancelled) this
+   *  session. Until then the screen must not claim there are no duplicates. */
+  duplicatesScanned: boolean;
   folders: LibraryFolder[];
 
   // UI State
@@ -467,6 +470,7 @@ export const useLibraryStore = create<LibraryState>()(
       smartAlbums: [],
       tags: [],
       duplicates: [],
+      duplicatesScanned: false,
       folders: [],
       inspectedId: null,
       selectedIds: [],
@@ -1622,6 +1626,7 @@ export const useLibraryStore = create<LibraryState>()(
             : duplicates;
           set({
             duplicates: merged,
+            duplicatesScanned: true,
             busy: false,
             canceling: false,
             progress: null,
@@ -1668,7 +1673,7 @@ export const useLibraryStore = create<LibraryState>()(
         }
       },
 
-      clearDuplicates: () => set({ duplicates: [] }),
+      clearDuplicates: () => set({ duplicates: [], duplicatesScanned: false }),
 
       // UI
       setBusy: (busy) => set({ busy, ...(busy ? {} : { canceling: false }) }),

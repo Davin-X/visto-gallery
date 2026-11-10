@@ -479,6 +479,7 @@ export function AppScreenRouter({
       {screen === "Duplicates" && (
         <DuplicatesScreen
           groups={library.duplicates}
+          scanned={library.duplicatesScanned}
           items={library.items}
           onScan={library.scanDuplicates}
           onClear={library.clearDuplicates}
