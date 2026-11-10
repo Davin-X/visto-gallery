@@ -78,6 +78,7 @@ function VideoPlayer({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [autoAdvance, setAutoAdvance] = useState(false);
   const [failed, setFailed] = useState(() => !canPlayVideoInApp(path, name));
+  const [videoError, setVideoError] = useState<MediaError | null>(null);
   const [players, setPlayers] = useState<ExternalPlayer[]>([]);
   const [openError, setOpenError] = useState<string | null>(null);
 
@@ -460,6 +461,16 @@ function VideoPlayer({
 
   if (failed) {
     const ext = fileExtension(path) || fileExtension(name);
+    // Only call it a format problem when the extension is genuinely
+    // unsupported or the error is SRC_NOT_SUPPORTED. A missing file, an
+    // unplugged drive or a permission error gets the availability copy.
+    // SRC_NOT_SUPPORTED (4) and DECODE (3) point at the codec; everything
+    // else (network, aborted, unknown) means the file is unavailable.
+    const isFormatFailure =
+      !canPlayVideoInApp(path, name) ||
+      !videoError ||
+      videoError.code === 4 ||
+      videoError.code === 3;
     const player = players[0];
     return (
       <div className="viewer-video-fallback" role="alert">
@@ -480,8 +491,9 @@ function VideoPlayer({
         </div>
         <h3 className="viewer-video-fallback-title">{name || "This video"}</h3>
         <p className="viewer-video-fallback-copy">
-          {ext ? `.${ext} files` : "This file"} can't be decoded by macOS's built-in web player.
-          Open it in a desktop player that supports this format.
+          {isFormatFailure
+            ? `${ext ? `.${ext} files` : "This file"} can't be decoded by macOS's built-in web player. Open it in a desktop player that supports this format.`
+            : "This video could not be played. The file may be missing or the source drive may be disconnected — check the source and try again."}
         </p>
         <div className="viewer-video-fallback-actions">
           {player ? (
@@ -500,7 +512,7 @@ function VideoPlayer({
             Reveal in Finder
           </button>
         </div>
-        {!player && (
+        {isFormatFailure && !player && (
           <p className="viewer-video-feedback">
             Tip: IINA, VLC, or Elmedia Video Player all play MKV natively.
           </p>
@@ -534,7 +546,10 @@ function VideoPlayer({
           event.stopPropagation();
           onFullscreen?.();
         }}
-        onError={() => setFailed(true)}
+        onError={(event) => {
+          setVideoError(event.currentTarget.error ?? null);
+          setFailed(true);
+        }}
         tabIndex={0}
         aria-keyshortcuts="Space ArrowLeft ArrowRight ArrowUp ArrowDown F M"
         title={`${name || "Video"} — focus for shortcuts: Space play/pause, ←/→ seek, F fullscreen`}
