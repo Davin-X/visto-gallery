@@ -7,6 +7,7 @@ use sqlx::{QueryBuilder, Sqlite, SqlitePool};
 use tauri::Manager;
 
 use crate::commands::{normalize_root, now_ms, path_is_inside};
+use crate::errors::CommandError;
 use crate::models::MediaItem;
 
 pub(crate) const LIBRARY_COUNTS_CHANGED: &str = "library-counts-changed";
@@ -148,7 +149,7 @@ pub(crate) fn file_modified_at(metadata: &std::fs::Metadata) -> i64 {
 pub(crate) async fn upsert_media_batch(
     db: &SqlitePool,
     rows: &[(MediaItem, Option<i32>, Option<i32>)],
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     if rows.is_empty() {
         return Ok(());
     }
@@ -187,7 +188,7 @@ pub(crate) async fn upsert_media_batch(
     query.push(
         " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END, updated_at = excluded.updated_at, favorite = media_items.favorite, hidden = media_items.hidden, is_animated = excluded.is_animated, content_signature = excluded.content_signature, rating = COALESCE(excluded.rating, media_items.rating), color_label = COALESCE(excluded.color_label, media_items.color_label)",
     );
-    query.build().execute(db).await.map_err(|e| e.to_string())?;
+    query.build().execute(db).await?;
     Ok(())
 }
 
@@ -201,11 +202,10 @@ pub(crate) async fn prune_missing_items(
     db: &SqlitePool,
     root: &str,
     seen_paths: &HashSet<String>,
-) -> Result<usize, String> {
+) -> Result<usize, CommandError> {
     let candidates: Vec<(String, String)> = sqlx::query_as("SELECT id, path FROM media_items")
         .fetch_all(db)
-        .await
-        .map_err(|error| error.to_string())?;
+        .await?;
 
     let missing: Vec<String> = candidates
         .into_iter()
@@ -219,7 +219,7 @@ pub(crate) async fn prune_missing_items(
     // Stay below SQLite's bound-parameter limit and delete every relation in
     // one transaction so a partial prune cannot leave orphaned album/tag rows.
     const DELETE_CHUNK: usize = 500;
-    let mut transaction = db.begin().await.map_err(|error| error.to_string())?;
+    let mut transaction = db.begin().await?;
     for chunk in missing.chunks(DELETE_CHUNK) {
         for table in ["media_tags", "album_items"] {
             let mut query =
@@ -229,11 +229,7 @@ pub(crate) async fn prune_missing_items(
                 values.push_bind(id);
             }
             values.push_unseparated(")");
-            query
-                .build()
-                .execute(&mut *transaction)
-                .await
-                .map_err(|error| error.to_string())?;
+            query.build().execute(&mut *transaction).await?;
         }
 
         let mut query = QueryBuilder::<Sqlite>::new("DELETE FROM media_items WHERE id IN (");
@@ -242,16 +238,9 @@ pub(crate) async fn prune_missing_items(
             values.push_bind(id);
         }
         values.push_unseparated(")");
-        query
-            .build()
-            .execute(&mut *transaction)
-            .await
-            .map_err(|error| error.to_string())?;
+        query.build().execute(&mut *transaction).await?;
     }
-    transaction
-        .commit()
-        .await
-        .map_err(|error| error.to_string())?;
+    transaction.commit().await?;
 
     Ok(missing.len())
 }
@@ -260,11 +249,11 @@ pub(crate) async fn import_media_file(
     db: &SqlitePool,
     path: &Path,
     now: i64,
-) -> Result<Option<(MediaItem, i64)>, String> {
+) -> Result<Option<(MediaItem, i64)>, CommandError> {
     let owned = path.to_path_buf();
     let inspected = tokio::task::spawn_blocking(move || inspect_media_file(&owned, now))
         .await
-        .map_err(|e| format!("Import worker failed: {e}"))?;
+        .map_err(|e| CommandError::internal(format!("Import worker failed: {e}")))?;
     let Some((item, width, height)) = inspected else {
         return Ok(None);
     };

@@ -1,3 +1,4 @@
+use crate::errors::CommandError;
 use serde::Serialize;
 use sqlx::Row;
 use tauri::State;
@@ -30,42 +31,47 @@ pub struct RootPathMappingResult {
     pub updated_item_count: i64,
 }
 
-fn normalize(path: &str) -> Result<String, String> {
+fn normalize(path: &str) -> Result<String, CommandError> {
     let trimmed = path.trim();
     if trimmed.is_empty() || !trimmed.starts_with('/') {
-        return Err("Choose absolute POSIX paths for the moved library mapping.".to_string());
+        return Err(CommandError::invalid(
+            "Choose absolute POSIX paths for the moved library mapping.".to_string(),
+        ));
     }
     Ok(super::normalize_root(trimmed))
 }
 
-fn validate_mapping(old_root: &str, new_root: &str) -> Result<(String, String), String> {
+fn validate_mapping(old_root: &str, new_root: &str) -> Result<(String, String), CommandError> {
     let old_root = normalize(old_root)?;
     let new_root = normalize(new_root)?;
     if old_root == new_root {
-        return Err("The new source root must be different from the missing one.".to_string());
+        return Err(CommandError::invalid(
+            "The new source root must be different from the missing one.".to_string(),
+        ));
     }
     if new_root.len() <= 1 {
-        return Err("Choose a real source folder as the new root.".to_string());
+        return Err(CommandError::invalid(
+            "Choose a real source folder as the new root.".to_string(),
+        ));
     }
     if !std::path::Path::new(&new_root).is_dir() {
-        return Err(format!(
+        return Err(CommandError::not_found(format!(
             "The new source root does not exist or is not a folder: {new_root}"
-        ));
+        )));
     }
     Ok((old_root, new_root))
 }
 
-async fn ensure_registered_root(db: &sqlx::SqlitePool, old_root: &str) -> Result<(), String> {
+async fn ensure_registered_root(db: &sqlx::SqlitePool, old_root: &str) -> Result<(), CommandError> {
     let found: Option<i64> =
         sqlx::query_scalar("SELECT 1 FROM library_folders WHERE path = ? LIMIT 1")
             .bind(old_root)
             .fetch_optional(db)
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
     if found.is_none() {
-        return Err(format!(
+        return Err(CommandError::path(format!(
             "'{old_root}' is not a registered library source. Register the missing source first; arbitrary path rewrites are refused."
-        ));
+        )));
     }
     Ok(())
 }
@@ -79,7 +85,10 @@ fn mapped_path(old_root: &str, new_root: &str, path: &str) -> Option<String> {
         .map(|suffix| format!("{new_root}/{suffix}"))
 }
 
-async fn find_affected_paths(db: &sqlx::SqlitePool, old_root: &str) -> Result<Vec<String>, String> {
+async fn find_affected_paths(
+    db: &sqlx::SqlitePool,
+    old_root: &str,
+) -> Result<Vec<String>, CommandError> {
     let prefix = format!("{old_root}/");
     let rows = sqlx::query(
         "SELECT path FROM media_items WHERE path = ? OR substr(path, 1, ?) = ? ORDER BY path",
@@ -88,8 +97,7 @@ async fn find_affected_paths(db: &sqlx::SqlitePool, old_root: &str) -> Result<Ve
     .bind(prefix.chars().count() as i64)
     .bind(&prefix)
     .fetch_all(db)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     Ok(rows
         .into_iter()
         .map(|row| row.get::<String, _>("path"))
@@ -101,7 +109,7 @@ async fn find_conflicts(
     old_paths: &[String],
     new_root: &str,
     old_root: &str,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, CommandError> {
     let affected: std::collections::HashSet<&String> = old_paths.iter().collect();
     let mut conflicts = Vec::new();
     for old_path in old_paths {
@@ -112,8 +120,7 @@ async fn find_conflicts(
             sqlx::query_scalar("SELECT path FROM media_items WHERE path = ? LIMIT 1")
                 .bind(&new_path)
                 .fetch_optional(db)
-                .await
-                .map_err(|e| e.to_string())?;
+                .await?;
         // An owner that is itself being moved in this transaction is fine;
         // any other owner would be overwritten.
         if let Some(owner) = owner {
@@ -133,7 +140,7 @@ pub async fn preview_root_path_mapping(
     old_root: String,
     new_root: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<RootPathMappingPreview, String> {
+) -> Result<RootPathMappingPreview, CommandError> {
     let (old_root, new_root) = validate_mapping(&old_root, &new_root)?;
     let db = super::get_db(&catalog)?;
     ensure_registered_root(&db, &old_root).await?;
@@ -163,31 +170,33 @@ pub async fn apply_root_path_mapping(
     old_root: String,
     new_root: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<RootPathMappingResult, String> {
+) -> Result<RootPathMappingResult, CommandError> {
     let (old_root, new_root) = validate_mapping(&old_root, &new_root)?;
     let db = super::get_db(&catalog)?;
     ensure_registered_root(&db, &old_root).await?;
     let affected = find_affected_paths(&db, &old_root).await?;
     let conflicts = find_conflicts(&db, &affected, &new_root, &old_root).await?;
     if !conflicts.is_empty() {
-        return Err(format!(
+        return Err(CommandError::invalid(format!(
             "The new root already contains catalog paths that conflict with the move (for example {}). No library paths were changed.",
             conflicts.join(", ")
-        ));
+        )));
     }
 
     let now = super::now_ms();
-    let mut tx = db.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = db.begin().await?;
     let updated_root = sqlx::query("UPDATE library_folders SET path = ? WHERE path = ?")
         .bind(&new_root)
         .bind(&old_root)
         .execute(&mut *tx)
         .await
-        .map_err(|e| format!("Could not update the registered source root: {e}"))?;
+        .map_err(|e| {
+            CommandError::database(format!("Could not update the registered source root: {e}"))
+        })?;
     if updated_root.rows_affected() != 1 {
-        return Err(format!(
+        return Err(CommandError::path(format!(
             "'{old_root}' is not a registered library source. No paths were changed."
-        ));
+        )));
     }
 
     for old_path in &affected {
@@ -326,7 +335,7 @@ mod tests {
         let error = ensure_registered_root(&db, "/not-registered")
             .await
             .unwrap_err();
-        assert!(error.contains("not a registered library source"));
+        assert!(error.message.contains("not a registered library source"));
         db.close().await;
         let _ = std::fs::remove_file(db_path);
     }

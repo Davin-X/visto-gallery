@@ -3,6 +3,7 @@ import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { tauri } from "../engine/commands/tauri";
 import { clearEditDraft } from "../engine/stores";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
+import { errorCode } from "../engine/types/errors";
 import { invalidateThumbnailCache } from "../design/components/CachedThumbnail";
 import HiddenScreen from "../screens/HiddenScreen";
 import LibraryScreen from "../screens/LibraryScreen";
@@ -14,7 +15,7 @@ import BatchScreen from "../screens/BatchScreen";
 import AlbumsScreen from "../screens/AlbumsScreen";
 import DuplicatesScreen from "../screens/DuplicatesScreen";
 import { SettingsScreen } from "../design/components/SettingsScreen";
-import type { LibraryFolder, LibraryStats } from "../engine/types/commands";
+import type { LibraryFolder, LibraryStats, ErrorCode } from "../engine/types/commands";
 import type { MediaItem } from "../engine/types/media";
 import type { Screen } from "./screen";
 
@@ -42,7 +43,8 @@ interface AppScreenRouterProps {
   rescanSource: (folder: LibraryFolder) => Promise<void>;
   importFiles: () => Promise<void>;
   importFolder: () => Promise<void>;
-  showNotice: (text: string) => void;
+  showNotice: (text: string, code?: ErrorCode) => void;
+  showErrorNotice: (error: unknown, prefix?: string) => void;
   exportToBatch: () => void;
   addItemsToAlbum: (albumId: string) => Promise<void>;
   albumDragOver: boolean;
@@ -93,6 +95,7 @@ export function AppScreenRouter({
   importFiles,
   importFolder,
   showNotice,
+  showErrorNotice,
   exportToBatch,
   addItemsToAlbum,
   albumDragOver,
@@ -221,7 +224,7 @@ export function AppScreenRouter({
             try {
               await library.loadAlbumItems(albumId);
             } catch (error) {
-              showNotice(`Could not load album items: ${String(error)}`);
+              showErrorNotice(error, "Could not load album items");
             }
           }}
         />
@@ -376,10 +379,10 @@ export function AppScreenRouter({
                   : "Exported edited copy",
               );
             } catch (e) {
-              if (String(e).includes("cancelled")) {
+              if (errorCode(e) === "cancelled") {
                 showNotice("Export cancelled");
               } else {
-                showNotice("Export failed: " + String(e));
+                showErrorNotice(e, "Export failed");
               }
             }
           }}

@@ -1,3 +1,4 @@
+use crate::errors::CommandError;
 use crate::models::*;
 use serde::Serialize;
 use sqlx::sqlite::Sqlite;
@@ -28,21 +29,20 @@ const ALBUM_COVER_LIMIT: i64 = 4;
 #[tauri::command]
 pub async fn get_album_overviews(
     catalog: State<'_, crate::Catalog>,
-) -> Result<Vec<AlbumOverview>, String> {
+) -> Result<Vec<AlbumOverview>, CommandError> {
     let db = super::get_db(&catalog)?;
     load_album_overviews(&db).await
 }
 
 pub(crate) async fn load_album_overviews(
     db: &sqlx::SqlitePool,
-) -> Result<Vec<AlbumOverview>, String> {
+) -> Result<Vec<AlbumOverview>, CommandError> {
     let albums = sqlx::query_as::<_, Album>(&format!(
         "{} ORDER BY a.created_at ASC",
         super::ALBUM_SELECT
     ))
     .fetch_all(db)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     if albums.is_empty() {
         return Ok(Vec::new());
@@ -66,8 +66,7 @@ pub(crate) async fn load_album_overviews(
     )
     .bind(ALBUM_COVER_LIMIT)
     .fetch_all(db)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     let mut cover_ids_by_album: HashMap<String, Vec<String>> = HashMap::new();
     for row in cover_rows {
@@ -91,11 +90,7 @@ pub(crate) async fn load_album_overviews(
             separated.push_bind(id);
         }
         separated.push_unseparated(")");
-        let items = qb
-            .build_query_as::<MediaItem>()
-            .fetch_all(db)
-            .await
-            .map_err(|e| e.to_string())?;
+        let items = qb.build_query_as::<MediaItem>().fetch_all(db).await?;
         for item in items {
             items_by_id.insert(item.id.clone(), item);
         }
@@ -124,15 +119,14 @@ pub(crate) async fn load_album_overviews(
 }
 
 #[tauri::command]
-pub async fn get_albums(catalog: State<'_, crate::Catalog>) -> Result<Vec<Album>, String> {
+pub async fn get_albums(catalog: State<'_, crate::Catalog>) -> Result<Vec<Album>, CommandError> {
     let db = super::get_db(&catalog)?;
     let mut albums = sqlx::query_as::<_, Album>(&format!(
         "{} ORDER BY a.created_at ASC",
         super::ALBUM_SELECT
     ))
     .fetch_all(&db)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     // Hydrate item_ids per album from album_items join table.
     let album_ids: Vec<String> = albums.iter().map(|a| a.id.clone()).collect();
@@ -148,8 +142,7 @@ pub async fn get_albums(catalog: State<'_, crate::Catalog>) -> Result<Vec<Album>
         let rows = qb
             .build_query_as::<(String, String)>()
             .fetch_all(&db)
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
         let mut by_album: HashMap<String, Vec<String>> = HashMap::new();
         for (album_id, media_id) in rows {
             by_album.entry(album_id).or_default().push(media_id);
@@ -167,11 +160,13 @@ pub async fn create_album(
     name: String,
     color_index: Option<i32>,
     catalog: State<'_, crate::Catalog>,
-) -> Result<Album, String> {
+) -> Result<Album, CommandError> {
     let db = super::get_db(&catalog)?;
     let name = name.trim().to_string();
     if name.is_empty() {
-        return Err("Album name cannot be empty".to_string());
+        return Err(CommandError::internal(
+            "Album name cannot be empty".to_string(),
+        ));
     }
     let album = Album::new(name, color_index.unwrap_or(0));
     sqlx::query(
@@ -183,8 +178,7 @@ pub async fn create_album(
     .bind(album.created_at)
     .bind(album.updated_at)
     .execute(&db)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     Ok(album)
 }
 
@@ -192,13 +186,12 @@ pub async fn create_album(
 pub async fn delete_album(
     album_id: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
     sqlx::query("DELETE FROM albums WHERE id = ?")
         .bind(&album_id)
         .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(())
 }
 
@@ -207,22 +200,21 @@ pub async fn rename_album(
     album_id: String,
     name: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
     sqlx::query("UPDATE albums SET name = ?, updated_at = ? WHERE id = ?")
         .bind(&name)
         .bind(super::now_ms())
         .bind(&album_id)
         .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(())
 }
 
 async fn fetch_album_items(
     db: &sqlx::SqlitePool,
     album_id: &str,
-) -> Result<Vec<MediaItem>, String> {
+) -> Result<Vec<MediaItem>, CommandError> {
     // `SELECT m.*` keeps this query in sync with MediaItem's row mapper.
     // Listing columns by hand previously dropped `is_animated` and
     // `content_signature`, so every album open failed to decode a row.
@@ -235,8 +227,7 @@ async fn fetch_album_items(
     )
     .bind(album_id)
     .fetch_all(db)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     Ok(items)
 }
 
@@ -244,7 +235,7 @@ async fn fetch_album_items(
 pub async fn get_album_items(
     album_id: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<Vec<MediaItem>, String> {
+) -> Result<Vec<MediaItem>, CommandError> {
     let db = super::get_db(&catalog)?;
     fetch_album_items(&db, &album_id).await
 }
@@ -254,7 +245,7 @@ pub async fn add_to_album(
     album_id: String,
     item_ids: Vec<String>,
     catalog: State<'_, crate::Catalog>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
     for item_id in &item_ids {
         sqlx::query(
@@ -264,8 +255,7 @@ pub async fn add_to_album(
         .bind(item_id)
         .bind(super::now_ms())
         .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     }
     Ok(())
 }
@@ -275,15 +265,14 @@ pub async fn remove_from_album(
     album_id: String,
     item_ids: Vec<String>,
     catalog: State<'_, crate::Catalog>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
     for item_id in &item_ids {
         sqlx::query("DELETE FROM album_items WHERE album_id = ? AND media_id = ?")
             .bind(&album_id)
             .bind(item_id)
             .execute(&db)
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
     }
     Ok(())
 }

@@ -1,4 +1,6 @@
 import { useEffect, useState, useRef } from "react";
+import type { ErrorCode } from "../../../engine/types/commands";
+import { errorCode } from "../../../engine/types/errors";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { FolderIcon, ShieldIcon } from "../icons";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
@@ -15,7 +17,7 @@ import type { RootPathMappingPreview } from "../../../engine/types/commands";
 export function RootPathMapping(props: {
   suggestedOldRoot?: string | null;
   onApplied: () => void | Promise<void>;
-  showNotice: (text: string) => void;
+  showNotice: (text: string, code?: ErrorCode) => void;
 }) {
   const [oldRoot, setOldRoot] = useState("");
   const [newRoot, setNewRoot] = useState("");
@@ -49,6 +51,7 @@ export function RootPathMapping(props: {
         `Could not open the folder picker: ${
           error instanceof Error ? error.message : String(error)
         }`,
+        errorCode(error) ?? "dialog",
       );
     }
   };
@@ -71,6 +74,7 @@ export function RootPathMapping(props: {
       setPreview(null);
       props.showNotice(
         `Could not preview the mapping: ${error instanceof Error ? error.message : String(error)}`,
+        errorCode(error) ?? "internal",
       );
     } finally {
       setBusy(false);
@@ -91,6 +95,7 @@ export function RootPathMapping(props: {
     } catch (error) {
       props.showNotice(
         `Could not apply the mapping: ${error instanceof Error ? error.message : String(error)}`,
+        errorCode(error) ?? "internal",
       );
     } finally {
       setBusy(false);

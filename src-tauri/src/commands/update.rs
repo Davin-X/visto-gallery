@@ -1,4 +1,5 @@
 use super::*;
+use crate::errors::CommandError;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use ts_rs::TS;
@@ -50,7 +51,7 @@ struct GithubAsset {
 pub async fn check_updates(
     catalog: State<'_, crate::Catalog>,
     force: Option<bool>,
-) -> Result<UpdateCheck, String> {
+) -> Result<UpdateCheck, CommandError> {
     let db = super::get_db(&catalog)?;
     let now = super::now_ms();
     let current = env!("CARGO_PKG_VERSION").to_string();
@@ -66,31 +67,40 @@ pub async fn check_updates(
     Ok(result)
 }
 
-async fn fetch_latest(now: i64, current: &str) -> Result<UpdateCheck, String> {
+async fn fetch_latest(now: i64, current: &str) -> Result<UpdateCheck, CommandError> {
     let client = reqwest::Client::builder()
         .user_agent(format!("VistoGallery/{}", current))
         .timeout(std::time::Duration::from_secs(10))
         .build()
-        .map_err(|e| format!("Could not create update client: {}", e))?;
+        .map_err(|e| {
+            CommandError::new(
+                ErrorCode::Network,
+                format!("Could not create update client: {}", e),
+            )
+        })?;
 
     let response = client
         .get(RELEASES_URL)
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
-        .map_err(|e| format!("Could not reach GitHub: {}", e))?;
+        .map_err(|e| {
+            CommandError::new(ErrorCode::Network, format!("Could not reach GitHub: {}", e))
+        })?;
 
     if !response.status().is_success() {
-        return Err(format!(
+        return Err(CommandError::internal(format!(
             "GitHub returned {} while checking for updates",
             response.status()
-        ));
+        )));
     }
 
-    let release: GithubRelease = response
-        .json()
-        .await
-        .map_err(|e| format!("Could not read the release response: {}", e))?;
+    let release: GithubRelease = response.json().await.map_err(|e| {
+        CommandError::new(
+            ErrorCode::Network,
+            format!("Could not read the release response: {}", e),
+        )
+    })?;
 
     Ok(build_result(release, current, now))
 }
@@ -149,12 +159,11 @@ async fn read_cache(
     db: &SqlitePool,
     now: i64,
     current: &str,
-) -> Result<Option<UpdateCheck>, String> {
+) -> Result<Option<UpdateCheck>, CommandError> {
     let value: Option<String> = sqlx::query_scalar("SELECT value FROM settings WHERE key = ?")
         .bind(CACHE_KEY)
         .fetch_optional(db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     let Some(value) = value else {
         return Ok(None);
@@ -177,14 +186,13 @@ async fn read_cache(
     }
 }
 
-async fn write_cache(db: &SqlitePool, result: &UpdateCheck) -> Result<(), String> {
-    let value = serde_json::to_string(result).map_err(|e| e.to_string())?;
+async fn write_cache(db: &SqlitePool, result: &UpdateCheck) -> Result<(), CommandError> {
+    let value = serde_json::to_string(result)?;
     sqlx::query("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)")
         .bind(CACHE_KEY)
         .bind(value)
         .execute(db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(())
 }
 

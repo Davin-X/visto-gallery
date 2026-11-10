@@ -1,4 +1,5 @@
 use super::*;
+use crate::errors::{CommandError, ErrorCode};
 use crate::{models::*, AppState};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
@@ -18,7 +19,7 @@ pub async fn scan_library(
     catalog: State<'_, crate::Catalog>,
     state: State<'_, AppState>,
     window: Window,
-) -> Result<ScanResult, String> {
+) -> Result<ScanResult, CommandError> {
     {
         let db = super::get_db(&catalog)?;
         super::authorize_import_path(&root_path, &db, &state.grants).await?;
@@ -31,10 +32,17 @@ pub async fn scan_library(
         .root_lock(&super::normalize_root(&root_path));
     let _root_guard = root_lock.lock().await;
     let root = PathBuf::from(&root_path);
-    let root_metadata = std::fs::metadata(&root)
-        .map_err(|error| format!("Cannot access source folder '{}': {error}", root.display()))?;
+    let root_metadata = std::fs::metadata(&root).map_err(|error| {
+        CommandError::io(format!(
+            "Cannot access source folder '{}': {error}",
+            root.display()
+        ))
+    })?;
     if !root_metadata.is_dir() {
-        return Err(format!("Source path is not a folder: {}", root.display()));
+        return Err(CommandError::io(format!(
+            "Source path is not a folder: {}",
+            root.display()
+        )));
     }
     // Remove app-created temp exports left by a crash/failed write. Only files
     // matching `<name>.tmp-<uuid>` and older than the grace period are touched.
@@ -67,8 +75,7 @@ pub async fn scan_library(
         .bind(&prefix)
         .bind(&prefix)
         .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?
+        .await?
         .into_iter()
         .map(|(path, size, modified_at)| (path, (size, modified_at)))
         .collect()
@@ -81,17 +88,17 @@ pub async fn scan_library(
     let (media_paths, walk_error) =
         tokio::task::spawn_blocking(move || collect_media_paths(&walk_root, &walk_cancel))
             .await
-            .map_err(|e| format!("Scan worker failed: {e}"))?;
+            .map_err(|e| CommandError::internal(format!("Scan worker failed: {e}")))?;
     let had_walk_error = walk_error.is_some();
     for p in &media_paths {
         seen_paths.insert(p.to_string_lossy().into_owned());
     }
     if media_paths.is_empty() && !job.is_cancelled() {
         if let Some(error) = walk_error {
-            return Err(format!(
+            return Err(CommandError::internal(format!(
                 "Could not read media in '{}': {error}. Check the folder's macOS access permissions.",
                 root.display()
-            ));
+            )));
         }
     }
     // A file moved or renamed inside this source is the same item, not a delete
@@ -119,7 +126,7 @@ pub async fn scan_library(
             inspect_scan_chunk(&chunk, &known, force, now, &chunk_cancel)
         })
         .await
-        .map_err(|e| format!("Scan worker failed: {e}"))?;
+        .map_err(|e| CommandError::internal(format!("Scan worker failed: {e}")))?;
         let batch = scanned.batch;
         let completed_in_batch = scanned.completed;
         total_size += scanned.size;
@@ -184,12 +191,10 @@ pub async fn scan_library(
     // call that imports, instead of staying empty until a separate round-trip.
     let albums = sqlx::query_as::<_, Album>(&format!("{} ORDER BY a.created_at ASC", ALBUM_SELECT))
         .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     let tags = sqlx::query_as::<_, Tag>(&format!("{} ORDER BY t.name ASC", TAG_SELECT))
         .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     Ok(ScanResult {
         items,
@@ -307,7 +312,7 @@ pub async fn import_files(
     state: State<'_, AppState>,
     window: Window,
     app: tauri::AppHandle,
-) -> Result<ScanResult, String> {
+) -> Result<ScanResult, CommandError> {
     let db = super::get_db(&catalog)?;
     for raw in &paths {
         super::authorize_import_path(raw, &db, &state.grants).await?;
@@ -343,7 +348,7 @@ pub async fn import_files(
         tmp
     })
     .await
-    .map_err(|e| format!("Import worker failed: {e}"))?;
+    .map_err(|e| CommandError::internal(format!("Import worker failed: {e}")))?;
     let total = all_paths.len() as u64;
 
     for path in all_paths {
@@ -387,12 +392,10 @@ pub async fn import_files(
 
     let albums = sqlx::query_as::<_, Album>(&format!("{} ORDER BY a.created_at ASC", ALBUM_SELECT))
         .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     let tags = sqlx::query_as::<_, Tag>(&format!("{} ORDER BY t.name ASC", TAG_SELECT))
         .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     let discovered_count = items.len();
     if discovered_count > 0 {
@@ -447,7 +450,7 @@ fn cursor_value(item: &MediaItem, sort_by: &str) -> Value {
 pub async fn get_library_items(
     filter: Option<super::LibraryFilterDTO>,
     catalog: State<'_, crate::Catalog>,
-) -> Result<LibraryItemsPage, String> {
+) -> Result<LibraryItemsPage, CommandError> {
     let db = super::get_db(&catalog)?;
     let f = filter.unwrap_or_default();
     get_library_items_page(&db, f).await
@@ -459,14 +462,14 @@ pub async fn get_library_items(
 #[tauri::command]
 pub async fn get_hidden_items(
     catalog: State<'_, crate::Catalog>,
-) -> Result<LibraryItemsPage, String> {
+) -> Result<LibraryItemsPage, CommandError> {
     let db = super::get_db(&catalog)?;
     let mut items: Vec<MediaItem> = sqlx::query_as(
         "SELECT * FROM media_items WHERE hidden = 1 ORDER BY COALESCE(captured_at, modified_at) DESC",
     )
     .fetch_all(&db)
     .await
-    .map_err(|e| e.to_string())?;
+    ?;
     hydrate_relations(&db, &mut items).await?;
     let total_count = items.len() as i64;
     Ok(LibraryItemsPage {
@@ -581,7 +584,7 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
 pub(crate) async fn get_library_items_page(
     db: &SqlitePool,
     mut f: super::LibraryFilterDTO,
-) -> Result<LibraryItemsPage, String> {
+) -> Result<LibraryItemsPage, CommandError> {
     // Hidden items stay out of every view unless the caller asks for them, so
     // the items and the count always describe the same set. Smart Albums pass
     // no `hidden` value and used to page hidden items while counting none.
@@ -615,14 +618,14 @@ pub(crate) async fn get_library_items_page(
     };
     if let Some(raw_cursor) = f.cursor.as_deref() {
         let cursor: LibraryCursor = serde_json::from_str(raw_cursor)
-            .map_err(|_| "Invalid library page cursor".to_string())?;
+            .map_err(|_| CommandError::invalid("Invalid library page cursor".to_string()))?;
         let comparison = if dir == "ASC" { ">" } else { "<" };
         match sort_by {
             "name" => {
                 let value = cursor
                     .value
                     .as_str()
-                    .ok_or("Invalid name cursor")?
+                    .ok_or_else(|| CommandError::invalid("Invalid name cursor"))?
                     .to_string();
                 qb.push(" AND (name COLLATE NOCASE ")
                     .push(comparison)
@@ -638,7 +641,7 @@ pub(crate) async fn get_library_items_page(
                 let value = cursor
                     .value
                     .as_str()
-                    .ok_or("Invalid kind cursor")?
+                    .ok_or_else(|| CommandError::invalid("Invalid kind cursor"))?
                     .to_string();
                 qb.push(" AND (kind ")
                     .push(comparison)
@@ -651,7 +654,10 @@ pub(crate) async fn get_library_items_page(
                     .push("))");
             }
             "size" => {
-                let value = cursor.value.as_i64().ok_or("Invalid size cursor")?;
+                let value = cursor
+                    .value
+                    .as_i64()
+                    .ok_or_else(|| CommandError::invalid("Invalid size cursor"))?;
                 qb.push(" AND (size ")
                     .push(comparison)
                     .push(" ")
@@ -666,7 +672,7 @@ pub(crate) async fn get_library_items_page(
                 let value = cursor
                     .value
                     .as_i64()
-                    .ok_or("Invalid modified date cursor")?;
+                    .ok_or_else(|| CommandError::invalid("Invalid modified date cursor"))?;
                 qb.push(" AND (modified_at ")
                     .push(comparison)
                     .push(" ")
@@ -678,7 +684,10 @@ pub(crate) async fn get_library_items_page(
                     .push("))");
             }
             _ => {
-                let value = cursor.value.as_i64().ok_or("Invalid capture date cursor")?;
+                let value = cursor
+                    .value
+                    .as_i64()
+                    .ok_or_else(|| CommandError::invalid("Invalid capture date cursor"))?;
                 qb.push(" AND (COALESCE(captured_at, modified_at) ")
                     .push(comparison)
                     .push(" ")
@@ -702,11 +711,7 @@ pub(crate) async fn get_library_items_page(
     // Fetch one extra row solely to determine whether another page exists.
     qb.push(" LIMIT ").push_bind((page_size + 1) as i64);
 
-    let mut items = qb
-        .build_query_as::<MediaItem>()
-        .fetch_all(db)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut items = qb.build_query_as::<MediaItem>().fetch_all(db).await?;
 
     let has_more = items.len() > page_size;
     if has_more {
@@ -724,11 +729,7 @@ pub(crate) async fn get_library_items_page(
         None
     };
 
-    let total_count: i64 = count_qb
-        .build_query_scalar::<i64>()
-        .fetch_one(db)
-        .await
-        .map_err(|e| e.to_string())?;
+    let total_count: i64 = count_qb.build_query_scalar::<i64>().fetch_one(db).await?;
 
     hydrate_relations(db, &mut items).await?;
     Ok(LibraryItemsPage {
@@ -741,7 +742,7 @@ pub(crate) async fn get_library_items_page(
 
 /// Attach tags and album ids to a page of items using filtered queries.
 /// Only fetches relations for the given item IDs (keyset pagination friendly).
-async fn hydrate_relations(db: &SqlitePool, items: &mut [MediaItem]) -> Result<(), String> {
+async fn hydrate_relations(db: &SqlitePool, items: &mut [MediaItem]) -> Result<(), CommandError> {
     if items.is_empty() {
         return Ok(());
     }
@@ -768,7 +769,7 @@ async fn hydrate_relations(db: &SqlitePool, items: &mut [MediaItem]) -> Result<(
         for id in ids {
             tag_query = tag_query.bind(*id);
         }
-        for (media_id, name) in tag_query.fetch_all(db).await.map_err(|e| e.to_string())? {
+        for (media_id, name) in tag_query.fetch_all(db).await? {
             tags_by_item.entry(media_id).or_default().push(name);
         }
 
@@ -780,7 +781,7 @@ async fn hydrate_relations(db: &SqlitePool, items: &mut [MediaItem]) -> Result<(
         for id in ids {
             album_query = album_query.bind(*id);
         }
-        for (media_id, album_id) in album_query.fetch_all(db).await.map_err(|e| e.to_string())? {
+        for (media_id, album_id) in album_query.fetch_all(db).await? {
             albums_by_item.entry(media_id).or_default().push(album_id);
         }
     }
@@ -826,9 +827,11 @@ pub async fn get_item_thumbnail(
     request: ThumbnailRequest,
     app: AppHandle,
     catalog: State<'_, crate::Catalog>,
-) -> Result<ThumbnailResponse, String> {
+) -> Result<ThumbnailResponse, CommandError> {
     if !matches!(request.size, 64 | 128 | 256 | 512 | 1024) {
-        return Err("Unsupported thumbnail size".to_string());
+        return Err(CommandError::invalid(
+            "Unsupported thumbnail size".to_string(),
+        ));
     }
 
     let db = super::get_db(&catalog)?;
@@ -837,21 +840,14 @@ pub async fn get_item_thumbnail(
     )
     .bind(&request.item_id)
     .fetch_optional(&db)
-    .await
-    .map_err(|error| error.to_string())?
+    .await?
     .ok_or_else(|| "Item not found in library".to_string())?;
 
     let quality = request.quality.unwrap_or(78).clamp(1, 100);
     let max_cache_bytes = request.max_cache_bytes.unwrap_or(512 * 1024 * 1024);
 
-    let cache_root = app
-        .path()
-        .app_cache_dir()
-        .map_err(|error| error.to_string())?
-        .join("thumbnails");
-    tokio::fs::create_dir_all(&cache_root)
-        .await
-        .map_err(|error| error.to_string())?;
+    let cache_root = app.path().app_cache_dir()?.join("thumbnails");
+    tokio::fs::create_dir_all(&cache_root).await?;
     let cache_key = thumbnail_cache_key(
         &request.item_id,
         item.2,
@@ -889,7 +885,7 @@ pub async fn get_item_thumbnail(
             )
         })
         .await
-        .map_err(|error| format!("Thumbnail worker failed: {error}"))??;
+        .map_err(|error| CommandError::internal(format!("Thumbnail worker failed: {error}")))??;
         maybe_prune_thumbnail_cache(cache_root.clone(), max_cache_bytes);
         generated
     };
@@ -1014,7 +1010,7 @@ pub(crate) fn generate_cached_thumbnail(
     source_size: i64,
     quality: u8,
     kind: &str,
-) -> Result<(Vec<u8>, u32, u32), String> {
+) -> Result<(Vec<u8>, u32, u32), CommandError> {
     #[cfg(target_os = "macos")]
     {
         // RAW files: try macOS ImageIO (sips) which supports some RAW via Camera Raw.
@@ -1053,9 +1049,14 @@ pub(crate) fn generate_cached_thumbnail(
         return generate_placeholder_thumbnail(destination, size, kind);
     }
     let reader = image::ImageReader::open(source)
-        .map_err(|error| format!("Could not read photo: {error}"))?
+        .map_err(|error| CommandError::io(format!("Could not read photo: {error}")))?
         .with_guessed_format()
-        .map_err(|error| format!("Could not identify photo format: {error}"))?;
+        .map_err(|error| {
+            CommandError::new(
+                ErrorCode::UnsupportedFormat,
+                format!("Could not identify photo format: {error}"),
+            )
+        })?;
     let mut decoder = match reader.into_decoder() {
         Ok(decoder) => decoder,
         Err(error) => {
@@ -1079,10 +1080,10 @@ pub(crate) fn generate_cached_thumbnail(
     let mut bytes = Vec::new();
     JpegEncoder::new_with_quality(&mut bytes, quality)
         .encode(&thumbnail, width, height, image::ExtendedColorType::Rgb8)
-        .map_err(|error| format!("Could not encode thumbnail: {error}"))?;
+        .map_err(|error| CommandError::io(format!("Could not encode thumbnail: {error}")))?;
 
     let temporary = destination.with_extension(format!("{}.tmp", Uuid::new_v4()));
-    std::fs::write(&temporary, &bytes).map_err(|error| error.to_string())?;
+    std::fs::write(&temporary, &bytes)?;
     commit_thumbnail_file(&temporary, destination)?;
     Ok((bytes, width, height))
 }
@@ -1093,7 +1094,7 @@ fn generate_placeholder_thumbnail(
     destination: &Path,
     size: u32,
     kind: &str,
-) -> Result<(Vec<u8>, u32, u32), String> {
+) -> Result<(Vec<u8>, u32, u32), CommandError> {
     use image::{Rgb, RgbImage};
     let color = match kind {
         "raw" => Rgb([120, 110, 90]),   // warm gray for RAW
@@ -1105,10 +1106,12 @@ fn generate_placeholder_thumbnail(
     let mut bytes = Vec::new();
     JpegEncoder::new_with_quality(&mut bytes, 78)
         .encode(&img, width, height, image::ExtendedColorType::Rgb8)
-        .map_err(|error| format!("Could not encode placeholder thumbnail: {error}"))?;
+        .map_err(|error| {
+            CommandError::io(format!("Could not encode placeholder thumbnail: {error}"))
+        })?;
 
     let temporary = destination.with_extension(format!("{}.tmp", Uuid::new_v4()));
-    std::fs::write(&temporary, &bytes).map_err(|error| error.to_string())?;
+    std::fs::write(&temporary, &bytes)?;
     commit_thumbnail_file(&temporary, destination)?;
     Ok((bytes, width, height))
 }
@@ -1120,12 +1123,12 @@ fn generate_thumbnail_with_qlmanage(
     source: &str,
     destination: &Path,
     size: u32,
-) -> Result<(Vec<u8>, u32, u32), String> {
+) -> Result<(Vec<u8>, u32, u32), CommandError> {
     use std::process::Command;
 
     let tmp_dir = std::env::temp_dir().join(format!("visto-qlmanage-{}", Uuid::new_v4()));
     std::fs::create_dir_all(&tmp_dir)
-        .map_err(|error| format!("Could not create temp dir: {error}"))?;
+        .map_err(|error| CommandError::io(format!("Could not create temp dir: {error}")))?;
 
     let mut child = Command::new("/usr/bin/qlmanage")
         .args([
@@ -1139,7 +1142,7 @@ fn generate_thumbnail_with_qlmanage(
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .map_err(|error| format!("qlmanage not available: {error}"))?;
+        .map_err(|error| CommandError::internal(format!("qlmanage not available: {error}")))?;
 
     // QuickLook can hang on large or exotic video containers (a multi-GB MKV
     // is a real example), so cap the wait instead of occupying a thumbnail
@@ -1156,18 +1159,24 @@ fn generate_thumbnail_with_qlmanage(
                 let _ = child.kill();
                 let _ = child.wait();
                 let _ = std::fs::remove_dir_all(&tmp_dir);
-                return Err("qlmanage thumbnail timed out".to_string());
+                return Err(CommandError::internal(
+                    "qlmanage thumbnail timed out".to_string(),
+                ));
             }
             Err(error) => {
                 let _ = std::fs::remove_dir_all(&tmp_dir);
-                return Err(format!("qlmanage thumbnail failed: {error}"));
+                return Err(CommandError::internal(format!(
+                    "qlmanage thumbnail failed: {error}"
+                )));
             }
         }
     };
 
     if !status.success() {
         let _ = std::fs::remove_dir_all(&tmp_dir);
-        return Err("qlmanage thumbnail failed".to_string());
+        return Err(CommandError::internal(
+            "qlmanage thumbnail failed".to_string(),
+        ));
     }
 
     let result = (|| {
@@ -1182,23 +1191,35 @@ fn normalize_qlmanage_thumbnail(
     source: &Path,
     destination: &Path,
     size: u32,
-) -> Result<(Vec<u8>, u32, u32), String> {
+) -> Result<(Vec<u8>, u32, u32), CommandError> {
     let image = image::ImageReader::open(source)
-        .map_err(|error| format!("Could not read QuickLook thumbnail: {error}"))?
+        .map_err(|error| CommandError::io(format!("Could not read QuickLook thumbnail: {error}")))?
         .with_guessed_format()
-        .map_err(|error| format!("Could not identify QuickLook thumbnail: {error}"))?
+        .map_err(|error| {
+            CommandError::new(
+                ErrorCode::UnsupportedFormat,
+                format!("Could not identify QuickLook thumbnail: {error}"),
+            )
+        })?
         .decode()
-        .map_err(|error| format!("Could not decode QuickLook thumbnail: {error}"))?
+        .map_err(|error| {
+            CommandError::new(
+                ErrorCode::UnsupportedFormat,
+                format!("Could not decode QuickLook thumbnail: {error}"),
+            )
+        })?
         .thumbnail(size, size)
         .to_rgb8();
     let (width, height) = (image.width(), image.height());
     let mut bytes = Vec::new();
     JpegEncoder::new_with_quality(&mut bytes, 78)
         .encode(&image, width, height, image::ExtendedColorType::Rgb8)
-        .map_err(|error| format!("Could not encode QuickLook thumbnail: {error}"))?;
+        .map_err(|error| {
+            CommandError::io(format!("Could not encode QuickLook thumbnail: {error}"))
+        })?;
 
     let temporary = destination.with_extension(format!("{}.tmp", Uuid::new_v4()));
-    std::fs::write(&temporary, &bytes).map_err(|error| error.to_string())?;
+    std::fs::write(&temporary, &bytes)?;
     commit_thumbnail_file(&temporary, destination)?;
     Ok((bytes, width, height))
 }
@@ -1208,23 +1229,29 @@ fn generate_thumbnail_with_qlmanage(
     _source: &str,
     _destination: &Path,
     _size: u32,
-) -> Result<(Vec<u8>, u32, u32), String> {
-    Err("qlmanage not available on this platform".to_string())
+) -> Result<(Vec<u8>, u32, u32), CommandError> {
+    Err(CommandError::internal(
+        "qlmanage not available on this platform".to_string(),
+    ))
 }
 
 /// Find the newest decodable image generated by QuickLook. `qlmanage` commonly
 /// writes PNG files even though our thumbnail cache is JPEG.
-fn find_qlmanage_output(dir: &Path) -> Result<std::path::PathBuf, String> {
+fn find_qlmanage_output(dir: &Path) -> Result<std::path::PathBuf, CommandError> {
     let mut best: Option<std::path::PathBuf> = None;
     let mut best_time = std::time::UNIX_EPOCH;
     let entries = std::fs::read_dir(dir)
-        .map_err(|error| format!("Could not read QuickLook output: {error}"))?;
+        .map_err(|error| CommandError::io(format!("Could not read QuickLook output: {error}")))?;
     for entry in entries {
-        let entry = entry.map_err(|error| format!("Could not read QuickLook output: {error}"))?;
+        let entry = entry.map_err(|error| {
+            CommandError::io(format!("Could not read QuickLook output: {error}"))
+        })?;
         let path = entry.path();
         if !entry
             .file_type()
-            .map_err(|error| format!("Could not inspect QuickLook output: {error}"))?
+            .map_err(|error| {
+                CommandError::io(format!("Could not inspect QuickLook output: {error}"))
+            })?
             .is_file()
             || image::image_dimensions(&path).is_err()
         {
@@ -1240,7 +1267,7 @@ fn find_qlmanage_output(dir: &Path) -> Result<std::path::PathBuf, String> {
             best = Some(path);
         }
     }
-    best.ok_or_else(|| "qlmanage output not found".to_string())
+    best.ok_or_else(|| CommandError::not_found("qlmanage output not found"))
 }
 
 #[cfg(test)]
@@ -1298,14 +1325,16 @@ mod qlmanage_thumbnail_tests {
         fs::write(root.join("video.mov.txt"), b"not an image").expect("write non-image file");
 
         assert_eq!(
-            find_qlmanage_output(&root).expect_err("no image should be found"),
+            find_qlmanage_output(&root)
+                .expect_err("no image should be found")
+                .message,
             "qlmanage output not found"
         );
         fs::remove_dir_all(&root).expect("remove test directory");
     }
 }
 
-fn commit_thumbnail_file(temporary: &Path, destination: &Path) -> Result<(), String> {
+fn commit_thumbnail_file(temporary: &Path, destination: &Path) -> Result<(), CommandError> {
     match std::fs::rename(temporary, destination) {
         Ok(()) => {}
         Err(_) if destination.exists() => {
@@ -1313,7 +1342,7 @@ fn commit_thumbnail_file(temporary: &Path, destination: &Path) -> Result<(), Str
         }
         Err(error) => {
             let _ = std::fs::remove_file(temporary);
-            return Err(error.to_string());
+            return Err(CommandError::internal(error.to_string()));
         }
     }
     Ok(())
@@ -1328,7 +1357,7 @@ fn generate_with_macos_sips(
     size: u32,
     quality: u8,
     reason: &str,
-) -> Result<(Vec<u8>, u32, u32), String> {
+) -> Result<(Vec<u8>, u32, u32), CommandError> {
     use std::process::Command;
 
     let temporary = destination.with_extension(format!("{}.tmp.jpg", Uuid::new_v4()));
@@ -1353,23 +1382,23 @@ fn generate_with_macos_sips(
     if !output.status.success() {
         let _ = std::fs::remove_file(&temporary);
         let detail = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
+        return Err(CommandError::internal(format!(
             "Could not create thumbnail ({reason}): {}",
             detail.trim()
-        ));
+        )));
     }
     let dimensions = match image::image_dimensions(&temporary) {
         Ok(dimensions) => dimensions,
         Err(error) => {
             let _ = std::fs::remove_file(&temporary);
-            return Err(error.to_string());
+            return Err(CommandError::internal(error.to_string()));
         }
     };
     let bytes = match std::fs::read(&temporary) {
         Ok(bytes) => bytes,
         Err(error) => {
             let _ = std::fs::remove_file(&temporary);
-            return Err(error.to_string());
+            return Err(CommandError::internal(error.to_string()));
         }
     };
     commit_thumbnail_file(&temporary, destination)?;
@@ -1382,8 +1411,10 @@ fn generate_with_macos_sips(
     _destination: &Path,
     _size: u32,
     reason: &str,
-) -> Result<(Vec<u8>, u32, u32), String> {
-    Err(format!("Could not create thumbnail ({reason})"))
+) -> Result<(Vec<u8>, u32, u32), CommandError> {
+    Err(CommandError::internal(format!(
+        "Could not create thumbnail ({reason})"
+    )))
 }
 
 #[tauri::command]
@@ -1391,12 +1422,15 @@ pub async fn watch_folder(
     path: String,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     // A source deleted outside the app is "missing", not an access error.
     // Report it distinctly so the frontend can skip the permissions notice and
     // avoid recording it as watched (a remounted drive must be watched again).
     if !std::path::Path::new(&path).is_dir() {
-        return Err(format!("MISSING_SOURCE:{path}"));
+        return Err(CommandError::new(
+            ErrorCode::MissingSource,
+            format!("The library source is not available: {path}"),
+        ));
     }
     let app_handle = app.clone();
     let watch_path = path.clone();
@@ -1419,22 +1453,19 @@ pub async fn watch_folder(
                     );
                 }
             }
-        })
-        .map_err(|e| e.to_string())?;
-    watcher
-        .watch(
-            std::path::Path::new(&path),
-            notify::RecursiveMode::Recursive,
-        )
-        .map_err(|e| e.to_string())?;
-    let mut guard = state.watchers.lock().map_err(|e| e.to_string())?;
+        })?;
+    watcher.watch(
+        std::path::Path::new(&path),
+        notify::RecursiveMode::Recursive,
+    )?;
+    let mut guard = state.watchers.lock()?;
     guard.insert(path, watcher);
     Ok(())
 }
 
 #[tauri::command]
-pub async fn unwatch_folder(path: String, state: State<'_, AppState>) -> Result<(), String> {
-    let mut guard = state.watchers.lock().map_err(|e| e.to_string())?;
+pub async fn unwatch_folder(path: String, state: State<'_, AppState>) -> Result<(), CommandError> {
+    let mut guard = state.watchers.lock()?;
     guard.remove(&path);
     Ok(())
 }
@@ -1444,12 +1475,14 @@ pub async fn unwatch_folder(path: String, state: State<'_, AppState>) -> Result<
 /// Only these are safe to watch: inferred buckets are display groupings and
 /// may point at directories the user never added.
 #[tauri::command]
-pub async fn get_library_roots(catalog: State<'_, crate::Catalog>) -> Result<Vec<String>, String> {
+pub async fn get_library_roots(
+    catalog: State<'_, crate::Catalog>,
+) -> Result<Vec<String>, CommandError> {
     let db = super::get_db(&catalog)?;
     sqlx::query_scalar("SELECT path FROM library_folders ORDER BY path ASC")
         .fetch_all(&db)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(CommandError::from)
 }
 
 /// Group a path that was imported before folder tracking existed.
@@ -1488,24 +1521,22 @@ pub(crate) fn inferred_folder_root(path: &str) -> Option<String> {
 #[tauri::command]
 pub async fn get_library_folders(
     catalog: State<'_, crate::Catalog>,
-) -> Result<Vec<LibraryFolder>, String> {
+) -> Result<Vec<LibraryFolder>, CommandError> {
     let db = super::get_db(&catalog)?;
     get_library_folders_inner(&db).await
 }
 
 pub(crate) async fn get_library_folders_inner(
     db: &SqlitePool,
-) -> Result<Vec<LibraryFolder>, String> {
+) -> Result<Vec<LibraryFolder>, CommandError> {
     let registered: Vec<String> =
         sqlx::query_scalar("SELECT path FROM library_folders ORDER BY path ASC")
             .fetch_all(db)
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
 
     let rows = sqlx::query("SELECT path, size FROM media_items WHERE hidden = 0")
         .fetch_all(db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     // One pass over the catalog: each item lands in exactly one folder.
     let mut registered_sorted = registered.clone();
@@ -1596,7 +1627,9 @@ pub struct LibraryStats {
 }
 
 #[tauri::command]
-pub async fn get_library_stats(catalog: State<'_, crate::Catalog>) -> Result<LibraryStats, String> {
+pub async fn get_library_stats(
+    catalog: State<'_, crate::Catalog>,
+) -> Result<LibraryStats, CommandError> {
     let db = super::get_db(&catalog)?;
     let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
         "SELECT
@@ -1617,7 +1650,7 @@ pub async fn get_library_stats(catalog: State<'_, crate::Catalog>) -> Result<Lib
     )
     .fetch_one(&db)
     .await
-    .map_err(|e| e.to_string())?;
+    ?;
 
     let (
         photos,
@@ -1665,21 +1698,24 @@ pub async fn remove_library_folder(
     path: String,
     delete_files: Option<bool>,
     catalog: State<'_, crate::Catalog>,
-) -> Result<i64, String> {
+) -> Result<i64, CommandError> {
     let db = super::get_db(&catalog)?;
     let root = super::normalize_root(&path);
     if root.is_empty() {
-        return Err("Refusing to remove an empty folder path".to_string());
+        return Err(CommandError::invalid(
+            "Refusing to remove an empty folder path".to_string(),
+        ));
     }
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
         .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     if !registered
         .iter()
         .any(|registered_path| super::normalize_root(registered_path) == root)
     {
-        return Err("Folder is not a registered library root.".to_string());
+        return Err(CommandError::path(
+            "Folder is not a registered library root.".to_string(),
+        ));
     }
 
     let rows = sqlx::query(
@@ -1689,8 +1725,7 @@ pub async fn remove_library_folder(
     .bind(root.len() as i64)
     .bind(&root)
     .fetch_all(&db)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     let targets: Vec<(String, String)> = rows
         .iter()
@@ -1713,7 +1748,9 @@ pub async fn remove_library_folder(
                     let p = path.clone();
                     let r = tokio::task::spawn_blocking(move || trash::delete(&p)).await;
                     if r.is_err() || r.unwrap().is_err() {
-                        return Err("Could not move files to Trash".to_string());
+                        return Err(CommandError::io(
+                            "Could not move files to Trash".to_string(),
+                        ));
                     }
                 }
             } else if false {
@@ -1721,13 +1758,15 @@ pub async fn remove_library_folder(
                     let p = path.clone();
                     let r = tokio::task::spawn_blocking(move || trash::delete(&p)).await;
                     if r.is_err() || r.unwrap().is_err() {
-                        return Err("Could not move files to Trash".to_string());
+                        return Err(CommandError::io(
+                            "Could not move files to Trash".to_string(),
+                        ));
                     }
                 }
             }
         }
     }
-    let mut tx = db.begin().await.map_err(|e| e.to_string())?;
+    let mut tx = db.begin().await?;
 
     // Clean up join rows explicitly instead of relying on foreign-key cascades
     // being enabled on this particular pooled connection.
@@ -1737,11 +1776,7 @@ pub async fn remove_library_folder(
             "DELETE FROM album_items WHERE media_id = ?",
             "DELETE FROM media_items WHERE id = ?",
         ] {
-            sqlx::query(statement)
-                .bind(id)
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| e.to_string())?;
+            sqlx::query(statement).bind(id).execute(&mut *tx).await?;
         }
     }
 
@@ -1749,8 +1784,7 @@ pub async fn remove_library_folder(
     // inside it, so a later import is not shadowed by stale entries.
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
         .fetch_all(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     for registered_path in registered {
         if super::normalize_root(&registered_path) == root
             || super::path_is_inside(&registered_path, &root)
@@ -1758,12 +1792,11 @@ pub async fn remove_library_folder(
             sqlx::query("DELETE FROM library_folders WHERE path = ?")
                 .bind(&registered_path)
                 .execute(&mut *tx)
-                .await
-                .map_err(|e| e.to_string())?;
+                .await?;
         }
     }
 
-    tx.commit().await.map_err(|e| e.to_string())?;
+    tx.commit().await?;
 
     Ok(targets.len() as i64)
 }
@@ -1774,15 +1807,14 @@ pub async fn toggle_favorite(
     favorite: bool,
     catalog: State<'_, crate::Catalog>,
     app: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
     let changed = sqlx::query("UPDATE media_items SET favorite = ?, updated_at = ? WHERE id = ?")
         .bind(if favorite { 1i32 } else { 0i32 })
         .bind(super::now_ms())
         .bind(&item_id)
         .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?
+        .await?
         .rows_affected();
     // The Favourites chip and the sidebar read catalog-wide counts from the
     // backend, so this flag change has to ask for them again. The frontend
@@ -1799,15 +1831,14 @@ pub async fn toggle_hidden(
     hidden: bool,
     catalog: State<'_, crate::Catalog>,
     app: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
     let changed = sqlx::query("UPDATE media_items SET hidden = ?, updated_at = ? WHERE id = ?")
         .bind(if hidden { 1i32 } else { 0i32 })
         .bind(super::now_ms())
         .bind(&item_id)
         .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?
+        .await?
         .rows_affected();
     // Hiding changes every catalog-wide count (the stats query ignores hidden
     // rows), so refresh them here rather than waiting for the next scan.
@@ -1823,15 +1854,14 @@ pub async fn set_rating(
     item_id: String,
     rating: i32,
     catalog: State<'_, crate::Catalog>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
     sqlx::query("UPDATE media_items SET rating = ?, updated_at = ? WHERE id = ?")
         .bind(rating)
         .bind(super::now_ms())
         .bind(&item_id)
         .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(())
 }
 
@@ -1842,15 +1872,14 @@ pub async fn set_color_label(
     item_id: String,
     color_label: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
     sqlx::query("UPDATE media_items SET color_label = ?, updated_at = ? WHERE id = ?")
         .bind(color_label)
         .bind(super::now_ms())
         .bind(&item_id)
         .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(())
 }
 
@@ -1860,14 +1889,13 @@ pub async fn apply_item_tags(
     db: &SqlitePool,
     item_id: &str,
     tags: &[String],
-) -> Result<(), String> {
-    let mut tx = db.begin().await.map_err(|e| e.to_string())?;
+) -> Result<(), CommandError> {
+    let mut tx = db.begin().await?;
 
     sqlx::query("DELETE FROM media_tags WHERE media_id = ?")
         .bind(item_id)
         .execute(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     let mut seen = std::collections::HashSet::new();
     for tag_name in tags {
@@ -1883,8 +1911,7 @@ pub async fn apply_item_tags(
             sqlx::query_scalar("SELECT id FROM tags WHERE name = ? COLLATE NOCASE")
                 .bind(trimmed)
                 .fetch_optional(&mut *tx)
-                .await
-                .map_err(|e| e.to_string())?;
+                .await?;
 
         let tag_id = match existing {
             Some(id) => id,
@@ -1897,8 +1924,7 @@ pub async fn apply_item_tags(
                 .bind(trimmed)
                 .bind(super::now_ms())
                 .execute(&mut *tx)
-                .await
-                .map_err(|e| e.to_string())?;
+                .await?;
                 new_id
             }
         };
@@ -1907,11 +1933,10 @@ pub async fn apply_item_tags(
             .bind(item_id)
             .bind(&tag_id)
             .execute(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
     }
 
-    tx.commit().await.map_err(|e| e.to_string())?;
+    tx.commit().await?;
     Ok(())
 }
 
@@ -1920,7 +1945,7 @@ pub async fn update_item_tags(
     item_id: String,
     tags: Vec<String>,
     catalog: State<'_, crate::Catalog>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
     apply_item_tags(&db, &item_id, &tags).await
 }

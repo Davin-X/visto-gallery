@@ -17,6 +17,7 @@ mod smart_albums;
 mod system;
 mod temp_files;
 mod update;
+use crate::errors::{CommandError, ErrorCode};
 use crate::{models::*, Catalog};
 pub use albums::*;
 use anyhow::Result;
@@ -74,7 +75,7 @@ pub use repo::{delete_library_database, get_tags};
 pub(crate) use repo::{relink_moved_items, ALBUM_SELECT, TAG_SELECT};
 // ===== Helper Functions =====
 
-pub(crate) fn get_db(catalog: &State<'_, Catalog>) -> Result<SqlitePool, String> {
+pub(crate) fn get_db(catalog: &State<'_, Catalog>) -> Result<SqlitePool, CommandError> {
     catalog.pool()
 }
 

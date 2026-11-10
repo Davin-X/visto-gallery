@@ -18,6 +18,7 @@ use sqlx::SqlitePool;
 use tauri::State;
 use tauri_plugin_dialog::DialogExt;
 
+use crate::errors::CommandError;
 use crate::AppState;
 
 /// Normalize a folder path so comparisons do not depend on a trailing slash.
@@ -79,14 +80,18 @@ pub(crate) fn is_path_under_registered_roots(path: &str, registered: &[String]) 
 pub fn validate_path_under_registered_roots(
     path: &str,
     registered: &[String],
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     if registered.is_empty() {
-        return Err("No registered library folders; path access denied.".to_string());
+        return Err(CommandError::path(
+            "No registered library folders; path access denied.".to_string(),
+        ));
     }
     if is_path_under_registered_roots(path, registered) {
         Ok(())
     } else {
-        Err("Path is outside registered library folders.".to_string())
+        Err(CommandError::path(
+            "Path is outside registered library folders.".to_string(),
+        ))
     }
 }
 
@@ -127,29 +132,28 @@ pub(crate) async fn authorize_import_path(
     path: &str,
     db: &SqlitePool,
     grants: &GrantedPaths,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     if grants.covers(Path::new(path)) {
         return Ok(());
     }
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
         .fetch_all(db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     if !registered.is_empty() && validate_path_under_registered_roots(path, &registered).is_ok() {
         return Ok(());
     }
     if is_inferred_catalog_folder(path, db).await? {
         return Ok(());
     }
-    Err(format!(
+    Err(CommandError::path(format!(
         "'{}' was not chosen in a file picker or dropped onto the window.",
         path
-    ))
+    )))
 }
 
 /// True when `path` is exactly the sidebar bucket that already-cataloged
 /// items are grouped under.
-async fn is_inferred_catalog_folder(path: &str, db: &SqlitePool) -> Result<bool, String> {
+async fn is_inferred_catalog_folder(path: &str, db: &SqlitePool) -> Result<bool, CommandError> {
     let root = normalize_root(path);
     if root == "/" || root.is_empty() {
         return Ok(false);
@@ -161,8 +165,7 @@ async fn is_inferred_catalog_folder(path: &str, db: &SqlitePool) -> Result<bool,
     .bind(&prefix)
     .bind(&prefix)
     .fetch_optional(db)
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
     Ok(sample
         .is_some_and(|item| crate::commands::library::inferred_folder_root(&item) == Some(root)))
 }
@@ -181,7 +184,7 @@ fn paths_to_strings(paths: Vec<tauri_plugin_dialog::FilePath>) -> Vec<String> {
 pub async fn pick_source_folders(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, CommandError> {
     let picked = app
         .dialog()
         .file()
@@ -199,7 +202,7 @@ pub async fn pick_source_folders(
 pub async fn pick_media_files(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, CommandError> {
     let extensions = crate::commands::supported_extensions();
     let ext_refs: Vec<&str> = extensions.iter().map(String::as_str).collect();
     let picked = app

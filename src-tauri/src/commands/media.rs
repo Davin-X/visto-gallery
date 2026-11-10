@@ -1,4 +1,5 @@
 use super::*;
+use crate::errors::CommandError;
 use image::{DynamicImage, ImageEncoder};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
@@ -16,7 +17,7 @@ use tauri::{Manager, State, Window};
 async fn catalog_paths_by_id(
     db: &sqlx::SqlitePool,
     ids: &[String],
-) -> Result<HashMap<String, String>, String> {
+) -> Result<HashMap<String, String>, CommandError> {
     let mut found = HashMap::new();
     // Keep the IN list below SQLite's default parameter limit.
     for chunk in ids.chunks(400) {
@@ -33,8 +34,7 @@ async fn catalog_paths_by_id(
         let rows: Vec<(String, String)> = query
             .build_query_as::<(String, String)>()
             .fetch_all(db)
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
         found.extend(rows);
     }
     Ok(found)
@@ -50,27 +50,33 @@ fn validate_trash_path(
     path: &str,
     cataloged: &HashSet<String>,
     registered: &[String],
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let metadata = std::fs::symlink_metadata(path)
-        .map_err(|_| "File no longer exists on disk.".to_string())?;
+        .map_err(|_| CommandError::not_found("File no longer exists on disk."))?;
     if metadata.file_type().is_symlink() {
-        return Err("Refusing to move a symbolic link to Trash.".to_string());
+        return Err(CommandError::invalid(
+            "Refusing to move a symbolic link to Trash.".to_string(),
+        ));
     }
     if !metadata.is_file() {
-        return Err("Only regular files can be moved to Trash.".to_string());
+        return Err(CommandError::invalid(
+            "Only regular files can be moved to Trash.".to_string(),
+        ));
     }
     if cataloged.contains(path) {
         return Ok(());
     }
     if registered.is_empty() {
-        return Err(
+        return Err(CommandError::path(
             "File is not in the catalog and no library folders are registered.".to_string(),
-        );
+        ));
     }
     if is_path_under_registered_roots(path, registered) {
         Ok(())
     } else {
-        Err("Path is outside registered library folders and not in the catalog.".to_string())
+        Err(CommandError::path(
+            "Path is outside registered library folders and not in the catalog.".to_string(),
+        ))
     }
 }
 
@@ -84,7 +90,7 @@ async fn resolve_trash_targets(
     db: &sqlx::SqlitePool,
     ids: Vec<String>,
     registered: &[String],
-) -> Result<(Vec<(String, String)>, Vec<TrashError>), String> {
+) -> Result<(Vec<(String, String)>, Vec<TrashError>), CommandError> {
     // De-duplicate ids while preserving caller order.
     let mut seen = HashSet::new();
     let requested: Vec<String> = ids
@@ -105,13 +111,18 @@ async fn resolve_trash_targets(
         let Some(path) = resolved.get(&id) else {
             failed.push(TrashError {
                 id,
+                code: ErrorCode::NotFound,
                 error: "Item is no longer in the catalog.".to_string(),
             });
             continue;
         };
         match validate_trash_path(path, &cataloged, registered) {
             Ok(()) => targets.push((id, path.clone())),
-            Err(error) => failed.push(TrashError { id, error }),
+            Err(error) => failed.push(TrashError {
+                id,
+                code: error.code,
+                error: error.message,
+            }),
         }
     }
     Ok((targets, failed))
@@ -124,7 +135,7 @@ trait TrashSink: Send + Sync {
     /// On macOS this is one AppleScript `tell Finder delete` call per batch —
     /// Finder's native Trash supports "Put Back" and a single invocation
     /// avoids per-file deletion sounds.
-    fn delete_all(&self, paths: &[String]) -> Result<(), String>;
+    fn delete_all(&self, paths: &[String]) -> Result<(), CommandError>;
 }
 
 struct OsTrash;
@@ -152,7 +163,7 @@ fn is_apple_events_denied(message: &str) -> bool {
 }
 
 #[cfg(target_os = "macos")]
-fn trash_via_finder(paths: &[String]) -> Result<(), String> {
+fn trash_via_finder(paths: &[String]) -> Result<(), CommandError> {
     // One osascript call tells Finder to delete every path in this batch.
     // Finder's native Trash supports "Put Back", and batching many paths in
     // one AppleScript invocation means one sound for the whole batch instead
@@ -170,22 +181,26 @@ fn trash_via_finder(paths: &[String]) -> Result<(), String> {
         .arg("-e")
         .arg(&script)
         .output()
-        .map_err(|e| format!("osascript failed: {}", e))?;
+        .map_err(|e| CommandError::internal(format!("osascript failed: {}", e)))?;
 
     if output.status.success() {
         Ok(())
     } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
+        Err(CommandError::internal(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ))
     }
 }
 
 #[cfg(not(target_os = "macos"))]
-fn trash_via_finder(_paths: &[String]) -> Result<(), String> {
-    Err("Finder trash is only available on macOS.".to_string())
+fn trash_via_finder(_paths: &[String]) -> Result<(), CommandError> {
+    Err(CommandError::internal(
+        "Finder trash is only available on macOS.".to_string(),
+    ))
 }
 
 impl TrashSink for OsTrash {
-    fn delete_all(&self, paths: &[String]) -> Result<(), String> {
+    fn delete_all(&self, paths: &[String]) -> Result<(), CommandError> {
         #[cfg(target_os = "macos")]
         {
             match trash_via_finder(paths) {
@@ -194,19 +209,19 @@ impl TrashSink for OsTrash {
                 // it is the only path that supports "Put Back". Falling back to
                 // NSFileManager keeps deleting working instead of failing every
                 // batch (and the per-file retry) with a permission error.
-                Err(error) if is_apple_events_denied(&error) => {
+                Err(error) if is_apple_events_denied(&error.message) => {
                     eprintln!(
                         "Finder automation is unavailable ({}); trashing with NSFileManager instead.",
-                        error.trim()
+                        error.message.trim()
                     );
-                    trash::delete_all(paths).map_err(|e| e.to_string())
+                    trash::delete_all(paths).map_err(CommandError::from)
                 }
                 Err(error) => Err(error),
             }
         }
         #[cfg(not(target_os = "macos"))]
         {
-            trash::delete_all(paths).map_err(|e| e.to_string())
+            trash::delete_all(paths).map_err(CommandError::from)
         }
     }
 }
@@ -223,7 +238,7 @@ async fn execute_trash<P>(
     targets: Vec<(String, String)>,
     sink: Arc<dyn TrashSink>,
     progress: P,
-) -> Result<TrashResult, String>
+) -> Result<TrashResult, CommandError>
 where
     P: Fn(usize, usize, Option<&str>),
 {
@@ -243,6 +258,7 @@ where
             for (id, _) in chunk {
                 failed.push(TrashError {
                     id: id.clone(),
+                    code: ErrorCode::Cancelled,
                     error: "Operation cancelled".to_string(),
                 });
             }
@@ -271,6 +287,7 @@ where
                     if super::TRASH_CANCEL.load(Ordering::SeqCst) {
                         failed.push(TrashError {
                             id: id.clone(),
+                            code: ErrorCode::Cancelled,
                             error: "Operation cancelled".to_string(),
                         });
                         continue;
@@ -285,10 +302,12 @@ where
                         Ok(Ok(())) => trashed.push(id.clone()),
                         Ok(Err(e)) => failed.push(TrashError {
                             id: id.clone(),
+                            code: ErrorCode::Io,
                             error: format!("Could not move to Trash: {}", e),
                         }),
                         Err(e) => failed.push(TrashError {
                             id: id.clone(),
+                            code: ErrorCode::Internal,
                             error: format!("Trash task failed: {}", e),
                         }),
                     }
@@ -302,6 +321,7 @@ where
                 for (id, _) in chunk {
                     failed.push(TrashError {
                         id: id.clone(),
+                        code: ErrorCode::Internal,
                         error: format!("Trash task failed: {}", e),
                     });
                 }
@@ -325,7 +345,7 @@ where
                     let _ = std::fs::remove_file(backup);
                 }
             }
-            Err(error) => catalog_error = Some(error),
+            Err(error) => catalog_error = Some(error.message),
         }
     }
 
@@ -341,11 +361,11 @@ where
 async fn remove_trashed_rows(
     db: &sqlx::SqlitePool,
     trashed: &[String],
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, CommandError> {
     let mut transaction = db
         .begin()
         .await
-        .map_err(|e| format!("could not update the catalog: {}", e))?;
+        .map_err(|e| CommandError::database(format!("could not update the catalog: {}", e)))?;
     let mut backup_files = Vec::new();
     for id in trashed {
         // Collect journaled originals before the FK cascade removes their rows,
@@ -355,19 +375,20 @@ async fn remove_trashed_rows(
                 .bind(id)
                 .fetch_all(&mut *transaction)
                 .await
-                .map_err(|e| format!("could not read edit backups: {}", e))?;
+                .map_err(|e| {
+                    CommandError::database(format!("could not read edit backups: {}", e))
+                })?;
         backup_files.extend(backups);
 
         sqlx::query("DELETE FROM media_items WHERE id = ?")
             .bind(id)
             .execute(&mut *transaction)
             .await
-            .map_err(|e| format!("could not delete catalog row: {}", e))?;
+            .map_err(|e| CommandError::database(format!("could not delete catalog row: {}", e)))?;
     }
-    transaction
-        .commit()
-        .await
-        .map_err(|e| format!("could not commit the catalog update: {}", e))?;
+    transaction.commit().await.map_err(|e| {
+        CommandError::database(format!("could not commit the catalog update: {}", e))
+    })?;
     Ok(backup_files)
 }
 
@@ -376,14 +397,13 @@ pub async fn move_to_trash(
     ids: Vec<String>,
     catalog: State<'_, crate::Catalog>,
     window: Window,
-) -> Result<TrashResult, String> {
+) -> Result<TrashResult, CommandError> {
     super::TRASH_CANCEL.store(false, Ordering::SeqCst);
 
     let db = super::get_db(&catalog)?;
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
         .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     let (targets, mut failed) = resolve_trash_targets(&db, ids, &registered).await?;
     if targets.is_empty() {
@@ -446,39 +466,44 @@ pub async fn move_to_trash(
 pub async fn reveal_in_finder(
     path: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
     let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
         .bind(&path)
         .fetch_optional(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     if exists.is_none() {
-        return Err("Path is not part of the catalog.".to_string());
+        return Err(CommandError::path(
+            "Path is not part of the catalog.".to_string(),
+        ));
     }
     std::process::Command::new("open")
         .arg("-R")
         .arg(&path)
         .status()
-        .map_err(|e| format!("Could not reveal {}: {}", path, e))?;
+        .map_err(|e| CommandError::io(format!("Could not reveal {}: {}", path, e)))?;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn open_file(path: String, catalog: State<'_, crate::Catalog>) -> Result<(), String> {
+pub async fn open_file(
+    path: String,
+    catalog: State<'_, crate::Catalog>,
+) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
     let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
         .bind(&path)
         .fetch_optional(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     if exists.is_none() {
-        return Err("Path is not part of the catalog.".to_string());
+        return Err(CommandError::path(
+            "Path is not part of the catalog.".to_string(),
+        ));
     }
     std::process::Command::new("open")
         .arg(&path)
         .status()
-        .map_err(|e| format!("Could not open {}: {}", path, e))?;
+        .map_err(|e| CommandError::io(format!("Could not open {}: {}", path, e)))?;
     Ok(())
 }
 
@@ -538,21 +563,24 @@ pub async fn open_with_player(
     path: String,
     player: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
     let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
         .bind(&path)
         .fetch_optional(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     if exists.is_none() {
-        return Err("Path is not part of the catalog.".to_string());
+        return Err(CommandError::path(
+            "Path is not part of the catalog.".to_string(),
+        ));
     }
 
     let player_path = PathBuf::from(&player);
     if player_path.extension().and_then(|ext| ext.to_str()) != Some("app") || !player_path.is_dir()
     {
-        return Err("Requested player is not an installed application.".to_string());
+        return Err(CommandError::invalid(
+            "Requested player is not an installed application.".to_string(),
+        ));
     }
 
     std::process::Command::new("open")
@@ -560,22 +588,24 @@ pub async fn open_with_player(
         .arg(&player_path)
         .arg(&path)
         .status()
-        .map_err(|e| format!("Could not open {} with {}: {}", path, player, e))?;
+        .map_err(|e| CommandError::io(format!("Could not open {} with {}: {}", path, player, e)))?;
     Ok(())
 }
 
 /// Open a folder in Finder. Used by Batch export results.
 #[tauri::command]
-pub async fn open_folder(path: String) -> Result<(), String> {
+pub async fn open_folder(path: String) -> Result<(), CommandError> {
     // Unlike `open -R` (which selects a file in its parent), this opens the
     // folder itself in Finder. Used by Batch export results.
     if !std::path::Path::new(&path).is_dir() {
-        return Err("Path is not a directory.".to_string());
+        return Err(CommandError::invalid(
+            "Path is not a directory.".to_string(),
+        ));
     }
     std::process::Command::new("open")
         .arg(&path)
         .status()
-        .map_err(|e| format!("Could not open {}: {}", path, e))?;
+        .map_err(|e| CommandError::io(format!("Could not open {}: {}", path, e)))?;
     Ok(())
 }
 
@@ -812,24 +842,21 @@ pub(crate) fn compute_sha256(path: &std::path::Path) -> Option<String> {
 pub async fn read_exif(
     path: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<ExifData, String> {
+) -> Result<ExifData, CommandError> {
     let db = super::get_db(&catalog)?;
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
         .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     validate_path_under_registered_roots(&path, &registered)?;
     let path_buf = std::path::PathBuf::from(&path);
-    let data = tokio::task::spawn_blocking(move || extract_exif(&path_buf))
-        .await
-        .map_err(|e| e.to_string())?;
+    let data = tokio::task::spawn_blocking(move || extract_exif(&path_buf)).await?;
     Ok(data)
 }
 
 /// In-place edits re-encode the source and atomically replace it. Only
 /// formats we can round-trip safely are eligible; anything else (HEIC, TIFF,
 /// AVIF, …) would lose data silently, so it must go through "Save a copy".
-pub(crate) fn validate_in_place_format(source_path: &str) -> Result<(), String> {
+pub(crate) fn validate_in_place_format(source_path: &str) -> Result<(), CommandError> {
     let ext = source_path
         .rsplit('.')
         .next()
@@ -838,8 +865,11 @@ pub(crate) fn validate_in_place_format(source_path: &str) -> Result<(), String> 
     if matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp") {
         return Ok(());
     }
-    Err(format!(
-        "In-place export supports JPEG, PNG and WebP (refusing .{ext}). Use \"Save a copy\" to keep the original untouched."
+    Err(CommandError::new(
+        ErrorCode::UnsupportedFormat,
+        format!(
+            "In-place export supports JPEG, PNG and WebP (refusing .{ext}). Use \"Save a copy\" to keep the original untouched."
+        ),
     ))
 }
 
@@ -853,21 +883,20 @@ async fn ensure_edit_backup_in_dir(
     backup_dir: &std::path::Path,
     media_id: &str,
     source_path: &str,
-) -> Result<PathBuf, String> {
+) -> Result<PathBuf, CommandError> {
     if let Some(row) = sqlx::query("SELECT backup_path FROM edit_backups WHERE media_id = ?")
         .bind(media_id)
         .fetch_optional(db)
-        .await
-        .map_err(|e| e.to_string())?
+        .await?
     {
         let recorded: String = row.get("backup_path");
         if std::path::Path::new(&recorded).is_file() {
             return Ok(PathBuf::from(recorded));
         }
-        return Err(
+        return Err(CommandError::not_found(
             "The journaled original for this item is missing; use \"Save a copy\" instead of replacing it."
                 .to_string(),
-        );
+        ));
     }
 
     std::fs::create_dir_all(backup_dir).map_err(|e| {
@@ -890,16 +919,20 @@ async fn ensure_edit_backup_in_dir(
     let destination = backup_path.clone();
     tokio::task::spawn_blocking(move || std::fs::copy(&source, &destination))
         .await
-        .map_err(|e| format!("Backup task failed: {e}"))?
-        .map_err(|e| format!("Failed to journal the original before editing: {e}"))?;
+        .map_err(|e| CommandError::internal(format!("Backup task failed: {e}")))?
+        .map_err(|e| {
+            CommandError::internal(format!(
+                "Failed to journal the original before editing: {e}"
+            ))
+        })?;
 
     let size = std::fs::metadata(&backup_path)
-        .map_err(|e| format!("Could not read the journaled original: {e}"))?
+        .map_err(|e| CommandError::io(format!("Could not read the journaled original: {e}")))?
         .len() as i64;
     let hash_path = backup_path.clone();
     let hash = tokio::task::spawn_blocking(move || compute_sha256(&hash_path))
         .await
-        .map_err(|e| format!("Hash task failed: {e}"))?;
+        .map_err(|e| CommandError::internal(format!("Hash task failed: {e}")))?;
 
     sqlx::query(
         "INSERT INTO edit_backups (media_id, original_path, backup_path, size, sha256, created_at) \
@@ -914,15 +947,14 @@ async fn ensure_edit_backup_in_dir(
     .bind(super::now_ms())
     .execute(db)
     .await
-    .map_err(|e| e.to_string())?;
+    ?;
 
     // If a concurrent edit won the race, keep its record and drop our copy.
     let recorded: String =
         sqlx::query_scalar("SELECT backup_path FROM edit_backups WHERE media_id = ?")
             .bind(media_id)
             .fetch_one(db)
-            .await
-            .map_err(|e| e.to_string())?;
+            .await?;
     if recorded != backup_path.to_string_lossy() {
         let _ = std::fs::remove_file(&backup_path);
         return Ok(PathBuf::from(recorded));
@@ -936,11 +968,11 @@ async fn ensure_edit_backup(
     db: &sqlx::SqlitePool,
     media_id: &str,
     source_path: &str,
-) -> Result<PathBuf, String> {
+) -> Result<PathBuf, CommandError> {
     let app_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Could not locate the app data folder: {e}"))?;
+        .map_err(|e| CommandError::io(format!("Could not locate the app data folder: {e}")))?;
     ensure_edit_backup_in_dir(db, &app_dir.join("edit-originals"), media_id, source_path).await
 }
 
@@ -949,14 +981,13 @@ pub async fn render_edited(
     request: RenderRequest,
     app: tauri::AppHandle,
     catalog: State<'_, crate::Catalog>,
-) -> Result<ExportResult, String> {
+) -> Result<ExportResult, CommandError> {
     // Validate the source path against registered library folders before doing
     // any work, so a crafted request cannot read arbitrary files.
     let db = super::get_db(&catalog)?;
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
         .fetch_all(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     if !registered.is_empty() {
         super::validate_path_under_registered_roots(&request.source_path, &registered)?;
     }
@@ -972,20 +1003,19 @@ pub async fn render_edited(
             sqlx::query_scalar("SELECT path FROM media_items WHERE id = ?")
                 .bind(&media_id)
                 .fetch_optional(&db)
-                .await
-                .map_err(|e| e.to_string())?;
+                .await?;
         match catalog_path {
             Some(path) if path == request.source_path => {}
             Some(_) => {
-                return Err(
+                return Err(CommandError::path(
                     "The requested file does not match the catalog entry for this item."
                         .to_string(),
-                )
+                ))
             }
             None => {
-                return Err(
+                return Err(CommandError::path(
                     "Item is not in the catalog; in-place edits are not allowed.".to_string(),
-                )
+                ))
             }
         }
         Some(ensure_edit_backup(&app, &db, &media_id, &request.source_path).await?)
@@ -998,7 +1028,7 @@ pub async fn render_edited(
     let result =
         tauri::async_runtime::spawn_blocking(move || render_edited_blocking(request, backup_path))
             .await
-            .map_err(|e| format!("Task failed: {}", e))??;
+            .map_err(|e| CommandError::internal(format!("Task failed: {}", e)))??;
 
     // After a successful in-place replace, refresh the catalog row so the
     // thumbnail cache key (which includes modified_at) changes and the stale
@@ -1031,21 +1061,31 @@ pub async fn render_edited(
 fn render_edited_blocking(
     request: RenderRequest,
     backup_path: Option<PathBuf>,
-) -> Result<ExportResult, String> {
+) -> Result<ExportResult, CommandError> {
     use std::path::PathBuf;
 
     let source_path = PathBuf::from(&request.source_path);
 
     // 1. Load image with metadata
     let reader = image::ImageReader::open(&source_path)
-        .map_err(|e| format!("Could not open image: {}", e))?
+        .map_err(|e| CommandError::io(format!("Could not open image: {}", e)))?
         .with_guessed_format()
-        .map_err(|e| format!("Could not identify image format: {}", e))?;
+        .map_err(|e| {
+            CommandError::new(
+                ErrorCode::UnsupportedFormat,
+                format!("Could not identify image format: {}", e),
+            )
+        })?;
 
-    let _format = reader.format().ok_or("Unknown image format")?;
-    let mut img = reader
-        .decode()
-        .map_err(|e| format!("Could not decode image: {}", e))?;
+    let _format = reader
+        .format()
+        .ok_or_else(|| CommandError::new(ErrorCode::UnsupportedFormat, "Unknown image format"))?;
+    let mut img = reader.decode().map_err(|e| {
+        CommandError::new(
+            ErrorCode::UnsupportedFormat,
+            format!("Could not decode image: {}", e),
+        )
+    })?;
 
     let (orig_width, orig_height) = (img.width(), img.height());
 
@@ -1113,7 +1153,9 @@ fn render_edited_blocking(
         // In-place: the original was already journaled by the caller. Write to
         // a temp file next to the source, then atomically replace it.
         if backup_path.is_none() {
-            return Err("Missing journaled original for in-place edit.".to_string());
+            return Err(CommandError::invalid(
+                "Missing journaled original for in-place edit.".to_string(),
+            ));
         }
 
         let mut guard = super::TempFileGuard::new(
@@ -1133,7 +1175,7 @@ fn render_edited_blocking(
         // Atomic rename. If it fails, the source is untouched; keep the
         // journaled original intact for a later revert.
         std::fs::rename(guard.path(), &source_path)
-            .map_err(|e| format!("Failed to replace original: {}", e))?;
+            .map_err(|e| CommandError::io(format!("Failed to replace original: {}", e)))?;
         guard.commit();
 
         source_path.to_string_lossy().into_owned()
@@ -1169,7 +1211,7 @@ fn render_edited_blocking(
 
     // 8. Verify output
     let metadata = std::fs::metadata(&output_path)
-        .map_err(|e| format!("Output verification failed: {}", e))?;
+        .map_err(|e| CommandError::io(format!("Output verification failed: {}", e)))?;
     let size = metadata.len() as i64;
 
     Ok(ExportResult {
@@ -1182,25 +1224,30 @@ fn render_edited_blocking(
 
 /// Folder that holds "save a copy" renders until the user picks a
 /// destination. Only files inside it may be handed to `save_exported_file`.
-pub(crate) fn export_staging_dir() -> Result<PathBuf, String> {
+pub(crate) fn export_staging_dir() -> Result<PathBuf, CommandError> {
     let dir = std::env::temp_dir().join("visto-export");
     std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("Could not create export staging folder: {}", e))?;
+        .map_err(|e| CommandError::io(format!("Could not create export staging folder: {}", e)))?;
     Ok(dir)
 }
 
 /// Resolve `source` and require it to be a regular file directly inside the
 /// export staging folder. Canonicalizing first means `..` segments and
 /// symlinks cannot point the move at a file elsewhere on disk.
-pub(crate) fn validate_export_source(source: &str, staging: &Path) -> Result<PathBuf, String> {
+pub(crate) fn validate_export_source(
+    source: &str,
+    staging: &Path,
+) -> Result<PathBuf, CommandError> {
     let staging = staging
         .canonicalize()
-        .map_err(|e| format!("Export staging folder is unavailable: {}", e))?;
+        .map_err(|e| CommandError::io(format!("Export staging folder is unavailable: {}", e)))?;
     let src = Path::new(source)
         .canonicalize()
-        .map_err(|_| "Exported file no longer exists.".to_string())?;
+        .map_err(|_| CommandError::not_found("Exported file no longer exists."))?;
     if src.parent() != Some(staging.as_path()) || !src.is_file() {
-        return Err("Source is not an app-generated export.".to_string());
+        return Err(CommandError::path(
+            "Source is not an app-generated export.".to_string(),
+        ));
     }
     Ok(src)
 }
@@ -1215,7 +1262,7 @@ pub async fn save_exported_file(
     app: tauri::AppHandle,
     source_path: String,
     suggested_name: String,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, CommandError> {
     use tauri_plugin_dialog::DialogExt;
 
     let src = validate_export_source(&source_path, &export_staging_dir()?)?;
@@ -1239,24 +1286,26 @@ pub async fn save_exported_file(
         let _ = std::fs::remove_file(&src);
         return Ok(None);
     };
-    let dst = picked.into_path().map_err(|e| e.to_string())?;
+    let dst = picked
+        .into_path()
+        .map_err(|e| CommandError::new(ErrorCode::Dialog, e.to_string()))?;
 
     tokio::task::spawn_blocking(move || {
         // Prefer an atomic rename; fall back to copy+remove across volumes.
         if std::fs::rename(&src, &dst).is_err() {
             std::fs::copy(&src, &dst)
-                .map_err(|e| format!("Could not copy exported file: {}", e))?;
+                .map_err(|e| CommandError::io(format!("Could not copy exported file: {}", e)))?;
             let _ = std::fs::remove_file(&src);
         }
         Ok(Some(dst.to_string_lossy().into_owned()))
     })
-    .await
-    .map_err(|e| e.to_string())?
+    .await?
 }
 
 #[cfg(test)]
 mod export_source_tests {
     use super::validate_export_source;
+    use crate::errors::ErrorCode;
     use std::fs;
 
     fn staging() -> std::path::PathBuf {
@@ -1281,7 +1330,9 @@ mod export_source_tests {
             std::env::temp_dir().join(format!("visto-outside-{}.jpg", uuid::Uuid::new_v4()));
         fs::write(&outside, b"secret").unwrap();
         let sneaky = dir.join("..").join(outside.file_name().unwrap());
-        assert!(validate_export_source(sneaky.to_str().unwrap(), &dir).is_err());
+        let error = validate_export_source(sneaky.to_str().unwrap(), &dir)
+            .expect_err("escape should be rejected");
+        assert_eq!(error.code, ErrorCode::PathNotAllowed);
         let _ = fs::remove_file(&outside);
         let _ = fs::remove_dir_all(&dir);
     }
@@ -1447,42 +1498,37 @@ fn write_image(
     quality: f32,
     strip_metadata: bool,
     exif_data: &Option<Vec<u8>>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let quality = (quality * 100.0).round().clamp(1.0, 100.0) as u8;
 
     match format {
         "image/png" => {
             let encoder = image::codecs::png::PngEncoder::new_with_quality(
-                std::fs::File::create(path).map_err(|e| e.to_string())?,
+                std::fs::File::create(path)?,
                 image::codecs::png::CompressionType::Default,
                 image::codecs::png::FilterType::default(),
             );
-            encoder
-                .write_image(
-                    img.as_bytes(),
-                    img.width(),
-                    img.height(),
-                    img.color().into(),
-                )
-                .map_err(|e| e.to_string())?;
+            encoder.write_image(
+                img.as_bytes(),
+                img.width(),
+                img.height(),
+                img.color().into(),
+            )?;
         }
         "image/webp" => {
-            let encoder = image::codecs::webp::WebPEncoder::new_lossless(
-                std::fs::File::create(path).map_err(|e| e.to_string())?,
-            );
-            encoder
-                .write_image(
-                    img.as_bytes(),
-                    img.width(),
-                    img.height(),
-                    img.color().into(),
-                )
-                .map_err(|e| e.to_string())?;
+            let encoder =
+                image::codecs::webp::WebPEncoder::new_lossless(std::fs::File::create(path)?);
+            encoder.write_image(
+                img.as_bytes(),
+                img.width(),
+                img.height(),
+                img.color().into(),
+            )?;
         }
         _ => {
             // JPEG default
             // For JPEG, we can preserve EXIF by injecting it
-            let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
+            let mut file = std::fs::File::create(path)?;
 
             // JPEG only supports RGB; flatten any alpha channel.
             let rgb = img.to_rgb8();
@@ -1495,29 +1541,25 @@ fn write_image(
                     // No EXIF to preserve, write normally
                     let encoder =
                         image::codecs::jpeg::JpegEncoder::new_with_quality(&mut file, quality);
-                    encoder
-                        .write_image(
-                            rgb.as_raw(),
-                            rgb.width(),
-                            rgb.height(),
-                            image::ExtendedColorType::Rgb8,
-                        )
-                        .map_err(|e| e.to_string())?;
+                    encoder.write_image(
+                        rgb.as_raw(),
+                        rgb.width(),
+                        rgb.height(),
+                        image::ExtendedColorType::Rgb8,
+                    )?;
                 }
             } else {
                 // Strip metadata explicitly requested
                 let encoder =
                     image::codecs::jpeg::JpegEncoder::new_with_quality(&mut file, quality);
-                encoder
-                    .write_image(
-                        rgb.as_raw(),
-                        rgb.width(),
-                        rgb.height(),
-                        image::ExtendedColorType::Rgb8,
-                    )
-                    .map_err(|e| e.to_string())?;
+                encoder.write_image(
+                    rgb.as_raw(),
+                    rgb.width(),
+                    rgb.height(),
+                    image::ExtendedColorType::Rgb8,
+                )?;
             }
-            file.flush().map_err(|e| e.to_string())?;
+            file.flush()?;
         }
     }
     Ok(())
@@ -1532,21 +1574,19 @@ pub(crate) fn write_jpeg_with_exif(
     img: &image::RgbImage,
     quality: u8,
     exif: &[u8],
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     use std::io::Write;
 
     // Encode to a memory buffer first.
     let mut buffer = Vec::new();
     {
         let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buffer, quality);
-        encoder
-            .write_image(
-                img.as_raw(),
-                img.width(),
-                img.height(),
-                image::ExtendedColorType::Rgb8,
-            )
-            .map_err(|e| e.to_string())?;
+        encoder.write_image(
+            img.as_raw(),
+            img.width(),
+            img.height(),
+            image::ExtendedColorType::Rgb8,
+        )?;
     }
 
     // Inject APP1 segment bytes (marker + length + payload).
@@ -1560,7 +1600,9 @@ pub(crate) fn write_jpeg_with_exif(
 
     // SOI
     if buffer.len() < 2 || buffer[0] != 0xFF || buffer[1] != 0xD8 {
-        return Err("Encoded JPEG is missing SOI marker.".to_string());
+        return Err(CommandError::internal(
+            "Encoded JPEG is missing SOI marker.".to_string(),
+        ));
     }
     output.extend_from_slice(&[0xFF, 0xD8]);
 
@@ -1655,7 +1697,7 @@ pub(crate) fn write_jpeg_with_exif(
         output.extend_from_slice(&app1);
     }
 
-    file.write_all(&output).map_err(|e| e.to_string())?;
+    file.write_all(&output)?;
     Ok(())
 }
 
@@ -1775,30 +1817,26 @@ mod exif_tests {
 }
 
 #[tauri::command]
-pub async fn backfill_metadata(catalog: State<'_, crate::Catalog>) -> Result<i64, String> {
+pub async fn backfill_metadata(catalog: State<'_, crate::Catalog>) -> Result<i64, CommandError> {
     let db = super::get_db(&catalog)?;
     let rows: Vec<(String, String)> = sqlx::query_as(
         "SELECT id, path FROM media_items WHERE captured_at IS NULL OR camera IS NULL OR sha256 IS NULL",
     )
     .fetch_all(&db)
     .await
-    .map_err(|e| e.to_string())?;
+    ?;
 
     let mut updated = 0i64;
     for (id, path) in rows {
         let path_buf = std::path::PathBuf::from(&path);
         let exif_path = path_buf.clone();
-        let exif = tokio::task::spawn_blocking(move || extract_exif(&exif_path))
-            .await
-            .map_err(|e| e.to_string())?;
+        let exif = tokio::task::spawn_blocking(move || extract_exif(&exif_path)).await?;
         if exif.metadata_error.is_some() && exif.captured_at.is_none() && exif.camera.is_none() {
             continue;
         }
         // Compute SHA-256 only when it's missing; skip if file is unreadable.
         let sha256 = if path_buf.exists() {
-            tokio::task::spawn_blocking(move || compute_sha256(&path_buf))
-                .await
-                .map_err(|e| e.to_string())?
+            tokio::task::spawn_blocking(move || compute_sha256(&path_buf)).await?
         } else {
             None
         };
@@ -1817,7 +1855,7 @@ pub async fn backfill_metadata(catalog: State<'_, crate::Catalog>) -> Result<i64
         .bind(&id)
         .execute(&db)
         .await
-        .map_err(|e| e.to_string())?;
+        ?;
         updated += 1;
     }
     Ok(updated)
@@ -1847,7 +1885,7 @@ mod in_place_format_tests {
         ] {
             let err = validate_in_place_format(path).expect_err("should be rejected");
             assert!(
-                err.contains("Save a copy"),
+                err.message.contains("Save a copy"),
                 "error for {path} should mention Save a copy, got: {err}"
             );
         }
@@ -1862,6 +1900,7 @@ mod in_place_format_tests {
 #[cfg(test)]
 mod trash_validation_tests {
     use super::{catalog_paths_by_id, validate_trash_path};
+    use crate::errors::ErrorCode;
     use std::collections::HashSet;
     use std::path::{Path, PathBuf};
 
@@ -1915,7 +1954,30 @@ mod trash_validation_tests {
 
         let error = validate_trash_path(file.to_str().unwrap(), &HashSet::new(), &registered)
             .expect_err("outside root should be rejected");
-        assert!(error.contains("outside registered library folders"));
+        assert_eq!(error.code, ErrorCode::PathNotAllowed);
+        assert!(error.message.contains("outside registered library folders"));
+    }
+
+    #[test]
+    fn missing_file_is_reported_as_not_found() {
+        let dir = temp_dir("missing");
+        let file = dir.join("gone.jpg");
+        let error = validate_trash_path(file.to_str().unwrap(), &HashSet::new(), &[])
+            .expect_err("missing file should be rejected");
+        assert_eq!(error.code, ErrorCode::NotFound);
+    }
+
+    #[test]
+    fn symlink_is_reported_as_invalid_input() {
+        let dir = temp_dir("symlink");
+        let file = dir.join("a.jpg");
+        write_file(&file);
+        let link = dir.join("link.jpg");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&file, &link).unwrap();
+        let error = validate_trash_path(link.to_str().unwrap(), &HashSet::new(), &[])
+            .expect_err("symlink should be rejected");
+        assert_eq!(error.code, ErrorCode::InvalidInput);
     }
 
     #[test]
@@ -1942,7 +2004,7 @@ mod trash_validation_tests {
 
         let error = validate_trash_path(file.to_str().unwrap(), &HashSet::new(), &[])
             .expect_err("missing file should be rejected");
-        assert!(error.contains("no longer exists"));
+        assert!(error.message.contains("no longer exists"));
     }
 
     #[test]
@@ -1956,7 +2018,7 @@ mod trash_validation_tests {
 
         let error = validate_trash_path(link.to_str().unwrap(), &HashSet::new(), &registered)
             .expect_err("symlink should be rejected");
-        assert!(error.contains("symbolic link"));
+        assert!(error.message.contains("symbolic link"));
     }
 
     #[test]
@@ -1966,7 +2028,7 @@ mod trash_validation_tests {
 
         let error = validate_trash_path(dir.to_str().unwrap(), &HashSet::new(), &registered)
             .expect_err("directory should be rejected");
-        assert!(error.contains("Only regular files"));
+        assert!(error.message.contains("Only regular files"));
     }
 
     #[tokio::test]
@@ -2002,6 +2064,7 @@ mod trash_validation_tests {
 #[cfg(test)]
 mod trash_flow_tests {
     use super::{execute_trash, resolve_trash_targets, TrashSink};
+    use crate::errors::CommandError;
     use std::collections::HashSet;
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex};
@@ -2069,11 +2132,11 @@ mod trash_flow_tests {
     }
 
     impl TrashSink for FakeTrash {
-        fn delete_all(&self, paths: &[String]) -> Result<(), String> {
+        fn delete_all(&self, paths: &[String]) -> Result<(), CommandError> {
             // If any path in the batch is a known failure, the whole batch
             // fails (mirrors a single osascript call failing partway).
             if paths.iter().any(|p| self.fail_paths.contains(p)) {
-                return Err("permission denied".to_string());
+                return Err(CommandError::internal("permission denied".to_string()));
             }
             self.moved.lock().unwrap().extend(paths.iter().cloned());
             Ok(())
@@ -2267,7 +2330,7 @@ mod trash_flow_tests {
     struct PanickingTrash;
 
     impl TrashSink for PanickingTrash {
-        fn delete_all(&self, _paths: &[String]) -> Result<(), String> {
+        fn delete_all(&self, _paths: &[String]) -> Result<(), CommandError> {
             panic!("trash backend panicked");
         }
     }
@@ -2442,6 +2505,6 @@ mod edit_backup_tests {
         )
         .await
         .expect_err("missing original should fail closed");
-        assert!(error.contains("missing"));
+        assert!(error.message.contains("missing"));
     }
 }

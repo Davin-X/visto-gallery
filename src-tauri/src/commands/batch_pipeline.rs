@@ -8,6 +8,8 @@ use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::codecs::webp::WebPEncoder;
 use image::{DynamicImage, GenericImageView, ImageEncoder};
 use time::OffsetDateTime;
+
+use crate::errors::{CommandError, ErrorCode};
 use uuid::Uuid;
 
 use crate::commands::{BatchExportItem, BatchExportRequest};
@@ -153,10 +155,10 @@ pub(crate) fn write_batch_jpeg(
     image: DynamicImage,
     path: &Path,
     quality: u8,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let rgb = image.to_rgb8();
     let file = std::fs::File::create(path)
-        .map_err(|e| format!("Could not create the export file: {}", e))?;
+        .map_err(|e| CommandError::io(format!("Could not create the export file: {}", e)))?;
     let mut writer = std::io::BufWriter::new(file);
     JpegEncoder::new_with_quality(&mut writer, quality)
         .encode(
@@ -165,12 +167,12 @@ pub(crate) fn write_batch_jpeg(
             rgb.height(),
             image::ExtendedColorType::Rgb8,
         )
-        .map_err(|e| format!("JPEG encoding failed: {}", e))
+        .map_err(|e| CommandError::io(format!("JPEG encoding failed: {}", e)))
 }
 
-pub(crate) fn write_batch_png(image: DynamicImage, path: &Path) -> Result<(), String> {
+pub(crate) fn write_batch_png(image: DynamicImage, path: &Path) -> Result<(), CommandError> {
     let file = std::fs::File::create(path)
-        .map_err(|e| format!("Could not create the export file: {}", e))?;
+        .map_err(|e| CommandError::io(format!("Could not create the export file: {}", e)))?;
     let writer = std::io::BufWriter::new(file);
     PngEncoder::new_with_quality(writer, CompressionType::Default, FilterType::Adaptive)
         .write_image(
@@ -179,12 +181,12 @@ pub(crate) fn write_batch_png(image: DynamicImage, path: &Path) -> Result<(), St
             image.height(),
             image.color().into(),
         )
-        .map_err(|e| format!("PNG encoding failed: {}", e))
+        .map_err(|e| CommandError::io(format!("PNG encoding failed: {}", e)))
 }
 
-pub(crate) fn write_batch_webp(image: DynamicImage, path: &Path) -> Result<(), String> {
+pub(crate) fn write_batch_webp(image: DynamicImage, path: &Path) -> Result<(), CommandError> {
     let file = std::fs::File::create(path)
-        .map_err(|e| format!("Could not create the export file: {}", e))?;
+        .map_err(|e| CommandError::io(format!("Could not create the export file: {}", e)))?;
     let mut writer = std::io::BufWriter::new(file);
     WebPEncoder::new_lossless(&mut writer)
         .encode(
@@ -193,7 +195,7 @@ pub(crate) fn write_batch_webp(image: DynamicImage, path: &Path) -> Result<(), S
             image.height(),
             image.color().into(),
         )
-        .map_err(|e| format!("WebP encoding failed: {}", e))
+        .map_err(|e| CommandError::io(format!("WebP encoding failed: {}", e)))
 }
 
 /// macOS ImageIO can decode HEIC/HEIF and other formats the Rust `image`
@@ -205,11 +207,16 @@ pub(crate) fn write_batch_with_sips(
     extension: &str,
     quality: u8,
     max_dimension: Option<u32>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let format = match extension {
         "jpg" | "jpeg" => "jpeg",
         "png" => "png",
-        other => return Err(format!("Unsupported fallback format: {}", other)),
+        other => {
+            return Err(CommandError::new(
+                ErrorCode::UnsupportedFormat,
+                format!("Unsupported fallback format: {}", other),
+            ))
+        }
     };
 
     let mut command = std::process::Command::new("/usr/bin/sips");
@@ -228,16 +235,19 @@ pub(crate) fn write_batch_with_sips(
         .arg("--out")
         .arg(output)
         .output()
-        .map_err(|e| format!("Could not run the macOS image converter: {}", e))?;
+        .map_err(|e| CommandError::io(format!("Could not run the macOS image converter: {}", e)))?;
 
     if !result.status.success() || !output.exists() {
         let stderr = String::from_utf8_lossy(&result.stderr);
         let detail = stderr.trim();
-        return Err(if detail.is_empty() {
-            "macOS could not decode this image.".to_string()
-        } else {
-            detail.to_string()
-        });
+        return Err(CommandError::new(
+            ErrorCode::UnsupportedFormat,
+            if detail.is_empty() {
+                "macOS could not decode this image.".to_string()
+            } else {
+                detail.to_string()
+            },
+        ));
     }
     Ok(())
 }
@@ -248,10 +258,12 @@ pub(crate) fn export_batch_item(
     folder: &Path,
     quality: u8,
     used: &mut HashSet<String>,
-) -> Result<PathBuf, String> {
+) -> Result<PathBuf, CommandError> {
     let source = Path::new(&item.source_path);
     if !source.is_file() {
-        return Err("Source file not found on disk.".to_string());
+        return Err(CommandError::internal(
+            "Source file not found on disk.".to_string(),
+        ));
     }
 
     let output_ext = batch_output_extension(&request.format, source);
@@ -278,17 +290,17 @@ pub(crate) fn export_batch_item(
             } else {
                 "RAW conversion needs native macOS image support. Choose “Keep source format” and turn off resizing and metadata stripping to copy RAW files."
             };
-            return Err(message.to_string());
+            return Err(CommandError::io(message.to_string()));
         }
         std::fs::copy(source, &output_path)
-            .map_err(|e| format!("Could not copy the file: {}", e))?;
+            .map_err(|e| CommandError::io(format!("Could not copy the file: {}", e)))?;
         return Ok(output_path);
     }
 
     // A straight copy preserves the original bytes (and its metadata) exactly.
     if !converting && !resizing && !request.strip_metadata {
         std::fs::copy(source, &output_path)
-            .map_err(|e| format!("Could not copy the file: {}", e))?;
+            .map_err(|e| CommandError::io(format!("Could not copy the file: {}", e)))?;
         return Ok(output_path);
     }
 
@@ -301,7 +313,12 @@ pub(crate) fn export_batch_item(
             let fallback_ext = match output_ext.as_str() {
                 "jpg" | "jpeg" | "png" => output_ext.clone(),
                 "webp" => "png".to_string(),
-                _ => return Err(format!("Could not decode this image: {}", decode_error)),
+                _ => {
+                    return Err(CommandError::new(
+                        ErrorCode::UnsupportedFormat,
+                        format!("Could not decode this image: {}", decode_error),
+                    ))
+                }
             };
             let direct = fallback_ext == output_ext;
             let target = if direct {
@@ -320,9 +337,12 @@ pub(crate) fn export_batch_item(
                 if !direct {
                     std::fs::remove_file(&target).ok();
                 }
-                return Err(format!(
-                    "Could not decode this image: {} ({})",
-                    decode_error, fallback_error
+                return Err(CommandError::new(
+                    ErrorCode::UnsupportedFormat,
+                    format!(
+                        "Could not decode this image: {} ({})",
+                        decode_error, fallback_error
+                    ),
                 ));
             }
 
@@ -330,8 +350,9 @@ pub(crate) fn export_batch_item(
                 return Ok(output_path);
             }
 
-            let decoded = image::open(&target)
-                .map_err(|e| format!("Could not read the converted image: {}", e))?;
+            let decoded = image::open(&target).map_err(|e| {
+                CommandError::internal(format!("Could not read the converted image: {}", e))
+            })?;
             let result = write_batch_webp(decoded, &output_path);
             std::fs::remove_file(&target).ok();
             return result.map(|_| output_path);
@@ -347,10 +368,10 @@ pub(crate) fn export_batch_item(
         "png" => write_batch_png(image, &output_path)?,
         "webp" => write_batch_webp(image, &output_path)?,
         other => {
-            return Err(format!(
+            return Err(CommandError::internal(format!(
                 "Can’t write .{} files yet. Choose JPEG, PNG, or WebP.",
                 other
-            ))
+            )))
         }
     }
 

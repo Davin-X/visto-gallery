@@ -1,4 +1,5 @@
 use super::LibraryFilterDTO;
+use crate::errors::CommandError;
 use crate::models::MediaItem;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
@@ -38,20 +39,26 @@ pub struct SmartAlbumFilter {
 }
 
 impl SmartAlbumFilter {
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> Result<(), CommandError> {
         if let Some(kind) = &self.kind {
             if !matches!(kind.as_str(), "photo" | "video" | "raw") {
-                return Err(format!("Unsupported media kind in Smart Album: {kind}"));
+                return Err(CommandError::invalid(format!(
+                    "Unsupported media kind in Smart Album: {kind}"
+                )));
             }
         }
         if let Some(rating) = self.rating {
             if !(0..=5).contains(&rating) {
-                return Err("Smart Album rating must be between 0 and 5".to_string());
+                return Err(CommandError::invalid(
+                    "Smart Album rating must be between 0 and 5".to_string(),
+                ));
             }
         }
         if let (Some(from), Some(to)) = (self.date_from, self.date_to) {
             if from > to {
-                return Err("Smart Album start date must be before its end date".to_string());
+                return Err(CommandError::invalid(
+                    "Smart Album start date must be before its end date".to_string(),
+                ));
             }
         }
         if let Some(sort_by) = &self.sort_by {
@@ -59,12 +66,16 @@ impl SmartAlbumFilter {
                 sort_by.as_str(),
                 "capturedAt" | "modifiedAt" | "name" | "size" | "kind"
             ) {
-                return Err(format!("Unsupported Smart Album sort: {sort_by}"));
+                return Err(CommandError::invalid(format!(
+                    "Unsupported Smart Album sort: {sort_by}"
+                )));
             }
         }
         if let Some(order) = &self.sort_order {
             if !matches!(order.as_str(), "asc" | "desc") {
-                return Err(format!("Unsupported Smart Album sort order: {order}"));
+                return Err(CommandError::invalid(format!(
+                    "Unsupported Smart Album sort order: {order}"
+                )));
             }
         }
         Ok(())
@@ -110,23 +121,26 @@ fn row_to_album(
     row: &sqlx::sqlite::SqliteRow,
     item_count: i64,
     cover_items: Vec<MediaItem>,
-) -> Result<SmartAlbum, String> {
-    let filter_json: String = row.try_get("filter_json").map_err(|e| e.to_string())?;
+) -> Result<SmartAlbum, CommandError> {
+    let filter_json: String = row.try_get("filter_json")?;
     let filter: SmartAlbumFilter = serde_json::from_str(&filter_json)
-        .map_err(|e| format!("Invalid Smart Album filter: {e}"))?;
+        .map_err(|e| CommandError::invalid(format!("Invalid Smart Album filter: {e}")))?;
     filter.validate()?;
     Ok(SmartAlbum {
-        id: row.try_get("id").map_err(|e| e.to_string())?,
-        name: row.try_get("name").map_err(|e| e.to_string())?,
+        id: row.try_get("id")?,
+        name: row.try_get("name")?,
         filter,
         item_count,
         cover_items,
-        created_at: row.try_get("created_at").map_err(|e| e.to_string())?,
-        updated_at: row.try_get("updated_at").map_err(|e| e.to_string())?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
     })
 }
 
-async fn count_matches(db: &sqlx::SqlitePool, filter: &SmartAlbumFilter) -> Result<i64, String> {
+async fn count_matches(
+    db: &sqlx::SqlitePool,
+    filter: &SmartAlbumFilter,
+) -> Result<i64, CommandError> {
     let page = super::library::get_library_items_page(
         db,
         LibraryFilterDTO {
@@ -141,7 +155,7 @@ async fn count_matches(db: &sqlx::SqlitePool, filter: &SmartAlbumFilter) -> Resu
 async fn cover_items_for(
     db: &sqlx::SqlitePool,
     filter: &SmartAlbumFilter,
-) -> Result<Vec<MediaItem>, String> {
+) -> Result<Vec<MediaItem>, CommandError> {
     let page = super::library::get_library_items_page(
         db,
         LibraryFilterDTO {
@@ -158,19 +172,19 @@ async fn cover_items_for(
 /// tested against a real file-backed catalog.
 pub(crate) async fn get_smart_albums_in_catalog(
     db: &sqlx::SqlitePool,
-) -> Result<Vec<SmartAlbum>, String> {
+) -> Result<Vec<SmartAlbum>, CommandError> {
     let rows = sqlx::query(
         "SELECT id, name, filter_json, created_at, updated_at FROM smart_albums ORDER BY name COLLATE NOCASE ASC",
     )
     .fetch_all(db)
     .await
-    .map_err(|e| e.to_string())?;
+    ?;
 
     let mut albums = Vec::with_capacity(rows.len());
     for row in rows {
-        let filter_json: String = row.try_get("filter_json").map_err(|e| e.to_string())?;
+        let filter_json: String = row.try_get("filter_json")?;
         let filter: SmartAlbumFilter = serde_json::from_str(&filter_json)
-            .map_err(|e| format!("Invalid Smart Album filter: {e}"))?;
+            .map_err(|e| CommandError::invalid(format!("Invalid Smart Album filter: {e}")))?;
         filter.validate()?;
         let item_count = count_matches(db, &filter).await?;
         let covers = cover_items_for(db, &filter).await?;
@@ -185,15 +199,17 @@ pub(crate) async fn create_smart_album_in_catalog(
     db: &sqlx::SqlitePool,
     name: String,
     filter: SmartAlbumFilter,
-) -> Result<SmartAlbum, String> {
+) -> Result<SmartAlbum, CommandError> {
     let name = name.trim().to_string();
     if name.is_empty() {
-        return Err("Smart Album name cannot be empty".to_string());
+        return Err(CommandError::invalid(
+            "Smart Album name cannot be empty".to_string(),
+        ));
     }
     filter.validate()?;
     let id = Uuid::new_v4().to_string();
     let now = super::now_ms();
-    let filter_json = serde_json::to_string(&filter).map_err(|e| e.to_string())?;
+    let filter_json = serde_json::to_string(&filter)?;
     sqlx::query(
         "INSERT INTO smart_albums (id, name, filter_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
     )
@@ -228,7 +244,7 @@ pub(crate) async fn create_smart_album_in_catalog(
 #[tauri::command]
 pub async fn get_smart_albums(
     catalog: State<'_, crate::Catalog>,
-) -> Result<Vec<SmartAlbum>, String> {
+) -> Result<Vec<SmartAlbum>, CommandError> {
     let db = super::get_db(&catalog)?;
     get_smart_albums_in_catalog(&db).await
 }
@@ -238,7 +254,7 @@ pub async fn create_smart_album(
     name: String,
     filter: SmartAlbumFilter,
     catalog: State<'_, crate::Catalog>,
-) -> Result<SmartAlbum, String> {
+) -> Result<SmartAlbum, CommandError> {
     let db = super::get_db(&catalog)?;
     create_smart_album_in_catalog(&db, name, filter).await
 }
@@ -248,10 +264,12 @@ pub async fn rename_smart_album(
     album_id: String,
     name: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let name = name.trim().to_string();
     if name.is_empty() {
-        return Err("Smart Album name cannot be empty".to_string());
+        return Err(CommandError::invalid(
+            "Smart Album name cannot be empty".to_string(),
+        ));
     }
     let db = super::get_db(&catalog)?;
     sqlx::query("UPDATE smart_albums SET name = ?, updated_at = ? WHERE id = ?")
@@ -259,8 +277,7 @@ pub async fn rename_smart_album(
         .bind(super::now_ms())
         .bind(&album_id)
         .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(())
 }
 
@@ -268,13 +285,12 @@ pub async fn rename_smart_album(
 pub async fn delete_smart_album(
     album_id: String,
     catalog: State<'_, crate::Catalog>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
     sqlx::query("DELETE FROM smart_albums WHERE id = ?")
         .bind(&album_id)
         .execute(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
     Ok(())
 }
 
@@ -286,17 +302,16 @@ pub async fn get_smart_album_items(
     limit: Option<i32>,
     cursor: Option<String>,
     catalog: State<'_, crate::Catalog>,
-) -> Result<super::LibraryItemsPage, String> {
+) -> Result<super::LibraryItemsPage, CommandError> {
     let db = super::get_db(&catalog)?;
     let row = sqlx::query("SELECT filter_json FROM smart_albums WHERE id = ?")
         .bind(&album_id)
         .fetch_optional(&db)
-        .await
-        .map_err(|e| e.to_string())?
+        .await?
         .ok_or_else(|| "Smart Album no longer exists".to_string())?;
-    let filter_json: String = row.try_get("filter_json").map_err(|e| e.to_string())?;
+    let filter_json: String = row.try_get("filter_json")?;
     let filter: SmartAlbumFilter = serde_json::from_str(&filter_json)
-        .map_err(|e| format!("Invalid Smart Album filter: {e}"))?;
+        .map_err(|e| CommandError::invalid(format!("Invalid Smart Album filter: {e}")))?;
     filter.validate()?;
 
     super::library::get_library_items_page(
@@ -411,7 +426,9 @@ mod tests {
             .unwrap();
 
         let error = super::get_smart_albums_in_catalog(&db).await.unwrap_err();
-        assert!(error.contains("Smart Album rating must be between 0 and 5"));
+        assert!(error
+            .message
+            .contains("Smart Album rating must be between 0 and 5"));
     }
 
     #[test]

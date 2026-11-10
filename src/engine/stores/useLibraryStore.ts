@@ -20,7 +20,10 @@ import type {
   LibraryItemsPage,
   SmartAlbum,
   SmartAlbumFilter,
+  ErrorCode,
 } from "../types/commands";
+import { describeError } from "../../app/utils/describeError";
+import { errorCode } from "../types/errors";
 import { tauri } from "../commands/tauri";
 import { formatBytes } from "../commands/tauri";
 
@@ -124,6 +127,8 @@ export interface LibraryState {
     currentFile?: string;
   } | null;
   notice: string | null;
+  /** Code behind `notice` when it came from a failed command. */
+  noticeCode: ErrorCode | null;
 
   // Computed
   visibleItems: MediaItem[];
@@ -229,7 +234,9 @@ export interface LibraryState {
   // Actions - UI
   setBusy: (busy: boolean) => void;
   setProgress: (progress: LibraryState["progress"]) => void;
-  showNotice: (text: string) => void;
+  showNotice: (text: string, code?: ErrorCode | null) => void;
+  /** Show a failed command's message, with its code for the toast tone. */
+  showErrorNotice: (error: unknown, prefix?: string) => void;
 }
 
 // Sorting is the most expensive part of deriving the gallery collections.
@@ -489,6 +496,7 @@ export const useLibraryStore = create<LibraryState>()(
       refreshingLibrary: false,
       progress: null,
       notice: null,
+      noticeCode: null,
 
       // Pagination
       page: 0,
@@ -571,11 +579,8 @@ export const useLibraryStore = create<LibraryState>()(
         } catch (e) {
           if (generation !== libraryLoadGeneration) return;
           if (import.meta.env.DEV) console.error("loadItemsPage failed:", e);
-          set({
-            refreshingLibrary: false,
-            loadedViewKey: null,
-            notice: "Failed to load library: " + String(e),
-          });
+          set({ refreshingLibrary: false, loadedViewKey: null });
+          get().showErrorNotice(e, "Failed to load library");
         }
       },
 
@@ -612,9 +617,7 @@ export const useLibraryStore = create<LibraryState>()(
         } catch (e) {
           if (generation !== libraryLoadGeneration) return;
           if (import.meta.env.DEV) console.error("loadCatalogMetadata failed:", e);
-          set({
-            notice: "Failed to load catalog metadata: " + String(e),
-          });
+          get().showErrorNotice(e, "Failed to load catalog metadata");
         }
       },
 
@@ -696,10 +699,8 @@ export const useLibraryStore = create<LibraryState>()(
             set({ loadingNextPage: false });
             return;
           }
-          set({
-            loadingNextPage: false,
-            notice: "Failed to load more items: " + String(error),
-          });
+          set({ loadingNextPage: false });
+          get().showErrorNotice(error, "Failed to load more items");
         }
       },
 
@@ -1251,7 +1252,7 @@ export const useLibraryStore = create<LibraryState>()(
           const cancelled =
             trashedIds.size === 0 &&
             result.failed.length > 0 &&
-            result.failed.every((f) => f.error?.includes("cancelled"));
+            result.failed.every((f) => f.code === "cancelled");
           if (cancelled) {
             return { status: "cancelled", trashed: 0, failed: result.failed.length };
           }
@@ -1486,11 +1487,7 @@ export const useLibraryStore = create<LibraryState>()(
           const smartAlbums = await tauri.smartAlbums.get();
           set({ smartAlbums });
         } catch (error) {
-          get().showNotice(
-            `Could not load Smart Albums: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
+          get().showErrorNotice(error, "Could not load Smart Albums");
         }
       },
 
@@ -1525,9 +1522,7 @@ export const useLibraryStore = create<LibraryState>()(
           set((s) => ({ smartAlbums: [...s.smartAlbums, album] }));
           get().showNotice(`Saved Smart Album "${album.name}".`);
         } catch (error) {
-          get().showNotice(
-            `Could not save Smart Album: ${error instanceof Error ? error.message : String(error)}`,
-          );
+          get().showErrorNotice(error, "Could not save Smart Album");
         }
       },
 
@@ -1542,11 +1537,7 @@ export const useLibraryStore = create<LibraryState>()(
             ),
           }));
         } catch (error) {
-          get().showNotice(
-            `Could not rename Smart Album: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
+          get().showErrorNotice(error, "Could not rename Smart Album");
         }
       },
 
@@ -1559,18 +1550,14 @@ export const useLibraryStore = create<LibraryState>()(
           }));
           get().showNotice("Smart Album deleted. Photos were not changed.");
         } catch (error) {
-          get().showNotice(
-            `Could not delete Smart Album: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
+          get().showErrorNotice(error, "Could not delete Smart Album");
         }
       },
 
       openSmartAlbum: async (albumId) => {
         const album = get().smartAlbums.find((entry) => entry.id === albumId);
         if (!album) {
-          get().showNotice("That Smart Album no longer exists.");
+          get().showNotice("That Smart Album no longer exists.", "notFound");
           return;
         }
         const filter = album.filter;
@@ -1635,12 +1622,9 @@ export const useLibraryStore = create<LibraryState>()(
           );
         } catch (e) {
           const cancelled = get().canceling;
-          set({
-            busy: false,
-            canceling: false,
-            progress: null,
-            notice: cancelled ? "Duplicate scan cancelled." : "Duplicate scan failed",
-          });
+          set({ busy: false, canceling: false, progress: null });
+          if (cancelled) get().showNotice("Duplicate scan cancelled.");
+          else get().showNotice("Duplicate scan failed", errorCode(e) ?? "internal");
         }
       },
 
@@ -1653,10 +1637,8 @@ export const useLibraryStore = create<LibraryState>()(
           if (phase === "hashing") await tauri.duplicates.cancel();
           else await tauri.library.cancelScan();
         } catch (e) {
-          set({
-            canceling: false,
-            notice: `Could not cancel scan: ${String(e)}`,
-          });
+          set({ canceling: false });
+          get().showErrorNotice(e, "Could not cancel scan");
         } finally {
           // Always clear canceling state - the backend flag is handled by next scan
           set({ canceling: false });
@@ -1668,10 +1650,8 @@ export const useLibraryStore = create<LibraryState>()(
         try {
           await tauri.items.cancelMoveToTrash();
         } catch (e) {
-          set({
-            canceling: false,
-            notice: `Could not cancel deletion: ${String(e)}`,
-          });
+          set({ canceling: false });
+          get().showErrorNotice(e, "Could not cancel deletion");
         }
       },
 
@@ -1680,15 +1660,19 @@ export const useLibraryStore = create<LibraryState>()(
       // UI
       setBusy: (busy) => set({ busy, ...(busy ? {} : { canceling: false }) }),
       setProgress: (progress) => set({ progress }),
-      showNotice: (text) => {
-        set({ notice: text });
+      showNotice: (text, code = null) => {
+        set({ notice: text, noticeCode: code ?? null });
         if (text) {
-          const warning =
-            /failed|could not|cannot access|not a folder|could not read|no media files found|no supported media/i.test(
-              text,
-            );
-          setTimeout(() => set({ notice: "" }), warning ? 8000 : 3600);
+          setTimeout(() => set({ notice: "", noticeCode: null }), code ? 8000 : 3600);
         }
+      },
+
+      showErrorNotice: (error, prefix) => {
+        const message = describeError(error);
+        get().showNotice(
+          prefix ? `${prefix}: ${message}` : message,
+          errorCode(error) ?? "internal",
+        );
       },
 
       // Internal: refresh derived state
