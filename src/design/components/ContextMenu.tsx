@@ -260,4 +260,3 @@ export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
     root!,
   );
 }
-
