@@ -668,10 +668,9 @@ kbd {
 }
 
 /* Favourite and colour label share the top-left corner. When both exist, move
-   the heart beside the dot so neither badge covers the other, and align their
-   vertical centres (16px dot vs 22px heart). */
+   the heart beside the dot so neither badge covers the other. */
 .gallery-tile:has(.tile-color-label) .tile-favorite {
-  top: 4px;
+  top: 7px;
   left: 29px;
 }
 .tile-rating {
