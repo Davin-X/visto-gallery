@@ -72,6 +72,19 @@ const SORT_LABELS: Record<SortBy, string> = {
   name: "Name",
 };
 
+/** True when a key event originates from an editable field (input, textarea,
+ *  select, contenteditable) — the duplicates shortcuts must not hijack typing. */
+function isEditableTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  return (
+    el.isContentEditable ||
+    el.tagName === "INPUT" ||
+    el.tagName === "TEXTAREA" ||
+    el.tagName === "SELECT"
+  );
+}
+
 function parentFolder(path: string): string {
   const index = path.lastIndexOf("/");
   return index > 0 ? path.slice(0, index) : path;
@@ -273,6 +286,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     useCallback(
       (e: KeyboardEvent) => {
         if (busy) return;
+        if (isEditableTarget(e.target)) return;
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
           e.preventDefault();
           selectAllCopies();
