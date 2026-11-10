@@ -136,7 +136,7 @@ export function AppTopBar({
           type="button"
           aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
           aria-pressed={sidebarOpen}
-          title={sidebarOpen ? "Hide sidebar (⌥⌘S)" : "Show sidebar (⌥⌘S)"}
+          title={sidebarOpen ? "Hide sidebar (⌘\)" : "Show sidebar (⌘\)"}
           onClick={onToggleSidebar}
         >
           <PanelLeftIcon size={18} />
