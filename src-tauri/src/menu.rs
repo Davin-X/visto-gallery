@@ -1,5 +1,42 @@
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter, Manager};
+
+/// Menu items that forward to the webview as window events. Everything else
+/// (close window, quit, fullscreen) is handled natively below.
+const MENU_EVENTS: &[(&str, &str)] = &[
+    ("file_open_folder", "menu-open-folder"),
+    ("file_import_files", "menu-import-files"),
+    ("file_export", "menu-export"),
+    ("view_toggle_sidebar", "menu-toggle-sidebar"),
+    ("view_toggle_inspector", "menu-toggle-inspector"),
+    ("view_zoom_in", "menu-zoom-in"),
+    ("view_zoom_out", "menu-zoom-out"),
+    ("help_about", "menu-about"),
+    ("help_check_updates", "menu-check-updates"),
+];
+
+/// The window event a menu item id maps to, when there is one.
+pub fn menu_event_for_id(id: &str) -> Option<&'static str> {
+    MENU_EVENTS
+        .iter()
+        .find(|(item_id, _)| *item_id == id)
+        .map(|(_, window_event)| *window_event)
+}
+
+/// Emit the window event for `id` on the main window. Returns true when the
+/// id was a forwarding menu item.
+pub fn dispatch_menu_event(app: &AppHandle, id: &str) -> bool {
+    let Some(window_event) = menu_event_for_id(id) else {
+        return false;
+    };
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Some(window) = app_handle.get_webview_window("main") {
+            let _ = window.emit(window_event, ());
+        }
+    });
+    true
+}
 
 pub fn create_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     // File menu
@@ -130,4 +167,33 @@ pub fn create_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
     MenuBuilder::new(app)
         .items(&[&file_menu, &edit_menu, &view_menu, &window_menu, &help_menu])
         .build()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::menu_event_for_id;
+
+    #[test]
+    fn forwarding_items_map_to_their_window_event() {
+        assert_eq!(menu_event_for_id("file_export"), Some("menu-export"));
+        assert_eq!(
+            menu_event_for_id("help_check_updates"),
+            Some("menu-check-updates")
+        );
+    }
+
+    #[test]
+    fn native_items_and_unknown_ids_are_not_forwarded() {
+        assert_eq!(menu_event_for_id("file_quit"), None);
+        assert_eq!(menu_event_for_id("view_fullscreen"), None);
+        assert_eq!(menu_event_for_id("no_such_item"), None);
+    }
+
+    #[test]
+    fn forwarding_ids_are_unique() {
+        let mut ids: Vec<&'static str> = super::MENU_EVENTS.iter().map(|(id, _)| *id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), super::MENU_EVENTS.len());
+    }
 }

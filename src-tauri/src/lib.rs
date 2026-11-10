@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
 use sqlx::SqlitePool;
-use tauri::{Emitter, Manager, State};
+use tauri::{Manager, State};
 
 // Modules
 mod commands;
@@ -19,7 +19,7 @@ mod models;
 use commands::*;
 use db::Database;
 use errors::CommandError;
-use menu::create_menu;
+use menu::{create_menu, dispatch_menu_event};
 
 /// Shared SQLite pool (or the launch-time open error). Managed as Tauri state
 /// so commands take it without locking a mutex. Set exactly once during setup.
@@ -130,93 +130,27 @@ pub fn run() {
             app.set_menu(menu)?;
 
             // Handle menu events
-            app.on_menu_event(|app, event| match event.id().as_ref() {
-                "file_open_folder" => {
-                    let app_handle = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            let _ = window.emit("menu-open-folder", ());
-                        }
-                    });
+            app.on_menu_event(|app, event| {
+                let id = event.id().as_ref();
+                if dispatch_menu_event(app, id) {
+                    return;
                 }
-                "file_import_files" => {
-                    let app_handle = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            let _ = window.emit("menu-import-files", ());
+                match id {
+                    "file_close_window" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.close();
                         }
-                    });
-                }
-                "file_export" => {
-                    let app_handle = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            let _ = window.emit("menu-export", ());
-                        }
-                    });
-                }
-                "file_close_window" => {
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.close();
                     }
-                }
-                "file_quit" => {
-                    app.exit(0);
-                }
-                "view_toggle_sidebar" => {
-                    let app_handle = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            let _ = window.emit("menu-toggle-sidebar", ());
-                        }
-                    });
-                }
-                "view_toggle_inspector" => {
-                    let app_handle = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            let _ = window.emit("menu-toggle-inspector", ());
-                        }
-                    });
-                }
-                "view_zoom_in" => {
-                    let app_handle = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            let _ = window.emit("menu-zoom-in", ());
-                        }
-                    });
-                }
-                "view_zoom_out" => {
-                    let app_handle = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            let _ = window.emit("menu-zoom-out", ());
-                        }
-                    });
-                }
-                "view_fullscreen" => {
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.set_fullscreen(true);
+                    "file_quit" => {
+                        app.exit(0);
                     }
-                }
-                "help_about" => {
-                    let app_handle = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            let _ = window.emit("menu-about", ());
+                    "view_fullscreen" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.set_fullscreen(true);
                         }
-                    });
+                    }
+                    _ => {}
                 }
-                "help_check_updates" => {
-                    let app_handle = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            let _ = window.emit("menu-check-updates", ());
-                        }
-                    });
-                }
-                _ => {}
             });
             Ok(())
         })
