@@ -2272,10 +2272,14 @@ function LibraryScreen(props: LibraryScreenProps) {
                     <button
                       className={`inspector-action ${sel.favorite ? "favorite active" : ""}`}
                       onClick={() => props.onToggleFavorite(props.inspectedId as string)}
-                      title={sel.favorite ? "Unfavorite" : "Favorite"}
+                      title={sel.favorite ? "Remove from favorites" : "Add to favorites"}
+                      aria-pressed={!!sel.favorite}
                     >
+                      {/* The label stays "Favorite"; the filled heart and
+                          pressed state show it is on. "Unfavorite" was too
+                          long for the button and spilled out of it. */}
                       <HeartIcon size={14} filled={!!sel.favorite} />
-                      <span>{sel.favorite ? "Unfavorite" : "Favorite"}</span>
+                      <span>Favorite</span>
                     </button>
                     <button
                       className="inspector-action"
@@ -2283,15 +2287,16 @@ function LibraryScreen(props: LibraryScreenProps) {
                       title={sel.hidden ? "Unhide" : "Hide"}
                     >
                       {sel.hidden ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
-                      <span>{sel.hidden ? "Unhide" : "Hide"}</span>
+                      <span>{sel.hidden ? "Show" : "Hide"}</span>
                     </button>
                     <button
                       className={`inspector-action ${isSelected ? "active" : ""}`}
                       onClick={() => props.onToggleSelect(sel.id)}
                       title={isSelected ? "Remove from selection" : "Add to selection"}
+                      aria-pressed={isSelected}
                     >
                       {isSelected ? <CheckIcon size={14} /> : <PlusIcon size={14} />}
-                      <span>{isSelected ? "Selected" : "Select"}</span>
+                      <span>Select</span>
                     </button>
                   </div>
                   <div className="inspector-section">

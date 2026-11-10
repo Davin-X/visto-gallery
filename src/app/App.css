@@ -13146,3 +13146,36 @@ body.is-resizing .photo-inspector {
   color: var(--muted);
   font-size: 11px;
 }
+
+/* Inspector action buttons (View, Favorite, Hide, Select) must never spill
+   their label: four equal columns, labels that ellipsize as a last resort,
+   and a 2x2 grid once the panel is dragged narrow (it can go down to 180px). */
+.photo-inspector {
+  container-type: inline-size;
+}
+
+.photo-inspector .inspector-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.photo-inspector .inspector-actions button {
+  min-width: 0;
+  padding-inline: 1px;
+  overflow: hidden;
+}
+
+.photo-inspector .inspector-actions button span {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@container (max-width: 195px) {
+  .photo-inspector .inspector-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
