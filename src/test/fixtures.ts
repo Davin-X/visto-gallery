@@ -84,6 +84,7 @@ export function makeLibraryStats(overrides: Partial<LibraryStats> = {}): Library
     videos: 0,
     raws: 0,
     animations: 0,
+    animationsSize: 0,
     uncategorized: 0,
     favorites: 0,
     hidden: 0,

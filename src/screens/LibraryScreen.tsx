@@ -374,11 +374,10 @@ function LibraryScreen(props: LibraryScreenProps) {
     for (const item of filterSource) {
       if (!props.hiddenView && item.hidden) continue;
       counts.All += 1;
-      if (item.kind === "photo") counts.Photos += 1;
+      if (item.kind === "photo" && !item.isAnimated) counts.Photos += 1;
       else if (item.kind === "video") counts.Videos += 1;
       else if (item.kind === "raw") counts.RAW += 1;
-      // Animated items are also photos; the chip is a narrower view, not a
-      // separate kind, so it never changes the Photos or All counts.
+      // Animated files keep their own count; Photos is still images only.
       if (item.isAnimated) counts.Animations += 1;
       if (item.favorite) counts.Favorites += 1;
     }
@@ -1393,7 +1392,8 @@ function LibraryScreen(props: LibraryScreenProps) {
                 : f === "All"
                   ? (props.libraryStats?.photos ?? 0) +
                     (props.libraryStats?.videos ?? 0) +
-                    (props.libraryStats?.raws ?? 0)
+                    (props.libraryStats?.raws ?? 0) +
+                    (props.libraryStats?.animations ?? 0)
                   : f === "Photos"
                     ? (props.libraryStats?.photos ?? 0)
                     : f === "Videos"

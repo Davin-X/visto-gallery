@@ -675,7 +675,7 @@ test("cancelDelete keeps the stable operation overlay in its cancelling state", 
   expect(useLibraryStore.getState().canceling).toBe(true);
 });
 
-test("Animations filter narrows to animated items without reclassifying photos", () => {
+test("Animations filter narrows to animated items; Photos is still images only", () => {
   const gif = { ...makeItem("gif", "loop.gif"), isAnimated: true };
   const still = makeItem("still", "still.jpg");
   const animatedVideo = {
@@ -700,7 +700,7 @@ test("Animations filter narrows to animated items without reclassifying photos",
       .sort(),
   ).toEqual(["clip", "gif"]);
 
-  // GIFs stay photos: the Photos filter must not lose them.
+  // Photos excludes animated items; animated files keep their own filter.
   useLibraryStore.setState({ filter: "Photos" });
   useLibraryStore.getState().refreshDerived();
   expect(
@@ -708,7 +708,7 @@ test("Animations filter narrows to animated items without reclassifying photos",
       .getState()
       .visibleItems.map((i) => i.id)
       .sort(),
-  ).toEqual(["gif", "still"]);
+  ).toEqual(["still"]);
 });
 
 test("Animations filter is sent to the backend as an animated flag, not a kind", () => {

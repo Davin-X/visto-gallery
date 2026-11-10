@@ -1612,8 +1612,10 @@ pub struct LibraryStats {
     photos: i64,
     videos: i64,
     raws: i64,
-    /// Subset of `photos`: items the catalog treats as animated content.
+    /// Animated items; counted within `photos` until the split ships, but kept separate for the UI.
     animations: i64,
+    /// Total bytes of the animated subset.
+    animations_size: i64,
     uncategorized: i64,
     favorites: i64,
     hidden: i64,
@@ -1631,16 +1633,17 @@ pub async fn get_library_stats(
     catalog: State<'_, crate::Catalog>,
 ) -> Result<LibraryStats, CommandError> {
     let db = super::get_db(&catalog)?;
-    let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
+    let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
         "SELECT
-            SUM(CASE WHEN kind = 'photo' AND hidden = 0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN kind = 'photo' AND hidden = 0 AND is_animated = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN kind = 'video' AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN kind = 'raw' AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN is_animated = 1 AND hidden = 0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN is_animated = 1 AND hidden = 0 THEN size ELSE 0 END),
             SUM(CASE WHEN kind NOT IN ('photo', 'video', 'raw') AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN favorite = 1 AND hidden = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN hidden = 1 THEN 1 ELSE 0 END),
-            SUM(CASE WHEN kind = 'photo' AND hidden = 0 THEN size ELSE 0 END),
+            SUM(CASE WHEN kind = 'photo' AND hidden = 0 AND is_animated = 0 THEN size ELSE 0 END),
             SUM(CASE WHEN kind = 'video' AND hidden = 0 THEN size ELSE 0 END),
             SUM(CASE WHEN kind = 'raw' AND hidden = 0 THEN size ELSE 0 END),
             SUM(CASE WHEN kind NOT IN ('photo', 'video', 'raw') AND hidden = 0 THEN size ELSE 0 END),
@@ -1657,6 +1660,7 @@ pub async fn get_library_stats(
         videos,
         raws,
         animations,
+        animations_size,
         uncategorized,
         favorites,
         hidden,
@@ -1675,6 +1679,7 @@ pub async fn get_library_stats(
         videos,
         raws,
         animations,
+        animations_size,
         uncategorized,
         favorites,
         hidden,
