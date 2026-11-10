@@ -218,7 +218,9 @@ function HiddenScreen(props: HiddenScreenProps) {
         filter={filter}
         query={query}
         layout={library.layout}
-        showInspector={library.showInspector}
+        // With nothing hidden there is nothing to inspect; give the empty
+        // state the full width instead of an empty panel.
+        showInspector={library.showInspector && library.hiddenCount > 0}
         activeAlbum={null}
         albums={library.albums}
         hiddenCount={library.hiddenCount}

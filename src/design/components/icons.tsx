@@ -596,6 +596,34 @@ export function ChevronRightIcon({ size = 14, className = "", strokeWidth = 2 }:
   );
 }
 
+/** Double chevron: collapse a panel to its icon rail. */
+export function ChevronsLeftIcon({ size = 14, className = "", strokeWidth = 2 }: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <path
+        d="M11 17l-5-5 5-5M18 17l-5-5 5-5"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** Double chevron: expand a panel from its icon rail. */
+export function ChevronsRightIcon({ size = 14, className = "", strokeWidth = 2 }: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <path
+        d="M13 7l5 5-5 5M6 7l5 5-5 5"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 export function CameraIcon({ size = 16, className = "", strokeWidth = 1.8 }: IconProps) {
   return (
     <Svg size={size} className={className} strokeWidth={strokeWidth}>

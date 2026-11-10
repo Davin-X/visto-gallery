@@ -2185,9 +2185,16 @@ function LibraryScreen(props: LibraryScreenProps) {
                       {...holdHandlers(sel.id)}
                     >
                       {sel.kind === "photo" ? (
-                        <img
-                          src={assetUrl(sel.path)}
-                          alt={tileAlt(sel)}
+                        // A cached 512px preview, not the original: a 40 MB
+                        // photo does not need a full decode for this frame,
+                        // and a missing or offline file shows "Preview
+                        // unavailable" instead of a broken image.
+                        <CachedThumbnail
+                          itemId={sel.id}
+                          name={tileAlt(sel)}
+                          size={512}
+                          eager
+                          showStatus
                           style={draftImageStyle(draftTransforms, sel.id)}
                         />
                       ) : sel.kind === "video" ? (
@@ -2265,10 +2272,14 @@ function LibraryScreen(props: LibraryScreenProps) {
                     <button
                       className={`inspector-action ${sel.favorite ? "favorite active" : ""}`}
                       onClick={() => props.onToggleFavorite(props.inspectedId as string)}
-                      title={sel.favorite ? "Unfavorite" : "Favorite"}
+                      title={sel.favorite ? "Remove from favorites" : "Add to favorites"}
+                      aria-pressed={!!sel.favorite}
                     >
+                      {/* The label stays "Favorite"; the filled heart and
+                          pressed state show it is on. "Unfavorite" was too
+                          long for the button and spilled out of it. */}
                       <HeartIcon size={14} filled={!!sel.favorite} />
-                      <span>{sel.favorite ? "Unfavorite" : "Favorite"}</span>
+                      <span>Favorite</span>
                     </button>
                     <button
                       className="inspector-action"
@@ -2276,15 +2287,16 @@ function LibraryScreen(props: LibraryScreenProps) {
                       title={sel.hidden ? "Unhide" : "Hide"}
                     >
                       {sel.hidden ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
-                      <span>{sel.hidden ? "Unhide" : "Hide"}</span>
+                      <span>{sel.hidden ? "Show" : "Hide"}</span>
                     </button>
                     <button
                       className={`inspector-action ${isSelected ? "active" : ""}`}
                       onClick={() => props.onToggleSelect(sel.id)}
                       title={isSelected ? "Remove from selection" : "Add to selection"}
+                      aria-pressed={isSelected}
                     >
                       {isSelected ? <CheckIcon size={14} /> : <PlusIcon size={14} />}
-                      <span>{isSelected ? "Selected" : "Select"}</span>
+                      <span>Select</span>
                     </button>
                   </div>
                   <div className="inspector-section">
@@ -2407,7 +2419,7 @@ function LibraryScreen(props: LibraryScreenProps) {
               <div className="inspector-top">
                 <div>
                   <small>INSPECTOR</small>
-                  <h2>No Inspection</h2>
+                  <h2>Nothing selected</h2>
                 </div>
                 <button
                   type="button"
@@ -2423,8 +2435,8 @@ function LibraryScreen(props: LibraryScreenProps) {
                   <DetailsIcon size={26} />
                 </span>
                 <p>
-                  Single-click a photo or video to inspect its details. Selection is separate — use
-                  the checkbox or + to multi-select.
+                  Click a photo or video to see its details here. To pick several for an action, use
+                  the checkbox on each one.
                 </p>
               </div>
             </div>

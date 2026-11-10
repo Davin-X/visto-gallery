@@ -1,6 +1,7 @@
 import React from "react";
 import { AlbumsIcon, PlusIcon } from "../design/components/icons";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
+import { MiddleTruncate } from "../design/components/MiddleTruncate";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
 import type { Album, MediaItem, MediaKind } from "../engine/types/media";
 import type { SmartAlbum } from "../engine/types/commands";
@@ -98,7 +99,11 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                       <span className="smart-album-tile-cover-empty">{badge}</span>
                     )}
                   </span>
-                  <span className="smart-album-tile-name">{album.name}</span>
+                  <MiddleTruncate
+                    className="smart-album-tile-name"
+                    text={album.name}
+                    tailLength={6}
+                  />
                   <span className="smart-album-tile-count">
                     {album.itemCount.toLocaleString()} {album.itemCount === 1 ? "item" : "items"}
                   </span>
@@ -148,7 +153,9 @@ function AlbumsScreen(props: AlbumsScreenProps) {
               <span className="album-card-meta">
                 <span className="album-card-name">
                   <i className={`album-dot ${album.color}`} />
-                  <span>{album.name}</span>
+                  {/* Names often differ only at the end ("Trip 2023", "Trip
+                      2024"), so keep the end visible when space runs out. */}
+                  <MiddleTruncate text={album.name} tailLength={6} />
                 </span>
                 <span className="album-card-count">
                   {album.count > 0
