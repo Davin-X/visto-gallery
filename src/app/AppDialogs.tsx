@@ -59,6 +59,7 @@ interface AppDialogsProps {
 
   removeAllSourcesDialogOpen: boolean;
   setRemoveAllSourcesDialogOpen: (open: boolean) => void;
+  removingAllSources: boolean;
 
   folderPendingRemove: LibraryFolder | null;
   removingFolder: boolean;
@@ -674,13 +675,21 @@ function RemoveFromAlbumDialog({
   onClose: () => void;
   onConfirm: () => Promise<void>;
 }) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(open && !!pending, dialogRef);
   useEscape(onClose, open);
 
   if (!open || !pending) return null;
 
   return (
     <Backdrop open={open} onClose={onClose}>
-      <div className="album-dialog delete-album-dialog" role="alertdialog" aria-modal="true">
+      <div
+        ref={dialogRef}
+        className="album-dialog delete-album-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="remove-from-album-title"
+      >
         <DialogHeader
           eyebrow="ALBUM"
           title="Remove from Album?"
@@ -728,6 +737,8 @@ function SourcesSheet({
   escapeBlocked: boolean;
   library: any;
 }) {
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(open, sheetRef);
   useEscape(onClose, open && !escapeBlocked);
 
   if (!open) return null;
@@ -735,6 +746,7 @@ function SourcesSheet({
   return (
     <Backdrop open={open} onClose={onClose} className="sources-sheet-backdrop">
       <div
+        ref={sheetRef}
         className="album-dialog sources-sheet"
         role="dialog"
         aria-modal="true"
@@ -781,30 +793,46 @@ function RemoveAllSourcesDialog({
   open,
   onClose,
   onConfirm,
+  busy,
 }: {
   open: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  /** While a removal pass is running the dialog stays up and pinned. */
+  busy: boolean;
 }) {
-  useEscape(onClose, open);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(open, dialogRef);
+  useEscape(onClose, open && !busy);
 
   if (!open) return null;
 
   return (
-    <Backdrop open={open} onClose={onClose}>
-      <div className="album-dialog" role="dialog" aria-modal="true">
+    <Backdrop
+      open={open}
+      onClose={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        className="album-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="remove-all-sources-title"
+      >
         <div className="dialog-heading">
-          <h2>Remove all sources?</h2>
+          <h2 id="remove-all-sources-title">Remove all sources?</h2>
         </div>
         <div className="dialog-body">
           This removes all source folders from the library. Files stay on disk.
         </div>
         <div className="dialog-actions">
-          <button type="button" className="quiet-button" onClick={onClose}>
+          <button type="button" className="quiet-button" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button type="button" className="danger-button" onClick={onConfirm}>
-            Remove all
+          <button type="button" className="danger-button" onClick={onConfirm} disabled={busy}>
+            {busy ? "Removing…" : "Remove all"}
           </button>
         </div>
       </div>
@@ -913,6 +941,7 @@ export function AppDialogs(props: AppDialogsProps) {
     setSourcesSheetOpen,
     removeAllSourcesDialogOpen,
     setRemoveAllSourcesDialogOpen,
+    removingAllSources,
     folderPendingRemove,
     removingFolder,
     setFolderPendingRemove,
@@ -1041,10 +1070,8 @@ export function AppDialogs(props: AppDialogsProps) {
       <RemoveAllSourcesDialog
         open={removeAllSourcesDialogOpen}
         onClose={() => setRemoveAllSourcesDialogOpen(false)}
-        onConfirm={() => {
-          setRemoveAllSourcesDialogOpen(false);
-          void removeAllSources();
-        }}
+        onConfirm={() => void removeAllSources()}
+        busy={removingAllSources}
       />
       <RemoveFolderDialog
         open={folderPendingRemove != null}

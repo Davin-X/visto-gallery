@@ -113,6 +113,7 @@ function App() {
   const [removingFolder, setRemovingFolder] = useState(false);
   const [sourcesSheetOpen, setSourcesSheetOpen] = useState(false);
   const [removeAllSourcesDialogOpen, setRemoveAllSourcesDialogOpen] = useState(false);
+  const [removingAllSources, setRemovingAllSources] = useState(false);
 
   const rescanInProgress = useRef(false);
   // Where the viewer returns when it closes. Opening the viewer from Hidden
@@ -2045,18 +2046,22 @@ function App() {
   };
 
   const removeAllSources = async () => {
+    if (removingAllSources) return;
     const folders = library.folders;
     if (folders.length === 0) return;
+    setRemovingAllSources(true);
     library.setBusy(true);
     try {
       for (const folder of folders) {
         await library.removeFolder(folder.path, false);
       }
       library.showNotice(`Removed ${folders.length} source(s).`);
+      setRemoveAllSourcesDialogOpen(false);
     } catch (e) {
       library.showErrorNotice(e, "Could not remove sources");
     } finally {
       library.setBusy(false);
+      setRemovingAllSources(false);
     }
   };
 
@@ -2436,6 +2441,7 @@ function App() {
             setSourcesSheetOpen={setSourcesSheetOpen}
             removeAllSourcesDialogOpen={removeAllSourcesDialogOpen}
             setRemoveAllSourcesDialogOpen={setRemoveAllSourcesDialogOpen}
+            removingAllSources={removingAllSources}
             folderPendingRemove={folderPendingRemove}
             removingFolder={removingFolder}
             setFolderPendingRemove={setFolderPendingRemove}
