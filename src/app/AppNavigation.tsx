@@ -389,8 +389,8 @@ export function AppSidebar({
             stats.raws +
             stats.animations +
             stats.uncategorized
-          ).toLocaleString()} ·{" "}
-          {formatBytesSimple(stats.totalSize)}
+          ).toLocaleString()}{" "}
+          · {formatBytesSimple(stats.totalSize)}
         </span>
       </div>
     </>
