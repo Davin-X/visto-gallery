@@ -29,6 +29,8 @@ function CameraLensBrowserScreen(props: CameraLensBrowserScreenProps) {
   const setColorLabelFilter = useLibraryStore((s) => s.setColorLabelFilter);
   const setActiveAlbum = useLibraryStore((s) => s.setActiveAlbum);
   const setQuery = useLibraryStore((s) => s.setQuery);
+  const setCameraFilter = useLibraryStore((s) => s.setCameraFilter);
+  const setLensFilter = useLibraryStore((s) => s.setLensFilter);
 
   const cameraGroups = useMemo<CameraGroup[]>(() => {
     const byCamera = new Map<string, MediaItem[]>();
@@ -59,19 +61,20 @@ function CameraLensBrowserScreen(props: CameraLensBrowserScreenProps) {
   const filterByCamera = (camera: string) => {
     setActiveAlbum(null);
     setQuery("");
-    // Filter items by camera using query (the library search includes camera)
-    setQuery(camera);
     setMinRating(null);
     setColorLabelFilter(null);
+    setLensFilter(null);
+    setCameraFilter(camera);
     props.onBack();
   };
 
   const filterByLens = (lens: string) => {
     setActiveAlbum(null);
     setQuery("");
-    setQuery(lens);
     setMinRating(null);
     setColorLabelFilter(null);
+    setCameraFilter(null);
+    setLensFilter(lens);
     props.onBack();
   };
 
@@ -80,10 +83,10 @@ function CameraLensBrowserScreen(props: CameraLensBrowserScreenProps) {
       <div className="page-header">
         <button
           type="button"
-          className="quiet-button icon-only"
+          className="icon-button camera-lens-back"
           onClick={props.onBack}
           title="Back to library"
-          aria-label="Back"
+          aria-label="Back to library"
         >
           <ArrowLeftIcon size={16} />
         </button>
@@ -110,9 +113,15 @@ function CameraLensBrowserScreen(props: CameraLensBrowserScreenProps) {
                 className="equipment-card"
                 onClick={() => filterByCamera(group.camera)}
               >
-                <span className="equipment-icon">📷</span>
-                <span className="equipment-name">{group.camera}</span>
-                <span className="equipment-count">{group.count}</span>
+                <span className="equipment-icon">
+                  <CameraIcon size={20} />
+                </span>
+                <span className="equipment-name" title={group.camera}>
+                  {group.camera}
+                </span>
+                <span className="equipment-count">
+                  {group.count.toLocaleString()} {group.count === 1 ? "item" : "items"}
+                </span>
               </button>
             ))}
           </div>
@@ -133,9 +142,15 @@ function CameraLensBrowserScreen(props: CameraLensBrowserScreenProps) {
                 className="equipment-card"
                 onClick={() => filterByLens(group.lens)}
               >
-                <span className="equipment-icon">🔍</span>
-                <span className="equipment-name">{group.lens}</span>
-                <span className="equipment-count">{group.count}</span>
+                <span className="equipment-icon">
+                  <LensIcon size={20} />
+                </span>
+                <span className="equipment-name" title={group.lens}>
+                  {group.lens}
+                </span>
+                <span className="equipment-count">
+                  {group.count.toLocaleString()} {group.count === 1 ? "item" : "items"}
+                </span>
               </button>
             ))}
           </div>
@@ -144,7 +159,9 @@ function CameraLensBrowserScreen(props: CameraLensBrowserScreenProps) {
 
       {cameraGroups.length === 0 && lensGroups.length === 0 && (
         <div className="empty-state">
-          <span>📷</span>
+          <span className="empty-state-icon" aria-hidden="true">
+            <CameraIcon size={28} />
+          </span>
           <b>No camera/lens data</b>
           <p>EXIF camera and lens information isn’t available for any items in this view.</p>
         </div>
