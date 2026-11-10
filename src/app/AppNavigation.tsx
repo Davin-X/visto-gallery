@@ -108,8 +108,9 @@ export function AppTopBar({
 
   return (
     <header className="topbar" onMouseDown={onMouseDown} onDoubleClick={onDoubleClick}>
-      <div className="topbar-brand">
-        <b>VistoGallery</b>
+      <div className="topbar-brand" aria-label="VistoGallery">
+        <span className="brand-wordmark">Visto</span>
+        <span className="brand-wordmark brand-wordmark--muted">Gallery</span>
       </div>
       <div className="topbar-context">
         {screen === "Library" ? (

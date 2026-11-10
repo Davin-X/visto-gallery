@@ -67,13 +67,11 @@ function AlbumsScreen(props: AlbumsScreenProps) {
       {(props.smartAlbums?.length ?? 0) > 0 && (
         <section className="smart-albums-section" aria-label="Smart Albums">
           <div className="smart-albums-heading">
-            <div>
+            <div className="page-heading--section">
               <p className="eyebrow">SAVED FILTERS</p>
               <h2>Smart Albums</h2>
             </div>
-            <span className="settings-row-desc">
-              Updates automatically as your library changes.
-            </span>
+            <span className="section-desc">Updates automatically as your library changes.</span>
           </div>
           <div className="smart-albums-list">
             {props.smartAlbums!.map((album) => {

@@ -560,155 +560,149 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
 
   return (
     <div className="feature-page duplicates-page" ref={pageRef} onScroll={handleScroll}>
-      {hasGroups ? (
-        <header className="duplicate-header">
-          {pageHeading}
+      {pageHeading}
 
-          {hasGroups && (
-            <div className="duplicate-toolbar">
-              <div className="duplicate-filter-tabs" role="group" aria-label="Filter by media type">
-                {(Object.keys(KIND_LABELS) as KindFilter[]).map((kind) => (
-                  <button
-                    key={kind}
-                    type="button"
-                    aria-pressed={filterKind === kind}
-                    className={[
-                      filterKind === kind ? "is-active" : "",
-                      kindCounts[kind] === 0 ? "is-empty" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    onClick={() => changeFilter(kind)}
-                  >
-                    {KIND_LABELS[kind]}
-                    <span className="duplicate-filter-count">{kindCounts[kind]}</span>
-                  </button>
+      {hasGroups && (
+        <div className="duplicate-toolbar">
+          <div className="duplicate-filter-tabs" role="group" aria-label="Filter by media type">
+            {(Object.keys(KIND_LABELS) as KindFilter[]).map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                aria-pressed={filterKind === kind}
+                className={[
+                  filterKind === kind ? "is-active" : "",
+                  kindCounts[kind] === 0 ? "is-empty" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                onClick={() => changeFilter(kind)}
+              >
+                {KIND_LABELS[kind]}
+                <span className="duplicate-filter-count">{kindCounts[kind]}</span>
+              </button>
+            ))}
+          </div>
+          <div className="duplicate-toolbar-right">
+            <div className="duplicate-keeper" role="group" aria-label="Default copy to keep">
+              <span className="duplicate-keeper-label">Keep</span>
+              <button
+                type="button"
+                className={keeperMode === "best" ? "is-active" : ""}
+                aria-pressed={keeperMode === "best"}
+                title="Keep the highest-quality copy: RAW or TIFF first, then resolution and file size"
+                onClick={() => changeKeeperMode("best")}
+              >
+                Best quality
+              </button>
+              <button
+                type="button"
+                className={keeperMode === "oldest" ? "is-active" : ""}
+                aria-pressed={keeperMode === "oldest"}
+                title="Keep the copy that entered your library first"
+                onClick={() => changeKeeperMode("oldest")}
+              >
+                Oldest
+              </button>
+              <button
+                type="button"
+                className={keeperMode === "newest" ? "is-active" : ""}
+                aria-pressed={keeperMode === "newest"}
+                title="Keep the copy that entered your library last"
+                onClick={() => changeKeeperMode("newest")}
+              >
+                Newest
+              </button>
+            </div>
+            <div className="sort-control" role="group" aria-label="Sort groups">
+              <select
+                aria-label="Sort duplicate groups by"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortBy)}
+              >
+                {(Object.keys(SORT_LABELS) as SortBy[]).map((option) => (
+                  <option key={option} value={option}>
+                    {SORT_LABELS[option]}
+                  </option>
                 ))}
-              </div>
-              <div className="duplicate-toolbar-right">
-                <div className="duplicate-keeper" role="group" aria-label="Default copy to keep">
-                  <span className="duplicate-keeper-label">Keep</span>
-                  <button
-                    type="button"
-                    className={keeperMode === "best" ? "is-active" : ""}
-                    aria-pressed={keeperMode === "best"}
-                    title="Keep the highest-quality copy: RAW or TIFF first, then resolution and file size"
-                    onClick={() => changeKeeperMode("best")}
-                  >
-                    Best quality
-                  </button>
-                  <button
-                    type="button"
-                    className={keeperMode === "oldest" ? "is-active" : ""}
-                    aria-pressed={keeperMode === "oldest"}
-                    title="Keep the copy that entered your library first"
-                    onClick={() => changeKeeperMode("oldest")}
-                  >
-                    Oldest
-                  </button>
-                  <button
-                    type="button"
-                    className={keeperMode === "newest" ? "is-active" : ""}
-                    aria-pressed={keeperMode === "newest"}
-                    title="Keep the copy that entered your library last"
-                    onClick={() => changeKeeperMode("newest")}
-                  >
-                    Newest
-                  </button>
-                </div>
-                <div className="sort-control" role="group" aria-label="Sort groups">
-                  <select
-                    aria-label="Sort duplicate groups by"
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as SortBy)}
-                  >
-                    {(Object.keys(SORT_LABELS) as SortBy[]).map((option) => (
-                      <option key={option} value={option}>
-                        {SORT_LABELS[option]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="layout-switcher" role="group" aria-label="Tile layout">
-                  <button
-                    type="button"
-                    className={viewMode === "grid" ? "selected" : ""}
-                    aria-pressed={viewMode === "grid"}
-                    title="Grid view"
-                    onClick={() => setViewMode("grid")}
-                  >
-                    <GridIcon size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    className={viewMode === "list" ? "selected" : ""}
-                    aria-pressed={viewMode === "list"}
-                    title="List view"
-                    onClick={() => setViewMode("list")}
-                  >
-                    <ColumnsIcon size={14} />
-                  </button>
-                </div>
-                {expandableGroups.length > 0 && (
-                  <button type="button" className="quiet-button" onClick={toggleAllGroups}>
-                    {allExpanded ? "Collapse all" : "Expand all"}
-                  </button>
-                )}
-              </div>
+              </select>
             </div>
-          )}
-          {hasVisibleGroups && (
-            <div className="duplicate-selection-bar">
-              <div className="duplicate-selection-copy">
-                <span>
-                  <b>{selectedCopyCount.toLocaleString()}</b> of {totalCopies.toLocaleString()}{" "}
-                  extra copies selected
-                </span>
-                {selectedCopyCount > 0 && (
-                  <span className="duplicate-selection-savings">
-                    {formatBytesSimple(selectedBytes)} reclaimable
-                  </span>
-                )}
-              </div>
-              <div className="duplicate-selection-actions">
-                <button
-                  type="button"
-                  className="quiet-button"
-                  disabled={busy || totalCopies === 0 || allCopiesSelected}
-                  onClick={selectAllCopies}
-                >
-                  Select copies
-                </button>
-                <button
-                  type="button"
-                  className="quiet-button"
-                  disabled={selected.size === 0}
-                  onClick={selectNone}
-                >
-                  Clear
-                </button>
-                <button
-                  type="button"
-                  className="quiet-button"
-                  disabled={!canAct}
-                  onClick={() => void onHideIds([...selected])}
-                >
-                  Hide
-                </button>
-                <button
-                  type="button"
-                  className="danger-button"
-                  disabled={!canAct}
-                  onClick={() => onRequestDeleteItems([...selected])}
-                >
-                  <TrashIcon size={13} /> Move to Trash
-                </button>
-              </div>
+            <div className="layout-switcher" role="group" aria-label="Tile layout">
+              <button
+                type="button"
+                className={viewMode === "grid" ? "selected" : ""}
+                aria-pressed={viewMode === "grid"}
+                title="Grid view"
+                onClick={() => setViewMode("grid")}
+              >
+                <GridIcon size={14} />
+              </button>
+              <button
+                type="button"
+                className={viewMode === "list" ? "selected" : ""}
+                aria-pressed={viewMode === "list"}
+                title="List view"
+                onClick={() => setViewMode("list")}
+              >
+                <ColumnsIcon size={14} />
+              </button>
             </div>
-          )}
-        </header>
-      ) : (
-        <>{pageHeading}</>
+            {expandableGroups.length > 0 && (
+              <button type="button" className="quiet-button" onClick={toggleAllGroups}>
+                {allExpanded ? "Collapse all" : "Expand all"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {hasVisibleGroups && (
+        <div className="duplicate-selection-bar">
+          <div className="duplicate-selection-copy">
+            <span>
+              <b>{selectedCopyCount.toLocaleString()}</b> of {totalCopies.toLocaleString()} extra
+              copies selected
+            </span>
+            {selectedCopyCount > 0 && (
+              <span className="duplicate-selection-savings">
+                {formatBytesSimple(selectedBytes)} reclaimable
+              </span>
+            )}
+          </div>
+          <div className="duplicate-selection-actions">
+            <button
+              type="button"
+              className="quiet-button"
+              disabled={busy || totalCopies === 0 || allCopiesSelected}
+              onClick={selectAllCopies}
+            >
+              Select copies
+            </button>
+            <button
+              type="button"
+              className="quiet-button"
+              disabled={selected.size === 0}
+              onClick={selectNone}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              className="quiet-button"
+              disabled={!canAct}
+              onClick={() => void onHideIds([...selected])}
+            >
+              Hide
+            </button>
+            <button
+              type="button"
+              className="danger-button"
+              disabled={!canAct}
+              onClick={() => onRequestDeleteItems([...selected])}
+            >
+              <TrashIcon size={13} /> Move to Trash
+            </button>
+          </div>
+        </div>
       )}
       {!hasVisibleGroups ? (
         <div className={`duplicate-empty${hasGroups && !busy ? " is-compact" : ""}`}>

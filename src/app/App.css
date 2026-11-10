@@ -421,7 +421,9 @@ body.is-resizing .photo-inspector {
   top: 0;
   z-index: 10;
   background: color-mix(in srgb, var(--surface-2) 40%, var(--surface));
-  padding: 16px 16px 12px;
+  /* Same page frame as the feature screens so the library heading lines up
+     with Albums, Batch, Duplicates, Edit and Settings. */
+  padding: var(--page-top) var(--page-gutter) 0;
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -465,29 +467,28 @@ body.is-resizing .photo-inspector {
 }
 
 .header-left .eyebrow {
-  margin: 0;
-  color: var(--muted);
-  font-size: 10px;
+  margin: 0 0 var(--space-1);
+  color: var(--faint);
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.13em;
 }
 
 .header-title-row {
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
-  margin-top: 2px;
+  margin-top: var(--space-1);
 }
 
 .header-left h1 {
   margin: 0;
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: -0.04em;
+  font-size: var(--heading-1-size);
+  font-weight: var(--heading-1-weight);
+  letter-spacing: var(--heading-1-letter-spacing);
   color: var(--ink);
-  line-height: 1.15;
-  white-space: nowrap;
+  line-height: var(--heading-1-line-height);
 }
 
 .header-left .page-subtitle {
@@ -512,13 +513,15 @@ body.is-resizing .photo-inspector {
   min-width: 0;
 }
 
+/* Page-level actions are the same size on every screen (the toolbar row
+   below them uses the compact 32px tier). */
 .header-actions .primary-button,
 .header-actions .quiet-button {
-  height: 32px;
-  min-height: 32px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
+  height: var(--control-height);
+  min-height: var(--control-height);
+  border-radius: var(--control-radius);
+  font-size: var(--control-font-size);
+  font-weight: var(--control-font-weight);
 }
 
 .header-actions .primary-button {
@@ -636,8 +639,8 @@ body.is-resizing .photo-inspector {
 .library-header .collection-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 0 0 10px;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-2);
   flex-wrap: wrap;
   justify-content: space-between;
 }
@@ -649,10 +652,10 @@ body.is-resizing .photo-inspector {
   flex: 1 1 auto;
   min-width: 160px;
   max-width: 448px;
-  height: 36px;
+  height: 32px;
   padding: 0 12px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 9px;
   background: color-mix(in srgb, var(--surface-3) 90%, transparent);
   font-size: 12px;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
@@ -801,9 +804,9 @@ body.is-resizing .photo-inspector {
   flex: 1 1 100%;
   width: 100%;
   max-width: 100%;
-  gap: 6px;
+  gap: var(--space-2);
   min-width: 0;
-  padding: 10px 0 0;
+  padding-top: var(--space-1);
   border-top: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
   background: transparent;
   overflow-x: auto;
@@ -818,11 +821,11 @@ body.is-resizing .photo-inspector {
 
 .filter-cluster .smart-label {
   flex: 0 0 auto;
-  color: var(--faint);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  padding-right: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  padding-right: var(--space-1);
   white-space: nowrap;
 }
 
@@ -957,8 +960,8 @@ body.is-resizing .photo-inspector {
   left: 0;
   z-index: 1;
   flex: 0 0 auto;
-  margin-right: 4px;
-  padding-right: 2px;
+  margin-right: var(--space-1);
+  padding-right: var(--space-1);
   background: var(--surface-2);
 }
 
@@ -1151,7 +1154,7 @@ body.is-resizing .photo-inspector {
 .library-grid-container {
   flex: 1 1 0;
   overflow-y: auto;
-  padding: 16px 20px 24px;
+  padding: var(--space-4) var(--page-gutter) var(--space-6);
   min-height: 0;
   box-sizing: border-box;
 }
@@ -2643,13 +2646,14 @@ body.is-resizing .photo-inspector {
   background: var(--orange);
 }
 
-/* Page Heading */
+/* Page Heading — one shape for every screen: eyebrow, title, optional
+   subtitle on the left; actions on the right. */
 .page-heading {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  gap: 24px;
-  margin-bottom: 28px;
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
   flex-wrap: wrap;
 }
 
@@ -2658,16 +2662,16 @@ body.is-resizing .photo-inspector {
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
 }
 
 .page-heading h1 {
   margin: 0;
   color: var(--ink);
-  font-size: 28px;
-  font-weight: 650;
-  letter-spacing: -0.03em;
-  line-height: 1.2;
+  font-size: var(--heading-1-size);
+  font-weight: var(--heading-1-weight);
+  letter-spacing: var(--heading-1-letter-spacing);
+  line-height: var(--heading-1-line-height);
 }
 
 .page-subtitle {
@@ -2680,8 +2684,8 @@ body.is-resizing .photo-inspector {
 .collection-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
   flex-wrap: wrap;
 }
 
@@ -2855,10 +2859,12 @@ body.is-resizing .photo-inspector {
   transition: all 0.15s;
 }
 
+/* One selected treatment for every segmented control in the app: the chosen
+   segment is the accent fill with contrast text. */
 .layout-switcher button.selected {
-  background: var(--surface);
-  color: var(--accent-text);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .zoom-control {
@@ -2889,9 +2895,9 @@ body.is-resizing .photo-inspector {
 }
 
 .zoom-control button.selected {
-  background: var(--surface);
-  color: var(--accent-text);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .zoom-glyph {
@@ -2981,10 +2987,10 @@ body.is-resizing .photo-inspector {
 
 .app-frame .library-header .toolbar-actions > .sort-control {
   box-sizing: border-box;
-  min-height: 36px;
-  height: 36px;
-  gap: 5px;
-  padding: 4px;
+  min-height: 32px;
+  height: 32px;
+  gap: 4px;
+  padding: 3px;
   margin-left: 0;
   border-color: var(--line-strong);
   border-radius: 9px;
@@ -3004,7 +3010,7 @@ body.is-resizing .photo-inspector {
   flex: 1 1 auto;
   min-width: 0;
   max-width: 150px;
-  height: 28px;
+  height: 26px;
   padding: 0 7px;
   border-radius: 6px;
   background: transparent;
@@ -3021,7 +3027,7 @@ body.is-resizing .photo-inspector {
   gap: 4px;
   width: auto;
   min-width: 34px;
-  height: 28px;
+  height: 26px;
   min-height: 0;
   padding: 0 7px;
   border: 0;
@@ -3158,31 +3164,32 @@ body.is-resizing .photo-inspector {
   cursor: not-allowed;
 }
 
-/* Topbar */
+/* Topbar — custom window chrome (macOS overlay traffic lights). Sleek, quiet,
+   and balanced: a translucent bar that frames the content without competing. */
 .topbar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  column-gap: 16px;
+  column-gap: 12px;
   height: 48px;
-  padding: 0 18px;
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  padding: 0 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--surface-3) 35%, transparent);
   position: sticky;
   top: 0;
   z-index: 30;
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  backdrop-filter: blur(28px) saturate(1.25);
+  -webkit-backdrop-filter: blur(28px) saturate(1.25);
   user-select: none;
   -webkit-user-select: none;
 }
 
-/* macOS traffic lights are overlaid on our own topbar (titleBarStyle
-   "Overlay"), so reserve room at the leading edge and let the bar drag the
-   window. */
+/* Reserve room for the overlaid macOS traffic lights and keep the bar a
+   drag region for the window. */
 .app-frame .topbar {
   grid-template-columns: auto minmax(0, 1fr) auto auto;
-  padding-left: 92px;
+  padding-left: 90px;
 }
 
 /* Pin children to explicit columns so hiding a column never shifts placement. */
@@ -3208,36 +3215,57 @@ body.is-resizing .photo-inspector {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
-  font-size: 15px;
-  font-weight: 650;
-  letter-spacing: 0.012em;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ink);
   user-select: none;
   -webkit-user-select: none;
+}
+
+.topbar-brand b,
+.brand-wordmark {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.brand-wordmark--muted {
+  color: var(--muted);
+  font-weight: 500;
 }
 
 .brand-mark {
   display: block;
   flex: 0 0 auto;
-  filter: drop-shadow(0 2px 5px rgba(4, 43, 47, 0.3));
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.18));
 }
 
 .topbar-context {
   justify-self: center;
-  display: flex;
+  display: inline-flex;
   min-width: 0;
-  max-width: 100%;
+  max-width: min(42vw, 480px);
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 500;
+  line-height: 1.2;
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   user-select: none;
   -webkit-user-select: none;
 }
 
+.topbar-context:empty {
+  display: none;
+}
+
 .topbar-context > span {
-  max-width: min(38vw, 440px);
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3246,22 +3274,26 @@ body.is-resizing .photo-inspector {
 .topbar-context .muted {
   color: var(--faint);
 }
+
 .topbar-busy {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
   color: var(--accent-text);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
 }
+
 .topbar-busy::before {
   content: "";
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
   animation: pulse 1.2s ease-in-out infinite;
 }
 @keyframes pulse {
@@ -3289,12 +3321,47 @@ body.is-resizing .photo-inspector {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
 }
 
-/* One size for every top-bar control: the toggle buttons, the theme picker,
-   and the settings gear. 28px matches the standard toolbar metrics. */
-.topbar-actions .icon-button,
+/* Titlebar controls: quiet by default, clear on hover/active — like native
+   window chrome. Kept separate from .icon-button used elsewhere in the app. */
+.topbar-actions .icon-button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.topbar-actions .icon-button:hover {
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+.topbar-actions .icon-button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.topbar-actions .icon-button:active {
+  transform: scale(0.94);
+}
+
+.topbar-actions .icon-button svg {
+  display: block;
+}
 
 .icon-button {
   display: grid;
@@ -3319,12 +3386,11 @@ body.is-resizing .photo-inspector {
   background: var(--surface-2);
 }
 
-.topbar-actions .icon-button[aria-pressed="true"] {
+.icon-button[aria-pressed="true"] {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent-text);
 }
-
 
 .icon-button:active {
   transform: scale(0.94);
@@ -4669,11 +4735,12 @@ body.is-resizing .photo-inspector {
 /* Edit Page styles live in the editor section at the end of this file, where
    the canvas/rail height contract is defined in one place. */
 
-/* Feature Page */
+/* Feature Page — every full screen outside the library shares this frame so
+   headings and content line up when switching screens. */
 .feature-page {
-  max-width: 900px;
+  max-width: var(--page-max);
   margin: 0 auto;
-  padding: 16px 24px 48px;
+  padding: var(--page-top) var(--page-gutter) var(--space-8);
 }
 
 /* Albums overview: one card per album; the card is the entry point into the
@@ -4875,28 +4942,114 @@ body.is-resizing .photo-inspector {
   margin-top: 24px;
 }
 
-/* Album detail header: a small fanned cover, the name, and the two actions
-   that matter inside an album. */
-.album-detail-top {
-  padding: 13px 0 11px;
+/* Album detail header: a quiet breadcrumb row, then the fanned covers, the
+   name and the album actions on one line — the same heading shape as every
+   other screen. */
+.page-heading.album-detail-top {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  padding: 0;
+  flex-wrap: nowrap;
+}
+.album-detail-head {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.page-heading.album-detail-top .album-detail-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.page-heading.album-detail-top .album-detail-copy .eyebrow {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+.page-heading.album-detail-top .album-detail-copy h1 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--heading-1-size);
+  font-weight: var(--heading-1-weight);
+  letter-spacing: var(--heading-1-letter-spacing);
+  line-height: var(--heading-1-line-height);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-heading.album-detail-top .album-detail-copy .page-subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+.page-heading.album-detail-top .album-detail-actions {
+  margin-left: auto;
+}
+
+/* Narrow centre pane (window below ~1300px, or the inspector open): let the
+   actions drop to their own row instead of squeezing the album name. */
+@media (max-width: 1299px) {
+  .album-detail-head {
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
+
+  .page-heading.album-detail-top .album-detail-copy {
+    flex: 1 1 180px;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-heading.album-detail-top .album-detail-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+.album-detail-lead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .album-breadcrumb {
   display: inline-flex;
   align-items: center;
+  align-self: flex-start;
   gap: 6px;
-  margin: 0 0 11px;
-  padding: 0;
+  height: 20px;
+  margin: 0;
+  padding: 0 6px 0 0;
   border: 0;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 550;
+  white-space: nowrap;
   cursor: pointer;
+  transition: color 0.12s ease;
+}
+
+.album-breadcrumb-arrow {
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.75;
 }
 
 .album-breadcrumb:hover {
   color: var(--accent-text);
+}
+
+.album-breadcrumb:hover .album-breadcrumb-arrow {
+  opacity: 1;
 }
 
 .album-detail-heading {
@@ -4910,13 +5063,13 @@ body.is-resizing .photo-inspector {
 .album-detail-cover {
   position: relative;
   display: grid;
-  width: 118px;
-  height: 86px;
+  width: 104px;
+  height: 76px;
   flex: 0 0 auto;
   place-items: center;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 11px;
   background:
     radial-gradient(
       circle at 28% 18%,
@@ -4932,9 +5085,10 @@ body.is-resizing .photo-inspector {
 }
 
 .album-detail-cover .album-stack-photo {
-  width: 61%;
+  width: 62%;
   border-width: 2px;
   border-radius: 6px;
+  box-shadow: 0 4px 10px rgba(12, 18, 26, 0.16);
 }
 
 .album-detail-copy {
@@ -4943,40 +5097,44 @@ body.is-resizing .photo-inspector {
 }
 
 .album-detail-copy .eyebrow {
-  font-size: 10px;
+  margin: 0 0 var(--space-1);
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
 }
 
 .album-detail-copy h1 {
   margin: 0;
   overflow: hidden;
   color: var(--ink);
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.05em;
+  font-size: var(--heading-1-size);
+  font-weight: var(--heading-1-weight);
+  letter-spacing: var(--heading-1-letter-spacing);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .album-detail-copy .page-subtitle {
-  margin-top: 5px;
+  margin-top: var(--space-1);
 }
 
 .album-detail-actions {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex-wrap: nowrap;
 }
 
 .album-detail-actions .play-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 36px;
+  height: var(--control-height);
   padding: 0 12px;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: var(--control-radius);
   background: var(--surface);
   color: var(--text);
   font-size: 13px;
@@ -4998,16 +5156,16 @@ body.is-resizing .photo-inspector {
 }
 
 .album-detail-actions .primary-button {
-  height: 36px;
+  height: var(--control-height);
   padding: 0 14px;
-  border-radius: 9px;
-  font-size: 13px;
+  border-radius: var(--control-radius);
+  font-size: var(--control-font-size);
 }
 
 .album-detail-actions .icon-button {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+  width: var(--control-height);
+  height: var(--control-height);
+  border-radius: var(--control-radius);
 }
 
 /* Empty albums become a real drop target instead of a dead end. */
@@ -5347,22 +5505,22 @@ body.is-resizing .photo-inspector {
 
 @media (max-width: 1299px) {
   .library-layout.with-inspector .library-center {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: var(--page-gutter);
+    padding-right: var(--page-gutter);
   }
 
   .library-layout.with-inspector .library-header {
-    padding: 16px 16px 12px;
+    padding: var(--space-4) var(--page-gutter) var(--space-3);
   }
 
   .library-layout.with-inspector .library-grid-container {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: var(--page-gutter);
+    padding-right: var(--page-gutter);
   }
 
   .library-layout.with-inspector .details-header-sticky {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: var(--page-gutter);
+    padding-right: var(--page-gutter);
   }
 
   .library-layout.with-inspector .library-header .page-heading {
@@ -5470,10 +5628,12 @@ body.is-resizing .photo-inspector {
 }
 
 /* Keep thumbnail-size glyphs centered within the compact segmented control. */
+/* Thumbnail-size control matches the layout switcher exactly (height, button
+   size, radius and selected treatment) so the toolbar reads as one row. */
 .app-frame .library-header .toolbar-actions .zoom-control {
   box-sizing: border-box;
   align-items: center;
-  height: 31px;
+  height: 32px;
   min-height: 0;
   margin-left: 0;
   padding: 2px;
@@ -5485,19 +5645,14 @@ body.is-resizing .photo-inspector {
   display: grid;
   place-items: center;
   box-sizing: border-box;
-  flex: 0 0 25px;
-  width: 25px;
-  height: 25px;
-  min-width: 25px;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 26px;
+  min-width: 28px;
   min-height: 0;
   padding: 0;
+  border-radius: 6px;
   line-height: 1;
-}
-
-.app-frame .library-header .toolbar-actions .zoom-control button.selected {
-  background: var(--accent);
-  color: var(--accent-contrast);
-  box-shadow: 0 1px 4px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 @container library-pane (max-width: 420px) {
@@ -6459,7 +6614,7 @@ body.is-resizing .photo-inspector {
    ========================================================================== */
 
 .batch-page {
-  max-width: 1180px;
+  max-width: 1080px;
 }
 
 .batch-page .page-heading {
@@ -6469,10 +6624,10 @@ body.is-resizing .photo-inspector {
 .batch-stepper {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 0 0 18px;
+  gap: var(--space-3);
+  margin: var(--space-6) 0 var(--space-5);
   color: var(--faint);
-  font-size: 12px;
+  font-size: var(--control-font-size);
 }
 
 .batch-stepper span {
@@ -6734,29 +6889,30 @@ body.is-resizing .photo-inspector {
 .batch-empty {
   display: grid;
   justify-items: center;
-  gap: 7px;
-  padding: 30px 20px;
+  gap: 6px;
+  padding: 36px 24px;
   border: 1px dashed var(--line-strong);
-  border-radius: 10px;
+  border-radius: 16px;
   background: var(--surface-2);
   text-align: center;
 }
 
 .batch-empty-icon {
   display: grid;
-  width: 42px;
-  height: 42px;
-  margin-bottom: 2px;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 4px;
   place-items: center;
-  border-radius: 12px;
-  background: var(--blue-soft);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
   color: var(--accent-text);
 }
 
 .batch-empty b {
   color: var(--ink);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 650;
 }
 
 .batch-empty p {
@@ -7619,7 +7775,7 @@ body.is-resizing .photo-inspector {
    same scroll region as the rows. The selection checkbox gets its own track
    so it never overlaps file-size text. */
 .library-grid-container:has(> .details-header-sticky) {
-  padding: 0 28px 24px;
+  padding: 0 var(--page-gutter) var(--space-6);
 }
 
 .details-header-sticky,
@@ -8234,10 +8390,10 @@ body.is-resizing .photo-inspector {
   min-height: 36px;
 }
 
-/* Keep the Details view on the same 20px grid gutter as the other modes. */
+/* Keep the Details view on the same grid gutter as the other modes. */
 .library-grid-container:has(> .details-header-sticky) {
-  padding-right: 20px;
-  padding-left: 20px;
+  padding-right: var(--page-gutter);
+  padding-left: var(--page-gutter);
 }
 .details-header-sticky,
 .gallery-grid.layout-details {
@@ -8415,6 +8571,16 @@ body.is-resizing .photo-inspector {
   overflow: hidden;
   padding: 12px clamp(14px, 1.8vw, 24px) 16px;
   box-sizing: border-box;
+}
+
+/* With no photo open, Edit is an ordinary page: same frame and heading rhythm
+   as Albums, Batch, Duplicates and Settings. The dense editor padding above
+   still applies once a photo is loaded. */
+.edit-page.edit-page--empty {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--page-top) var(--page-gutter) var(--space-8);
+  overflow: auto;
 }
 
 /* 1. Information-Rich Header */
@@ -9743,22 +9909,22 @@ body.is-resizing .photo-inspector {
    scroll within their own card, and keep the two-column layout breathable. */
 .batch-page {
   width: 100%;
-  max-width: 1240px;
-  padding: 28px clamp(20px, 3vw, 36px) 40px;
+  max-width: 1080px;
+  padding: var(--space-7) var(--space-8) var(--space-8);
   box-sizing: border-box;
 }
 .batch-page .page-heading {
-  gap: 18px;
-  margin-bottom: 18px;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
 }
 .batch-page .page-heading > div {
   min-width: 0;
 }
 .batch-page .page-heading h1 {
-  font-size: clamp(22px, 2.5vw, 30px);
+  font-size: var(--heading-1-size);
 }
 .batch-stepper {
-  gap: clamp(6px, 1vw, 12px);
+  gap: var(--space-3);
 }
 .batch-layout {
   grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
@@ -9870,7 +10036,7 @@ body.is-resizing .photo-inspector {
 @media (max-width: 560px) {
   .edit-page,
   .batch-page {
-    padding: 20px 14px 28px;
+    padding: var(--space-6) var(--space-4) var(--space-7);
   }
   .edit-page > .page-heading {
     align-items: flex-start;
@@ -9944,7 +10110,6 @@ body.is-resizing .photo-inspector {
 .feature-page,
 .albums-page,
 .duplicates-page,
-.batch-page,
 .edit-page,
 .viewer-screen,
 .settings-page {
@@ -9973,15 +10138,8 @@ body.is-resizing .photo-inspector {
 /* ===== Duplicate finder ===== */
 
 .duplicates-page {
-  /* components.css reads --control-height for quiet/primary/danger buttons.
-     Keep duplicates-page action controls aligned with the 32px toolbar row
-     (heading, selection bar, group actions). */
-  --control-height: 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  /* Dock the sticky header flush; top spacing lives inside the header. */
-  padding-top: 0;
+  /* Use the same page padding as all other feature screens; no padding-top
+     override or flex gap that breaks the spacing system. */
 }
 
 .duplicate-header {
@@ -9990,22 +10148,13 @@ body.is-resizing .photo-inspector {
   z-index: 20;
   padding: 14px 0 6px;
   background: color-mix(in srgb, var(--surface) 92%, transparent);
-  .duplicates-page .page-subtitle {
-    margin: 2px 0 0;
-    font-size: 12px;
-  }
-  .duplicates-page .page-heading {
-    margin-bottom: 8px;
-    align-items: center;
-  }
-
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--line);
 }
 
 .duplicates-page > .page-heading {
-  margin-bottom: 2px;
+  margin-bottom: var(--space-6);
 }
 
 .duplicate-heading-actions {
@@ -10073,32 +10222,37 @@ body.is-resizing .photo-inspector {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-top: 2px;
-  margin-bottom: 8px;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+  margin-bottom: var(--space-2);
 }
 
+/* Kind filter: same 32px segmented box and 26px segments as the Library
+   layout/size switchers, so the row has one height instead of 46/32. */
 .duplicate-filter-tabs {
   display: inline-flex;
   align-items: center;
+  box-sizing: border-box;
+  height: 32px;
   gap: 2px;
   padding: 2px;
   border: 1px solid var(--line-strong);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--surface-3);
 }
 
 .duplicate-filter-tabs button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
+  height: 26px;
   min-height: 26px;
-  padding: 0 8px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -10109,11 +10263,9 @@ body.is-resizing .photo-inspector {
 }
 
 .duplicate-filter-tabs button.is-active {
-  background: var(--surface);
-  color: var(--accent-text);
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.12),
-    inset 0 0 0 1px var(--line);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .duplicate-filter-tabs button.is-empty {
@@ -10125,14 +10277,21 @@ body.is-resizing .photo-inspector {
 }
 
 .duplicate-filter-count {
-  color: var(--faint);
-  font-size: 9px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .duplicate-filter-tabs button.is-active .duplicate-filter-count {
-  color: var(--accent-text);
+  border-color: transparent;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  color: inherit;
 }
 
 .duplicate-toolbar-right {
@@ -10142,13 +10301,11 @@ body.is-resizing .photo-inspector {
   gap: 6px;
 }
 
-/* One control height for the whole toolbar, and one nested control height for
-   what sits inside those boxes. The shared .sort-control (40px),
-   .layout-switcher (38px) and .quiet-button (36px) otherwise leave the row
-   ragged next to the 32px filter tabs and keeper picker. */
-/* `.app-frame :is(.layout-switcher, …, .sort-control)` later in the cascade
-   pins those two to 38px, so these overrides have to carry the .app-frame
-   prefix to win without important. */
+/* The whole row sits on the same compact 32px tier as the Library toolbar:
+   one box height, 26px segments inside it, 12px labels. The shared
+   .sort-control (40px), .layout-switcher (38px) and .quiet-button (36px)
+   otherwise leave the row ragged. These overrides carry the .app-frame prefix
+   to beat the later `.app-frame :is(...)` rules without !important. */
 .app-frame .duplicate-toolbar .sort-control,
 .app-frame .duplicate-toolbar .layout-switcher,
 .app-frame .duplicate-toolbar .quiet-button {
@@ -10160,13 +10317,19 @@ body.is-resizing .photo-inspector {
 }
 
 .app-frame .duplicate-toolbar .sort-control {
+  gap: 4px;
   padding: 3px;
   margin-left: 0;
+  border-color: var(--line-strong);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-2) 84%, transparent);
 }
 
 .app-frame .duplicate-toolbar .sort-control select {
-  height: 24px;
-  font-size: 11px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 12px;
 }
 
 .app-frame .duplicate-toolbar .layout-switcher {
@@ -10178,7 +10341,7 @@ body.is-resizing .photo-inspector {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
+  width: 28px;
   height: 26px;
   min-height: 26px;
   align-self: center;
@@ -10188,9 +10351,9 @@ body.is-resizing .photo-inspector {
 
 .app-frame .duplicate-toolbar .quiet-button {
   padding: 0 10px;
-  border-radius: 9px;
-  font-size: 11px;
-  font-weight: 600;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: var(--control-font-weight);
 }
 
 .duplicate-keeper {
@@ -10207,20 +10370,20 @@ body.is-resizing .photo-inspector {
 .duplicate-keeper-label {
   padding-right: 3px;
   color: var(--muted);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .duplicate-keeper button {
   min-height: 26px;
-  padding: 0 8px;
+  padding: 0 9px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -10231,11 +10394,9 @@ body.is-resizing .photo-inspector {
 }
 
 .duplicate-keeper button.is-active {
-  background: var(--surface);
-  color: var(--accent-text);
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.12),
-    inset 0 0 0 1px var(--line);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 /* Selection bar ------------------------------------------------------- */
@@ -10894,7 +11055,7 @@ body.is-resizing .photo-inspector {
 .duplicate-empty {
   display: grid;
   place-items: center;
-  padding: 64px 24px;
+  padding: 48px 24px;
   border: 1px dashed var(--line-strong);
   border-radius: 16px;
   background: var(--surface-2);
@@ -11328,12 +11489,15 @@ body.is-resizing .photo-inspector {
   pointer-events: none;
 }
 
-.video-player-heading {
+.page-heading.video-player-heading {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 10px;
   min-width: 0;
   min-height: 32px;
+  margin-bottom: 0;
+  flex-wrap: nowrap;
 }
 
 .video-player-back {
@@ -11389,6 +11553,14 @@ body.is-resizing .photo-inspector {
   font-weight: 600;
   letter-spacing: -0.02em;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-player-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
   white-space: nowrap;
 }
 
@@ -12103,12 +12275,6 @@ body.is-resizing .photo-inspector {
       border-radius: 6px;
     }
 
-    .library-header .toolbar-actions .zoom-control button.selected {
-      background: var(--accent);
-      color: var(--accent-contrast);
-      box-shadow: 0 1px 4px color-mix(in srgb, var(--accent) 25%, transparent);
-    }
-
     .library-header .toolbar-actions > .sort-control {
       flex: 1 1 150px;
       min-width: 0;
@@ -12349,12 +12515,6 @@ body.is-resizing .photo-inspector {
   .library-header .toolbar-actions .zoom-control button {
     width: 25px;
     height: 24px;
-  }
-
-  .library-header .toolbar-actions .zoom-control button.selected {
-    background: var(--accent);
-    color: var(--accent-contrast);
-    box-shadow: 0 1px 4px color-mix(in srgb, var(--accent) 25%, transparent);
   }
 
   .library-header .toolbar-actions > .sort-control {
@@ -12677,11 +12837,6 @@ body.is-resizing .photo-inspector {
       width: 22px;
       min-width: 22px;
       height: 23px;
-    }
-
-    .library-layout.with-inspector .library-header .toolbar-actions .zoom-control button.selected {
-      background: var(--accent);
-      color: var(--accent-contrast);
     }
 
     .library-layout.with-inspector .library-header .toolbar-actions > .sort-control {
