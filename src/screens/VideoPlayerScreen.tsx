@@ -15,7 +15,10 @@ function PlaybackTimeChip({ itemDuration }: { itemDuration?: number | null }) {
   const time = usePlaybackStore((state) => state.time);
   const duration = usePlaybackStore((state) => state.duration);
   return (
-    <span className="video-player-meta-chip video-player-meta-chip-time" title="Elapsed / total duration">
+    <span
+      className="video-player-meta-chip video-player-meta-chip-time"
+      title="Elapsed / total duration"
+    >
       <span>{formatDuration(time)}</span>
       <span className="video-player-meta-sep" aria-hidden="true">
         /
