@@ -84,6 +84,10 @@ function ViewerScreen(props: ViewerScreenProps) {
   const stripRef = useRef<HTMLDivElement | null>(null);
   const programmaticScrollRef = useRef(false);
   const stripWindowSize = 50;
+  // Must match the redesign CSS: .filmstrip button { flex-basis: 58px } with
+  // an 8px gap → one item per 66px. Any mismatch drifts the virtualized
+  // window and the scrollLeft bookkeeping.
+  const FILMSTRIP_STRIDE = 66;
   const selectedIndex = items.findIndex((item) => item.id === selected?.id);
   const stripEnd = Math.min(items.length, stripStart + stripWindowSize);
   const photoStatus =
@@ -119,7 +123,6 @@ function ViewerScreen(props: ViewerScreenProps) {
   }, [legendVisible]);
 
   // Keep the active thumbnail in view as you navigate a long filmstrip.
-  // Keep the active thumbnail in view as you navigate a long filmstrip.
   useEffect(() => {
     if (selectedIndex < 0) return;
     let nextStart = stripStart;
@@ -132,7 +135,7 @@ function ViewerScreen(props: ViewerScreenProps) {
       );
     }
     if (nextStart !== stripStart) {
-      const delta = (nextStart - stripStart) * 60;
+      const delta = (nextStart - stripStart) * FILMSTRIP_STRIDE;
       programmaticScrollRef.current = true;
       if (stripRef.current)
         stripRef.current.scrollLeft = Math.max(0, stripRef.current.scrollLeft + delta);
@@ -147,7 +150,7 @@ function ViewerScreen(props: ViewerScreenProps) {
   useEffect(() => {
     if (stripRef.current) {
       programmaticScrollRef.current = true;
-      stripRef.current.scrollLeft = stripStart * 60;
+      stripRef.current.scrollLeft = stripStart * FILMSTRIP_STRIDE;
       window.setTimeout(() => {
         programmaticScrollRef.current = false;
       }, 0);
@@ -162,7 +165,7 @@ function ViewerScreen(props: ViewerScreenProps) {
     const nextStart = Math.max(
       0,
       Math.min(
-        Math.floor(Math.max(0, strip.scrollLeft - 68) / 60) - 10,
+        Math.floor(Math.max(0, strip.scrollLeft) / FILMSTRIP_STRIDE) - 10,
         items.length - stripWindowSize,
       ),
     );
@@ -683,7 +686,7 @@ function ViewerScreen(props: ViewerScreenProps) {
           <span
             className="filmstrip-spacer"
             aria-hidden="true"
-            style={{ flexBasis: `${stripStart * 60}px` }}
+            style={{ flexBasis: `${stripStart * FILMSTRIP_STRIDE}px` }}
           />
         )}
         {items.slice(stripStart, stripEnd).map((item) => (
@@ -711,7 +714,7 @@ function ViewerScreen(props: ViewerScreenProps) {
           <span
             className="filmstrip-spacer"
             aria-hidden="true"
-            style={{ flexBasis: `${(items.length - stripEnd) * 60}px` }}
+            style={{ flexBasis: `${(items.length - stripEnd) * FILMSTRIP_STRIDE}px` }}
           />
         )}
       </div>
