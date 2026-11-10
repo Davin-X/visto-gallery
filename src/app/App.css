@@ -10405,7 +10405,7 @@ body.is-resizing .photo-inspector {
 }
 
 .duplicates-page .duplicate-group-actions .quiet-button,
-.duplicates-page .duplicate-header .page-heading-actions :is(.quiet-button, .primary-button) {
+.duplicates-page .duplicate-heading-actions :is(.quiet-button, .primary-button) {
   min-height: 32px;
   padding: 0 10px;
   border-radius: 9px;

@@ -167,15 +167,26 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     () => (compare ? groupViews.find((view) => view.group.sha256 === compare.sha) : undefined),
     [compare, groupViews],
   );
+  const copyIdSet = useMemo(() => {
+    const ids = new Set<string>();
+    groupViews.forEach((view) => view.copies.forEach((item) => ids.add(item.id)));
+    return ids;
+  }, [groupViews]);
+
+  const selectedCopyCount = useMemo(
+    () => [...selected].filter((id) => copyIdSet.has(id)).length,
+    [selected, copyIdSet],
+  );
+
   const selectedBytes = useMemo(() => {
     let total = 0;
     groupViews.forEach((view) => {
       view.ordered.forEach((item) => {
-        if (selected.has(item.id)) total += item.size;
+        if (selected.has(item.id) && copyIdSet.has(item.id)) total += item.size;
       });
     });
     return total;
-  }, [groupViews, selected]);
+  }, [groupViews, selected, copyIdSet]);
 
   const libraryTotals = useMemo(() => {
     let copies = 0;
@@ -518,7 +529,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const isDuplicateScan = busy && progress?.phase === "hashing";
   const isTrashing = busy && progress?.phase === "trashing";
   const canAct = !busy && selected.size > 0;
-  const allCopiesSelected = totalCopies > 0 && selected.size >= totalCopies;
+  const allCopiesSelected = totalCopies > 0 && selectedCopyCount >= totalCopies;
 
   const pageHeading = (
     <div className="page-heading">
@@ -555,17 +566,12 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
 
           {hasGroups && (
             <div className="duplicate-toolbar">
-              <div
-                className="duplicate-filter-tabs"
-                role="tablist"
-                aria-label="Filter by media type"
-              >
+              <div className="duplicate-filter-tabs" role="group" aria-label="Filter by media type">
                 {(Object.keys(KIND_LABELS) as KindFilter[]).map((kind) => (
                   <button
                     key={kind}
                     type="button"
-                    role="tab"
-                    aria-selected={filterKind === kind}
+                    aria-pressed={filterKind === kind}
                     className={[
                       filterKind === kind ? "is-active" : "",
                       kindCounts[kind] === 0 ? "is-empty" : "",
@@ -655,10 +661,10 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
             <div className="duplicate-selection-bar">
               <div className="duplicate-selection-copy">
                 <span>
-                  <b>{selected.size.toLocaleString()}</b> of {totalCopies.toLocaleString()} extra
+                  <b>{selectedCopyCount.toLocaleString()}</b> of {totalCopies.toLocaleString()} extra
                   copies selected
                 </span>
-                {selected.size > 0 && (
+                {selectedCopyCount > 0 && (
                   <span className="duplicate-selection-savings">
                     {formatBytesSimple(selectedBytes)} reclaimable
                   </span>
