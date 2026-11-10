@@ -44,9 +44,6 @@ pub async fn scan_library(
             root.display()
         )));
     }
-    // Remove app-created temp exports left by a crash/failed write. Only files
-    // matching `<name>.tmp-<uuid>` and older than the grace period are touched.
-    super::sweep_stale_export_temps(&root, std::time::Duration::from_secs(300));
     let start = std::time::Instant::now();
     let mut items = Vec::new();
     let mut total_size: i64 = 0;
@@ -82,13 +79,16 @@ pub async fn scan_library(
     });
 
     // Discover the media paths once, on the blocking pool: a large tree can
-    // take minutes to walk and must not pin an async worker.
+    // take minutes to walk and must not pin an async worker. The same walk
+    // removes app-created export temps (`<name>.tmp-<uuid>`) left by a crash or
+    // failed write; only ones older than the grace period are touched.
     let walk_root = root.clone();
     let walk_cancel = job.flag();
-    let (media_paths, walk_error) =
-        tokio::task::spawn_blocking(move || collect_media_paths(&walk_root, &walk_cancel))
-            .await
-            .map_err(|e| CommandError::internal(format!("Scan worker failed: {e}")))?;
+    let (media_paths, walk_error) = tokio::task::spawn_blocking(move || {
+        collect_media_paths(&walk_root, &walk_cancel, Some(STALE_EXPORT_TEMP_AGE))
+    })
+    .await
+    .map_err(|e| CommandError::internal(format!("Scan worker failed: {e}")))?;
     let had_walk_error = walk_error.is_some();
     for p in &media_paths {
         seen_paths.insert(p.to_string_lossy().into_owned());
@@ -208,20 +208,31 @@ pub async fn scan_library(
     })
 }
 
+/// Export temps younger than this may still be in the middle of a write.
+const STALE_EXPORT_TEMP_AGE: std::time::Duration = std::time::Duration::from_secs(300);
+
 /// Walk `root` and return every media file path plus the first walk error.
-/// Blocking: call it from `spawn_blocking`.
+/// With `sweep_temps_older_than`, app export temps at least that old are
+/// removed during the same walk. Blocking: call it from `spawn_blocking`.
 pub(crate) fn collect_media_paths(
     root: &Path,
     cancel: &std::sync::atomic::AtomicBool,
+    sweep_temps_older_than: Option<std::time::Duration>,
 ) -> (Vec<PathBuf>, Option<String>) {
     let mut media_paths = Vec::new();
     let mut walk_error: Option<String> = None;
+    let temp_cutoff = sweep_temps_older_than.and_then(super::stale_temp_cutoff);
     for entry in WalkDir::new(root) {
         if cancel.load(Ordering::SeqCst) {
             break;
         }
         match entry {
             Ok(entry) if entry.file_type().is_file() => {
+                if let Some(cutoff) = temp_cutoff {
+                    if super::remove_if_stale_export_temp(&entry, cutoff) {
+                        continue;
+                    }
+                }
                 let ext = entry
                     .path()
                     .extension()
@@ -336,7 +347,7 @@ pub async fn import_files(
             }
             let path = PathBuf::from(raw);
             if path.is_dir() {
-                tmp.extend(collect_media_paths(&path, &walk_cancel).0);
+                tmp.extend(collect_media_paths(&path, &walk_cancel, None).0);
             } else if path.is_file() {
                 if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
                     if is_media_file(&ext.to_lowercase()) {
@@ -2572,7 +2583,7 @@ mod scan_chunk_tests {
     #[test]
     fn walk_keeps_only_media_extensions() {
         let root = tree();
-        let (mut paths, error) = collect_media_paths(&root, &AtomicBool::new(false));
+        let (mut paths, error) = collect_media_paths(&root, &AtomicBool::new(false), None);
         paths.sort();
         assert!(error.is_none());
         assert_eq!(paths, vec![root.join("a.jpg"), root.join("nested/b.PNG")]);
@@ -2580,9 +2591,37 @@ mod scan_chunk_tests {
     }
 
     #[test]
+    fn walk_sweeps_stale_export_temps_only_when_asked() {
+        let root = tree();
+        let stale = root.join(format!("a.tmp-{}", uuid::Uuid::new_v4()));
+        let fresh = root.join(format!("b.tmp-{}", uuid::Uuid::new_v4()));
+        fs::write(&stale, b"partial").unwrap();
+        fs::write(&fresh, b"in progress").unwrap();
+        let old = filetime::FileTime::from_unix_time(1_000_000_000, 0);
+        filetime::set_file_mtime(&stale, old).unwrap();
+
+        // Imports pass None: nothing is removed.
+        collect_media_paths(&root, &AtomicBool::new(false), None);
+        assert!(stale.exists());
+
+        // Scans pass a grace period: the old temp goes, the fresh one stays,
+        // and media discovery is unchanged.
+        let (mut paths, _) = collect_media_paths(
+            &root,
+            &AtomicBool::new(false),
+            Some(std::time::Duration::from_secs(300)),
+        );
+        paths.sort();
+        assert!(!stale.exists());
+        assert!(fresh.exists());
+        assert_eq!(paths, vec![root.join("a.jpg"), root.join("nested/b.PNG")]);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn walk_stops_when_cancelled() {
         let root = tree();
-        let (paths, _) = collect_media_paths(&root, &AtomicBool::new(true));
+        let (paths, _) = collect_media_paths(&root, &AtomicBool::new(true), None);
         assert!(paths.is_empty());
         let _ = fs::remove_dir_all(&root);
     }

@@ -67,37 +67,44 @@ fn is_app_export_temp(name: &str) -> bool {
 ///
 /// Returns the number of files removed. Errors reading individual entries are
 /// ignored so a partial scan still cleans what it can.
+/// The folder scan does the same cleanup inside its own walk (see
+/// `collect_media_paths`); this standalone form exercises the rule in tests.
+#[cfg(test)]
 pub fn sweep_stale_export_temps(root: &Path, min_age: Duration) -> usize {
     if !root.is_dir() {
         return 0;
     }
-    let cutoff = SystemTime::now().checked_sub(min_age);
-    let Some(cutoff) = cutoff else {
+    let Some(cutoff) = stale_temp_cutoff(min_age) else {
         return 0;
     };
-    let mut removed = 0usize;
-    for entry in walkdir::WalkDir::new(root)
+    walkdir::WalkDir::new(root)
         .follow_links(false)
         .into_iter()
         .filter_map(|e| e.ok())
-    {
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let name = entry.file_name().to_string_lossy();
-        if !is_app_export_temp(&name) {
-            continue;
-        }
-        let stale = entry
-            .metadata()
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .is_some_and(|modified| modified <= cutoff);
-        if stale && std::fs::remove_file(entry.path()).is_ok() {
-            removed += 1;
-        }
+        .filter(|entry| remove_if_stale_export_temp(entry, cutoff))
+        .count()
+}
+
+/// The modification time at or before which an export temp counts as stale.
+pub fn stale_temp_cutoff(min_age: Duration) -> Option<SystemTime> {
+    SystemTime::now().checked_sub(min_age)
+}
+
+/// Remove `entry` when it is an app export temp (`<name>.tmp-<uuid>`) last
+/// modified at or before `cutoff`. Returns whether a file was removed.
+///
+/// Callers that already walk a tree (the folder scan) use this per entry so
+/// cleanup needs no second walk.
+pub fn remove_if_stale_export_temp(entry: &walkdir::DirEntry, cutoff: SystemTime) -> bool {
+    if !entry.file_type().is_file() || !is_app_export_temp(&entry.file_name().to_string_lossy()) {
+        return false;
     }
-    removed
+    let stale = entry
+        .metadata()
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .is_some_and(|modified| modified <= cutoff);
+    stale && std::fs::remove_file(entry.path()).is_ok()
 }
 
 #[cfg(test)]
