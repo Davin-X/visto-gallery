@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BrandMark } from "../design/components/BrandMark";
 import { KindDot } from "../design/components/KindBadge";
 import { NowPlaying } from "../design/components/NowPlaying";
 import {
@@ -92,7 +91,6 @@ export function AppTopBar({
   return (
     <header className="topbar" onMouseDown={onMouseDown} onDoubleClick={onDoubleClick}>
       <div className="topbar-brand">
-        <BrandMark size={26} />
         <b>VistoGallery</b>
       </div>
       <div className="topbar-context">
