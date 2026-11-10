@@ -64,7 +64,7 @@
   --page-gutter: 32px;
   /* Tight enough that the sticky library header leaves the grid room, roomy
      enough to keep the heading off the top bar. */
-  --page-top: 18px;
+  --page-top: 12px;
   --page-max: 1240px;
 }
 
@@ -73,7 +73,7 @@
 @media (max-width: 1100px) {
   :root {
     --page-gutter: 24px;
-    --page-top: 14px;
+    --page-top: 10px;
   }
 }
 
