@@ -428,16 +428,33 @@ function computeDerived(state: LibraryState) {
   }
 
   const playable = visible.filter((item) => item.kind === "photo" || item.kind === "video");
-  // Hidden items are excluded by the hidden=false filter sent to the
-  // backend, so viewerItems always comes from the visible set.
-  const viewerItems = visible.filter((item) => {
-    if (state.filter === "Photos" && (item.kind !== "photo" || item.isAnimated)) return false;
-    if (state.filter === "Videos" && item.kind !== "video") return false;
-    if (state.filter === "RAW" && item.kind !== "raw") return false;
-    if (state.filter === "Animations" && !item.isAnimated) return false;
-    if (state.filter === "Favorites" && !item.favorite) return false;
+
+  const matchesKindFilter = (item: MediaItem, f: Filter) => {
+    if (f === "Photos" && (item.kind !== "photo" || item.isAnimated)) return false;
+    if (f === "Videos" && item.kind !== "video") return false;
+    if (f === "RAW" && item.kind !== "raw") return false;
+    if (f === "Animations" && !item.isAnimated) return false;
+    if (f === "Favorites" && !item.favorite) return false;
     return true;
-  });
+  };
+
+  let viewerItems: MediaItem[];
+  if (viewerScope === "hidden") {
+    const q = (state.hiddenQuery || "").trim().toLowerCase();
+    viewerItems = (state.hiddenItems || []).filter((item) => {
+      if (!matchesKindFilter(item, state.hiddenFilter || "All")) return false;
+      if (q) {
+        const hay = `${item.name || ""} ${item.path || ""} ${item.extension || ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  } else {
+    // Hidden items are excluded by the hidden=false filter sent to the
+    // backend, so viewerItems always comes from the visible set.
+    viewerItems = visible.filter((item) => matchesKindFilter(item, state.filter));
+  }
+
   const viewerSelected = resolveInspectedItem({ ...state, inspectedId }, viewerItems);
   const currentIndex = Math.max(
     0,
