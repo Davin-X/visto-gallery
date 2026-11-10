@@ -1,4 +1,4 @@
-import { FolderIcon, InfoIcon } from "../icons";
+import { FolderIcon, ShieldIcon } from "../icons";
 import type { LibraryFolder } from "../../../engine/types/commands";
 import { SourcesManager } from "../SourcesManager";
 
@@ -49,7 +49,7 @@ export function LibraryPanel(props: {
 
       <div className="settings-warning">
         <span className="settings-warning-icon">
-          <InfoIcon size={14} />
+          <ShieldIcon size={15} />
         </span>
         <span>
           Folder watching requires granting Full Disk Access in System Settings → Privacy &

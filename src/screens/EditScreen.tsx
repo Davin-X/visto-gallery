@@ -960,7 +960,7 @@ function EditScreen(props: EditScreenProps) {
                         top: draftPopoverPos.top,
                         right: draftPopoverPos.right,
                         left: "auto",
-                        zIndex: 1001,
+                        zIndex: "var(--z-popover)",
                       }}
                       aria-label="Saved edit drafts"
                     >

@@ -60,6 +60,15 @@ export function MoonIcon({ size = 18, className = "", strokeWidth = 1.9 }: IconP
   );
 }
 
+export function MonitorIcon({ size = 18, className = "", strokeWidth = 1.9 }: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <rect x="2.5" y="4" width="19" height="12.5" rx="2" />
+      <path d="M9 20h6M12 16.5V20" />
+    </Svg>
+  );
+}
+
 /* ===== Sidebar navigation ===== */
 
 /** The standard "left panel" glyph (Finder/VS Code/Linear) for toggling the
