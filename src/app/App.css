@@ -3570,20 +3570,28 @@ body.is-resizing .photo-inspector {
   .sidebar-stats-popup .stat-row.size .stat-value {
     color: var(--accent-text);
   }
-  /* Footer: health dot and update dot only, both pinned to the left. */
+  /* Footer: health dot and update dot only, both pinned to the left. The
+     version string fits the 64px rail in compact type, so keep it visible. */
   .app-body.sidebar-collapsed .sidebar-footer {
-    justify-content: flex-start;
-    gap: 14px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 4px 14px;
   }
   .app-body.sidebar-collapsed .sidebar-health {
-    font-size: 0;
-    gap: 0;
-  }
-  .app-body.sidebar-collapsed .sidebar-version {
     display: none;
   }
+  .app-body.sidebar-collapsed .sidebar-version {
+    display: block;
+    font-size: 9px;
+    line-height: 1;
+    text-align: center;
+  }
   .app-body.sidebar-collapsed .sidebar-version-group {
-    gap: 8px;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
   }
   .app-body.sidebar-collapsed .update-badge {
     font-size: 0;
