@@ -41,37 +41,6 @@ select {
 button {
   cursor: pointer;
 }
-.topbar {
-  position: relative;
-  z-index: 5;
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  align-items: center;
-  height: 56px;
-  padding: 0 18px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
-}
-.traffic-lights {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.light {
-  width: 11px;
-  height: 11px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 50%;
-}
-.light.red {
-  background: #ff6058;
-}
-.light.yellow {
-  background: #ffbd2e;
-}
-.light.green {
-  background: #28c840;
-}
 .topbar-brand {
   display: flex;
   align-items: center;
@@ -106,20 +75,6 @@ button {
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-}
-.theme-button {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 9px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 13px;
-}
-.theme-button span {
-  font-size: 13px;
 }
 .icon-button {
   display: grid;
@@ -336,10 +291,6 @@ button {
 .library-layout.with-inspector {
   grid-template-columns: minmax(0, 1fr) var(--inspector-width, 260px);
 }
-.library-center {
-  min-width: 0;
-  padding: 29px 28px 38px;
-}
 .page-heading {
   display: flex;
   justify-content: space-between;
@@ -384,41 +335,6 @@ button {
 .primary-button:hover {
   background: var(--accent-hover);
 }
-.collection-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.search-field {
-  display: flex;
-  min-width: 170px;
-  height: 32px;
-  flex: 1;
-  align-items: center;
-  gap: 8px;
-  padding: 0 9px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--muted);
-}
-.search-field > span {
-  font-size: 17px;
-}
-.search-field input,
-.semantic-search input {
-  width: 100%;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--ink);
-  font-size: 13px;
-}
-.search-field input::placeholder,
-.semantic-search input::placeholder {
-  color: var(--faint);
-}
 kbd {
   padding: 2px 4px;
   border: 1px solid var(--line-strong);
@@ -428,39 +344,6 @@ kbd {
   font: inherit;
   font-size: 12px;
   white-space: nowrap;
-}
-.toolbar-button {
-  display: flex;
-  height: 32px;
-  align-items: center;
-  gap: 6px;
-  padding: 0 9px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 13px;
-}
-.layout-switcher {
-  display: flex;
-  height: 32px;
-  padding: 3px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--surface-2);
-}
-.layout-switcher button {
-  width: 26px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-}
-.layout-switcher button.selected {
-  background: var(--surface);
-  color: var(--accent-text);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 .smart-filter-row {
   display: flex;
@@ -537,13 +420,6 @@ kbd {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px 11px;
 }
-.gallery-grid.filmstrip {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-.gallery-grid.overview {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
 .gallery-tile {
   min-width: 0;
   padding: 0;
@@ -559,12 +435,6 @@ kbd {
   border: 2px solid transparent;
   border-radius: 7px;
   background: var(--surface-3);
-}
-.gallery-grid.filmstrip .tile-image {
-  height: 94px;
-}
-.gallery-grid.overview .tile-image {
-  height: 220px;
 }
 .tile-image img {
   display: block;
@@ -846,15 +716,6 @@ kbd {
   white-space: nowrap;
   min-width: 0;
 }
-.inspector-top > button {
-  width: 21px;
-  height: 21px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 14px;
-}
 .inspector-image {
   position: relative;
   display: block;
@@ -922,27 +783,6 @@ kbd {
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.04em;
-}
-.inspector-actions {
-  display: flex;
-  gap: 5px;
-  margin: 9px 0 15px;
-}
-.inspector-actions button {
-  display: grid;
-  flex: 1;
-  justify-items: center;
-  gap: 3px;
-  padding: 6px 2px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 12px;
-}
-.inspector-actions span {
-  color: var(--muted);
-  font-size: 13px;
 }
 .inspector-hidden-note {
   padding: 12px;
@@ -2561,17 +2401,6 @@ kbd {
     grid-template-columns: auto minmax(0, 1fr) auto auto;
     padding-left: 80px;
   }
-  .theme-button {
-    width: 29px;
-    height: 28px;
-    justify-content: center;
-    overflow: hidden;
-    padding: 0;
-    font-size: 0;
-  }
-  .theme-button span {
-    font-size: 14px;
-  }
   .app-body {
     grid-template-columns: 1fr;
     min-height: calc(100vh - 50px);
@@ -2648,15 +2477,6 @@ kbd {
   }
   .tile-image {
     height: clamp(110px, 34vw, 190px);
-  }
-  .gallery-grid.filmstrip {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .gallery-grid.overview {
-    grid-template-columns: 1fr;
-  }
-  .gallery-grid.overview .tile-image {
-    height: 240px;
   }
   .older-grid img {
     height: 65px;
@@ -2997,173 +2817,11 @@ kbd {
 }
 
 .app-frame,
-.app-frame :is(h1, h2, h3, h4, button, input, select, textarea, kbd) {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-kerning: normal;
-}
 
-.app-frame :is(.page-heading h1, .content-heading h1) {
-  font-size: 28px;
-  font-weight: 650;
-  letter-spacing: -0.035em;
-  line-height: 1.2;
-}
-
-.app-frame
-  :is(
-    .page-heading h2,
-    .page-heading h3,
-    .main-header h2,
-    .first-run h2,
-    .semantic-hero h2,
-    .slideshow-caption h2
-  ) {
-  font-size: 21px;
-  font-weight: 650;
-  letter-spacing: -0.03em;
-  line-height: 1.25;
-}
-
-.app-frame
-  :is(
-    .date-group-heading h2,
-    .batch-options h2,
-    .slideshow-settings h2,
-    .inspector-top h2,
-    .feature-card h3
-  ) {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-}
-
-.app-frame
-  :is(
-    .topbar-brand,
-    .topbar-context,
-    .nav-item,
-    .album-nav button,
-    .search-field input,
-    .toolbar-button,
-    .quick-filter,
-    .filter-chip,
-    .date-button,
-    .view-button,
-    .select-button,
-    .photo-caption,
-    .tile-caption,
-    .inspector-actions button,
-    .settings-row,
-    .batch-option,
-    .duplicate-card,
-    .slideshow-settings,
-    .edit-controls,
-    .first-run > p,
-    .feature-card p,
-    .location-preview b,
-    .location-preview small,
-    .capture-time,
-    .finder-tags,
-    .semantic-search input,
-    .search-suggestions button,
-    .batch-form-row,
-    .batch-form-check,
-    .viewer-caption,
-    .keyboard-hint,
-    .primary-button,
-    .quiet-button,
-    .outline-button,
-    .danger-button,
-    .theme-button,
-    .inspector-section-head,
-    .settings-row b,
-    .memory-open,
-    .edit-tabs button,
-    .auto-adjust button,
-    .canvas-actions button
-  ) {
-  font-size: 13px;
-}
-
-.app-frame
-  :is(
-    .page-subtitle,
-    .nav-count,
-    .nav-badge,
-    .tile-caption small,
-    .photo-caption small,
-    .metadata,
-    .location-row small,
-    .finder-tags > small,
-    .feature-body-note,
-    .settings-row small,
-    .batch-form-row small,
-    .batch-form-check small,
-    .slideshow-settings small,
-    .duplicate-card small,
-    .inspector-top small,
-    .tile-caption b,
-    .profile-copy strong,
-    .storage-label,
-    .batch-selection button,
-    .batch-group-head button,
-    .inspector-section-head button,
-    .format-hint,
-    .format-hint b
-  ) {
-  font-size: 12px;
-}
-
-.app-frame
-  :is(
-    .eyebrow,
-    .sidebar-label,
-    .smart-label,
-    .inspector-kicker,
-    .overline,
-    .live-pill,
-    .beta-badge,
-    .native-feature-badge,
-    .search-suggestions,
-    .metadata-list,
-    .browser-capability-warning,
-    .native-limit-note,
-    .similarity-note,
-    .batch-stepper,
-    .batch-warning,
-    .export-destination,
-    .profile-copy small,
-    .storage-widget small,
-    .privacy-note small,
-    .metadata dt,
-    .metadata dd,
-    .quiet-button
-  ) {
-  font-size: 13px;
-}
-
-.app-frame
-  :is(
-    .eyebrow,
-    .sidebar-label,
-    .smart-label,
-    .inspector-kicker,
-    .overline,
-    .live-pill,
-    .beta-badge,
-    .native-feature-badge
-  ) {
-  font-weight: 600;
-  letter-spacing: 0.045em;
-}
 
 .app-frame .gallery-grid .tile-caption {
   gap: 6px;
   padding-top: 8px;
-}
-.collection-toolbar .quiet-button {
-  height: 32px;
 }
 .album-active-banner {
   display: flex;
@@ -3257,33 +2915,6 @@ kbd {
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.6);
   color: white;
-  font-size: 13px;
-}
-.selection-toolbar {
-  position: sticky;
-  z-index: 3;
-  bottom: 10px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-top: 15px;
-  padding: 8px;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  background: var(--surface);
-  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.1);
-}
-.selection-toolbar b {
-  margin-right: auto;
-  color: var(--text);
-  font-size: 12px;
-}
-.selection-toolbar button {
-  padding: 6px 7px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--surface);
-  color: var(--text);
   font-size: 13px;
 }
 .app-tag {
@@ -3678,49 +3309,9 @@ kbd {
   height: 100%;
   object-fit: cover;
 }
-@media (max-width: 1160px) {
-  .library-layout.with-inspector {
-    grid-template-columns: minmax(0, 1fr) var(--inspector-width, 225px);
-  }
-  .library-layout.with-inspector .gallery-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 900px) {
-  .library-layout.with-inspector {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .photo-inspector {
-    display: none;
-  }
-  .library-layout.with-inspector .gallery-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-@media (max-width: 700px) {
-  .library-layout.with-inspector .gallery-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .first-run {
-    min-height: 430px;
-    padding: 20px 10px;
-  }
-  .selection-toolbar {
-    flex-wrap: wrap;
-  }
-  .selection-toolbar b {
-    flex-basis: 100%;
-  }
-  .viewer-screen .page-heading h1 {
-    max-width: 230px;
-  }
-  .native-limit-note {
-    line-height: 1.5;
-  }
-}
 
 .app-frame
-  :is(
+  :where(
     h1,
     h2,
     h3,
@@ -3740,11 +3331,11 @@ kbd {
   font-kerning: normal;
 }
 
-.app-frame :is(h1, h2, h3, h4) {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+.app-frame :where(h1, h2, h3, h4) {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-.app-frame :is(.page-heading h1, .content-heading h1) {
+.app-frame :where(.page-heading h1, .content-heading h1) {
   font-size: 28px;
   font-weight: 650;
   letter-spacing: -0.035em;
@@ -3752,7 +3343,7 @@ kbd {
 }
 
 .app-frame
-  :is(
+  :where(
     .page-heading h2,
     .page-heading h3,
     .main-header h2,
@@ -3767,7 +3358,7 @@ kbd {
 }
 
 .app-frame
-  :is(
+  :where(
     .date-group-heading h2,
     .batch-options h2,
     .slideshow-settings h2,
@@ -3778,138 +3369,6 @@ kbd {
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.3;
-}
-
-.app-frame
-  :is(
-    .topbar-brand,
-    .topbar-context,
-    .nav-item,
-    .album-nav button,
-    .search-field input,
-    .toolbar-button,
-    .quick-filter,
-    .filter-chip,
-    .date-button,
-    .view-button,
-    .select-button,
-    .photo-caption,
-    .tile-caption,
-    .inspector-actions button,
-    .settings-row,
-    .batch-option,
-    .duplicate-card,
-    .slideshow-settings,
-    .edit-controls,
-    .first-run > p,
-    .feature-card p,
-    .location-preview b,
-    .location-preview small,
-    .capture-time,
-    .finder-tags,
-    .semantic-search input,
-    .search-suggestions button,
-    .batch-form-row,
-    .batch-form-check,
-    .viewer-caption,
-    .keyboard-hint,
-    .primary-button,
-    .quiet-button,
-    .outline-button,
-    .danger-button,
-    .theme-button,
-    .inspector-section-head,
-    .settings-row b,
-    .memory-open,
-    .edit-tabs button,
-    .auto-adjust button,
-    .canvas-actions button,
-    .selection-toolbar button,
-    .batch-form-row > input,
-    .batch-form-row select
-  ) {
-  font-size: 13px;
-}
-
-.app-frame
-  :is(
-    .page-subtitle,
-    .nav-count,
-    .nav-badge,
-    .tile-caption small,
-    .photo-caption small,
-    .metadata,
-    .location-row small,
-    .finder-tags > small,
-    .feature-body-note,
-    .settings-row small,
-    .batch-form-row small,
-    .batch-form-check small,
-    .slideshow-settings small,
-    .duplicate-card small,
-    .inspector-top small,
-    .tile-caption b,
-    .profile-copy strong,
-    .storage-label,
-    .batch-selection button,
-    .batch-group-head button,
-    .inspector-section-head button,
-    .format-hint,
-    .format-hint b,
-    .album-active-banner,
-    .album-active-banner button,
-    .raw-tile small,
-    .raw-viewer span,
-    .selection-toolbar b,
-    .selection-toolbar button,
-    .quiet-button,
-    .app-tag,
-    .filmstrip button > span,
-    .duplicate-nonimage,
-    .duplicate-card-meta span,
-    .batch-selection,
-    .batch-form-check b,
-    .empty-page p,
-    .settings-row select
-  ) {
-  font-size: 12px;
-}
-
-.app-frame
-  :is(
-    .eyebrow,
-    .sidebar-label,
-    .smart-label,
-    .inspector-kicker,
-    .overline,
-    .live-pill,
-    .beta-badge,
-    .native-feature-badge,
-    .search-suggestions,
-    .metadata-list,
-    .browser-capability-warning,
-    .native-limit-note,
-    .similarity-note,
-    .batch-stepper,
-    .batch-warning,
-    .export-destination,
-    .profile-copy small,
-    .storage-widget small,
-    .privacy-note small,
-    .metadata dt,
-    .metadata dd,
-    .format-hint small,
-    .raw-tile small,
-    .raw-viewer span,
-    .format-label,
-    .rule-line button,
-    .native-feature-badge,
-    .batch-form-row small,
-    .batch-form-check small,
-    .export-destination small,
-    .browser-capability-warning
-  ) {
-  font-size: 13px;
 }
 
 .app-frame
@@ -3941,57 +3400,6 @@ kbd {
   .app-frame .content-heading h1 {
     font-size: 24px;
   }
-}
-
-.app-frame .inspector-actions {
-  gap: 7px;
-  margin: 11px 0 17px;
-}
-
-.app-frame .inspector-actions button {
-  min-width: 0;
-  min-height: 56px;
-  align-content: center;
-  gap: 4px;
-  padding: 7px 3px;
-  border-color: var(--line-strong);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 18px;
-  transition:
-    background-color 120ms ease,
-    border-color 120ms ease;
-}
-
-.app-frame .inspector-actions button:hover {
-  border-color: var(--blue);
-  background: var(--blue-soft);
-}
-
-.app-frame .inspector-actions button span {
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 550;
-  line-height: 1.2;
-}
-
-.app-frame .inspector-actions .favorite-action {
-  color: #b64059;
-}
-
-.app-frame.dark .inspector-actions .favorite-action {
-  color: #ff8ba0;
-}
-
-.app-frame .inspector-actions .favorite-action.is-active {
-  border-color: #e6a5b1;
-  background: #fff1f3;
-}
-
-.app-frame.dark .inspector-actions .favorite-action.is-active {
-  border-color: #77424d;
-  background: #38252b;
 }
 
 .app-frame .finder-tags {
@@ -4179,15 +3587,8 @@ body {
   color: var(--text);
 }
 
-.topbar-context,
-.theme-button {
+.topbar-context {
   font-size: 12px;
-}
-
-.theme-button {
-  min-height: 32px;
-  padding: 0 12px;
-  border-color: var(--line-strong);
 }
 
 .icon-button {
@@ -4207,7 +3608,7 @@ body {
 }
 
 .app-frame
-  :is(
+  :where(
     .sidebar-label,
     .eyebrow,
     .smart-label,
@@ -4261,30 +3662,8 @@ body {
   min-height: 0;
 }
 
-.library-layout.with-inspector {
-  grid-template-columns: minmax(0, 1fr) var(--inspector-width, 276px);
-}
-
-.library-center {
-  padding: 32px 30px 42px;
-}
-
 .page-heading {
   margin-bottom: 27px;
-}
-
-.page-heading h1 {
-  color: var(--ink);
-  font-size: 30px;
-  font-weight: 650;
-  letter-spacing: -0.04em;
-  line-height: 1.15;
-}
-
-.page-subtitle {
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 13px;
 }
 
 .app-frame
@@ -4293,8 +3672,7 @@ body {
     .quiet-button,
     .outline-button,
     .danger-button,
-    .toolbar-button,
-    .theme-button
+    .toolbar-button
   ) {
   min-height: 36px;
   border-radius: 8px;
@@ -4323,39 +3701,6 @@ body {
 
 .collection-toolbar {
   gap: 9px;
-}
-
-.search-field {
-  height: 38px;
-  padding: 0 11px;
-  border-color: var(--line-strong);
-  border-radius: 8px;
-  background: var(--surface);
-}
-
-.search-field input,
-.semantic-search input {
-  font-size: 13px;
-}
-
-.toolbar-button {
-  height: 38px;
-  padding: 0 11px;
-}
-
-.layout-switcher {
-  height: 38px;
-  align-items: center;
-  padding: 4px;
-  border-color: var(--line);
-  border-radius: 8px;
-  background: var(--surface-2);
-}
-
-.layout-switcher button {
-  width: 30px;
-  height: 28px;
-  border-radius: 6px;
 }
 
 .smart-filter-row {
@@ -4834,7 +4179,6 @@ body {
     .canvas-actions button,
     .viewer-overlay-bottom button,
     .slideshow-controls button,
-    .selection-toolbar button
   ) {
   display: inline-flex;
   align-items: center;
@@ -4842,8 +4186,7 @@ body {
 }
 
 .app-frame .quiet-button,
-.app-frame .slideshow-controls button,
-.app-frame .selection-toolbar button {
+.app-frame .slideshow-controls button {
   gap: 8px;
 }
 

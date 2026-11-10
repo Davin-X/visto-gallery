@@ -107,17 +107,15 @@
 
 /* Segmented controls share one track and selected treatment. */
 .app-frame :is(.layout-switcher, .zoom-control, .sort-control) {
-  height: 38px;
-  min-height: 38px;
-  padding: 3px;
-  border-color: var(--line-strong);
-  border-radius: 10px;
-  background: var(--surface-2);
+  min-height: 32px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--surface-3);
 }
 
 .app-frame :is(.layout-switcher button, .zoom-control button, .sort-control button) {
-  min-height: 30px;
-  border-radius: 7px;
+  min-height: 26px;
+  border-radius: 6px;
   color: var(--muted);
 }
 
