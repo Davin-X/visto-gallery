@@ -3551,12 +3551,16 @@ body.is-resizing .photo-inspector {
     transform: scale(1.13); /* 18px glyph -> ~20px */
   }
   /* Sources entry: same anchored footprint, accent identity preserved. */
+  .app-body.sidebar-collapsed .sources-entry-section {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
   .app-body.sidebar-collapsed .sources-entry {
     width: 40px;
     border-radius: 9px;
   }
   .app-body.sidebar-collapsed .sources-entry-icon {
-    transform: scale(1.15);
+    transform: scale(1.13);
   }
   .app-body.sidebar-collapsed .sources-entry-text,
   .app-body.sidebar-collapsed .sources-entry-action {
