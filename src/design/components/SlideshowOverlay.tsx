@@ -209,22 +209,34 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
         e.preventDefault();
         e.stopPropagation();
         toggle();
-      } else if (e.key === "ArrowUp" && item.kind === "video" && videoRef.current) {
+      } else if (e.key === "ArrowUp" && item?.kind === "video" && videoRef.current) {
         e.preventDefault();
         e.stopPropagation();
         const v = videoRef.current;
         v.volume = Math.min(1, v.volume + 0.1);
         if (v.volume > 0) v.muted = false;
-      } else if (e.key === "ArrowDown" && item.kind === "video" && videoRef.current) {
+      } else if (e.key === "ArrowDown" && item?.kind === "video" && videoRef.current) {
         e.preventDefault();
         e.stopPropagation();
         const v = videoRef.current;
         v.volume = Math.max(0, v.volume - 0.1);
+      } else if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        e.stopPropagation();
+        setZoom((z) => Math.min(300, z + 25));
+      } else if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        e.stopPropagation();
+        setZoom((z) => Math.max(25, z - 25));
+      } else if (e.key === "r" || e.key === "R") {
+        e.preventDefault();
+        e.stopPropagation();
+        setRotation((r) => (r + 90) % 360);
       } else if (e.key === "f" || e.key === "F") {
         e.preventDefault();
         e.stopPropagation();
         void toggleFullscreen();
-      } else if (e.key === "m" && item.kind === "video") {
+      } else if (e.key === "m" && item?.kind === "video") {
         e.preventDefault();
         e.stopPropagation();
         const v = videoRef.current;
