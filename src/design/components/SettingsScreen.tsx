@@ -10,6 +10,7 @@ import {
   ACCENT_PALETTE,
 } from "../../engine/stores";
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useKeyboard } from "../../engine/hooks/useKeyboard";
 import { tauri } from "../../engine/commands/tauri";
 import { save, open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { BackupInfo, LibraryFolder } from "../../engine/types/commands";
@@ -58,6 +59,27 @@ export function SettingsScreen(props: {
   useFocusTrap(showResetConfirm, resetDialogRef);
   useFocusTrap(showDeleteConfirm, deleteDialogRef);
   useFocusTrap(!!pendingRestore, restoreDialogRef);
+
+  // Escape cancels whichever confirm dialog is open (restore stays pinned
+  // while a restore is in flight, matching its backdrop guard).
+  useKeyboard([
+    useCallback(
+      (e: KeyboardEvent) => {
+        if (e.key !== "Escape") return;
+        if (showResetConfirm) {
+          e.preventDefault();
+          setShowResetConfirm(false);
+        } else if (showDeleteConfirm) {
+          e.preventDefault();
+          setShowDeleteConfirm(false);
+        } else if (pendingRestore && !restoring) {
+          e.preventDefault();
+          setPendingRestore(null);
+        }
+      },
+      [showResetConfirm, showDeleteConfirm, pendingRestore, restoring],
+    ),
+  ]);
 
   // Settings values
   const appearance = useAppearance();
@@ -264,17 +286,34 @@ export function SettingsScreen(props: {
   );
 
   const renderAccentPicker = (value: string, onChange: (v: string) => void) => (
-    <div className="accent-picker" role="radiogroup" aria-label="Accent color">
+    <div
+      className="accent-picker"
+      role="radiogroup"
+      aria-label="Accent color"
+      onKeyDown={(event) => {
+        const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
+        if (!keys.includes(event.key)) return;
+        const current = ACCENT_PALETTE.findIndex((c) => c.id === value);
+        if (current < 0) return;
+        const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
+        const next = (current + direction + ACCENT_PALETTE.length) % ACCENT_PALETTE.length;
+        event.preventDefault();
+        onChange(ACCENT_PALETTE[next].id);
+        event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+      }}
+    >
       {ACCENT_PALETTE.map((c) => {
         const selected = value === c.id;
         return (
           <button
             key={c.id}
             type="button"
+            role="radio"
+            aria-checked={selected}
+            tabIndex={selected ? 0 : -1}
             className={`accent-option ${selected ? "selected" : ""}`}
             onClick={() => onChange(c.id)}
             aria-label={c.label}
-            aria-pressed={selected}
             title={c.label}
           >
             <span
@@ -403,12 +442,15 @@ export function SettingsScreen(props: {
           <div
             ref={resetDialogRef}
             className="album-dialog confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-reset-title"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="dialog-heading">
               <div>
                 <p className="eyebrow">RESET</p>
-                <h2>Reset All Settings?</h2>
+                <h2 id="settings-reset-title">Reset All Settings?</h2>
               </div>
             </div>
             <p className="dialog-body">
@@ -440,12 +482,15 @@ export function SettingsScreen(props: {
           <div
             ref={restoreDialogRef}
             className="album-dialog delete-album-dialog confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-restore-title"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="dialog-heading">
               <div>
                 <p className="eyebrow">RESTORE</p>
-                <h2>Replace the Current Catalog?</h2>
+                <h2 id="settings-restore-title">Replace the Current Catalog?</h2>
               </div>
             </div>
             <p className="dialog-body">
@@ -482,12 +527,15 @@ export function SettingsScreen(props: {
           <div
             ref={deleteDialogRef}
             className="album-dialog delete-album-dialog confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-delete-title"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="dialog-heading">
               <div>
                 <p className="eyebrow">DELETE</p>
-                <h2>Delete Library Database?</h2>
+                <h2 id="settings-delete-title">Delete Library Database?</h2>
               </div>
             </div>
             <p className="dialog-body">
