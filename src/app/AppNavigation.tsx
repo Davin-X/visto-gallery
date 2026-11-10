@@ -6,6 +6,7 @@ import {
   GearIcon,
   SunIcon,
   MoonIcon,
+  MonitorIcon,
   LibraryIcon,
   AlbumsIcon,
   ViewerIcon,
@@ -22,10 +23,21 @@ import {
   ChevronsRightIcon,
 } from "../design/components/icons";
 import { ACCENT_PALETTE } from "../engine/stores";
+import type { Appearance } from "../engine/types/generated/ipc";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { LibraryFolder, LibraryStats } from "../engine/types/commands";
-import type { Appearance } from "../engine/types/generated/ipc";
 import type { Screen } from "./screen";
+
+/** The top-bar button cycles light → dark → system → light. */
+export function cycleAppearance(appearance: Appearance): Appearance {
+  return appearance === "light" ? "dark" : appearance === "dark" ? "system" : "light";
+}
+
+const APPEARANCE_LABEL: Record<Appearance, string> = {
+  light: "Light",
+  dark: "Dark",
+  system: "System",
+};
 
 const NAV_ITEMS: Array<{
   label: string;
@@ -41,17 +53,6 @@ const NAV_ITEMS: Array<{
   { label: "Hidden", Icon: EyeOffIcon, screen: "Hidden" },
 ];
 
-/** The top-bar button cycles light → dark → system → light. */
-export function cycleAppearance(appearance: Appearance): Appearance {
-  return appearance === "light" ? "dark" : appearance === "dark" ? "system" : "light";
-}
-
-const APPEARANCE_LABEL: Record<Appearance, string> = {
-  light: "Light",
-  dark: "Dark",
-  system: "System",
-};
-
 interface AppTopBarProps {
   screen: Screen;
   activeAlbumName: string | null;
@@ -60,11 +61,11 @@ interface AppTopBarProps {
   sidebarOpen: boolean;
   showInspector: boolean;
   dark: boolean;
-  appearance: Appearance;
   accentColor: string;
   onToggleSidebar: () => void;
   onToggleInspector: () => void;
   onToggleAppearance: () => void;
+  appearance: Appearance;
   onCycleAccent: () => void;
   onOpenSettings: () => void;
   onMouseDown: (e: React.MouseEvent) => void;
@@ -186,7 +187,13 @@ export function AppTopBar({
           title={`Appearance: ${APPEARANCE_LABEL[appearance]} — switch to ${appearanceNextLabel}`}
           onClick={onToggleAppearance}
         >
-          {dark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
+          {appearance === "light" ? (
+            <SunIcon size={18} />
+          ) : appearance === "dark" ? (
+            <MoonIcon size={18} />
+          ) : (
+            <MonitorIcon size={18} />
+          )}
         </button>
         <button
           className="icon-button"
