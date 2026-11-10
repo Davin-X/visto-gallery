@@ -19,26 +19,44 @@ interface ContextMenuProps {
   onClose: () => void;
 }
 
-function ContextMenuContent({ items, onClose }: { items: ContextMenuItem[]; onClose: () => void }) {
+function ContextMenuContent({
+  items,
+  onClose,
+  onEscape,
+}: {
+  items: ContextMenuItem[];
+  onClose: () => void;
+  /** What Escape does when no submenu of this level is open. Defaults to onClose. */
+  onEscape?: () => void;
+}) {
   const [submenuOpen, setSubmenuOpen] = useState<{
     index: number;
     items: ContextMenuItem[];
   } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const submenuRef = useRef<HTMLDivElement>(null);
 
+  // Child-first registration: this level's handler runs before any parent
+  // menu level's, so Escape consumes itself here via stopImmediatePropagation.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
         if (submenuOpen) {
           setSubmenuOpen(null);
-          e.preventDefault();
         } else {
-          onClose();
+          (onEscape ?? onClose)();
         }
+        return;
       }
       if (e.key === "ArrowRight" && submenuOpen) {
-        submenuRef.current?.querySelector("button")?.focus();
+        // The open submenu mounts inline (not portaled), so it is a
+        // descendant of this level's menu root.
+        (
+          menuRef.current?.querySelector(
+            '.context-menu-submenu.open [role="menuitem"]:not([disabled])',
+          ) as HTMLElement | null
+        )?.focus();
       }
       if (e.key === "ArrowLeft" && submenuOpen) {
         setSubmenuOpen(null);
@@ -49,7 +67,7 @@ function ContextMenuContent({ items, onClose }: { items: ContextMenuItem[]; onCl
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [submenuOpen, onClose]);
+  }, [submenuOpen, onClose, onEscape]);
 
   useEffect(() => {
     menuRef.current?.focus();
@@ -108,9 +126,12 @@ function ContextMenuContent({ items, onClose }: { items: ContextMenuItem[]; onCl
 
         if (item.submenu) {
           return (
-            <div key={index} className="context-menu-submenu" role="none">
+            <div
+              key={index}
+              className={`context-menu-submenu${submenuOpen?.index === index ? " open" : ""}`}
+              role="none"
+            >
               <button
-                ref={submenuRef as any}
                 role="menuitem"
                 aria-haspopup="true"
                 aria-expanded={submenuOpen?.index === index}
@@ -140,6 +161,7 @@ function ContextMenuContent({ items, onClose }: { items: ContextMenuItem[]; onCl
                     setSubmenuOpen(null);
                     onClose();
                   }}
+                  onEscape={() => setSubmenuOpen(null)}
                 />
               )}
             </div>
@@ -195,15 +217,9 @@ export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
       if (!root!.contains(e.target as Node)) onClose();
     };
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-
     document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [onClose, root]);
 
@@ -245,26 +261,3 @@ export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
   );
 }
 
-// Hook for using context menu in components
-export function useContextMenu() {
-  const [menu, setMenu] = useState<{
-    items: ContextMenuItem[];
-    x: number;
-    y: number;
-  } | null>(null);
-
-  const open = (items: ContextMenuItem[], e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setMenu({ items, x: e.clientX, y: e.clientY });
-  };
-
-  const close = () => setMenu(null);
-
-  return {
-    menu,
-    open,
-    close,
-    ContextMenu: menu && <ContextMenu items={menu.items} x={menu.x} y={menu.y} onClose={close} />,
-  };
-}
