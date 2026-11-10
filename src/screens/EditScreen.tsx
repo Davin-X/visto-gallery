@@ -332,19 +332,12 @@ function EditScreen(props: EditScreenProps) {
   } | null>(null);
 
   const draftTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const aspectTriggerRef = useRef<HTMLButtonElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [viewportSize, setViewportSize] = useState<{ width: number; height: number } | null>(null);
   const [draftPopoverPos, setDraftPopoverPos] = useState<{
     top: number;
     right: number;
   } | null>(null);
-  const [aspectPopoverPos, setAspectPopoverPos] = useState<{
-    top?: number;
-    bottom?: number;
-    left: number;
-  } | null>(null);
-
   // Measure Canvas Viewport
   useEffect(() => {
     const el = viewportRef.current;
@@ -383,39 +376,6 @@ function EditScreen(props: EditScreenProps) {
       setDraftPopoverPos(null);
     }
   }, [draftTrayOpen]);
-
-  useEffect(() => {
-    if (!aspectMenuOpen) {
-      setAspectPopoverPos(null);
-      return;
-    }
-    const update = () => {
-      if (!aspectTriggerRef.current) return;
-      const rect = aspectTriggerRef.current.getBoundingClientRect();
-      const menuHeight = 280;
-      const menuWidth = 180;
-      const padding = 8;
-      const spaceBelow = window.innerHeight - rect.bottom - padding;
-      const spaceAbove = rect.top - padding;
-      const openUp = spaceBelow < menuHeight && spaceAbove > spaceBelow;
-      const left = Math.min(
-        Math.max(padding, rect.left),
-        Math.max(padding, window.innerWidth - menuWidth - padding),
-      );
-      setAspectPopoverPos(
-        openUp
-          ? { bottom: Math.max(padding, window.innerHeight - rect.top + padding), left }
-          : { top: rect.bottom + padding, left },
-      );
-    };
-    update();
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-    return () => {
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-    };
-  }, [aspectMenuOpen]);
 
   useEffect(() => {
     setGuideOffset({ x: 0, y: 0 });
@@ -486,13 +446,19 @@ function EditScreen(props: EditScreenProps) {
     }
   }, [props.item?.id, props.item?.width, props.item?.height]);
 
-  // Save draft when leaving the edit screen or switching items
+  // Save draft when leaving the edit screen or switching items. The cleanup
+  // captures the latest onSaveDraft via a ref so a new callback identity from a
+  // parent re-render never triggers a mid-session save.
   const exitItemId = props.item?.id;
+  const onSaveDraftRef = useRef(props.onSaveDraft);
+  useEffect(() => {
+    onSaveDraftRef.current = props.onSaveDraft;
+  });
   useEffect(() => {
     return () => {
-      void props.onSaveDraft?.();
+      void onSaveDraftRef.current?.();
     };
-  }, [exitItemId, props.onSaveDraft]);
+  }, [exitItemId]);
 
   const handleRevert = async () => {
     if (!props.item) return;
@@ -1326,7 +1292,6 @@ function EditScreen(props: EditScreenProps) {
             {/* Aspect Ratio Framing Preview Menu */}
             <div className="aspect-menu-container">
               <button
-                ref={aspectTriggerRef}
                 type="button"
                 className={aspectGuide ? "active" : ""}
                 aria-pressed={!!aspectGuide}
