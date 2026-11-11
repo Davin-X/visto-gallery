@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 export interface ContextMenuItem {
-  label: string | React.ReactNode;
+  /** Divider entries have no label; every real entry does. */
+  label?: string | React.ReactNode;
   shortcut?: string;
   icon?: React.ReactNode;
   onClick?: () => void;

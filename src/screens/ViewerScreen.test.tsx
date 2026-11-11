@@ -134,7 +134,7 @@ describe("photo viewer", () => {
 
     expect(container.querySelector(".filmstrip button[title='photo.jpg']")).toBeTruthy();
     expect(container.querySelector(".filmstrip button[title='video.mp4']")).toBeNull();
-    expect(screen.getByText("1 / 1")).toBeInTheDocument();
+    expect(screen.getByText("1 of 1")).toBeInTheDocument();
     expect(container.querySelector(".viewer-stage video")).toBeNull();
   });
 

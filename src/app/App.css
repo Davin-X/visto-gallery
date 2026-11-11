@@ -4629,21 +4629,6 @@ body.is-resizing .photo-inspector {
   box-sizing: border-box;
 }
 
-.filmstrip-label {
-  flex: 0 0 auto;
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  margin: 0 4px;
-  padding: 2px 4px;
-  border-radius: 4px;
-  background: var(--surface-2);
-  color: var(--faint);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
 .filmstrip button {
   flex: 0 0 64px;
   width: 64px;
@@ -4654,20 +4639,27 @@ body.is-resizing .photo-inspector {
   border: 2px solid transparent;
   background: var(--surface-3);
   cursor: pointer;
+  /* The current photo is the only fully lit thumbnail: a 2px border alone is
+     too quiet in a row of forty similar images. */
+  opacity: 0.66;
   transition:
     border-color 0.15s ease,
+    opacity 0.15s ease,
     transform 0.15s ease,
     box-shadow 0.15s ease;
 }
 .filmstrip button:hover {
+  opacity: 1;
   transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
 }
 .filmstrip button.active {
+  opacity: 1;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .filmstrip button:focus-visible {
+  opacity: 1;
   outline: 2px solid var(--blue);
   outline-offset: 2px;
 }
@@ -8459,29 +8451,50 @@ body.is-resizing .photo-inspector {
 }
 .viewer-screen > .viewer-heading {
   flex: 0 0 auto;
+  align-items: flex-start;
   margin-bottom: 0;
 }
-.viewer-screen > .viewer-heading h1 {
-  font-size: clamp(14px, 1.35vw, 17px);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-.viewer-screen .viewer-title-block {
-  display: flex;
-  align-items: baseline;
+/* Same heading row as the video player: back button, file name, details. The
+   details wrap under the name instead of being clipped by the nowrap title. */
+.viewer-screen > .viewer-heading .video-player-title {
   flex-wrap: wrap;
-  gap: 4px 10px;
-  min-width: 0;
+  row-gap: 4px;
+  overflow: visible;
+}
+.viewer-screen > .viewer-heading .video-player-title h1 {
+  font-size: clamp(14px, 1.35vw, 17px);
+  max-width: min(52vw, 560px);
 }
 
-.viewer-screen .viewer-title-block .eyebrow,
-.viewer-screen .viewer-title-block h1 {
+/* Same actions the grid offers on a right-click, reachable without knowing
+   about right-click (or the shortcut legend). */
+.viewer-heading-more {
+  display: grid;
   flex: 0 0 auto;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--text);
+  line-height: 0;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease;
 }
-
-.viewer-screen .viewer-title-block .viewer-meta {
-  flex: 1 0 100%;
-  min-width: 0;
+.viewer-heading-more:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+  background: var(--surface-3);
+}
+.viewer-heading-more:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
 }
 .viewer-stage {
   min-height: 280px;
@@ -8541,6 +8554,30 @@ body.is-resizing .photo-inspector {
 .filmstrip button:focus-visible,
 .filmstrip button:hover {
   border-color: var(--accent);
+}
+
+/* End of the loaded page: the viewer pages the library, so the strip needs a
+   visible way to ask for the rest instead of just ending at item 250. */
+.filmstrip button.filmstrip-more {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 96px;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--surface-2) 90%, transparent);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 1;
+}
+.filmstrip button.filmstrip-more:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.filmstrip button.filmstrip-more:disabled {
+  cursor: progress;
+  opacity: 0.6;
 }
 
 @media (max-width: 1100px) and (min-width: 901px) {
