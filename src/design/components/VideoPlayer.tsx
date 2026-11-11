@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../../engine/stores/useSettingsStore";
 import { usePlaybackStore } from "../../engine/stores/usePlaybackStore";
 import {
@@ -81,7 +82,19 @@ function VideoPlayer({
   const [pictureInPictureError, setPictureInPictureError] = useState<string | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [autoAdvance, setAutoAdvance] = useState(false);
-  const [failed, setFailed] = useState(() => !canPlayVideoInApp(path, name));
+  // Playback source resolution. WebKit plays the original file when it can
+  // decode it; anything else is remuxed losslessly by the backend and served
+  // from the cache. `preparing` covers the gap, so an undecodable container
+  // never reaches <video> at all — not even on the first paint, where WebKit
+  // would start pulling the whole file for nothing.
+  const [resolvedSrc, setResolvedSrc] = useState(() =>
+    canPlayVideoInApp(path, name) ? src : "",
+  );
+  const [preparing, setPreparing] = useState(
+    () => Boolean(path) && !canPlayVideoInApp(path, name),
+  );
+  const [failureDetail, setFailureDetail] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [videoError, setVideoError] = useState<MediaError | null>(null);
   const [players, setPlayers] = useState<ExternalPlayer[]>([]);
   const [openError, setOpenError] = useState<string | null>(null);
@@ -117,11 +130,129 @@ function VideoPlayer({
     };
   }, [src, showPlayerActivity]);
 
+  const requestPlaybackPlan = useCallback(
+    async (forceRemux: boolean) => {
+      if (!path) return null;
+      try {
+        return await tauri.items.preparePlayback(path, forceRemux);
+      } catch {
+        return null;
+      }
+    },
+    [path],
+  );
+
+  // Re-copy a file that probed as playable but decoded no frames. WKWebView
+  // reports nothing useful for a damaged index, so a remux is the only way to
+  // tell a broken container apart from an unsupported codec.
+  const remuxRetriedRef = useRef(false);
+  // Resolves true when the retry produced a playable copy.
+  const retryRemuxRef = useRef<() => Promise<boolean>>(() => Promise.resolve(false));
+  retryRemuxRef.current = async () => {
+    if (!path || remuxRetriedRef.current) return false;
+    remuxRetriedRef.current = true;
+    setPreparing(true);
+    const plan = await requestPlaybackPlan(true);
+    setPreparing(false);
+    if (!plan || plan.strategy !== "remuxed") return false;
+    setFailureDetail(null);
+    setVideoError(null);
+    setFailed(false);
+    setResolvedSrc(convertFileSrc(plan.path));
+    return true;
+  };
+
   // A different item can use a different container, so re-evaluate on change.
+  // Containers the allow-list accepts load immediately: a probe would only add
+  // latency to the common case, and a failure is still caught by the frame
+  // checks, which fall back to a forced remux.
   useEffect(() => {
-    setFailed(!canPlayVideoInApp(path, name));
+    let cancelled = false;
+    remuxRetriedRef.current = false;
+    setFailureDetail(null);
     setOpenError(null);
-  }, [src, path, name]);
+    setVideoError(null);
+    setFailed(false);
+    const nativeByExtension = canPlayVideoInApp(path, name);
+    setResolvedSrc(nativeByExtension ? src : "");
+    setPreparing(Boolean(path) && !nativeByExtension);
+    if (!path) return;
+
+    void requestPlaybackPlan(false).then((plan) => {
+      if (cancelled) return;
+      setPreparing(false);
+      // No backend (browser preview, harness): behave exactly as before.
+      if (!plan) {
+        setResolvedSrc(src);
+        return;
+      }
+      if (plan.strategy === "unsupported") {
+        setFailureDetail(plan.detail ?? null);
+        setFailed(true);
+        return;
+      }
+      // A probe can also unlock a container the allow-list did not know.
+      setResolvedSrc(plan.strategy === "remuxed" ? convertFileSrc(plan.path) : src);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [src, path, name, requestPlaybackPlan]);
+
+  // Report one media-element snapshot per opened video (and every error) to
+  // the app log. Without it a black picture that reports no error leaves no
+  // trace at all, since the webview console is not visible in a Tauri window.
+  useEffect(() => {
+    if (!path) return;
+    const report = (label: string) => {
+      const video = ref.current;
+      if (!video) return;
+      const element = video as HTMLVideoElement & {
+        getVideoPlaybackQuality?: () => { totalVideoFrames?: number };
+        webkitDecodedFrameCount?: number;
+      };
+      const error = video.error;
+      const rect = video.getBoundingClientRect();
+      const style = window.getComputedStyle(video);
+      const sample = {
+        src: video.currentSrc,
+        // The box separates "not decoding" from "decoding but not laid out":
+        // a 0-height or hidden element has data and no visible picture.
+        box: `${Math.round(rect.width)}x${Math.round(rect.height)}`,
+        display: style.display,
+        visibility: style.visibility,
+        opacity: style.opacity,
+        objectFit: style.objectFit,
+        readyState: video.readyState,
+        networkState: video.networkState,
+        paused: video.paused,
+        currentTime: Math.round(video.currentTime * 100) / 100,
+        duration: Number.isFinite(video.duration) ? video.duration : -1,
+        size: `${video.videoWidth}x${video.videoHeight}`,
+        errorCode: error?.code ?? 0,
+        errorMessage: error?.message ?? "",
+        decodedFrames:
+          element.getVideoPlaybackQuality?.()?.totalVideoFrames ??
+          element.webkitDecodedFrameCount ??
+          -1,
+      };
+      void tauri.items
+        .logPlaybackDiagnostic(label, JSON.stringify(sample))
+        .catch(() => {});
+    };
+    const video = ref.current;
+    const onError = () => report("error");
+    video?.addEventListener("error", onError);
+    // Report immediately as well: a quick click through the queue must still
+    // leave a trace, and a missing line would otherwise look like a crash.
+    report("mount");
+    const timer = window.setTimeout(() => report("state"), 2500);
+    return () => {
+      window.clearTimeout(timer);
+      video?.removeEventListener("error", onError);
+    };
+  }, [resolvedSrc, path]);
 
   // Only look up external players when something actually failed.
   useEffect(() => {
@@ -236,7 +367,12 @@ function VideoPlayer({
     const markPlaybackFailure = () => {
       if (failed) return;
       setVideoError({ code: 3 } as MediaError);
-      setFailed(true);
+      // A file can probe as playable and still decode nothing (damaged index,
+      // odd edit list). Try the remux once before giving up on in-app playback;
+      // the viewer keeps the frame and shows "Preparing playback…" meanwhile.
+      void retryRemuxRef.current().then((recovered) => {
+        if (!recovered) setFailed(true);
+      });
     };
 
     const getDecodedFrameCount = () => {
@@ -253,10 +389,29 @@ function VideoPlayer({
       return typeof webkitDecoded === "number" ? webkitDecoded : null;
     };
 
+    // WebKit exposes requestVideoFrameCallback but never calls it when the
+    // stream produces no frames. That leaves a black picture with a working
+    // transport bar and advancing time, and no `error` event — nothing else in
+    // this component notices, because dimensions are reported normally. A real
+    // video presents its first frame well inside this window.
+    let frameWatchdog: number | null = null;
+    const startFrameWatchdog = () => {
+      if (sawVideoFrame || failed) return;
+      if (frameWatchdog) window.clearTimeout(frameWatchdog);
+      frameWatchdog = window.setTimeout(() => {
+        const media = ref.current;
+        if (!media || sawVideoFrame || failed) return;
+        if (media.paused || media.currentTime < 0.15) return;
+        markPlaybackFailure();
+      }, 1500);
+    };
+
     const checkDecodedFrames = () => {
       if (failed || sawVideoFrame) return;
       const el = ref.current as any;
       if (!el) return;
+      // With a frame callback available the watchdog above is the reliable
+      // signal; decoded-frame counters lag or stay at zero in WebKit.
       if ("requestVideoFrameCallback" in el) return;
       if (el.readyState < 2) return;
       const decoded = getDecodedFrameCount();
@@ -365,6 +520,7 @@ function VideoPlayer({
       onPlay();
       checkVideoTrack();
       checkDecodedFrames();
+      startFrameWatchdog();
     };
 
     const onCanPlay = () => {
@@ -392,6 +548,7 @@ function VideoPlayer({
     return () => {
       if (noVideoTrackTimer) window.clearTimeout(noVideoTrackTimer);
       if (noDecodedFramesTimer) window.clearTimeout(noDecodedFramesTimer);
+      if (frameWatchdog) window.clearTimeout(frameWatchdog);
       if (
         videoFrameCallbackId !== null &&
         typeof (video as HTMLVideoElement & { cancelVideoFrameCallback?: (id: number) => void })
@@ -413,7 +570,7 @@ function VideoPlayer({
       video.removeEventListener("pause", onPause);
       video.removeEventListener("canplay", attemptAutoPlay);
     };
-  }, [src, syncPlayback]);
+  }, [resolvedSrc, syncPlayback]);
 
   useEffect(() => {
     const video = ref.current;
@@ -421,7 +578,7 @@ function VideoPlayer({
     setPictureInPictureSupported(supportsPictureInPicture(video));
     setPictureInPictureError(null);
     return observePictureInPicture(video, setPictureInPicture);
-  }, [src]);
+  }, [resolvedSrc]);
 
   useEffect(() => {
     const video = ref.current;
@@ -441,7 +598,7 @@ function VideoPlayer({
     };
     video.addEventListener("ended", onEnded);
     return () => video.removeEventListener("ended", onEnded);
-  }, [src, autoAdvance, active, compact, onNext, syncPlayback]);
+  }, [resolvedSrc, autoAdvance, active, compact, onNext, syncPlayback]);
 
   // Pause playback when the player host is removed, such as after Stop.
   useEffect(() => {
@@ -667,6 +824,7 @@ function VideoPlayer({
           </p>
         )}
         {openError && <p className="viewer-video-feedback error">{openError}</p>}
+        {failureDetail && <p className="viewer-video-feedback">{failureDetail}</p>}
       </div>
     );
   }
@@ -681,10 +839,15 @@ function VideoPlayer({
         handleSurfaceToggle();
       }}
     >
+      {preparing && !compact && (
+        <div className="viewer-video-preparing" role="status">
+          Preparing playback…
+        </div>
+      )}
       <video
         ref={ref}
         className={`viewer-video${compact ? " viewer-video-compact" : ""}`}
-        src={src}
+        src={resolvedSrc || undefined}
         width={width ?? undefined}
         height={height ?? undefined}
         style={{

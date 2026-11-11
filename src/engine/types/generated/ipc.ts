@@ -160,6 +160,34 @@ export type EditPreset = { id: string, name: string, edits: EditValues, crop?: C
 
 export type ExternalPlayer = { name: string, path: string, };
 
+export type MediaProbe = { 
+/**
+ * `ffprobe`'s format name, e.g. `mov,mp4,m4a,3gp,3g2,mj2`.
+ */
+container: string, videoCodec: string, videoProfile: string | null, pixelFormat: string | null, 
+/**
+ * FourCC of the video track (`hvc1`, `hev1`, `avc1`, ...). `hev1` is the
+ * reason a perfectly good HEVC MP4 plays black in WebKit.
+ */
+codecTag: string | null, audioCodec: string | null, 
+/**
+ * `ffprobe`'s audio profile (`LC`, `HE-AAC`, ...). Informational only:
+ * WebKit plays HE-AAC, so the profile never blocks in-app playback.
+ */
+audioProfile: string | null, width: number, height: number, durationSeconds: number, hasSubtitles: boolean, bitDepth: number, rotation: number, };
+
+export type PlaybackStrategy = "native" | "remuxed" | "unsupported";
+
+export type PreparedPlayback = { strategy: PlaybackStrategy, 
+/**
+ * The path to hand to `convertFileSrc`.
+ */
+path: string, probe: MediaProbe | null, 
+/**
+ * Why no strategy applied, for the fallback screen.
+ */
+detail: string | null, };
+
 export type UpdateCheck = { available: boolean, currentVersion: string, latestVersion: string, notes: string, releaseUrl: string, downloadUrl?: string | null, publishedAt?: string | null, checkedAt: number, };
 
 export type AppSettings = { appearance: Appearance, accentColor: AccentColor, sidebarWidth: number, inspectorWidth: number, showExtensions: boolean, animateTransitions: boolean, startupView: StartupView, openLastFolder: boolean, restoreWindowState: boolean, defaultLayout: DefaultLayout, thumbnailSize: ThumbnailSize, viewerZoomBehavior: ViewerZoomBehavior, slideshowInterval: number, slideshowShuffle: boolean, slideshowLoop: boolean, videoAutoPlay: boolean, videoLoop: boolean, watchFolders: Array<string>, autoImport: boolean, 
