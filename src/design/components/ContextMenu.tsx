@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 export interface ContextMenuItem {
-  label: string | React.ReactNode;
+  /** Divider entries have no label; every real entry does. */
+  label?: string | React.ReactNode;
   shortcut?: string;
   icon?: React.ReactNode;
   onClick?: () => void;
@@ -78,6 +79,26 @@ function ContextMenuContent({
     if (!item.submenu) onClose();
   };
 
+  // Hover-only submenus: a row opens its panel, and leaving the row or the
+  // panel closes it again. The short grace period covers the seam between the
+  // two, so moving the pointer towards the panel does not dismiss it, while a
+  // pointer that leaves still takes the panel away.
+  const closeTimerRef = useRef<number | null>(null);
+  const cancelClose = useCallback(() => {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }, []);
+  const scheduleClose = useCallback(() => {
+    cancelClose();
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      setSubmenuOpen(null);
+    }, 160);
+  }, [cancelClose]);
+  useEffect(() => cancelClose, [cancelClose]);
+
   return (
     <div
       ref={menuRef}
@@ -130,6 +151,8 @@ function ContextMenuContent({
               key={index}
               className={`context-menu-submenu${submenuOpen?.index === index ? " open" : ""}`}
               role="none"
+              onMouseEnter={cancelClose}
+              onMouseLeave={scheduleClose}
             >
               <button
                 role="menuitem"
@@ -138,12 +161,14 @@ function ContextMenuContent({
                 data-index={index}
                 className={`context-menu-item ${item.disabled ? "disabled" : ""}`}
                 disabled={item.disabled}
-                onClick={() => !item.disabled && setSubmenuOpen({ index, items: item.submenu! })}
                 onMouseEnter={() => {
-                  if (!item.disabled) setSubmenuOpen({ index, items: item.submenu! });
+                  if (item.disabled) return;
+                  cancelClose();
+                  setSubmenuOpen({ index, items: item.submenu! });
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "ArrowRight" && !item.disabled) {
+                  // Hover is the pointer's path; this keeps the keyboard working.
+                  if ((e.key === "ArrowRight" || e.key === "Enter") && !item.disabled) {
                     setSubmenuOpen({ index, items: item.submenu! });
                     e.preventDefault();
                   }
@@ -152,7 +177,9 @@ function ContextMenuContent({
                 <span className="context-menu-icon">{item.icon || ""}</span>
                 <span>{item.label}</span>
                 {item.shortcut && <span className="context-menu-shortcut">{item.shortcut}</span>}
-                <span className="context-menu-submenu-indicator">›</span>
+                <span className="context-menu-submenu-indicator" aria-hidden="true">
+                  ›
+                </span>
               </button>
               {submenuOpen?.index === index && (
                 <ContextMenuContent

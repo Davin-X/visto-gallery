@@ -55,6 +55,7 @@ import {
 } from "../engine/utils/mediaDate";
 import { displayFileName } from "../engine/utils/fileName";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
+import { buildItemContextMenu } from "../engine/utils/itemContextMenu";
 
 const GALLERY_PAGE_SIZE = 180;
 const VIRTUAL_GRID_OVERSCAN_ROWS = 6;
@@ -894,138 +895,24 @@ function LibraryScreen(props: LibraryScreenProps) {
     `gallery-tile${props.inspectedId === item.id ? " inspected" : ""}${selectedIdSet.has(item.id) ? " selected" : ""}${item.favorite ? " is-favorite" : ""}${masked(item) ? " hidden-obscured" : ""}`;
 
   // Right-clicking a photo is the most direct place to manage its album
-  // membership. The picker itself carries the album list and search.
-  const itemContextMenu = (item: any) => [
-    { label: "Open", onClick: () => props.onOpenViewer(item.id) },
-    ...(item.kind === "video" && props.onPlayBackground
-      ? [
-          {
-            label: "Play in background",
-            onClick: () => toggleBackground(item),
-          },
-        ]
-      : []),
-    ...(item.kind === "photo"
-      ? [
-          {
-            label: "Edit",
-            onClick: () => {
-              props.onOpenEdit?.(item);
-            },
-          },
-        ]
-      : []),
-    {
-      label: "Open in default app",
-      onClick: () => tauri.items.openFile(item.path),
-    },
-    {
-      label: "Open in Finder",
-      onClick: () => tauri.items.revealInFinder(item.path),
-    },
-    {
-      label: "Copy tags to Finder",
-      disabled: !(item.tags || []).length,
-      onClick: () => props.onCopyTagsToFinder?.([item.id]),
-    },
-    { divider: true },
-    {
-      label: "Add to Album…",
-      onClick: () => props.onOpenAlbumPicker?.([item.id]),
-    },
-    ...(props.activeAlbum
-      ? [
-          {
-            label: "Remove from this Album",
-            danger: true,
-            onClick: () =>
-              props.activeAlbum && props.onRequestRemoveFromAlbum?.(props.activeAlbum, [item.id]),
-          },
-        ]
-      : []),
-    { label: "New Album…", onClick: () => props.onCreateAlbum?.([item.id]) },
-    { divider: true },
-    { label: "Favorite", onClick: () => props.onToggleFavorite(item.id) },
-    {
-      label: item.rating ? `Rating ${"★".repeat(item.rating)}` : "Rating",
-      icon: item.rating ? (
-        <span className="ctx-star">★</span>
-      ) : (
-        <span className="ctx-star ctx-star-empty">☆</span>
-      ),
-      submenu: [
-        {
-          label: <span className="ctx-star ctx-star-empty">Unrate</span>,
-          onClick: () => props.onSetRatingForIds?.([item.id], 0),
-        },
-        {
-          label: <span className="ctx-star">★</span>,
-          onClick: () => props.onSetRatingForIds?.([item.id], 1),
-        },
-        {
-          label: <span className="ctx-star">★★</span>,
-          onClick: () => props.onSetRatingForIds?.([item.id], 2),
-        },
-        {
-          label: <span className="ctx-star">★★★</span>,
-          onClick: () => props.onSetRatingForIds?.([item.id], 3),
-        },
-        {
-          label: <span className="ctx-star">★★★★</span>,
-          onClick: () => props.onSetRatingForIds?.([item.id], 4),
-        },
-        {
-          label: <span className="ctx-star">★★★★★</span>,
-          onClick: () => props.onSetRatingForIds?.([item.id], 5),
-        },
-      ],
-    },
-    {
-      label: "Color Label",
-      icon: item.colorLabel ? <span className={`ctx-dot ctx-dot-${item.colorLabel}`} /> : null,
-      submenu: [
-        {
-          label: "None",
-          icon: <span className="ctx-dot ctx-dot-none" />,
-          onClick: () => props.onSetColorLabelForIds?.([item.id], null),
-        },
-        {
-          label: "Red",
-          icon: <span className="ctx-dot ctx-dot-red" />,
-          onClick: () => props.onSetColorLabelForIds?.([item.id], "red"),
-        },
-        {
-          label: "Yellow",
-          icon: <span className="ctx-dot ctx-dot-yellow" />,
-          onClick: () => props.onSetColorLabelForIds?.([item.id], "yellow"),
-        },
-        {
-          label: "Green",
-          icon: <span className="ctx-dot ctx-dot-green" />,
-          onClick: () => props.onSetColorLabelForIds?.([item.id], "green"),
-        },
-        {
-          label: "Blue",
-          icon: <span className="ctx-dot ctx-dot-blue" />,
-          onClick: () => props.onSetColorLabelForIds?.([item.id], "blue"),
-        },
-        {
-          label: "Purple",
-          icon: <span className="ctx-dot ctx-dot-purple" />,
-          onClick: () => props.onSetColorLabelForIds?.([item.id], "purple"),
-        },
-      ],
-    },
-    {
-      label: item.hidden ? "Unhide" : "Hide",
-      onClick: () => props.onToggleHidden(item.id),
-    },
-    {
-      label: "Delete",
-      danger: true,
-      onClick: () => props.onRequestDeleteItems?.([item.id]),
-    },
-  ];
+  // membership. The picker itself carries the album list and search. The menu
+  // is shared with the viewer, so the two surfaces cannot drift apart.
+  const itemContextMenu = (item: MediaItem) =>
+    buildItemContextMenu(item, {
+      onOpen: (id) => props.onOpenViewer(id),
+      onPlayBackground: props.onPlayBackground ? (id) => toggleBackground(item) : undefined,
+      onEdit: (target) => props.onOpenEdit?.(target),
+      onCopyTagsToFinder: (ids) => props.onCopyTagsToFinder?.(ids),
+      onOpenAlbumPicker: (ids) => props.onOpenAlbumPicker?.(ids),
+      onCreateAlbum: (ids) => props.onCreateAlbum?.(ids),
+      activeAlbum: props.activeAlbum,
+      onRequestRemoveFromAlbum: (albumId, ids) => props.onRequestRemoveFromAlbum?.(albumId, ids),
+      onToggleFavorite: (id) => props.onToggleFavorite(id),
+      onSetRating: (ids, rating) => props.onSetRatingForIds?.(ids, rating),
+      onSetColorLabel: (ids, label) => props.onSetColorLabelForIds?.(ids, label),
+      onToggleHidden: (id) => props.onToggleHidden(id),
+      onRequestDelete: (ids) => props.onRequestDeleteItems?.(ids),
+    });
 
   // Batch actions live in the contextual selection bar, so resolve the
   // selected items once and derive the toggled labels from them.

@@ -97,4 +97,31 @@ describe("video player screen", () => {
     expect(container.querySelector("section")).toHaveAttribute("aria-hidden", "true");
     expect(screen.getAllByTestId("queue-thumbnail")[0]).toHaveAttribute("data-eager", "false");
   });
+
+  it("opens the shared item menu from a queue tile, the stage and the header", () => {
+    const onContextMenu = vi.fn();
+    const { container } = render(
+      <VideoPlayerScreen
+        active
+        item={queue[0]}
+        queue={queue}
+        queueAutoPlayItemId="video-a"
+        assetUrl={(path) => path}
+        onBack={vi.fn()}
+        onSelect={vi.fn()}
+        onPrevious={vi.fn(() => true)}
+        onNext={vi.fn(() => true)}
+        onContextMenu={onContextMenu}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Play video-b.mp4" }));
+    expect(onContextMenu).toHaveBeenLastCalledWith(queue[1], expect.anything());
+
+    fireEvent.contextMenu(container.querySelector(".video-player-stage") as HTMLElement);
+    expect(onContextMenu).toHaveBeenLastCalledWith(queue[0], expect.anything());
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions for this video" }));
+    expect(onContextMenu).toHaveBeenLastCalledWith(queue[0], expect.anything());
+  });
 });

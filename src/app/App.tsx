@@ -304,6 +304,10 @@ function App() {
     }
     return items;
   }, [library.viewerItems, library.viewerSelected]);
+  // The viewer walks the loaded pages, so it has to be able to pull the next
+  // one in; without this it stopped at the library's page size.
+  const photoViewerHasMore = library.hasMore && library.viewerScope === "library";
+  const loadMorePhotos = useCallback(() => useLibraryStore.getState().loadNextPage(), []);
   // Video queue: built from the current browsing scope when playback starts,
   // skipping photos and RAW. Locked during playback so switching filters
   // never changes what plays next.
@@ -2561,6 +2565,9 @@ function App() {
         albumDragOver={albumDragOver}
         libraryStats={libraryStats}
         photoViewerItems={photoViewerItems}
+        photoViewerHasMore={photoViewerHasMore}
+        photoViewerLoadingMore={library.loadingNextPage}
+        onLoadMorePhotos={loadMorePhotos}
         playbackItem={playbackItem}
         videoQueue={videoQueue}
         queueAutoPlayId={queueAutoPlayId}

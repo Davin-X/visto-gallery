@@ -18,6 +18,7 @@ import { SettingsScreen } from "../design/components/SettingsScreen";
 import type { LibraryFolder, LibraryStats, ErrorCode } from "../engine/types/commands";
 import type { MediaItem } from "../engine/types/media";
 import type { Screen } from "./screen";
+import { buildItemContextMenu, type ItemMenuActions } from "../engine/utils/itemContextMenu";
 
 interface AppScreenRouterProps {
   screen: Screen;
@@ -50,6 +51,9 @@ interface AppScreenRouterProps {
   albumDragOver: boolean;
   libraryStats: LibraryStats;
   photoViewerItems: MediaItem[];
+  photoViewerHasMore: boolean;
+  photoViewerLoadingMore: boolean;
+  onLoadMorePhotos: () => unknown;
   playbackItem: MediaItem | null;
   videoQueue: MediaItem[];
   queueAutoPlayId: string | null;
@@ -101,6 +105,9 @@ export function AppScreenRouter({
   albumDragOver,
   libraryStats,
   photoViewerItems,
+  photoViewerHasMore,
+  photoViewerLoadingMore,
+  onLoadMorePhotos,
   playbackItem,
   videoQueue,
   queueAutoPlayId,
@@ -120,6 +127,30 @@ export function AppScreenRouter({
   copyTagsToFinderForIds,
   playVideoInBackground,
 }: AppScreenRouterProps) {
+  const openViewerEdit = async (item: MediaItem) => {
+    await edit.saveDraft();
+    await edit.open(item);
+    setScreen("Edit");
+  };
+  // The viewer and the video player share the grid's item menu, so star
+  // ratings, colour labels, album membership and delete work without extra
+  // buttons on either screen.
+  const itemMenuActions: ItemMenuActions = {
+    onEdit: (item) => void openViewerEdit(item),
+    onCopyTagsToFinder: copyTagsToFinderForIds,
+    onOpenAlbumPicker: (ids) => openAlbumPicker(ids),
+    onCreateAlbum: (ids) => openAlbumDialog(ids),
+    activeAlbum: library.activeAlbum,
+    onRequestRemoveFromAlbum: (albumId, ids) => setAlbumRemovePending({ albumId, itemIds: ids }),
+    onToggleFavorite: library.toggleFavorite,
+    onSetRating: library.setRatingForIds,
+    onSetColorLabel: library.setColorLabelForIds,
+    onToggleHidden: library.toggleHidden,
+    onRequestDelete: (ids) => {
+      itemPendingDeleteRef.current = ids;
+      setItemPendingDeleteCount(ids.length);
+    },
+  };
   return (
     <main id="main-content" className="main-content" tabIndex={-1} style={{ position: "relative" }}>
       {screen === "Library" && (
@@ -253,13 +284,15 @@ export function AppScreenRouter({
           onClose={viewer.close}
           onToggleFavorite={library.toggleFavorite}
           onToggleHidden={library.toggleHidden}
-          onOpenEdit={async (item: MediaItem) => {
-            await edit.saveDraft();
-            await edit.open(item);
-            setScreen("Edit");
+          onOpenEdit={openViewerEdit}
+          onContextMenu={(items, event) => {
+            const target = items[0];
+            if (target) openContextMenu(buildItemContextMenu(target, itemMenuActions), event);
           }}
-          onContextMenu={openContextMenu}
           assetUrl={assetUrl}
+          hasMore={photoViewerHasMore}
+          loadingMore={photoViewerLoadingMore}
+          onLoadMore={onLoadMorePhotos}
         />
       )}
 
@@ -275,6 +308,9 @@ export function AppScreenRouter({
         onNext={playNextVideo}
         queueHasMore={queueHasMore}
         onLoadMoreQueue={onLoadMoreQueue}
+        onContextMenu={(target, event) =>
+          openContextMenu(buildItemContextMenu(target, itemMenuActions), event)
+        }
       />
 
       {screen === "Edit" && (
