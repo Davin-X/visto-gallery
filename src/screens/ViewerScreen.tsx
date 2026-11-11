@@ -1,13 +1,15 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
   EditIcon,
   EyeOffIcon,
+  FilmstripIcon,
   FlipIcon,
   FullscreenIcon,
   HeartIcon,
   MinusIcon,
+  MoreIcon,
   PlusIcon,
   RotateIcon,
   SlideshowIcon,
@@ -52,9 +54,14 @@ interface ViewerScreenProps {
   onOpenEdit: (item: MediaItem) => void;
   onContextMenu: (items: MediaItem[], e: React.MouseEvent) => void;
   assetUrl: (path: string) => string;
+  /** More of this view exists than the loaded page holds. */
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => unknown;
 }
 
 function ViewerScreen(props: ViewerScreenProps) {
+  const { hasMore, loadingMore, onLoadMore } = props;
   const items = useMemo(() => props.items.filter((item) => item.kind !== "video"), [props.items]);
   const photoItems = useMemo(() => items.filter((item) => item.kind === "photo"), [items]);
   // Was the inspected item a video? The Viewer only shows photos — give the
@@ -77,17 +84,20 @@ function ViewerScreen(props: ViewerScreenProps) {
     id: string;
     status: "loading" | "loaded" | "failed";
   } | null>(null);
+  const stripWindowSize = 50;
+  // One strip item occupies `stripStride` px. It is measured from the rendered
+  // strip rather than duplicated here: the thumbnail size and gap belong to
+  // the CSS and change with the window.
+  const [stripStride, setStripStride] = useState(66);
   const [stripStart, setStripStart] = useState(() =>
-    Math.max(0, items.findIndex((item) => item.id === selected?.id) - 18),
+    Math.max(0, items.findIndex((item) => item.id === selected?.id) - stripWindowSize / 2),
   );
   const hideTimerRef = useRef<number | null>(null);
   const stripRef = useRef<HTMLDivElement | null>(null);
-  const programmaticScrollRef = useRef(false);
-  const stripWindowSize = 50;
-  // Must match the redesign CSS: .filmstrip button { flex-basis: 58px } with
-  // an 8px gap → one item per 66px. Any mismatch drifts the virtualized
-  // window and the scrollLeft bookkeeping.
-  const FILMSTRIP_STRIDE = 66;
+  const stripStrideRef = useRef(stripStride);
+  const stripStartRef = useRef(stripStart);
+  const lastRevealedRef = useRef<string | null>(null);
+  const loadMoreLockRef = useRef(false);
   const selectedIndex = items.findIndex((item) => item.id === selected?.id);
   const stripEnd = Math.min(items.length, stripStart + stripWindowSize);
   const photoStatus =
@@ -122,55 +132,91 @@ function ViewerScreen(props: ViewerScreenProps) {
     return () => window.clearTimeout(timer);
   }, [legendVisible]);
 
-  // Keep the active thumbnail in view as you navigate a long filmstrip.
-  useEffect(() => {
-    if (selectedIndex < 0) return;
-    let nextStart = stripStart;
-    if (selectedIndex < stripStart) {
-      nextStart = selectedIndex;
-    } else if (selectedIndex >= stripStart + stripWindowSize) {
-      nextStart = Math.max(
-        0,
-        Math.min(selectedIndex - stripWindowSize + 1, items.length - stripWindowSize),
-      );
+  // Measure the real stride from the rendered strip. The CSS owns the
+  // thumbnail size and gap, so a duplicated constant drifts out of step with
+  // the spacers and the strip renders the wrong slice of the list.
+  useLayoutEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const button = strip.querySelector<HTMLElement>("button");
+    const width = button?.getBoundingClientRect().width ?? 0;
+    if (width <= 0) return;
+    const gap = Number.parseFloat(window.getComputedStyle(strip).columnGap || "0") || 0;
+    const stride = width + gap;
+    if (Math.abs(stride - stripStrideRef.current) > 0.5) {
+      stripStrideRef.current = stride;
+      setStripStride(stride);
     }
-    if (nextStart !== stripStart) {
-      const delta = (nextStart - stripStart) * FILMSTRIP_STRIDE;
-      programmaticScrollRef.current = true;
-      if (stripRef.current)
-        stripRef.current.scrollLeft = Math.max(0, stripRef.current.scrollLeft + delta);
-      window.setTimeout(() => {
-        programmaticScrollRef.current = false;
-      }, 0);
-      setStripStart(nextStart);
-    }
-  }, [selectedIndex, stripStart, items.length]);
+  }, [items.length]);
 
-  // On open, align scroll position with the initial window (no smooth animation).
-  useEffect(() => {
-    if (stripRef.current) {
-      programmaticScrollRef.current = true;
-      stripRef.current.scrollLeft = stripStart * FILMSTRIP_STRIDE;
-      window.setTimeout(() => {
-        programmaticScrollRef.current = false;
-      }, 0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Bring the current photo to the middle of the strip when the selection
+  // changes, and once on open. Deliberately not keyed on the scroll position:
+  // re-running this on every scroll event snapped the strip back to the
+  // current photo the moment the user tried to browse elsewhere.
+  // Pull in the next page when the strip reaches the end of what is loaded.
+  // The viewer used to stop dead at the library's page size ("250 of 250").
+  const maybeLoadMore = useCallback(() => {
+    if (!hasMore || !onLoadMore || loadMoreLockRef.current) return;
+    loadMoreLockRef.current = true;
+    void Promise.resolve(onLoadMore()).finally(() => {
+      loadMoreLockRef.current = false;
+    });
+  }, [hasMore, onLoadMore]);
 
+  useEffect(() => {
+    loadMoreLockRef.current = false;
+  }, [items.length]);
+
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip || selectedIndex < 0) return;
+    const currentId = selected?.id ?? null;
+    const selectionChanged = lastRevealedRef.current !== currentId;
+    lastRevealedRef.current = currentId;
+    const stride = stripStrideRef.current;
+    const maxStart = Math.max(0, items.length - stripWindowSize);
+    let start = stripStartRef.current;
+    const outsideWindow = selectedIndex < start || selectedIndex >= start + stripWindowSize;
+    if (outsideWindow) {
+      start = Math.max(0, Math.min(selectedIndex - Math.floor(stripWindowSize / 2), maxStart));
+      stripStartRef.current = start;
+      setStripStart(start);
+    } else if (!selectionChanged) {
+      // A page arrived: leave the strip where the user left it.
+      return;
+    }
+    // A leading spacer of exactly one stride per skipped item means every
+    // thumbnail sits at `index × stride` regardless of the rendered window.
+    strip.scrollLeft = Math.max(
+      0,
+      selectedIndex * stride - Math.max(0, (strip.clientWidth - stride) / 2),
+    );
+  }, [selectedIndex, selected?.id, items.length, stripWindowSize]);
+
+  // Slide the rendered window along as the user scrolls. The scroll position
+  // needs no correction: a spacer of exactly one stride per skipped item keeps
+  // every thumbnail at the same offset, so the strip moves under the pointer
+  // without jumping.
   const handleFilmstripScroll = useCallback(() => {
-    if (programmaticScrollRef.current) return;
     const strip = stripRef.current;
     if (!strip || items.length <= stripWindowSize) return;
-    const nextStart = Math.max(
-      0,
-      Math.min(
-        Math.floor(Math.max(0, strip.scrollLeft) / FILMSTRIP_STRIDE) - 10,
-        items.length - stripWindowSize,
-      ),
-    );
-    setStripStart((current) => (Math.abs(nextStart - current) > 5 ? nextStart : current));
-  }, [items.length]);
+    const stride = stripStrideRef.current;
+    if (stride <= 0) return;
+    const start = stripStartRef.current;
+    const lead = 10;
+    const first = Math.max(0, Math.floor(strip.scrollLeft / stride));
+    const last = first + Math.ceil(strip.clientWidth / stride) + 1;
+    if (last > items.length - 10) maybeLoadMore();
+    let next = start;
+    if (first < start + lead) {
+      next = Math.max(0, first - lead);
+    } else if (last > start + stripWindowSize - lead) {
+      next = Math.min(Math.max(0, items.length - stripWindowSize), last - stripWindowSize + lead);
+    }
+    if (next === start) return;
+    stripStartRef.current = next;
+    setStripStart(next);
+  }, [items.length, stripWindowSize, maybeLoadMore]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -261,12 +307,27 @@ function ViewerScreen(props: ViewerScreenProps) {
 
   return (
     <div className="viewer-screen">
-      <div className="page-heading viewer-heading">
-        <div className="viewer-title-block">
-          <p className="eyebrow">VIEW</p>
+      <header className="page-heading video-player-heading viewer-heading">
+        <button
+          type="button"
+          className="video-player-back"
+          onClick={props.onClose}
+          aria-label="Close viewer"
+          title="Close viewer (Esc)"
+        >
+          <ChevronLeftIcon size={17} strokeWidth={2.1} />
+        </button>
+        <div className="video-player-title">
           <h1 title={selected.name}>{selected.name}</h1>
           <div className="viewer-meta">
             <div className="meta-row">
+              <span
+                className="video-player-meta-chip"
+                title={`Photo ${selectedIndex + 1} of ${items.length} in this view`}
+              >
+                <FilmstripIcon size={11} strokeWidth={2} />
+                {`${selectedIndex + 1} of ${items.length}${hasMore ? "+" : ""}`}
+              </span>
               <span className="meta-chip">
                 <svg
                   className="meta-icon"
@@ -366,10 +427,21 @@ function ViewerScreen(props: ViewerScreenProps) {
             )}
           </div>
         </div>
-      </div>
+        <button
+          type="button"
+          className="viewer-heading-more"
+          onClick={(event) => props.onContextMenu([selected], event)}
+          aria-label="More actions for this photo"
+          aria-haspopup="menu"
+          title="More actions"
+        >
+          <MoreIcon size={16} />
+        </button>
+      </header>
       <div
         className="viewer-stage"
         aria-busy={selected.kind === "photo" && photoStatus === "loading"}
+        onContextMenu={(event) => props.onContextMenu([selected], event)}
         onMouseMove={() => flashHints()}
         onDoubleClick={(e) => {
           if ((e.target as HTMLElement).closest("button, input")) return;
@@ -497,7 +569,6 @@ function ViewerScreen(props: ViewerScreenProps) {
             {props.rotation ? `${props.rotation}°` : ""}
             {props.rotation && props.flipX ? " · " : ""}
             {props.flipX ? "Flipped" : ""}
-            {selectedIndex + 1} / {items.length}
           </span>
         </div>
         {/* Compact shortcut hints live in the stage corner so the frame keeps
@@ -658,12 +729,11 @@ function ViewerScreen(props: ViewerScreenProps) {
         )}
       </div>
       <div className="filmstrip" ref={stripRef} onScroll={handleFilmstripScroll}>
-        <span className="filmstrip-label">FOLDER</span>
         {stripStart > 0 && (
           <span
             className="filmstrip-spacer"
             aria-hidden="true"
-            style={{ flexBasis: `${stripStart * FILMSTRIP_STRIDE}px` }}
+            style={{ flexBasis: `${stripStart * stripStride}px` }}
           />
         )}
         {items.slice(stripStart, stripEnd).map((item) => (
@@ -671,6 +741,7 @@ function ViewerScreen(props: ViewerScreenProps) {
             type="button"
             title={item.name}
             className={item.id === props.selected?.id ? "active" : ""}
+            aria-current={item.id === props.selected?.id ? "true" : undefined}
             key={item.id}
             onClick={() => props.onSetPhoto(item.id)}
           >
@@ -691,9 +762,21 @@ function ViewerScreen(props: ViewerScreenProps) {
           <span
             className="filmstrip-spacer"
             aria-hidden="true"
-            style={{ flexBasis: `${(items.length - stripEnd) * FILMSTRIP_STRIDE}px` }}
+            style={{ flexBasis: `${(items.length - stripEnd) * stripStride}px` }}
           />
         )}
+        {hasMore ? (
+          <button
+            type="button"
+            className="filmstrip-more"
+            onClick={() => void onLoadMore?.()}
+            disabled={loadingMore}
+            aria-label="Load more photos"
+            title="Load more photos into this strip"
+          >
+            {loadingMore ? "Loading…" : "Load more"}
+          </button>
+        ) : null}
       </div>
     </div>
   );
