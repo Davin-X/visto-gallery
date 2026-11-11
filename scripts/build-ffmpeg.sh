@@ -10,7 +10,8 @@
 # The feature list below is exactly what the app does:
 #   * probe   — read container and stream headers (demuxers, no decoders)
 #   * remux   — copy the video stream into MP4, re-encode audio to AAC-LC
-#   * poster  — decode one frame of any supported video and scale it to JPEG
+#   * fixtures — VP9 and AC-3 encoders exist only so the Rust tests can build
+#                sample files; the app itself never encodes video
 #
 # Anything missing here shows up as a specific failure, not a silent one: a
 # missing decoder means "ffmpeg could not extract a frame", a missing muxer

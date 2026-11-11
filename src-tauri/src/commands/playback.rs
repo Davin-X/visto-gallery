@@ -28,7 +28,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager};
 use ts_rs::TS;
 
-use crate::errors::{CommandError, ErrorCode};
+use crate::errors::CommandError;
 
 /// Remuxed media kept in the cache before the oldest entries are removed.
 ///
@@ -45,10 +45,7 @@ const NATIVE_EXTENSIONS: &[&str] = &["mp4", "m4v", "mov", "webm", "ogv"];
 #[derive(Debug, Clone, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct MediaProbe {
-    /// `ffprobe`'s format name, e.g. `mov,mp4,m4a,3gp,3g2,mj2`.
-    pub container: String,
     pub video_codec: String,
-    pub video_profile: Option<String>,
     pub pixel_format: Option<String>,
     /// FourCC of the video track (`hvc1`, `hev1`, `avc1`, ...). `hev1` is the
     /// reason a perfectly good HEVC MP4 plays black in WebKit.
@@ -59,10 +56,7 @@ pub struct MediaProbe {
     pub audio_profile: Option<String>,
     pub width: u32,
     pub height: u32,
-    pub duration_seconds: f64,
-    pub has_subtitles: bool,
     pub bit_depth: u32,
-    pub rotation: i32,
 }
 
 /// How `<video>` should be fed for this file.
@@ -100,13 +94,26 @@ enum ProbeFailure {
 /// arrive within milliseconds of each other. Without a gate both would run
 /// ffmpeg over the same file, reading and writing the same gigabytes twice for
 /// one result. The second caller waits and then finds the finished file.
-fn remux_gate(key: &str) -> Arc<tokio::sync::Mutex<()>> {
-    static GATES: OnceLock<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> = OnceLock::new();
-    let mut gates = GATES
-        .get_or_init(|| Mutex::new(HashMap::new()))
-        .lock()
-        .expect("remux gate map");
+type RemuxGate = Arc<tokio::sync::Mutex<()>>;
+
+fn gates() -> &'static Mutex<HashMap<String, RemuxGate>> {
+    static GATES: OnceLock<Mutex<HashMap<String, RemuxGate>>> = OnceLock::new();
+    GATES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn remux_gate(key: &str) -> RemuxGate {
+    let mut gates = gates().lock().expect("remux gate map");
     gates.entry(key.to_string()).or_default().clone()
+}
+
+/// Forget a gate once nobody holds it, so a long session over a big library does
+/// not keep one entry per file ever played. A caller that arrived meanwhile has
+/// its own handle, which keeps the count above two and the gate in the map.
+fn release_gate(key: &str, gate: &RemuxGate) {
+    let mut gates = gates().lock().expect("remux gate map");
+    if Arc::strong_count(gate) <= 2 {
+        gates.remove(key);
+    }
 }
 
 /// Last `limit` characters of a tool's stderr, collapsed to one line.
@@ -162,10 +169,6 @@ fn probe_sync(source: &Path) -> Result<MediaProbe, ProbeFailure> {
     let audio = streams
         .iter()
         .find(|stream| stream.get("codec_type").and_then(|kind| kind.as_str()) == Some("audio"));
-    let has_subtitles = streams
-        .iter()
-        .any(|stream| stream.get("codec_type").and_then(|kind| kind.as_str()) == Some("subtitle"));
-
     let text = |entry: &serde_json::Value, key: &str| -> Option<String> {
         entry
             .get(key)
@@ -184,51 +187,15 @@ fn probe_sync(source: &Path) -> Result<MediaProbe, ProbeFailure> {
             _ => 8,
         });
 
-    let rotation = video
-        .get("side_data_list")
-        .and_then(|entry| entry.as_array())
-        .and_then(|list| {
-            list.iter()
-                .find_map(|side| stream_i64(side, "rotation").map(|value| value as i32))
-        })
-        .or_else(|| {
-            video
-                .get("tags")
-                .and_then(|tags| stream_i64(tags, "rotate"))
-                .map(|value| value as i32)
-        })
-        .unwrap_or(0);
-
-    let duration_seconds = stream_i64(video, "duration")
-        .map(|value| value as f64)
-        .or_else(|| {
-            value
-                .get("format")
-                .and_then(|format| format.get("duration"))
-                .and_then(|entry| entry.as_str())
-                .and_then(|entry| entry.parse::<f64>().ok())
-        })
-        .unwrap_or(0.0);
-
     Ok(MediaProbe {
-        container: value
-            .get("format")
-            .and_then(|format| format.get("format_name"))
-            .and_then(|entry| entry.as_str())
-            .unwrap_or("unknown")
-            .to_string(),
         video_codec: text(video, "codec_name").unwrap_or_else(|| "unknown".to_string()),
-        video_profile: text(video, "profile"),
         pixel_format,
         codec_tag: text(video, "codec_tag_string").map(|tag| tag.to_lowercase()),
         audio_codec: audio.and_then(|stream| text(stream, "codec_name")),
         audio_profile: audio.and_then(|stream| text(stream, "profile")),
         width: stream_i64(video, "width").unwrap_or(0) as u32,
         height: stream_i64(video, "height").unwrap_or(0) as u32,
-        duration_seconds,
-        has_subtitles,
         bit_depth,
-        rotation,
     })
 }
 
@@ -402,33 +369,14 @@ fn cache_key(source: &Path, length: u64, modified_ms: u128) -> String {
 /// A Tauri window has no visible console, so a media element that reports
 /// nothing useful (black picture, no `error` event) is otherwise impossible to
 /// diagnose. The viewer sends a short state snapshot once a source is loaded;
-/// release builds log at the same volume, which is one line per opened video.
+/// this is one line per opened video.
+///
+/// `tracing` rather than `eprintln!`: when the bundled `.app` is launched from
+/// Finder its stderr goes nowhere anyone will look, which is exactly the case
+/// this diagnostic exists for.
 #[tauri::command]
 pub fn log_playback_diagnostic(label: String, payload: String) {
-    eprintln!("[playback] {label}: {payload}");
-}
-
-/// Inspect a video's real codecs. The viewer uses this for the failure copy.
-#[tauri::command]
-pub async fn probe_media(path: String) -> Result<MediaProbe, CommandError> {
-    let source = PathBuf::from(&path);
-    if !source.is_file() {
-        return Err(CommandError::not_found(format!(
-            "Could not find {path}. The file may have moved or be on a disconnected drive."
-        )));
-    }
-    tokio::task::spawn_blocking(move || probe_sync(&source))
-        .await
-        .map_err(|error| CommandError::internal(format!("probe task failed: {error}")))?
-        .map_err(|failure| match failure {
-            ProbeFailure::ToolMissing => CommandError::new(
-                ErrorCode::UnsupportedFormat,
-                "ffprobe is not installed.".to_string(),
-            ),
-            ProbeFailure::Failed(message) => {
-                CommandError::new(ErrorCode::UnsupportedFormat, message)
-            }
-        })
+    tracing::info!(target: "playback", %label, %payload, "playback state");
 }
 
 /// Decide how `<video>` should be fed for this file, remuxing when needed.
@@ -575,6 +523,8 @@ pub async fn prepare_playback(
         tokio::task::spawn_blocking(move || prune_cache(&prune_root, PLAYBACK_CACHE_BUDGET_BYTES));
     }
 
+    release_gate(&key, &gate);
+
     Ok(PreparedPlayback {
         strategy: PlaybackStrategy::Remuxed,
         path: target.to_string_lossy().into_owned(),
@@ -589,19 +539,14 @@ mod tests {
 
     fn probe_for(codec: &str, tag: Option<&str>, bit_depth: u32) -> MediaProbe {
         MediaProbe {
-            container: "matroska,webm".into(),
             video_codec: codec.into(),
-            video_profile: None,
             pixel_format: Some("yuv420p".into()),
             codec_tag: tag.map(str::to_string),
             audio_codec: Some("aac".into()),
             audio_profile: Some("LC".into()),
             width: 1920,
             height: 1080,
-            duration_seconds: 12.0,
-            has_subtitles: false,
             bit_depth,
-            rotation: 0,
         }
     }
 

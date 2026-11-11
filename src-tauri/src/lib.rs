@@ -193,7 +193,6 @@ pub fn run() {
             open_file,
             open_with_player,
             external_video_players,
-            probe_media,
             prepare_playback,
             log_playback_diagnostic,
             open_folder,

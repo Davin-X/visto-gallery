@@ -160,11 +160,7 @@ export type EditPreset = { id: string, name: string, edits: EditValues, crop?: C
 
 export type ExternalPlayer = { name: string, path: string, };
 
-export type MediaProbe = { 
-/**
- * `ffprobe`'s format name, e.g. `mov,mp4,m4a,3gp,3g2,mj2`.
- */
-container: string, videoCodec: string, videoProfile: string | null, pixelFormat: string | null, 
+export type MediaProbe = { videoCodec: string, pixelFormat: string | null, 
 /**
  * FourCC of the video track (`hvc1`, `hev1`, `avc1`, ...). `hev1` is the
  * reason a perfectly good HEVC MP4 plays black in WebKit.
@@ -174,7 +170,7 @@ codecTag: string | null, audioCodec: string | null,
  * `ffprobe`'s audio profile (`LC`, `HE-AAC`, ...). Informational only:
  * WebKit plays HE-AAC, so the profile never blocks in-app playback.
  */
-audioProfile: string | null, width: number, height: number, durationSeconds: number, hasSubtitles: boolean, bitDepth: number, rotation: number, };
+audioProfile: string | null, width: number, height: number, bitDepth: number, };
 
 export type PlaybackStrategy = "native" | "remuxed" | "unsupported";
 

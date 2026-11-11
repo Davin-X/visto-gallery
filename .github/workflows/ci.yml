@@ -14,10 +14,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Cache the ffmpeg source tarball
+      - name: Cache the ffmpeg source and built sidecars
         uses: actions/cache@v4
         with:
-          path: .ffmpeg-work
+          path: |
+            .ffmpeg-work
+            src-tauri/binaries
           # The tarball only changes when the version pinned in the script does.
           key: ffmpeg-src-${{ hashFiles('scripts/build-ffmpeg.sh') }}
           restore-keys: ffmpeg-src-
