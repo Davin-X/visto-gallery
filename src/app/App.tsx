@@ -1550,6 +1550,49 @@ function App() {
       showErrorNotice(error, "Could not remove");
     }
   };
+  /**
+   * Keep a playback session honest after a delete. When the video that was
+   * playing is the one trashed, drop the removed rows from the locked queue
+   * and start the next video (or end the session) instead of leaving the
+   * player on a catalog row that no longer exists.
+   */
+  const reconcilePlaybackAfterDelete = (deletedIds: string[]) => {
+    const state = useLibraryStore.getState();
+    const stillThere = new Set(
+      [...state.items, ...state.hiddenItems].map((candidate) => candidate.id),
+    );
+    const gone = new Set(deletedIds.filter((id) => !stillThere.has(id)));
+    if (gone.size === 0) return;
+    const playlist = videoQueue.filter((video) => !gone.has(video.id));
+    if (playlist.length !== videoQueue.length) setVideoQueue(playlist);
+    const playingId = usePlaybackStore.getState().itemId ?? backgroundVideo?.id ?? null;
+    if (!playingId || !gone.has(playingId)) {
+      // Something else in the queue went away; playback itself is fine.
+      if (backgroundVideo && gone.has(backgroundVideo.id)) setBackgroundVideo(null);
+      return;
+    }
+    const removedIndex = videoQueue.findIndex((video) => video.id === playingId);
+    const next =
+      videoQueue.slice(removedIndex + 1).find((video) => !gone.has(video.id)) ??
+      videoQueue
+        .slice(0, Math.max(0, removedIndex))
+        .reverse()
+        .find((video) => !gone.has(video.id)) ??
+      null;
+    if (next) {
+      setBackgroundVideo(next);
+      setQueueAutoPlayId(next.id);
+      return;
+    }
+    // Nothing left to play: end the session and leave the player screen.
+    usePlaybackStore.getState().stop();
+    setBackgroundVideo(null);
+    setQueueAutoPlayId(null);
+    setVideoQueue([]);
+    videoQueuePagingRef.current = null;
+    if (screen === "Video") setScreen(viewerOrigin || "Library");
+  };
+
   const confirmDeleteItem = () => {
     if (itemPendingDeleteCount === 0 || !itemPendingDeleteRef.current) return;
     const ids = itemPendingDeleteRef.current;
@@ -1561,6 +1604,7 @@ function App() {
       try {
         const result = await library.deleteItems(ids);
         const moved = result.status === "failed" ? 0 : result.trashed;
+        if (moved > 0) reconcilePlaybackAfterDelete(ids);
         // The duplicate manager can remove rows that are outside the loaded
         // page, so refresh canonical source/library totals after the native
         // transaction rather than estimating them from rendered tiles.
