@@ -315,6 +315,22 @@ function VideoPlayer({
     return () => unregisterPlayback(video);
   }, [itemId, name, registerPlayback, unregisterPlayback, syncPlayback]);
 
+  // A queued video is a different timeline. The shared snapshot keeps the
+  // *controls* (volume, mute, play/pause) across items, never the position,
+  // and the reused <video> element can hold the previous clip's time until the
+  // new source finishes loading — which showed its progress bar on the next
+  // video. Reset both whenever the item itself changes.
+  const lastItemIdRef = useRef(itemId);
+  useEffect(() => {
+    if (lastItemIdRef.current === itemId) return;
+    lastItemIdRef.current = itemId;
+    const video = ref.current;
+    if (video) video.currentTime = 0;
+    setTime(0);
+    setDuration(0);
+    syncPlayback({ time: 0, duration: 0 });
+  }, [itemId, syncPlayback]);
+
   useEffect(() => {
     const video = ref.current as HTMLVideoElement | null;
     if (!video) return;
