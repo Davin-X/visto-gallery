@@ -133,8 +133,12 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # No --with-deps: it shells out to apt, and the runner's Ubuntu mirror has
+      # been failing to resolve, which turned a docs-only change into a red e2e
+      # job. The browser we test needs is preinstalled-lib compatible on the
+      # hosted image, and the failure mode is explicit if it is not.
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - run: npm run build
       - name: Run harness smoke test
         run: npm run test:e2e
