@@ -202,6 +202,13 @@ function LibraryScreen(props: LibraryScreenProps) {
       usePlaybackStore.getState().toggle();
       return;
     }
+    // Containers WebKit cannot decode are prepared — remuxed on demand — by the
+    // player itself, not by the hidden background element. Open the player for
+    // those instead of starting a background session that would stay silent.
+    if (!canPlayVideoInApp(item.path, item.name)) {
+      props.onOpenViewer?.(item.id);
+      return;
+    }
     props.onPlayBackground?.(item.id);
   };
   const [showRefreshHint, setShowRefreshHint] = useState(false);
@@ -1672,8 +1679,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                             </span>
                           )}
                           {item.kind === "video" &&
-                            canPlayVideoInApp(item.path, item.name) &&
-                            props.onPlayBackground && (
+                                                        props.onPlayBackground && (
                               <button
                                 type="button"
                                 className="tile-play-background"
@@ -1854,8 +1860,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                                       </span>
                                     )}
                                     {item.kind === "video" &&
-                                      canPlayVideoInApp(item.path, item.name) &&
-                                      props.onPlayBackground && (
+                                                                            props.onPlayBackground && (
                                         <button
                                           type="button"
                                           className="tile-play-background"
@@ -2014,8 +2019,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                           </span>
                         )}
                         {item.kind === "video" &&
-                          canPlayVideoInApp(item.path, item.name) &&
-                          props.onPlayBackground && (
+                                                    props.onPlayBackground && (
                             <button
                               type="button"
                               className="tile-play-background"

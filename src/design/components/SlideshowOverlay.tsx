@@ -317,7 +317,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
           <div className="slideshow-video-fallback">
             <CachedThumbnail itemId={item.id} name={item.name} size={1024} />
             <p>
-              This format can't play in the slideshow. Open it from the Library in a desktop player.
+              This format can't play in the slideshow. Open it from the Library to watch it.
             </p>
           </div>
         ) : isVideo ? (

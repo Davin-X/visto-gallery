@@ -21,7 +21,7 @@ import {
   applyTheme,
   usePlaybackStore,
 } from "../engine/stores";
-import { canPlayVideoInApp, formatBytesSimple } from "../engine/utils/mediaTypes";
+import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import { dispatchNativeMenuEvent } from "./nativeMenu";
 import { isExportShortcut } from "./shortcuts";
 import { shouldCheckForUpdatesOnLaunch } from "./startup";
@@ -326,10 +326,7 @@ function App() {
       };
       const knownIds = new Set(videoQueue.map((item) => item.id));
       const videos = page.items.filter(
-        (item) =>
-          item.kind === "video" &&
-          canPlayVideoInApp(item.path, item.name) &&
-          !knownIds.has(item.id),
+        (item) => item.kind === "video" && !knownIds.has(item.id),
       );
       if (videos.length > 0) {
         setVideoQueue((current) => {
@@ -406,9 +403,7 @@ function App() {
 
     if (videoQueue.length === 0) {
       const state = useLibraryStore.getState();
-      const nextQueue = library.viewerItems.filter(
-        (item) => item.kind === "video" && canPlayVideoInApp(item.path, item.name),
-      );
+      const nextQueue = library.viewerItems.filter((item) => item.kind === "video");
       if (backgroundVideo && !nextQueue.some((item) => item.id === backgroundVideo.id))
         nextQueue.unshift(backgroundVideo);
       // Leave the queue empty when this scope has no playable videos yet:
@@ -1319,8 +1314,7 @@ function App() {
       });
       const libraryState = useLibraryStore.getState();
       const scopedVideos = libraryState.viewerItems.filter(
-        (candidate) =>
-          candidate.kind === "video" && canPlayVideoInApp(candidate.path, candidate.name),
+        (candidate) => candidate.kind === "video",
       );
       if (!scopedVideos.some((candidate) => candidate.id === item.id)) scopedVideos.unshift(item);
       setVideoQueue(scopedVideos);
