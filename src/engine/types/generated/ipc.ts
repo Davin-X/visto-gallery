@@ -101,7 +101,12 @@ export type ExportResult = { outputPath: string, size: number, width: number, he
 
 export type BatchExportRequest = { items: Array<BatchExportItem>, outputFolder: string, pattern: string, format: "jpeg" | "png" | "webp" | "heic" | "avif" | "source", quality: number, stripMetadata: boolean, maxDimension?: number, };
 
-export type BatchExportItem = { id: string, sourcePath: string, index: number, 
+export type BatchExportItem = { id: string, 
+/**
+ * Advisory only: `batch_export` replaces this with the catalog path for
+ * `id`, so a crafted request cannot point an export at another file.
+ */
+sourcePath: string, index: number, 
 /**
  * `photo`, `video`, or `raw`. Optional so older callers still work.
  */

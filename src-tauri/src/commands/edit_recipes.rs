@@ -208,10 +208,26 @@ async fn revert_edit_recipe_inner(db: &SqlitePool, media_id: &str) -> Result<boo
 
     let source = source_path.clone();
     let backup = backup_path.clone();
-    tokio::task::spawn_blocking(move || std::fs::copy(&backup, &source))
-        .await
-        .map_err(|e| CommandError::internal(format!("Restore task failed: {e}")))?
-        .map_err(|e| CommandError::internal(format!("Failed to restore backup: {}", e)))?;
+    let verify_hash = expected_hash.clone();
+    tokio::task::spawn_blocking(move || {
+        // Copy next to the source, flush, then rename: a failed restore leaves
+        // the edited file intact instead of a half-written replacement.
+        super::copy_atomically(&backup, Path::new(&source))?;
+
+        // Confirm the bytes that landed on disk match the journal before the
+        // backup record is dropped, so a bad copy cannot become the only copy.
+        if let Some(expected) = verify_hash.as_deref() {
+            let restored = compute_sha256(Path::new(&source));
+            if restored.as_deref() != Some(expected) {
+                return Err(CommandError::internal(
+                    "The restored file does not match the journaled original; the backup was kept.",
+                ));
+            }
+        }
+        Ok::<_, CommandError>(())
+    })
+    .await
+    .map_err(|e| CommandError::internal(format!("Restore task failed: {e}")))??;
 
     // Refresh the catalog row so thumbnails regenerate for the restored bytes.
     if let Ok(meta) = std::fs::metadata(&source_path) {

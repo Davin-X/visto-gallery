@@ -774,41 +774,228 @@ mod batch_export_tests {
         );
         std::fs::remove_dir_all(&folder).ok();
     }
+
+    fn folder_listing(folder: &Path, ignore: &str) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(folder)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name != ignore)
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn failed_export_leaves_neither_output_nor_temp() {
+        let folder = temp_dir("failed-export");
+        let source = folder.join("broken.png");
+        // Not an image at all: both the decoder and the `sips` fallback fail.
+        std::fs::write(&source, b"definitely not a png").expect("write source");
+
+        let item = test_item(&source);
+        let request = test_request(vec![item.clone()], &folder, "jpeg");
+
+        export_batch_item(&item, &request, &folder, 85, &mut HashSet::new())
+            .expect_err("a corrupt source must not export");
+
+        assert_eq!(
+            folder_listing(&folder, "broken.png"),
+            Vec::<String>::new(),
+            "no partial file or temp may survive a failed encode"
+        );
+        std::fs::remove_dir_all(&folder).ok();
+    }
+
+    #[test]
+    fn zero_byte_export_is_reclaimed_but_finished_files_are_not() {
+        let folder = temp_dir("zero-byte");
+        let destination = folder.join("photo_001.png");
+        std::fs::write(&destination, b"").expect("write empty placeholder");
+
+        let mut used = HashSet::new();
+        let path =
+            crate::commands::batch_pipeline::unique_batch_path(&folder, "photo_001.png", &mut used);
+        assert_eq!(path.file_name().unwrap(), "photo_001.png");
+
+        std::fs::write(&destination, b"finished").expect("write finished export");
+        let mut used = HashSet::new();
+        let path =
+            crate::commands::batch_pipeline::unique_batch_path(&folder, "photo_001.png", &mut used);
+        assert_eq!(path.file_name().unwrap(), "photo_001-2.png");
+
+        std::fs::remove_dir_all(&folder).ok();
+    }
+
+    #[test]
+    fn catalog_paths_replace_renderer_paths() {
+        let trusted = BatchExportItem {
+            id: "kept".to_string(),
+            source_path: "/etc/passwd".to_string(),
+            index: 0,
+            kind: Some(crate::media_kind::MediaKind::Photo),
+            date: None,
+        };
+        let stale = BatchExportItem {
+            id: "gone".to_string(),
+            source_path: "/tmp/elsewhere.jpg".to_string(),
+            index: 1,
+            kind: Some(crate::media_kind::MediaKind::Photo),
+            date: None,
+        };
+
+        let mut catalog_paths = std::collections::HashMap::new();
+        catalog_paths.insert(
+            "kept".to_string(),
+            "/Users/me/Pictures/photo.jpg".to_string(),
+        );
+
+        let (kept, rejected) = resolve_batch_items(vec![trusted, stale], &catalog_paths);
+
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].source_path, "/Users/me/Pictures/photo.jpg");
+        assert_eq!(rejected.len(), 1);
+        assert_eq!(rejected[0].item_id, "gone");
+        assert_eq!(rejected[0].code, ErrorCode::NotFound);
+    }
+}
+
+/// The folder the user picked in the native dialog for this run. Recorded
+/// server-side so `batch_export` can accept the renderer's claimed destination
+/// only when the user actually chose it. Process-global is fine: this app has
+/// one window and one batch destination at a time.
+static EXPORT_FOLDER_GRANT: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
+#[tauri::command]
+pub async fn choose_export_folder(app: tauri::AppHandle) -> Result<String, CommandError> {
+    let picked = app
+        .dialog()
+        .file()
+        .set_title("Choose an export folder")
+        .blocking_pick_folder()
+        .ok_or_else(|| CommandError::new(ErrorCode::Cancelled, "Export cancelled by user"))?;
+    let path = picked
+        .into_path()
+        .map_err(|e| CommandError::new(ErrorCode::Dialog, e.to_string()))?;
+    let canonical = path.canonicalize().unwrap_or(path);
+
+    *EXPORT_FOLDER_GRANT
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(canonical.clone());
+
+    Ok(canonical.to_string_lossy().into_owned())
+}
+
+/// The granted folder, when `claimed` resolves to exactly that directory.
+fn granted_export_folder(claimed: &str) -> Option<PathBuf> {
+    let claimed = Path::new(claimed.trim()).canonicalize().ok()?;
+    let granted = EXPORT_FOLDER_GRANT
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()?;
+    (granted == claimed).then_some(granted)
+}
+
+/// Ask the user where to put the exports. The folder the renderer sent is only
+/// used as the dialog's starting point: the destination that is actually
+/// written to always comes from the native dialog.
+fn pick_export_folder(app: &tauri::AppHandle, suggested: &str) -> Result<PathBuf, CommandError> {
+    let mut dialog = app.dialog().file().set_title("Choose an export folder");
+    let suggested = suggested.trim();
+    if !suggested.is_empty() && Path::new(suggested).is_dir() {
+        dialog = dialog.set_directory(suggested);
+    }
+    let picked = dialog
+        .blocking_pick_folder()
+        .ok_or_else(|| CommandError::new(ErrorCode::Cancelled, "Export cancelled by user"))?;
+    picked
+        .into_path()
+        .map_err(|e| CommandError::new(ErrorCode::Dialog, e.to_string()))
+}
+
+/// Keep only the items the catalog still knows about, replacing the renderer's
+/// `source_path` with the catalog's canonical path.
+fn resolve_batch_items(
+    items: Vec<BatchExportItem>,
+    catalog_paths: &std::collections::HashMap<String, String>,
+) -> (Vec<BatchExportItem>, Vec<BatchExportError>) {
+    let mut kept = Vec::with_capacity(items.len());
+    let mut rejected = Vec::new();
+    for mut item in items {
+        match catalog_paths.get(&item.id) {
+            Some(path) => {
+                item.source_path = path.clone();
+                kept.push(item);
+            }
+            None => rejected.push(BatchExportError {
+                item_id: item.id.clone(),
+                code: ErrorCode::NotFound,
+                error: "This item is no longer in the library.".to_string(),
+            }),
+        }
+    }
+    (kept, rejected)
 }
 
 #[tauri::command]
 pub async fn batch_export(
     app: tauri::AppHandle,
-    request: BatchExportRequest,
+    mut request: BatchExportRequest,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<BatchExportResult, CommandError> {
     // A new run always starts un-cancelled.
     super::BATCH_CANCEL.store(false, Ordering::SeqCst);
 
-    let total = request.items.len() as u32;
-    if total == 0 {
+    if request.items.is_empty() {
         return Err(CommandError::invalid(
             "Select at least one item to export.".to_string(),
         ));
     }
 
-    let folder = PathBuf::from(request.output_folder.trim());
-    if request.output_folder.trim().is_empty() {
-        return Err(CommandError::io(
-            "Choose an output folder first.".to_string(),
-        ));
+    // The destination must be the folder the user picked in the native dialog.
+    // If the renderer's claim does not match that grant, ask again rather than
+    // write anywhere it names.
+    let folder = match granted_export_folder(&request.output_folder) {
+        Some(folder) => folder,
+        None => pick_export_folder(&app, &request.output_folder)?,
+    };
+
+    // Resolve every source from the catalog. The renderer's `source_path` is
+    // never trusted, so a crafted request cannot read a file outside the
+    // library (or one the user has not selected in this app).
+    let db = super::get_db(&catalog)?;
+    let ids: Vec<String> = request.items.iter().map(|item| item.id.clone()).collect();
+    let mut query = sqlx::QueryBuilder::new("SELECT id, path FROM media_items WHERE id IN (");
+    {
+        let mut separated = query.separated(", ");
+        for id in &ids {
+            separated.push_bind(id);
+        }
     }
-    std::fs::create_dir_all(&folder)
-        .map_err(|e| CommandError::io(format!("Could not create the output folder: {}", e)))?;
-    if !folder.is_dir() {
-        return Err(CommandError::invalid(
-            "The chosen output location is not a folder.".to_string(),
-        ));
+    query.push(")");
+    let rows = query.build().fetch_all(&db).await?;
+    let catalog_paths: std::collections::HashMap<String, String> = rows
+        .into_iter()
+        .map(|row| (row.get("id"), row.get("path")))
+        .collect();
+
+    let (items, failed) = resolve_batch_items(std::mem::take(&mut request.items), &catalog_paths);
+    request.items = items;
+
+    let total = request.items.len() as u32;
+    if total == 0 {
+        return Ok(BatchExportResult {
+            exported: 0,
+            failed,
+            outputs: Vec::new(),
+            cancelled: false,
+        });
     }
 
     // Decoding and encoding are CPU/disk bound; keep them off the async runtime.
     tauri::async_runtime::spawn_blocking(move || {
         let mut outputs: Vec<String> = Vec::new();
-        let mut failed: Vec<BatchExportError> = Vec::new();
+        let mut failed = failed;
         let mut used_names: HashSet<String> = HashSet::new();
         let quality = (request.quality * 100.0).round().clamp(1.0, 100.0) as u8;
         let mut cancelled = false;

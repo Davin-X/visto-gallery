@@ -983,14 +983,14 @@ pub async fn render_edited(
     catalog: State<'_, crate::Catalog>,
 ) -> Result<ExportResult, CommandError> {
     // Validate the source path against registered library folders before doing
-    // any work, so a crafted request cannot read arbitrary files.
+    // any work, so a crafted request cannot read arbitrary files. With no
+    // folders registered the catalog is the only thing that can vouch for a
+    // path, and `validate_path_under_registered_roots` enforces that.
     let db = super::get_db(&catalog)?;
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
         .fetch_all(&db)
         .await?;
-    if !registered.is_empty() {
-        super::validate_path_under_registered_roots(&request.source_path, &registered)?;
-    }
+    super::validate_path_under_registered_roots(&request.source_path, &registered)?;
 
     let in_place = request.output_format == "in_place";
     let backup_path = if in_place {
@@ -1187,6 +1187,10 @@ fn render_edited_blocking(
             request.strip_metadata,
             &exif_data,
         )?;
+
+        // The rename below swaps the inode, so carry over what would otherwise
+        // be lost: POSIX mode, Finder tags, quarantine and other xattrs.
+        super::preserve_metadata(&source_path, guard.path());
 
         // Atomic rename. If it fails, the source is untouched; keep the
         // journaled original intact for a later revert.

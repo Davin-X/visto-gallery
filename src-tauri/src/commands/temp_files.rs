@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
+use crate::errors::CommandError;
+
 /// A temp file that is removed on drop unless explicitly committed. This keeps
 /// `<name>.tmp-<uuid>` export/edit outputs from leaking on write or rename
 /// failures.
@@ -30,6 +32,76 @@ impl Drop for TempFileGuard {
     fn drop(&mut self) {
         if !self.committed {
             let _ = std::fs::remove_file(&self.path);
+        }
+    }
+}
+
+/// A sibling temp path for `target`: `<name>.tmp-<uuid>` in the same folder.
+/// Staying in the same folder keeps the final rename atomic and never crosses
+/// a filesystem boundary. The name matches the sweep pattern in
+/// [`is_app_export_temp`], so an abandoned temp is cleaned up by the scan.
+pub(crate) fn temp_sibling(target: &Path) -> PathBuf {
+    target.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()))
+}
+
+fn sync_file(path: &Path) -> Result<(), CommandError> {
+    std::fs::File::open(path)
+        .and_then(|file| file.sync_all())
+        .map_err(|e| CommandError::io(format!("Could not flush the file to disk: {e}")))
+}
+
+/// Write `target` by way of a temp file in the same folder, then rename.
+///
+/// A failed write leaves the destination untouched and removes the temp, so a
+/// crash or an encode error can never leave a truncated file that later runs
+/// mistake for a finished one.
+pub(crate) fn write_atomically<F>(target: &Path, write: F) -> Result<(), CommandError>
+where
+    F: FnOnce(&Path) -> Result<(), CommandError>,
+{
+    let mut guard = TempFileGuard::new(temp_sibling(target));
+    write(guard.path())?;
+    sync_file(guard.path())?;
+    std::fs::rename(guard.path(), target).map_err(|e| {
+        CommandError::io(format!(
+            "Could not finish writing {}: {}",
+            target.display(),
+            e
+        ))
+    })?;
+    guard.commit();
+    Ok(())
+}
+
+/// Replace `target` with a copy of `source` without exposing a partial file.
+pub(crate) fn copy_atomically(source: &Path, target: &Path) -> Result<(), CommandError> {
+    write_atomically(target, |temp| {
+        std::fs::copy(source, temp)
+            .map(|_| ())
+            .map_err(|e| CommandError::io(format!("Could not copy the file: {e}")))
+    })
+}
+
+/// Best-effort carry-over of the metadata a rewritten file would otherwise
+/// lose when its inode is swapped: POSIX mode and extended attributes. On
+/// macOS that includes Finder tags (`com.apple.metadata:_kMDItemUserTags`),
+/// quarantine, and Finder info. Content is intentionally not copied.
+pub(crate) fn preserve_metadata(from: &Path, to: &Path) {
+    if let Ok(meta) = std::fs::metadata(from) {
+        if let Err(error) = std::fs::set_permissions(to, meta.permissions()) {
+            tracing::warn!(%error, "could not preserve file mode");
+        }
+    }
+
+    let Ok(names) = xattr::list(from) else {
+        return;
+    };
+    for name in names {
+        let Ok(Some(value)) = xattr::get(from, &name) else {
+            continue;
+        };
+        if let Err(error) = xattr::set(to, &name, &value) {
+            tracing::warn!(%error, "could not preserve extended attribute");
         }
     }
 }
@@ -246,6 +318,102 @@ mod tests {
         assert!(fresh.exists());
         assert!(other.exists());
         assert!(bak.exists());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    fn dir_names(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(dir)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn write_atomically_replaces_and_leaves_no_temp() {
+        let dir = tmpdir("atomic");
+        let target = dir.join("photo.jpg");
+        fs::write(&target, b"old").unwrap();
+
+        write_atomically(&target, |temp| {
+            fs::write(temp, b"new").unwrap();
+            Ok(())
+        })
+        .unwrap();
+
+        assert_eq!(fs::read(&target).unwrap(), b"new");
+        assert_eq!(dir_names(&dir), vec!["photo.jpg".to_string()]);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn write_atomically_keeps_target_when_the_write_fails() {
+        let dir = tmpdir("atomic-fail");
+        let target = dir.join("photo.jpg");
+        fs::write(&target, b"old").unwrap();
+
+        let result = write_atomically(&target, |temp| {
+            fs::write(temp, b"partial").unwrap();
+            Err(CommandError::io("encode failed".to_string()))
+        });
+
+        assert!(result.is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"old");
+        assert_eq!(dir_names(&dir), vec!["photo.jpg".to_string()]);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn copy_atomically_replaces_target() {
+        let dir = tmpdir("atomic-copy");
+        let source = dir.join("source.jpg");
+        let target = dir.join("target.jpg");
+        fs::write(&source, b"restored bytes").unwrap();
+        fs::write(&target, b"edited bytes").unwrap();
+
+        copy_atomically(&source, &target).unwrap();
+
+        assert_eq!(fs::read(&target).unwrap(), b"restored bytes");
+        assert_eq!(
+            dir_names(&dir),
+            vec!["source.jpg".to_string(), "target.jpg".to_string()]
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn preserve_metadata_carries_mode_and_xattrs() {
+        let dir = tmpdir("metadata");
+        let from = dir.join("from.jpg");
+        let to = dir.join("to.jpg");
+        fs::write(&from, b"a").unwrap();
+        fs::write(&to, b"b").unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&from, fs::Permissions::from_mode(0o640)).unwrap();
+        }
+
+        let xattr_name = "com.visto-gallery.test";
+        let xattr_supported = xattr::set(&from, xattr_name, b"finder-tag").is_ok();
+
+        preserve_metadata(&from, &to);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&to).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o640);
+        }
+        if xattr_supported {
+            assert_eq!(
+                xattr::get(&to, xattr_name).unwrap().as_deref(),
+                Some(&b"finder-tag"[..])
+            );
+        }
         let _ = fs::remove_dir_all(dir);
     }
 }

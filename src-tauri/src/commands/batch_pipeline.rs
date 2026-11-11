@@ -109,6 +109,8 @@ pub(crate) fn render_batch_filename(
 }
 
 /// Never overwrite an existing export (or a name used earlier in this batch).
+/// A zero-byte file is treated as reclaimable: it is the leftover of an
+/// interrupted run, not a finished export.
 pub(crate) fn unique_batch_path(
     folder: &Path,
     file_name: &str,
@@ -123,7 +125,7 @@ pub(crate) fn unique_batch_path(
 
     let mut candidate = file_name.to_string();
     let mut suffix = 2;
-    while used.contains(&candidate.to_ascii_lowercase()) || folder.join(&candidate).exists() {
+    while used.contains(&candidate.to_ascii_lowercase()) || export_name_taken(folder, &candidate) {
         candidate = if extension.is_empty() {
             format!("{}-{}", stem, suffix)
         } else {
@@ -133,6 +135,16 @@ pub(crate) fn unique_batch_path(
     }
     used.insert(candidate.to_ascii_lowercase());
     folder.join(candidate)
+}
+
+/// True when `candidate` already holds a finished file (or a directory) in
+/// `folder`. Empty files do not count, so a failed earlier export can be
+/// retried under the same name.
+fn export_name_taken(folder: &Path, candidate: &str) -> bool {
+    match std::fs::metadata(folder.join(candidate)) {
+        Ok(meta) => meta.is_dir() || meta.len() > 0,
+        Err(_) => false,
+    }
 }
 
 pub(crate) fn resize_batch_image(image: DynamicImage, max_dimension: u32) -> DynamicImage {
@@ -277,6 +289,24 @@ pub(crate) fn export_batch_item(
     let file_name = render_batch_filename(item, &request.pattern, date, &output_ext);
     let output_path = unique_batch_path(folder, &file_name, used);
 
+    // Encode or copy into a temp sibling, then rename. A failed write leaves no
+    // truncated file behind, so the name stays retryable.
+    super::write_atomically(&output_path, |temp| {
+        write_batch_output(item, request, folder, quality, &output_ext, temp)
+    })?;
+
+    Ok(output_path)
+}
+
+fn write_batch_output(
+    item: &BatchExportItem,
+    request: &BatchExportRequest,
+    folder: &Path,
+    quality: u8,
+    output_ext: &str,
+    output_path: &Path,
+) -> Result<(), CommandError> {
+    let source = Path::new(&item.source_path);
     let converting = request.format != "source";
     let resizing = request.max_dimension.map(|dim| dim > 0).unwrap_or(false);
     let kind = item.kind.unwrap_or(crate::media_kind::MediaKind::Photo);
@@ -292,16 +322,16 @@ pub(crate) fn export_batch_item(
             };
             return Err(CommandError::io(message.to_string()));
         }
-        std::fs::copy(source, &output_path)
+        std::fs::copy(source, output_path)
             .map_err(|e| CommandError::io(format!("Could not copy the file: {}", e)))?;
-        return Ok(output_path);
+        return Ok(());
     }
 
     // A straight copy preserves the original bytes (and its metadata) exactly.
     if !converting && !resizing && !request.strip_metadata {
-        std::fs::copy(source, &output_path)
+        std::fs::copy(source, output_path)
             .map_err(|e| CommandError::io(format!("Could not copy the file: {}", e)))?;
-        return Ok(output_path);
+        return Ok(());
     }
 
     let image = match image::open(source) {
@@ -310,8 +340,8 @@ pub(crate) fn export_batch_item(
             // HEIC/HEIF and some camera formats are only decodable through
             // macOS ImageIO. Fall back to `sips` when writing JPEG or PNG,
             // and use a temporary PNG when the target is WebP.
-            let fallback_ext = match output_ext.as_str() {
-                "jpg" | "jpeg" | "png" => output_ext.clone(),
+            let fallback_ext = match output_ext {
+                "jpg" | "jpeg" | "png" => output_ext.to_string(),
                 "webp" => "png".to_string(),
                 _ => {
                     return Err(CommandError::new(
@@ -322,7 +352,7 @@ pub(crate) fn export_batch_item(
             };
             let direct = fallback_ext == output_ext;
             let target = if direct {
-                output_path.clone()
+                output_path.to_path_buf()
             } else {
                 folder.join(format!(".visto-gallery-{}.png", Uuid::new_v4()))
             };
@@ -347,15 +377,15 @@ pub(crate) fn export_batch_item(
             }
 
             if direct {
-                return Ok(output_path);
+                return Ok(());
             }
 
             let decoded = image::open(&target).map_err(|e| {
                 CommandError::internal(format!("Could not read the converted image: {}", e))
             })?;
-            let result = write_batch_webp(decoded, &output_path);
+            let result = write_batch_webp(decoded, output_path);
             std::fs::remove_file(&target).ok();
-            return result.map(|_| output_path);
+            return result;
         }
     };
     let image = match request.max_dimension.filter(|dim| *dim > 0) {
@@ -363,10 +393,10 @@ pub(crate) fn export_batch_item(
         None => image,
     };
 
-    match output_ext.as_str() {
-        "jpg" | "jpeg" => write_batch_jpeg(image, &output_path, quality)?,
-        "png" => write_batch_png(image, &output_path)?,
-        "webp" => write_batch_webp(image, &output_path)?,
+    match output_ext {
+        "jpg" | "jpeg" => write_batch_jpeg(image, output_path, quality)?,
+        "png" => write_batch_png(image, output_path)?,
+        "webp" => write_batch_webp(image, output_path)?,
         other => {
             return Err(CommandError::internal(format!(
                 "Can’t write .{} files yet. Choose JPEG, PNG, or WebP.",
@@ -375,5 +405,5 @@ pub(crate) fn export_batch_item(
         }
     }
 
-    Ok(output_path)
+    Ok(())
 }
