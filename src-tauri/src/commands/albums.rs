@@ -240,6 +240,54 @@ pub async fn get_album_items(
     fetch_album_items(&db, &album_id).await
 }
 
+/// Batched add, with every row in one transaction. Filling a 100k-item album
+/// with per-id `INSERT OR IGNORE` was both slow and left a partially filled
+/// album behind on failure.
+pub async fn add_to_album_db(
+    db: &sqlx::SqlitePool,
+    album_id: &str,
+    item_ids: &[String],
+) -> Result<(), CommandError> {
+    if item_ids.is_empty() {
+        return Ok(());
+    }
+    let mut tx = db.begin().await?;
+    let now = super::now_ms();
+    for chunk in item_ids.chunks(400) {
+        // Which of these are already members? One lookup per chunk, then a
+        // multi-row insert of only the missing ones — with no UNIQUE index on
+        // album_items, we have to de-duplicate here rather than in SQL.
+        let mut lookup = QueryBuilder::new("SELECT media_id FROM album_items WHERE album_id = ");
+        lookup.push_bind(album_id).push(" AND media_id IN (");
+        {
+            let mut separated = lookup.separated(", ");
+            for id in chunk {
+                separated.push_bind(id);
+            }
+        }
+        lookup.push(")");
+        let existing: std::collections::HashSet<String> = lookup
+            .build_query_scalar::<String>()
+            .fetch_all(&mut *tx)
+            .await?
+            .into_iter()
+            .collect();
+
+        let fresh: Vec<&String> = chunk.iter().filter(|id| !existing.contains(*id)).collect();
+        if fresh.is_empty() {
+            continue;
+        }
+        let mut insert =
+            QueryBuilder::new("INSERT OR IGNORE INTO album_items (album_id, media_id, added_at) ");
+        insert.push_values(fresh, |mut row, id| {
+            row.push_bind(album_id).push_bind(id).push_bind(now);
+        });
+        insert.build().execute(&mut *tx).await?;
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn add_to_album(
     album_id: String,
@@ -247,16 +295,33 @@ pub async fn add_to_album(
     catalog: State<'_, crate::Catalog>,
 ) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
-    for item_id in &item_ids {
-        sqlx::query(
-            "INSERT OR IGNORE INTO album_items (album_id, media_id, added_at) VALUES (?, ?, ?)",
-        )
-        .bind(&album_id)
-        .bind(item_id)
-        .bind(super::now_ms())
-        .execute(&db)
-        .await?;
+    add_to_album_db(&db, &album_id, &item_ids).await
+}
+
+/// Batched remove, transactionally; same scale story as `add_to_album_db`.
+pub async fn remove_from_album_db(
+    db: &sqlx::SqlitePool,
+    album_id: &str,
+    item_ids: &[String],
+) -> Result<(), CommandError> {
+    if item_ids.is_empty() {
+        return Ok(());
     }
+    let mut tx = db.begin().await?;
+    for chunk in item_ids.chunks(400) {
+        let mut qb = QueryBuilder::new("DELETE FROM album_items WHERE album_id = ");
+        qb.push_bind(album_id);
+        qb.push(" AND media_id IN (");
+        {
+            let mut separated = qb.separated(", ");
+            for id in chunk {
+                separated.push_bind(id);
+            }
+        }
+        qb.push(")");
+        qb.build().execute(&mut *tx).await?;
+    }
+    tx.commit().await?;
     Ok(())
 }
 
@@ -267,19 +332,12 @@ pub async fn remove_from_album(
     catalog: State<'_, crate::Catalog>,
 ) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
-    for item_id in &item_ids {
-        sqlx::query("DELETE FROM album_items WHERE album_id = ? AND media_id = ?")
-            .bind(&album_id)
-            .bind(item_id)
-            .execute(&db)
-            .await?;
-    }
-    Ok(())
+    remove_from_album_db(&db, &album_id, &item_ids).await
 }
 
 #[cfg(test)]
 mod tests {
-    use super::fetch_album_items;
+    use super::{add_to_album_db, fetch_album_items, remove_from_album_db};
     use sqlx::sqlite::SqlitePoolOptions;
 
     async fn album_db() -> sqlx::SqlitePool {
@@ -299,6 +357,48 @@ mod tests {
             .await
             .expect("create album items table");
         db
+    }
+
+    #[tokio::test]
+    async fn add_and_remove_album_items_handle_large_batches() {
+        let db = album_db().await;
+        for i in 0..850 {
+            sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at) VALUES (?, ?, ?, 'jpg', 'photo', 1, 1, 1, 1)")
+                .bind(format!("m-{i}"))
+                .bind(format!("/tmp/item-{i}.jpg"))
+                .bind(format!("item-{i}.jpg"))
+                .execute(&db)
+                .await
+                .expect("insert media row");
+        }
+        let ids: Vec<String> = (0..850).map(|i| format!("m-{i}")).collect();
+
+        add_to_album_db(&db, "a1", &ids)
+            .await
+            .expect("batch add should succeed across multiple chunks");
+
+        // Re-adding must not duplicate membership (INSERT OR IGNORE).
+        add_to_album_db(&db, "a1", &ids)
+            .await
+            .expect("re-adding a member is a no-op");
+
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM album_items WHERE album_id = 'a1'")
+                .fetch_one(&db)
+                .await
+                .expect("count album memberships");
+        assert_eq!(count, 850);
+
+        remove_from_album_db(&db, "a1", &ids[..425])
+            .await
+            .expect("batch remove should succeed across multiple chunks");
+
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM album_items WHERE album_id = 'a1'")
+                .fetch_one(&db)
+                .await
+                .expect("count album memberships after remove");
+        assert_eq!(count, 425);
     }
 
     #[tokio::test]
