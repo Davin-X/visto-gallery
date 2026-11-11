@@ -325,9 +325,7 @@ function App() {
         loading: false,
       };
       const knownIds = new Set(videoQueue.map((item) => item.id));
-      const videos = page.items.filter(
-        (item) => item.kind === "video" && !knownIds.has(item.id),
-      );
+      const videos = page.items.filter((item) => item.kind === "video" && !knownIds.has(item.id));
       if (videos.length > 0) {
         setVideoQueue((current) => {
           const currentIds = new Set(current.map((item) => item.id));

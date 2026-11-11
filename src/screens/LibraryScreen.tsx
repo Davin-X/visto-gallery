@@ -1678,41 +1678,38 @@ function LibraryScreen(props: LibraryScreenProps) {
                               <KindBadge kind={item.kind} />
                             </span>
                           )}
-                          {item.kind === "video" &&
-                                                        props.onPlayBackground && (
-                              <button
-                                type="button"
-                                className="tile-play-background"
+                          {item.kind === "video" && props.onPlayBackground && (
+                            <button
+                              type="button"
+                              className="tile-play-background"
 
-                                aria-label={
-                                  playingId === item.id && isPlaying
-                                    ? `Pause ${tileAlt(item)}`
-                                    : `Play ${tileAlt(item)} in background`
-                                }
+                              aria-label={
+                                playingId === item.id && isPlaying
+                                  ? `Pause ${tileAlt(item)}`
+                                  : `Play ${tileAlt(item)} in background`
+                              }
 
-                                title={
-                                  playingId === item.id && isPlaying
-                                    ? "Pause"
-                                    : "Play in background"
-                                }
+                              title={
+                                playingId === item.id && isPlaying ? "Pause" : "Play in background"
+                              }
 
-                                onClick={(event) => {
-                                  event.stopPropagation();
+                              onClick={(event) => {
+                                event.stopPropagation();
 
-                                  toggleBackground(item);
-                                }}
+                                toggleBackground(item);
+                              }}
 
-                                onDoubleClick={(event) => event.stopPropagation()}
+                              onDoubleClick={(event) => event.stopPropagation()}
 
-                                aria-pressed={playingId === item.id && isPlaying}
-                              >
-                                {playingId === item.id && isPlaying ? (
-                                  <PauseIcon size={16} />
-                                ) : (
-                                  <PlayIcon size={16} />
-                                )}
-                              </button>
-                            )}
+                              aria-pressed={playingId === item.id && isPlaying}
+                            >
+                              {playingId === item.id && isPlaying ? (
+                                <PauseIcon size={16} />
+                              ) : (
+                                <PlayIcon size={16} />
+                              )}
+                            </button>
+                          )}
                           {item.kind === "video" && (
                             <span className="video-label">
                               <PlayIcon size={10} />
@@ -1859,41 +1856,40 @@ function LibraryScreen(props: LibraryScreenProps) {
                                         <KindBadge kind={item.kind} />
                                       </span>
                                     )}
-                                    {item.kind === "video" &&
-                                                                            props.onPlayBackground && (
-                                        <button
-                                          type="button"
-                                          className="tile-play-background"
+                                    {item.kind === "video" && props.onPlayBackground && (
+                                      <button
+                                        type="button"
+                                        className="tile-play-background"
 
-                                          aria-label={
-                                            playingId === item.id && isPlaying
-                                              ? `Pause ${tileAlt(item)}`
-                                              : `Play ${tileAlt(item)} in background`
-                                          }
+                                        aria-label={
+                                          playingId === item.id && isPlaying
+                                            ? `Pause ${tileAlt(item)}`
+                                            : `Play ${tileAlt(item)} in background`
+                                        }
 
-                                          title={
-                                            playingId === item.id && isPlaying
-                                              ? "Pause"
-                                              : "Play in background"
-                                          }
+                                        title={
+                                          playingId === item.id && isPlaying
+                                            ? "Pause"
+                                            : "Play in background"
+                                        }
 
-                                          onClick={(event) => {
-                                            event.stopPropagation();
+                                        onClick={(event) => {
+                                          event.stopPropagation();
 
-                                            toggleBackground(item);
-                                          }}
+                                          toggleBackground(item);
+                                        }}
 
-                                          onDoubleClick={(event) => event.stopPropagation()}
+                                        onDoubleClick={(event) => event.stopPropagation()}
 
-                                          aria-pressed={playingId === item.id && isPlaying}
-                                        >
-                                          {playingId === item.id && isPlaying ? (
-                                            <PauseIcon size={16} />
-                                          ) : (
-                                            <PlayIcon size={16} />
-                                          )}
-                                        </button>
-                                      )}
+                                        aria-pressed={playingId === item.id && isPlaying}
+                                      >
+                                        {playingId === item.id && isPlaying ? (
+                                          <PauseIcon size={16} />
+                                        ) : (
+                                          <PlayIcon size={16} />
+                                        )}
+                                      </button>
+                                    )}
                                     {item.kind === "video" && (
                                       <span className="video-label">
                                         <PlayIcon size={10} />
@@ -2018,39 +2014,38 @@ function LibraryScreen(props: LibraryScreenProps) {
                             <KindBadge kind={item.kind} />
                           </span>
                         )}
-                        {item.kind === "video" &&
-                                                    props.onPlayBackground && (
-                            <button
-                              type="button"
-                              className="tile-play-background"
+                        {item.kind === "video" && props.onPlayBackground && (
+                          <button
+                            type="button"
+                            className="tile-play-background"
 
-                              aria-label={
-                                playingId === item.id && isPlaying
-                                  ? `Pause ${tileAlt(item)}`
-                                  : `Play ${tileAlt(item)} in background`
-                              }
+                            aria-label={
+                              playingId === item.id && isPlaying
+                                ? `Pause ${tileAlt(item)}`
+                                : `Play ${tileAlt(item)} in background`
+                            }
 
-                              title={
-                                playingId === item.id && isPlaying ? "Pause" : "Play in background"
-                              }
+                            title={
+                              playingId === item.id && isPlaying ? "Pause" : "Play in background"
+                            }
 
-                              onClick={(event) => {
-                                event.stopPropagation();
+                            onClick={(event) => {
+                              event.stopPropagation();
 
-                                toggleBackground(item);
-                              }}
+                              toggleBackground(item);
+                            }}
 
-                              onDoubleClick={(event) => event.stopPropagation()}
+                            onDoubleClick={(event) => event.stopPropagation()}
 
-                              aria-pressed={playingId === item.id && isPlaying}
-                            >
-                              {playingId === item.id && isPlaying ? (
-                                <PauseIcon size={16} />
-                              ) : (
-                                <PlayIcon size={16} />
-                              )}
-                            </button>
-                          )}
+                            aria-pressed={playingId === item.id && isPlaying}
+                          >
+                            {playingId === item.id && isPlaying ? (
+                              <PauseIcon size={16} />
+                            ) : (
+                              <PlayIcon size={16} />
+                            )}
+                          </button>
+                        )}
                         {item.kind === "video" && (
                           <span className="video-label">
                             <PlayIcon size={10} />
