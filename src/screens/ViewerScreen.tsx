@@ -378,15 +378,8 @@ function ViewerScreen(props: ViewerScreenProps) {
         }}
       >
         <button
-          className={`viewer-arrow left${hintsVisible ? "" : " hidden"}`}
+          className="viewer-arrow left"
           type="button"
-          onMouseEnter={() => {
-            setHintsVisible(true);
-            if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
-          }}
-          onMouseLeave={() => {
-            hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
-          }}
           onClick={() => props.onNavigate(-1)}
           aria-label="Previous"
           title="Previous item (←)"
@@ -434,10 +427,10 @@ function ViewerScreen(props: ViewerScreenProps) {
               style={{
                 aspectRatio:
                   selected.width && selected.height
-                    ? `auto ${selected.width} / ${selected.height}`
-                    : "auto",
-                width: props.fitMode === "fill" ? "100%" : undefined,
-                height: props.fitMode === "fill" ? "100%" : undefined,
+                    ? `${selected.width} / ${selected.height}`
+                    : undefined,
+                width: props.fitMode === "actual" ? undefined : "100%",
+                height: props.fitMode === "actual" ? undefined : "100%",
                 maxWidth:
                   props.fitMode === "actual"
                     ? "none"
@@ -482,15 +475,8 @@ function ViewerScreen(props: ViewerScreenProps) {
           </div>
         )}
         <button
-          className={`viewer-arrow right${hintsVisible ? "" : " hidden"}`}
+          className="viewer-arrow right"
           type="button"
-          onMouseEnter={() => {
-            setHintsVisible(true);
-            if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
-          }}
-          onMouseLeave={() => {
-            hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
-          }}
           onClick={() => props.onNavigate(1)}
           aria-label="Next"
           title="Next item (→)"

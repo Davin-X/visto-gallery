@@ -186,7 +186,7 @@ function VideoPlayer({
   }, [itemId, name, registerPlayback, unregisterPlayback, syncPlayback]);
 
   useEffect(() => {
-    const video = ref.current;
+    const video = ref.current as HTMLVideoElement | null;
     if (!video) return;
 
     // Restore playback state from store if this is the same itemId
@@ -229,6 +229,114 @@ function VideoPlayer({
       setMuted(false);
     }
 
+    let noVideoTrackTimer: number | null = null;
+    let noDecodedFramesTimer: number | null = null;
+    let sawVideoFrame = false;
+
+    const markPlaybackFailure = () => {
+      if (failed) return;
+      setVideoError({ code: 3 } as MediaError);
+      setFailed(true);
+    };
+
+    const getDecodedFrameCount = () => {
+      const quality = (
+        video as HTMLVideoElement & {
+          getVideoPlaybackQuality?: () => { totalVideoFrames?: number };
+        }
+      ).getVideoPlaybackQuality?.();
+      if (quality && typeof quality.totalVideoFrames === "number") {
+        return quality.totalVideoFrames;
+      }
+      const webkitDecoded = (video as HTMLVideoElement & { webkitDecodedFrameCount?: number })
+        .webkitDecodedFrameCount;
+      return typeof webkitDecoded === "number" ? webkitDecoded : null;
+    };
+
+    const checkDecodedFrames = () => {
+      if (failed || sawVideoFrame) return;
+      const el = ref.current as any;
+      if (!el) return;
+      if ("requestVideoFrameCallback" in el) return;
+      if (el.readyState < 2) return;
+      const decoded = getDecodedFrameCount();
+      if (decoded !== null && decoded > 0) {
+        sawVideoFrame = true;
+        if (noDecodedFramesTimer) {
+          window.clearTimeout(noDecodedFramesTimer);
+          noDecodedFramesTimer = null;
+        }
+        return;
+      }
+      if (decoded === null) return;
+      const progressing =
+        (el.currentTime > 0.25 || !el.paused) &&
+        (Number.isFinite(el.duration) || el.currentTime > 0.25);
+      if (!progressing) return;
+      if (noDecodedFramesTimer) window.clearTimeout(noDecodedFramesTimer);
+      noDecodedFramesTimer = window.setTimeout(() => {
+        const media = ref.current as any;
+        if (!media) return;
+        const nextDecoded = getDecodedFrameCount();
+        const stillProgressing =
+          (media.currentTime > 0.25 || !media.paused) &&
+          (Number.isFinite(media.duration) || media.currentTime > 0.25);
+        if (!failed && !sawVideoFrame && stillProgressing && nextDecoded === 0) {
+          markPlaybackFailure();
+        }
+      }, 2000);
+    };
+
+    const checkVideoTrack = () => {
+      // Some files (e.g. unsupported video codec inside a supported container)
+      // play audio but expose no decodable video frames. Treat as a playback
+      // failure so the user can open the file in an external player.
+      // Be conservative: dimensions can be reported late, and playable videos
+      // must not be misclassified as audio-only.
+      if (failed) return;
+      if (video.readyState >= 2 && video.videoWidth === 0 && video.videoHeight === 0) {
+        if (noVideoTrackTimer) window.clearTimeout(noVideoTrackTimer);
+        noVideoTrackTimer = window.setTimeout(() => {
+          if (
+            video.readyState >= 2 &&
+            video.videoWidth === 0 &&
+            video.videoHeight === 0 &&
+            (video.currentTime > 0 || !video.paused || Number.isFinite(video.duration))
+          ) {
+            markPlaybackFailure();
+          }
+        }, 1500);
+      } else if (video.videoWidth > 0 || video.videoHeight > 0) {
+        if (noVideoTrackTimer) {
+          window.clearTimeout(noVideoTrackTimer);
+          noVideoTrackTimer = null;
+        }
+        checkDecodedFrames();
+      }
+    };
+
+    const requestFrameCallback = (
+      video as HTMLVideoElement & {
+        requestVideoFrameCallback?: (callback: () => void) => number;
+        cancelVideoFrameCallback?: (id: number) => void;
+      }
+    ).requestVideoFrameCallback;
+    let videoFrameCallbackId: number | null = null;
+    if (typeof requestFrameCallback === "function") {
+      const onFrame = () => {
+        sawVideoFrame = true;
+        if (noDecodedFramesTimer) {
+          window.clearTimeout(noDecodedFramesTimer);
+          noDecodedFramesTimer = null;
+        }
+      };
+      try {
+        videoFrameCallbackId = requestFrameCallback.call(video, onFrame);
+      } catch {
+        videoFrameCallbackId = null;
+      }
+    }
+
     const onMetadata = () => {
       const nextDuration = Number.isFinite(video.duration) ? video.duration : 0;
       setDuration(nextDuration);
@@ -241,6 +349,7 @@ function VideoPlayer({
     const onTimeUpdate = () => {
       setTime(video.currentTime);
       syncPlayback({ time: video.currentTime });
+      checkDecodedFrames();
     };
     const onPlay = () => {
       setPlaying(true);
@@ -251,9 +360,22 @@ function VideoPlayer({
       syncPlayback({ playing: false });
     };
 
+    const onLoadedData = () => checkVideoTrack();
+    const onPlaying = () => {
+      onPlay();
+      checkVideoTrack();
+      checkDecodedFrames();
+    };
+
+    const onCanPlay = () => {
+      checkVideoTrack();
+      checkDecodedFrames();
+    };
     video.addEventListener("loadedmetadata", onMetadata);
+    video.addEventListener("loadeddata", onLoadedData);
+    video.addEventListener("canplay", onCanPlay);
     video.addEventListener("timeupdate", onTimeUpdate);
-    video.addEventListener("play", onPlay);
+    video.addEventListener("play", onPlaying);
     video.addEventListener("pause", onPause);
     // A second, belt-and-suspenders attempt once the media is actually ready:
     // the mount-time play() can lose the race against the canplay event in
@@ -263,10 +385,31 @@ function VideoPlayer({
       video.addEventListener("canplay", attemptAutoPlay, { once: true });
     }
     if (video.readyState >= 1) onMetadata();
+    if (video.readyState >= 2) {
+      checkVideoTrack();
+      checkDecodedFrames();
+    }
     return () => {
+      if (noVideoTrackTimer) window.clearTimeout(noVideoTrackTimer);
+      if (noDecodedFramesTimer) window.clearTimeout(noDecodedFramesTimer);
+      if (
+        videoFrameCallbackId !== null &&
+        typeof (video as HTMLVideoElement & { cancelVideoFrameCallback?: (id: number) => void })
+          .cancelVideoFrameCallback === "function"
+      ) {
+        try {
+          (
+            video as HTMLVideoElement & { cancelVideoFrameCallback?: (id: number) => void }
+          ).cancelVideoFrameCallback!(videoFrameCallbackId);
+        } catch {
+          // ignore
+        }
+      }
       video.removeEventListener("loadedmetadata", onMetadata);
+      video.removeEventListener("loadeddata", onLoadedData);
+      video.removeEventListener("canplay", onCanPlay);
       video.removeEventListener("timeupdate", onTimeUpdate);
-      video.removeEventListener("play", onPlay);
+      video.removeEventListener("play", onPlaying);
       video.removeEventListener("pause", onPause);
       video.removeEventListener("canplay", attemptAutoPlay);
     };
@@ -310,7 +453,7 @@ function VideoPlayer({
     };
   }, []);
 
-  // Keyboard shortcuts for video (when focused)
+  // Keyboard shortcuts for active video playback
   const adjustVolume = useCallback((delta: number) => {
     setVolume((current) => {
       const next = Math.min(1, Math.max(0, current + delta));
@@ -321,8 +464,16 @@ function VideoPlayer({
 
   useEffect(() => {
     const video = ref.current;
-    if (!video) return;
+    if (!video || compact || !active) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      ) {
+        return;
+      }
       if (e.key === " ") {
         e.preventDefault();
         e.stopPropagation();
@@ -361,9 +512,9 @@ function VideoPlayer({
         setMuted((m) => !m);
       }
     };
-    video.addEventListener("keydown", handleKeyDown);
-    return () => video.removeEventListener("keydown", handleKeyDown);
-  }, [onFullscreen, adjustVolume]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [active, compact, onFullscreen, adjustVolume]);
 
   useEffect(() => {
     const video = ref.current;
@@ -450,7 +601,7 @@ function VideoPlayer({
 
   // A double-click means "fullscreen". Delay the single-click toggle briefly so
   // the second click of a double-click does not pause and resume the video.
-  const handleVideoClick = () => {
+  const handleSurfaceToggle = () => {
     showPlayerActivity();
     if (clickTimerRef.current) {
       window.clearTimeout(clickTimerRef.current);
@@ -525,6 +676,10 @@ function VideoPlayer({
       className="video-player-surface"
       onPointerMove={showPlayerActivity}
       onPointerDown={showPlayerActivity}
+      onClick={(event) => {
+        if (event.target !== event.currentTarget) return;
+        handleSurfaceToggle();
+      }}
     >
       <video
         ref={ref}
@@ -533,13 +688,18 @@ function VideoPlayer({
         width={width ?? undefined}
         height={height ?? undefined}
         style={{
-          aspectRatio: width && height ? `auto ${width} / ${height}` : "auto",
+          width: "100%",
+          height: "100%",
+          maxWidth: "100%",
+          maxHeight: "100%",
+          objectFit: "contain",
+          objectPosition: "center",
         }}
         autoPlay={videoAutoPlay || forceAutoPlay}
         loop={videoLoop && !autoAdvance && !compact}
         playsInline
         preload="metadata"
-        onClick={handleVideoClick}
+        onClick={handleSurfaceToggle}
         onDoubleClick={(event) => {
           event.stopPropagation();
           onFullscreen?.();
@@ -735,6 +895,30 @@ function VideoPlayer({
             >
               <PictureInPictureIcon size={14} />
             </button>
+            {path && (
+              <button
+                type="button"
+                onClick={() => void openExternally()}
+                aria-label="Open in default app"
+                title="Open in default app"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </button>
+            )}
             {onFullscreen && (
               <button
                 type="button"
