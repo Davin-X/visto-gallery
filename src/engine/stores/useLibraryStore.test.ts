@@ -156,11 +156,14 @@ test("viewer filmstrip follows media category and the active browsing scope", ()
     inspectedId: photo.id,
   });
   useLibraryStore.getState().refreshDerived();
+  // Items pass through in the order the backend paginates them (sort column
+  // whitelisted server-side, `id` tie-break). The fixture feeds them in
+  // backend order — the store no longer re-sorts.
   expect(useLibraryStore.getState().viewerItems.map((item) => item.id)).toEqual([
-    "album-photo",
     "photo",
     "video",
     "raw",
+    "album-photo",
   ]);
 
   useLibraryStore.setState({ filter: "Videos" });

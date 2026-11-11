@@ -440,7 +440,10 @@ pub struct LibraryItemsPage {
     pub(crate) items: Vec<MediaItem>,
     has_more: bool,
     next_cursor: Option<String>,
-    pub(crate) total_count: i64,
+    /// Present only on the first page for the current filter. Continuation
+    /// (`cursor`-paginated) pages return `null` so the frontend can keep the
+    /// earlier count instead of re-running a full `COUNT(*)` per page.
+    pub(crate) total_count: Option<i64>,
 }
 
 fn cursor_value(item: &MediaItem, sort_by: &str) -> Value {
@@ -467,28 +470,18 @@ pub async fn get_library_items(
     get_library_items_page(&db, f).await
 }
 
-/// Return every hidden item (`hidden = 1`) for the Hidden gallery.
-/// Unlike `get_library_items`, this does not paginate — the Hidden screen is
-/// a secondary view over a typically small set.
+/// Return a page of hidden items (`hidden = 1`) for the Hidden gallery.
+/// Paginated like `get_library_items`: continuation pages carry no count, and
+/// `has_more` / `next_cursor` drive the gallery's infinite load.
 #[tauri::command]
 pub async fn get_hidden_items(
+    filter: Option<super::LibraryFilterDTO>,
     catalog: State<'_, crate::Catalog>,
 ) -> Result<LibraryItemsPage, CommandError> {
     let db = super::get_db(&catalog)?;
-    let mut items: Vec<MediaItem> = sqlx::query_as(
-        "SELECT * FROM media_items WHERE hidden = 1 ORDER BY COALESCE(captured_at, modified_at) DESC",
-    )
-    .fetch_all(&db)
-    .await
-    ?;
-    hydrate_relations(&db, &mut items).await?;
-    let total_count = items.len() as i64;
-    Ok(LibraryItemsPage {
-        items,
-        has_more: false,
-        next_cursor: None,
-        total_count,
-    })
+    let mut f = filter.unwrap_or_default();
+    f.hidden = Some(true);
+    get_library_items_page(&db, f).await
 }
 
 /// Escape `\\`, `%` and `_` so a search term matches literally inside a
@@ -740,7 +733,14 @@ pub(crate) async fn get_library_items_page(
         None
     };
 
-    let total_count: i64 = count_qb.build_query_scalar::<i64>().fetch_one(db).await?;
+    // Counting a million-row table per continuation page buys nothing: the
+    // frontend keeps the first-page count. Skip the full scan for pages
+    // fetched through a cursor.
+    let total_count = if f.cursor.is_some() {
+        None
+    } else {
+        Some(count_qb.build_query_scalar::<i64>().fetch_one(db).await?)
+    };
 
     hydrate_relations(db, &mut items).await?;
     Ok(LibraryItemsPage {
@@ -2482,6 +2482,7 @@ mod pagination_tests {
             ["c", "a"]
         );
         assert!(first.has_more);
+        assert_eq!(first.total_count, Some(3));
 
         let second = get_library_items_page(
             &db,
@@ -2503,6 +2504,7 @@ mod pagination_tests {
             ["b"]
         );
         assert!(!second.has_more);
+        assert_eq!(second.total_count, None);
     }
 }
 
@@ -2594,7 +2596,7 @@ mod filter_and_scale_tests {
 
         let ids: Vec<&str> = page.items.iter().map(|item| item.id.as_str()).collect();
         assert_eq!(ids, ["shown"]);
-        assert_eq!(page.total_count, 1);
+        assert_eq!(page.total_count, Some(1));
     }
 
     #[tokio::test]
@@ -2617,7 +2619,7 @@ mod filter_and_scale_tests {
 
         let ids: Vec<&str> = page.items.iter().map(|item| item.id.as_str()).collect();
         assert_eq!(ids, ["secret"]);
-        assert_eq!(page.total_count, 1);
+        assert_eq!(page.total_count, Some(1));
     }
 
     #[tokio::test]
@@ -2660,7 +2662,7 @@ mod filter_and_scale_tests {
             let mut ids: Vec<&str> = page.items.iter().map(|i| i.id.as_str()).collect();
             ids.sort();
             assert_eq!(ids, expected);
-            assert_eq!(page.total_count, expected.len() as i64);
+            assert_eq!(page.total_count, Some(expected.len() as i64));
         }
     }
 
@@ -2719,7 +2721,7 @@ mod filter_and_scale_tests {
         let mut ids: Vec<&str> = page.items.iter().map(|item| item.id.as_str()).collect();
         ids.sort();
         assert_eq!(ids, ["captured", "fallback"]);
-        assert_eq!(page.total_count, 2);
+        assert_eq!(page.total_count, Some(2));
     }
 
     #[tokio::test]
@@ -2848,14 +2850,14 @@ mod filter_and_scale_tests {
         eprintln!(
             "10k benchmark: first-page items={} total={} page={}ms; album-overviews={} covers={} total={}ms",
             first.items.len(),
-            first.total_count,
+            first.total_count.unwrap_or_default(),
             first_page_ms,
             overview.len(),
             overview.first().map(|album| album.cover_items.len()).unwrap_or(0),
             overview_ms,
         );
         assert_eq!(first.items.len(), 250);
-        assert_eq!(first.total_count, 10_000);
+        assert_eq!(first.total_count, Some(10_000));
         assert_eq!(overview.len(), 1);
         assert_eq!(overview[0].item_count, 10_000);
         assert!(overview[0].cover_items.len() <= 4);

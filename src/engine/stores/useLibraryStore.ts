@@ -143,13 +143,11 @@ export interface LibraryState {
   viewerIndex: number;
   hiddenItems: MediaItem[];
   hiddenCount: number;
-
-  // Internal sort cache (per-store-instance, replaces module-level vars)
-  _sortedSource: MediaItem[] | null;
-  _sortedBy: LibraryState["sortBy"] | null;
-  _sortedOrder: LibraryState["sortOrder"] | null;
-  _sortedCache: MediaItem[];
-
+  // Hidden gallery pagination state. The hidden set is small, but
+  // unbounded `SELECT *` on a huge hidden folder is not free.
+  hiddenCursor: string | null;
+  hiddenHasMore: boolean;
+  hiddenLoading: boolean;
   // Per-album item cache (all items in an album, not paginated)
   albumItems: Record<string, MediaItem[]>;
   // Actions - Data Loading
@@ -157,6 +155,7 @@ export interface LibraryState {
   loadItemsPage: (filter?: LibraryFilter) => Promise<void>;
   loadCatalogMetadata: () => Promise<void>;
   loadHiddenItems: () => Promise<void>;
+  loadMoreHiddenItems: () => Promise<void>;
   loadNextPage: () => Promise<void>;
   loadFolders: () => Promise<void>;
   removeFolder: (path: string, deleteFiles?: boolean) => Promise<number>;
@@ -242,10 +241,6 @@ export interface LibraryState {
   showErrorNotice: (error: unknown, prefix?: string) => void;
 }
 
-// Sorting is the most expensive part of deriving the gallery collections.
-// Keep it stable across query, selection, and screen changes, which do not
-// replace the underlying items or alter the sort order. Cache lives on the
-// store instance (see _sortedSource / _sortedBy / _sortedOrder / _sortedCache)
 // Load generation and query debounce are per-app (not per-store-instance).
 let libraryLoadGeneration = 0;
 let queryReloadTimer: ReturnType<typeof setTimeout> | null = null;
@@ -253,6 +248,21 @@ let queryReloadTimer: ReturnType<typeof setTimeout> | null = null;
 // library on every keystroke. State updates stay immediate; only the IPC
 // round-trip is deferred.
 let cameraLensReloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+const HIDDEN_PAGE_SIZE = 250;
+
+// Normalize a paged command's return value: older callers returned a bare
+// array, newer ones return { items, hasMore, nextCursor, totalCount? }.
+function normalizePageResult(result: LibraryItemsPage | MediaItem[] | unknown): LibraryItemsPage {
+  if (Array.isArray(result)) {
+    return {
+      items: result as MediaItem[],
+      hasMore: false,
+      totalCount: (result as MediaItem[]).length,
+    };
+  }
+  return result as LibraryItemsPage;
+}
 
 function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
   const kind =
@@ -295,54 +305,6 @@ export function libraryViewKey(state: LibraryState): string {
   return JSON.stringify(currentLibraryFilter(state));
 }
 
-function getSortedItems(
-  state: LibraryState,
-  items: MediaItem[],
-  sortBy: LibraryState["sortBy"],
-  sortOrder: LibraryState["sortOrder"],
-) {
-  if (
-    items === state._sortedSource &&
-    sortBy === state._sortedBy &&
-    sortOrder === state._sortedOrder
-  )
-    return state._sortedCache;
-  state._sortedSource = items;
-  state._sortedBy = sortBy;
-  state._sortedOrder = sortOrder;
-  state._sortedCache = [...items].sort((a, b) => {
-    let comparison = 0;
-    switch (sortBy) {
-      case "name":
-        comparison = a.name.localeCompare(b.name, undefined, {
-          numeric: true,
-          sensitivity: "base",
-        });
-        break;
-      case "size":
-        comparison = a.size - b.size;
-        break;
-      case "kind":
-        comparison = a.kind.localeCompare(b.kind);
-        break;
-      case "modifiedAt":
-        comparison = a.modifiedAt - b.modifiedAt;
-        break;
-      case "capturedAt":
-      default:
-        comparison = (a.capturedAt ?? a.modifiedAt) - (b.capturedAt ?? b.modifiedAt);
-        break;
-    }
-    if (comparison === 0)
-      comparison = a.name.localeCompare(b.name, undefined, {
-        numeric: true,
-        sensitivity: "base",
-      });
-    return sortOrder === "asc" ? comparison : -comparison;
-  });
-  return state._sortedCache;
-}
-
 function findKnownItem(state: LibraryState, id: string): MediaItem | null {
   const direct =
     state.items.find((item) => item.id === id) || state.hiddenItems.find((item) => item.id === id);
@@ -380,25 +342,14 @@ function computeInspectionDerived(state: LibraryState) {
 }
 
 function computeDerived(state: LibraryState) {
-  const {
-    items,
-    filter,
-    query,
-    activeAlbum,
-    activeSource,
-    inspectedId,
-    viewerScope,
-    sortBy,
-    sortOrder,
-  } = state;
+  const { items, filter, query, activeAlbum, activeSource, inspectedId, viewerScope } = state;
 
-  // Items arrive from the backend already filtered by kind, query, date
-  // range, source, rating, color label, camera, lens, and album membership.
-  // Hidden items are excluded by the hidden=false filter sent with every
-  // request. Client-side filtering below is a safety net for when the
-  // backend is not available (e.g. browser preview mode without Tauri IPC).
-  const sorted = getSortedItems(state, items, sortBy, sortOrder);
-  let visible = sorted;
+  // Items arrive from the backend already filtered and ordered (sort column
+  // is whitelisted server-side with an `id` tie-break). Re-sorting here
+  // used to reshuffle keyset page boundaries because the two collations
+  // disagreed for `IMG_10` vs `IMG_2`; the order the backend chose is the
+  // order the grid renders.
+  let visible = items;
 
   visible = visible.filter((item) => {
     if (filter === "Photos" && (item.kind !== "photo" || item.isAnimated)) return false;
@@ -538,12 +489,9 @@ export const useLibraryStore = create<LibraryState>()(
       viewerIndex: -1,
       hiddenItems: [],
       hiddenCount: 0,
-
-      // Internal sort cache (per-store-instance)
-      _sortedSource: null,
-      _sortedBy: null,
-      _sortedOrder: null,
-      _sortedCache: [],
+      hiddenCursor: null,
+      hiddenHasMore: false,
+      hiddenLoading: false,
 
       // Per-album item cache (all items in an album, not paginated)
       albumItems: {},
@@ -586,9 +534,7 @@ export const useLibraryStore = create<LibraryState>()(
 
           const pageResult = await tauri.library.getItems(dto);
           if (generation !== libraryLoadGeneration) return;
-          const page: LibraryItemsPage = Array.isArray(pageResult)
-            ? { items: pageResult, hasMore: false, totalCount: pageResult.length }
-            : pageResult;
+          const page = normalizePageResult(pageResult);
 
           set({
             items: page.items,
@@ -669,33 +615,88 @@ export const useLibraryStore = create<LibraryState>()(
       },
 
       // Load hidden items separately since the main items query always
-      // filters hidden = false. These power the Hidden screen.
+      // filters hidden = false. These power the Hidden screen. First page
+      // here, continuation pages via loadMoreHiddenItems.
       loadHiddenItems: async () => {
         const generation = libraryLoadGeneration;
         const isTauri =
           typeof window !== "undefined" &&
           ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
         if (!isTauri) {
-          set({ hiddenItems: [], hiddenCount: 0 });
+          set({ hiddenItems: [], hiddenCount: 0, hiddenCursor: null, hiddenHasMore: false });
           return;
         }
         try {
-          const pageResult = await tauri.library.getHiddenItems();
+          set({ hiddenLoading: true });
+          const pageResult = await tauri.library.getHiddenItems({
+            limit: HIDDEN_PAGE_SIZE,
+          });
           if (generation !== libraryLoadGeneration) return;
-          const page: LibraryItemsPage = Array.isArray(pageResult)
-            ? { items: pageResult, hasMore: false, totalCount: pageResult.length }
-            : pageResult;
-          set({ hiddenItems: page.items, hiddenCount: page.totalCount ?? page.items.length });
+          const page = normalizePageResult(pageResult);
+          set({
+            hiddenItems: page.items,
+            hiddenCount: page.totalCount ?? page.items.length,
+            hiddenCursor: page.nextCursor ?? null,
+            hiddenHasMore: page.hasMore,
+            hiddenLoading: false,
+          });
         } catch (e) {
           if (generation !== libraryLoadGeneration) return;
           if (import.meta.env.DEV) console.error("loadHiddenItems failed:", e);
-          set({ hiddenItems: [], hiddenCount: 0 });
+          set({
+            hiddenItems: [],
+            hiddenCount: 0,
+            hiddenCursor: null,
+            hiddenHasMore: false,
+            hiddenLoading: false,
+          });
+        }
+      },
+
+      loadMoreHiddenItems: async () => {
+        const state = get();
+        if (state.hiddenLoading || !state.hiddenHasMore) return;
+        const cursor = state.hiddenCursor;
+        if (!cursor) return;
+        const generation = libraryLoadGeneration;
+        set({ hiddenLoading: true });
+        try {
+          const pageResult = await tauri.library.getHiddenItems({
+            limit: HIDDEN_PAGE_SIZE,
+            cursor,
+          });
+          if (generation !== libraryLoadGeneration) {
+            set({ hiddenLoading: false });
+            return;
+          }
+          const page = normalizePageResult(pageResult);
+          set((current) => {
+            const known = new Set(current.hiddenItems.map((item) => item.id));
+            const additions = page.items.filter((item) => !known.has(item.id));
+            return {
+              hiddenItems: [...current.hiddenItems, ...additions],
+              hiddenCursor: page.nextCursor ?? null,
+              hiddenHasMore: page.hasMore,
+              hiddenCount: page.totalCount ?? current.hiddenCount,
+              hiddenLoading: false,
+            };
+          });
+        } catch (error) {
+          if (generation !== libraryLoadGeneration) {
+            set({ hiddenLoading: false });
+            return;
+          }
+          set({ hiddenLoading: false });
+          get().showErrorNotice(error, "Failed to load more hidden items");
         }
       },
 
       loadNextPage: async () => {
         const state = get();
-        if (state.busy || !state.hasMore || !state.nextCursor) return;
+        // M3: the guard on `loadingNextPage` and `generation` used to be
+        // missing for the synchronous re-entry path, so a slow continuation
+        // request could start a duplicate fetch of the same cursor.
+        if (state.busy || state.loadingNextPage || !state.hasMore || !state.nextCursor) return;
         const cursor = state.nextCursor;
         const generation = libraryLoadGeneration;
         // Fetch continuation pages quietly. Marking the whole library busy here
@@ -715,9 +716,7 @@ export const useLibraryStore = create<LibraryState>()(
             set({ loadingNextPage: false });
             return;
           }
-          const page: LibraryItemsPage = Array.isArray(pageResult)
-            ? { items: pageResult, hasMore: false, totalCount: pageResult.length }
-            : pageResult;
+          const page = normalizePageResult(pageResult);
           set((current) => {
             const known = new Set(current.items.map((item) => item.id));
             const additions = page.items.filter((item) => !known.has(item.id));
