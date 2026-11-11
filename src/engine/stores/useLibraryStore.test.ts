@@ -35,6 +35,7 @@ vi.mock("../commands/tauri", () => ({
         hasMore: false,
         totalCount: 0,
       }),
+      getMatchingIds: vi.fn().mockResolvedValue([]),
       getFolders: vi.fn().mockResolvedValue([]),
       getRoots: vi.fn().mockResolvedValue([]),
       cancelScan: vi.fn().mockResolvedValue(undefined),
@@ -818,4 +819,34 @@ test("hidden gallery pages with cursor and loadMoreHiddenItems appends", async (
   expect(useLibraryStore.getState().hiddenCount).toBe(2);
 
   delete (window as any).__TAURI_INTERNALS__;
+});
+
+test("selectAll with more pages on the server selects every match without loading the window", async () => {
+  const items = [makeItem("a", "a.jpg"), makeItem("b", "b.mp4", false, "video")];
+  useLibraryStore.setState({
+    items,
+    totalCount: 5_000,
+    hasMore: true,
+    pageSize: 250,
+    selectedIds: [],
+  });
+  vi.mocked(tauri.library.getMatchingIds).mockResolvedValue(["a", "b", "c", "d", "e"]);
+
+  useLibraryStore.getState().selectAll();
+  await vi.waitFor(() => {
+    expect(useLibraryStore.getState().selectedIds).toEqual(["a", "b", "c", "d", "e"]);
+  });
+});
+
+test("toggleSelectAll deselects everything when the full match set is selected", async () => {
+  const items = [makeItem("a", "a.jpg")];
+  useLibraryStore.setState({
+    items,
+    totalCount: 3,
+    hasMore: true,
+    selectedIds: ["a", "b", "c"],
+  });
+
+  useLibraryStore.getState().toggleSelectAll();
+  expect(useLibraryStore.getState().selectedIds).toEqual([]);
 });

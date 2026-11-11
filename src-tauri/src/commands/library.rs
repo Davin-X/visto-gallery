@@ -470,6 +470,55 @@ pub async fn get_library_items(
     get_library_items_page(&db, f).await
 }
 
+/// Return only the catalog ids for the current filter. This is the cheap
+/// server-side answer to "give me everything that matches" — used by the
+/// frontend to back Select All on a filtered search without materializing
+/// thumbnails, EXIF, or relations.
+pub(crate) async fn matching_ids(
+    db: &SqlitePool,
+    mut f: super::LibraryFilterDTO,
+) -> Result<Vec<String>, CommandError> {
+    f.hidden.get_or_insert(false);
+
+    let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new("SELECT id FROM media_items WHERE 1=1");
+    push_library_filters(&mut qb, &f);
+
+    // Sort order only needs to match the page query so callers can rely on
+    // keyset semantics if they ever mix this with pagination.
+    let sort_by = match f.sort_by.as_deref() {
+        Some("modifiedAt") => "modifiedAt",
+        Some("name") => "name",
+        Some("size") => "size",
+        Some("kind") => "kind",
+        _ => "capturedAt",
+    };
+    let (primary_sql, default_dir) = match sort_by {
+        "modifiedAt" => ("modified_at", "DESC"),
+        "name" => ("name COLLATE NOCASE", "ASC"),
+        "size" => ("size", "ASC"),
+        "kind" => ("kind", "ASC"),
+        _ => ("COALESCE(captured_at, modified_at)", "DESC"),
+    };
+    let dir = match f.sort_order.as_deref() {
+        Some("asc") => "ASC",
+        Some("desc") => "DESC",
+        _ => default_dir,
+    };
+    qb.push(format!(" ORDER BY {} {}, id ASC", primary_sql, dir));
+
+    let ids = qb.build_query_scalar::<String>().fetch_all(db).await?;
+    Ok(ids)
+}
+
+#[tauri::command]
+pub async fn get_matching_ids(
+    filter: Option<super::LibraryFilterDTO>,
+    catalog: State<'_, crate::Catalog>,
+) -> Result<Vec<String>, CommandError> {
+    let db = super::get_db(&catalog)?;
+    matching_ids(&db, filter.unwrap_or_default()).await
+}
+
 /// Return a page of hidden items (`hidden = 1`) for the Hidden gallery.
 /// Paginated like `get_library_items`: continuation pages carry no count, and
 /// `has_more` / `next_cursor` drive the gallery's infinite load.
@@ -2390,7 +2439,7 @@ mod tag_tests {
 
 #[cfg(test)]
 mod pagination_tests {
-    use super::{cursor_value, get_library_items_page, LibraryCursor};
+    use super::{cursor_value, get_library_items_page, matching_ids, LibraryCursor};
     use crate::{commands::LibraryFilterDTO, models::MediaItem};
     use sqlx::sqlite::SqlitePoolOptions;
 
@@ -2505,6 +2554,43 @@ mod pagination_tests {
         );
         assert!(!second.has_more);
         assert_eq!(second.total_count, None);
+    }
+
+    #[tokio::test]
+    async fn matching_ids_returns_exactly_the_filtered_rows() {
+        let db = page_db().await;
+        for (id, captured_at, hidden) in
+            [("a", 30_i64, 0), ("b", 20, 0), ("c", 10, 0), ("d", 25, 1)]
+        {
+            sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, created_at, updated_at, hidden) VALUES (?, ?, ?, 'jpg', 'photo', ?, ?, ?, 1, 1, ?)")
+                .bind(id)
+                .bind(format!("/tmp/{id}.jpg"))
+                .bind(format!("{id}.jpg"))
+                .bind(1_i64)
+                .bind(1_i64)
+                .bind(captured_at)
+                .bind(hidden)
+                .execute(&db)
+                .await
+                .expect("insert media row");
+        }
+
+        let ids = matching_ids(&db, LibraryFilterDTO::default())
+            .await
+            .unwrap();
+        assert_eq!(ids, vec!["a".to_string(), "b".to_string(), "c".to_string()]);
+
+        // Hidden rows are excluded by default, matching the library view.
+        let ids_all = matching_ids(
+            &db,
+            LibraryFilterDTO {
+                hidden: Some(true),
+                ..LibraryFilterDTO::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(ids_all, vec!["d".to_string()]);
     }
 }
 

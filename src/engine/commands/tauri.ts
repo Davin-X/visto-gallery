@@ -60,6 +60,9 @@ export const tauri = {
     getItems: (filter: LibraryFilterDTO): Promise<LibraryItemsPage> =>
       invoke("get_library_items", { filter }),
 
+    getMatchingIds: (filter?: LibraryFilterDTO): Promise<string[]> =>
+      invoke("get_matching_ids", { filter }),
+
     getHiddenItems: (filter?: LibraryFilterDTO): Promise<LibraryItemsPage> =>
       invoke("get_hidden_items", { filter }),
 

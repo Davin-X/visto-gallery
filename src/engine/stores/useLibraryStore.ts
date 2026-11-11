@@ -264,6 +264,34 @@ function normalizePageResult(result: LibraryItemsPage | MediaItem[] | unknown): 
   return result as LibraryItemsPage;
 }
 
+// in-flight guard for "select everything matching" — the IPC can return tens
+// of thousands of ids; avoid re-triggering while one is still running.
+let selectAllMatchingInFlight = false;
+
+// Select everything that matches the current filter, without paging in the
+// visible window. Previously this selected only whichever items were already
+// rendered, so a big search result gave you 250 instead of everything.
+function selectAllMatching() {
+  if (selectAllMatchingInFlight) return;
+  selectAllMatchingInFlight = true;
+  const state = useLibraryStore.getState();
+  tauri.library
+    .getMatchingIds(currentLibraryFilter(state))
+    .then((ids) => {
+      useLibraryStore.setState({ selectedIds: ids });
+      useLibraryStore
+        .getState()
+        .showNotice(`Selected all ${ids.length.toLocaleString()} matching items.`);
+    })
+    .catch((error) => {
+      if (import.meta.env.DEV) console.error("Select all failed:", error);
+      useLibraryStore.getState().showErrorNotice(error, "Could not select all matching items");
+    })
+    .finally(() => {
+      selectAllMatchingInFlight = false;
+    });
+}
+
 function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
   const kind =
     state.filter === "Photos"
@@ -887,19 +915,29 @@ export const useLibraryStore = create<LibraryState>()(
       clearSelection: () => set({ selectedIds: [] }),
 
       toggleSelectAll: () => {
-        const { visibleItems, selectedIds } = get();
-        if (selectedIds.length === visibleItems.length) {
-          // Currently all selected, deselect all (inspection untouched)
+        const state = get();
+        // "Everything matching" scales with the whole query result; the visible
+        // set is not a fair proxy. When more pages exist on the server, fetch
+        // every matching id instead of only the loaded window.
+        const universe = state.hasMore ? state.totalCount : state.visibleItems.length;
+        if (universe > 0 && state.selectedIds.length >= universe) {
           set({ selectedIds: [] });
-        } else {
-          // Not all selected, select all visible
-          set({ selectedIds: visibleItems.map((i) => i.id) });
+          return;
         }
+        if (state.hasMore) {
+          selectAllMatching();
+          return;
+        }
+        set({ selectedIds: state.visibleItems.map((item) => item.id) });
       },
 
       selectAll: () => {
-        const { visibleItems } = get();
-        set({ selectedIds: visibleItems.map((i) => i.id) });
+        const state = get();
+        if (state.hasMore) {
+          selectAllMatching();
+          return;
+        }
+        set({ selectedIds: state.visibleItems.map((item) => item.id) });
       },
 
       // The Hidden gallery owns its own item list, so it needs a way to replace
