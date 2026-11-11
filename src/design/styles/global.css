@@ -4767,13 +4767,20 @@ body {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 12%, transparent);
 }
 
-.filter-badge {
+/* Selector must outrank the broad `.quick-filter span` rule (0-2-0 > 0-1-1),
+   or the badge inherits the chip's active text colour on the accent fill and
+   becomes invisible. */
+.quick-filter .filter-badge {
   min-width: 17px;
   height: 17px;
   padding: 0 5px;
   border-radius: 9px;
-  background: var(--accent);
-  color: var(--accent-contrast);
+  /* The button this badge lives in goes .active while the dropdown is open,
+     and an accent-filled badge on an accent-filled chip disappeared. Use the
+     neutral pill so the count reads in both states. */
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink);
   font-size: 10px;
   font-weight: 700;
   display: inline-flex;
