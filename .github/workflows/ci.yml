@@ -64,15 +64,30 @@ jobs:
         with:
           name: ffmpeg-sidecars
           path: src-tauri/binaries
+      # Artifact uploads do not reliably preserve the mode bits, and tauri only
+      # copies the sidecars it can execute into Contents/MacOS.
+      - name: Make the sidecars executable
+        run: |
+          set -euo pipefail
+          chmod +x src-tauri/binaries/*
+          ls -l src-tauri/binaries
       - name: Build the app bundle
         run: npm run tauri build -- --bundles app
       - name: The bundle ships the sidecars
         run: |
           set -euo pipefail
           app="src-tauri/target/release/bundle/macos/VistoGallery.app"
+          echo "sidecars found in the bundle:"
+          find "$app" \( -name 'ffmpeg*' -o -name 'ffprobe*' \) -exec ls -l {} \; || true
+          echo "Contents/MacOS:"
+          ls -l "$app/Contents/MacOS" || true
           for tool in ffmpeg ffprobe; do
             binary="$app/Contents/MacOS/$tool"
-            test -x "$binary" || { echo "::error::$tool is missing from the bundle"; exit 1; }
+            if [ ! -e "$binary" ]; then
+              echo "::error::$tool is missing from the bundle"
+              exit 1
+            fi
+            test -x "$binary" || { echo "::error::$tool is not executable"; ls -l "$binary"; exit 1; }
             "$binary" -version | head -1
           done
 
