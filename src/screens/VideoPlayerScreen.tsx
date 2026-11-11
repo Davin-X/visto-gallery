@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import VideoPlayer from "../design/components/VideoPlayer";
-import { ChevronLeftIcon, FilmstripIcon } from "../design/components/icons";
+import { ChevronLeftIcon, FilmstripIcon, MoreIcon } from "../design/components/icons";
 import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { formatDuration } from "../engine/utils/time";
 import type { MediaItem } from "../engine/types/media";
@@ -40,6 +40,8 @@ interface VideoPlayerScreenProps {
   onNext: () => boolean | Promise<boolean>;
   queueHasMore?: boolean;
   onLoadMoreQueue?: () => unknown;
+  /** Opens the shared item menu for a queue video or the one playing. */
+  onContextMenu?: (item: MediaItem, event: ReactMouseEvent) => void;
 }
 
 export default function VideoPlayerScreen({
@@ -54,6 +56,7 @@ export default function VideoPlayerScreen({
   onNext,
   queueHasMore = false,
   onLoadMoreQueue,
+  onContextMenu,
 }: VideoPlayerScreenProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const screenRef = useRef<HTMLElement | null>(null);
@@ -146,9 +149,23 @@ export default function VideoPlayerScreen({
             )}
           </span>
         </div>
+        <button
+          type="button"
+          className="video-player-more"
+          onClick={(event) => onContextMenu?.(item, event)}
+          aria-label="More actions for this video"
+          aria-haspopup="menu"
+          title="More actions"
+        >
+          <MoreIcon size={16} />
+        </button>
       </header>
 
-      <div className="video-player-stage" ref={stageRef}>
+      <div
+        className="video-player-stage"
+        ref={stageRef}
+        onContextMenu={(event) => onContextMenu?.(item, event)}
+      >
         <VideoPlayer
           itemId={item.id}
           active={active}
@@ -183,6 +200,7 @@ export default function VideoPlayerScreen({
               data-queue-id={video.id}
               className={video.id === item.id ? "video-queue-item active" : "video-queue-item"}
               onClick={() => onSelect(video.id)}
+              onContextMenu={(event) => onContextMenu?.(video, event)}
               aria-label={`Play ${video.name}`}
               aria-current={video.id === item.id ? "true" : undefined}
               title={video.name}

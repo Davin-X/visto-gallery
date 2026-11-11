@@ -11596,6 +11596,37 @@ body.is-resizing .photo-inspector {
   outline-offset: 2px;
 }
 
+/* Shares the viewer's discoverable route to the item menu (right-click also
+   works on the stage and on every queue tile). */
+.video-player-more {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--text);
+  line-height: 0;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease;
+}
+.video-player-more:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+  background: var(--surface-3);
+}
+.video-player-more:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
 .video-player-title {
   display: flex;
   align-items: center;
