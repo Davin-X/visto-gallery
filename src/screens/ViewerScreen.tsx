@@ -9,7 +9,6 @@ import {
   FullscreenIcon,
   HeartIcon,
   MinusIcon,
-  MoreIcon,
   PlusIcon,
   RotateIcon,
   SlideshowIcon,
@@ -19,7 +18,7 @@ import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import { KindDot } from "../design/components/KindBadge";
 import { useDraftTransforms, draftTransformStyle } from "../engine/stores/useEditStore";
 import { useSlideshowStore } from "../engine/stores/useSlideshowStore";
-import { tauri, thumbnailToDataUrl } from "../engine/commands/tauri";
+import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import { formatDuration } from "../engine/utils/time";
 import { draftImageStyle } from "../engine/utils/draftImage";
@@ -75,7 +74,6 @@ function ViewerScreen(props: ViewerScreenProps) {
   const folderPath = selected?.path
     ? String(selected.path).replace(/\\/g, "/").split("/").slice(0, -1).join("/")
     : "";
-  const folderName = folderPath.split("/").filter(Boolean).pop() || "Local Files";
   const [hintsVisible, setHintsVisible] = useState(true);
   // The keyboard legend is a first-time aid: shown once per app session, then
   // left to the ⌘/ cheat sheet so it stops covering the photo on every move.
@@ -427,16 +425,6 @@ function ViewerScreen(props: ViewerScreenProps) {
             )}
           </div>
         </div>
-        <button
-          type="button"
-          className="viewer-heading-more"
-          onClick={(event) => props.onContextMenu([selected], event)}
-          aria-label="More actions for this photo"
-          aria-haspopup="menu"
-          title="More actions"
-        >
-          <MoreIcon size={16} />
-        </button>
       </header>
       <div
         className="viewer-stage"

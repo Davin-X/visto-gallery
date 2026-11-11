@@ -21,8 +21,6 @@ import { buildItemContextMenu, type ItemMenuActions } from "../engine/utils/item
 
 interface AppScreenRouterProps {
   screen: Screen;
-  screenHistory: Screen[];
-  goBack: () => void;
   library: any;
   viewer: any;
   edit: any;
@@ -75,8 +73,6 @@ interface AppScreenRouterProps {
 
 export function AppScreenRouter({
   screen,
-  screenHistory,
-  goBack,
   library,
   viewer,
   edit,
@@ -280,7 +276,12 @@ export function AppScreenRouter({
           onToggleFlip={viewer.toggleFlip}
           onResetTransform={viewer.resetTransform}
           onToggleFullscreen={viewer.toggleFullscreen}
-          onClose={viewer.close}
+          onClose={() => {
+            viewer.close();
+            // Never return to the viewer itself: a close action that leaves
+            // `screen === "Viewer"` would be re-opened by the sync effect in App.
+            setScreen(viewerOrigin === "Viewer" ? "Library" : viewerOrigin || "Library");
+          }}
           onToggleFavorite={library.toggleFavorite}
           onToggleHidden={library.toggleHidden}
           onOpenEdit={openViewerEdit}

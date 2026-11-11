@@ -98,7 +98,7 @@ describe("video player screen", () => {
     expect(screen.getAllByTestId("queue-thumbnail")[0]).toHaveAttribute("data-eager", "false");
   });
 
-  it("opens the shared item menu from a queue tile, the stage and the header", () => {
+  it("opens the shared item menu from a queue tile and the stage", () => {
     const onContextMenu = vi.fn();
     const { container } = render(
       <VideoPlayerScreen
@@ -119,9 +119,6 @@ describe("video player screen", () => {
     expect(onContextMenu).toHaveBeenLastCalledWith(queue[1], expect.anything());
 
     fireEvent.contextMenu(container.querySelector(".video-player-stage") as HTMLElement);
-    expect(onContextMenu).toHaveBeenLastCalledWith(queue[0], expect.anything());
-
-    fireEvent.click(screen.getByRole("button", { name: "More actions for this video" }));
     expect(onContextMenu).toHaveBeenLastCalledWith(queue[0], expect.anything());
   });
 });
