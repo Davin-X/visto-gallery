@@ -6,13 +6,86 @@ on:
   pull_request:
 
 jobs:
+  # ffmpeg and ffprobe ship as Tauri sidecars, and `tauri-build` fails when the
+  # files listed in `externalBin` are missing. So every job that compiles the
+  # app needs them: build once here, pass them along as an artifact.
+  sidecars:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache the ffmpeg source tarball
+        uses: actions/cache@v4
+        with:
+          path: .ffmpeg-work
+          # The tarball only changes when the version pinned in the script does.
+          key: ffmpeg-src-${{ hashFiles('scripts/build-ffmpeg.sh') }}
+          restore-keys: ffmpeg-src-
+      - name: Build the static sidecars
+        run: bash scripts/build-ffmpeg.sh
+        env:
+          VISTO_FFMPEG_WORK: ${{ github.workspace }}/.ffmpeg-work
+      - name: The sidecars run and link nothing outside the system
+        run: |
+          set -euo pipefail
+          triple="$(rustc -vV | awk '/^host: /{print $2}')"
+          for tool in ffmpeg ffprobe; do
+            binary="src-tauri/binaries/$tool-$triple"
+            test -x "$binary" || { echo "::error::$tool was not built"; exit 1; }
+            "$binary" -version | head -1
+            foreign="$(otool -L "$binary" | tail -n +2 | awk '{print $1}' | grep -v '^/usr/lib/' | grep -v '^/System/' || true)"
+            if [ -n "$foreign" ]; then
+              echo "::error::$tool links against non-system libraries: $foreign"
+              exit 1
+            fi
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-sidecars
+          path: src-tauri/binaries/*
+          if-no-files-found: error
+          retention-days: 7
+
+  # Proves the bundled pair is what actually sits inside the app people download.
+  bundle:
+    runs-on: macos-latest
+    needs: sidecars
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-sidecars
+          path: src-tauri/binaries
+      - name: Build the app bundle
+        run: npm run tauri build -- --bundles app
+      - name: The bundle ships the sidecars
+        run: |
+          set -euo pipefail
+          app="src-tauri/target/release/bundle/macos/VistoGallery.app"
+          for tool in ffmpeg ffprobe; do
+            binary="$app/Contents/MacOS/$tool"
+            test -x "$binary" || { echo "::error::$tool is missing from the bundle"; exit 1; }
+            "$binary" -version | head -1
+          done
+
   rust:
     runs-on: macos-latest
+    needs: sidecars
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-sidecars
+          path: src-tauri/binaries
       - name: cargo fmt
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - name: cargo clippy
