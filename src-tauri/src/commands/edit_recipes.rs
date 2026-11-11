@@ -772,6 +772,16 @@ mod tests {
         assert!(revert_edit_recipe_inner(&db, "item-1").await.unwrap());
         assert_eq!(std::fs::read(&source).unwrap(), b"original-bytes");
         assert!(!backup.exists());
+        let leftovers: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.contains(".tmp-"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "the atomic restore must not leave temp files behind: {leftovers:?}"
+        );
         let journals: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM edit_backups WHERE media_id = 'item-1'")
                 .fetch_one(&db)
@@ -880,6 +890,51 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(recipes, 0);
+    }
+
+    #[tokio::test]
+    async fn test_failed_revert_keeps_the_edited_file_and_the_journal() {
+        let db = test_db().await;
+        let dir = temp_dir("restore-fails");
+        // The catalog says this path is a file, but a directory now sits
+        // there, so the final rename cannot replace it.
+        let source = dir.join("photo.jpg");
+        std::fs::create_dir(&source).expect("create blocking directory");
+        let backup = dir.join("originals").join("item-6.jpg");
+        std::fs::create_dir_all(backup.parent().unwrap()).unwrap();
+        std::fs::write(&backup, b"original-bytes").unwrap();
+
+        insert_media(&db, "item-6", &source).await;
+        insert_journal(&db, "item-6", &source, &backup).await;
+
+        let error = revert_edit_recipe_inner(&db, "item-6")
+            .await
+            .expect_err("a restore that cannot replace the target must fail");
+        assert!(
+            error.message.contains("Could not finish writing"),
+            "unexpected error: {}",
+            error.message
+        );
+
+        assert!(backup.exists(), "the journaled original must be kept");
+        let journals: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM edit_backups WHERE media_id = 'item-6'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(journals, 1, "the journal must survive a failed restore");
+        let leftovers: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.contains(".tmp-"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "a failed restore must not leave temp files behind: {leftovers:?}"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }
 
