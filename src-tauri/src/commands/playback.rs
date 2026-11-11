@@ -127,8 +127,8 @@ fn stream_i64(value: &serde_json::Value, key: &str) -> Option<i64> {
 }
 
 fn probe_sync(source: &Path) -> Result<MediaProbe, ProbeFailure> {
-    let ffprobe = crate::media_tools::find(crate::media_tools::FFPROBE)
-        .ok_or(ProbeFailure::ToolMissing)?;
+    let ffprobe =
+        crate::media_tools::find(crate::media_tools::FFPROBE).ok_or(ProbeFailure::ToolMissing)?;
     let output = Command::new(ffprobe)
         .args([
             "-v",
