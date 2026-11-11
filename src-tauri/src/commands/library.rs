@@ -1047,13 +1047,15 @@ pub(crate) fn generate_cached_thumbnail(
                 if let Ok(result) = generate_thumbnail_with_qlmanage(source, destination, size) {
                     return Ok(result);
                 }
-                if let Ok(result) = generate_thumbnail_with_ffmpeg(source, destination, size, quality)
+                if let Ok(result) =
+                    generate_thumbnail_with_ffmpeg(source, destination, size, quality)
                 {
                     return Ok(result);
                 }
             } else {
                 // Skip the guaranteed timeout for containers QuickLook never opens.
-                if let Ok(result) = generate_thumbnail_with_ffmpeg(source, destination, size, quality)
+                if let Ok(result) =
+                    generate_thumbnail_with_ffmpeg(source, destination, size, quality)
                 {
                     return Ok(result);
                 }
@@ -1158,8 +1160,19 @@ fn quicklook_handles_container(source: &str) -> bool {
         .to_lowercase();
     !matches!(
         extension.as_str(),
-        "mkv" | "avi" | "wmv" | "flv" | "webm" | "ts" | "m2ts" | "mts" | "mpg" | "mpeg"
-            | "vob" | "ogv" | "3gp"
+        "mkv"
+            | "avi"
+            | "wmv"
+            | "flv"
+            | "webm"
+            | "ts"
+            | "m2ts"
+            | "mts"
+            | "mpg"
+            | "mpeg"
+            | "vob"
+            | "ogv"
+            | "3gp"
     )
 }
 

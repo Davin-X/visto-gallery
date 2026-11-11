@@ -43,8 +43,8 @@ pub(crate) use import_pipeline::{
 pub(crate) use import_pipeline::{inspect_media_file, kind_for_ext};
 pub use library::*;
 pub use media::*;
-pub use playback::*;
 use notify::Watcher;
+pub use playback::*;
 pub use roots::*;
 pub use scan_jobs::ScanJobs;
 pub use settings::*;

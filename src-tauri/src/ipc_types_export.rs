@@ -19,11 +19,10 @@ mod tests {
         BatchExportItem, BatchExportProgress, BatchExportRequest, BatchExportResult, CropRect,
         CropState, DefaultLayout, DuplicateGroup, EditPreset, EditRecipe, EditValues, ExifData,
         ExportResult, ExternalPlayer, LibraryFilterDTO, LibraryFolder, LibraryItemsPage,
-        LibraryStats, MediaProbe, PartialSettings, PlaybackStrategy, PreparedPlayback, RenderRequest,
-        RestoreResult, RootPathMappingPreview,
-        RootPathMappingResult, ScanResult, SmartAlbum, SmartAlbumFilter, StartupView,
-        ThumbnailRequest, ThumbnailResponse, ThumbnailSize, TrashError, TrashResult, UpdateCheck,
-        ViewerZoomBehavior,
+        LibraryStats, MediaProbe, PartialSettings, PlaybackStrategy, PreparedPlayback,
+        RenderRequest, RestoreResult, RootPathMappingPreview, RootPathMappingResult, ScanResult,
+        SmartAlbum, SmartAlbumFilter, StartupView, ThumbnailRequest, ThumbnailResponse,
+        ThumbnailSize, TrashError, TrashResult, UpdateCheck, ViewerZoomBehavior,
     };
     use crate::errors::{CommandError, ErrorCode};
     use crate::media_kind::MediaKind;

@@ -90,9 +90,11 @@ fn locate(
         }
     }
 
-    path_var
-        .as_deref()
-        .and_then(|paths| std::env::split_paths(paths).map(|dir| dir.join(name)).find(|candidate| candidate.is_file()))
+    path_var.as_deref().and_then(|paths| {
+        std::env::split_paths(paths)
+            .map(|dir| dir.join(name))
+            .find(|candidate| candidate.is_file())
+    })
 }
 
 #[cfg(test)]
@@ -119,8 +121,14 @@ mod tests {
     #[test]
     fn bundled_sidecar_beats_a_system_install() {
         let app_dir = dir_with(&["visto-gallery", FFMPEG]);
-        let found = locate(FFMPEG, Some(&app_dir.join("visto-gallery")), None, None, &[])
-            .expect("bundled tool");
+        let found = locate(
+            FFMPEG,
+            Some(&app_dir.join("visto-gallery")),
+            None,
+            None,
+            &[],
+        )
+        .expect("bundled tool");
         assert_eq!(found, app_dir.join(FFMPEG));
         let _ = std::fs::remove_dir_all(app_dir);
     }
