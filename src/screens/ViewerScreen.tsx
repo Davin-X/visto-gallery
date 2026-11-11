@@ -9,7 +9,6 @@ import {
   FullscreenIcon,
   HeartIcon,
   MinusIcon,
-  MoreIcon,
   PlusIcon,
   RotateIcon,
   SlideshowIcon,
@@ -427,16 +426,6 @@ function ViewerScreen(props: ViewerScreenProps) {
             )}
           </div>
         </div>
-        <button
-          type="button"
-          className="viewer-heading-more"
-          onClick={(event) => props.onContextMenu([selected], event)}
-          aria-label="More actions for this photo"
-          aria-haspopup="menu"
-          title="More actions"
-        >
-          <MoreIcon size={16} />
-        </button>
       </header>
       <div
         className="viewer-stage"

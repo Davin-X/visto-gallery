@@ -281,7 +281,12 @@ export function AppScreenRouter({
           onToggleFlip={viewer.toggleFlip}
           onResetTransform={viewer.resetTransform}
           onToggleFullscreen={viewer.toggleFullscreen}
-          onClose={viewer.close}
+          onClose={() => {
+            viewer.close();
+            // Never return to the viewer itself: a close action that leaves
+            // `screen === "Viewer"` would be re-opened by the sync effect in App.
+            setScreen(viewerOrigin === "Viewer" ? "Library" : viewerOrigin || "Library");
+          }}
           onToggleFavorite={library.toggleFavorite}
           onToggleHidden={library.toggleHidden}
           onOpenEdit={openViewerEdit}

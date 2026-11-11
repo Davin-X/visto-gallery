@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import VideoPlayer from "../design/components/VideoPlayer";
-import { ChevronLeftIcon, FilmstripIcon, MoreIcon } from "../design/components/icons";
+import { ChevronLeftIcon, FilmstripIcon } from "../design/components/icons";
 import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { formatDuration } from "../engine/utils/time";
 import type { MediaItem } from "../engine/types/media";
@@ -149,16 +149,6 @@ export default function VideoPlayerScreen({
             )}
           </span>
         </div>
-        <button
-          type="button"
-          className="video-player-more"
-          onClick={(event) => onContextMenu?.(item, event)}
-          aria-label="More actions for this video"
-          aria-haspopup="menu"
-          title="More actions"
-        >
-          <MoreIcon size={16} />
-        </button>
       </header>
 
       <div
