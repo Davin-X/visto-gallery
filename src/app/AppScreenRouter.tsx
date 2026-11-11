@@ -22,8 +22,6 @@ import { buildItemContextMenu, type ItemMenuActions } from "../engine/utils/item
 
 interface AppScreenRouterProps {
   screen: Screen;
-  screenHistory: Screen[];
-  goBack: () => void;
   library: any;
   viewer: any;
   edit: any;
@@ -76,8 +74,6 @@ interface AppScreenRouterProps {
 
 export function AppScreenRouter({
   screen,
-  screenHistory,
-  goBack,
   library,
   viewer,
   edit,

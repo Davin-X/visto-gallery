@@ -2535,8 +2535,6 @@ function App() {
     >
       <AppScreenRouter
         screen={screen}
-        screenHistory={screenHistory}
-        goBack={goBack}
         library={library}
         viewer={viewer}
         edit={edit}
