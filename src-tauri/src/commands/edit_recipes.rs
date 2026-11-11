@@ -208,10 +208,26 @@ async fn revert_edit_recipe_inner(db: &SqlitePool, media_id: &str) -> Result<boo
 
     let source = source_path.clone();
     let backup = backup_path.clone();
-    tokio::task::spawn_blocking(move || std::fs::copy(&backup, &source))
-        .await
-        .map_err(|e| CommandError::internal(format!("Restore task failed: {e}")))?
-        .map_err(|e| CommandError::internal(format!("Failed to restore backup: {}", e)))?;
+    let verify_hash = expected_hash.clone();
+    tokio::task::spawn_blocking(move || {
+        // Copy next to the source, flush, then rename: a failed restore leaves
+        // the edited file intact instead of a half-written replacement.
+        super::copy_atomically(&backup, Path::new(&source))?;
+
+        // Confirm the bytes that landed on disk match the journal before the
+        // backup record is dropped, so a bad copy cannot become the only copy.
+        if let Some(expected) = verify_hash.as_deref() {
+            let restored = compute_sha256(Path::new(&source));
+            if restored.as_deref() != Some(expected) {
+                return Err(CommandError::internal(
+                    "The restored file does not match the journaled original; the backup was kept.",
+                ));
+            }
+        }
+        Ok::<_, CommandError>(())
+    })
+    .await
+    .map_err(|e| CommandError::internal(format!("Restore task failed: {e}")))??;
 
     // Refresh the catalog row so thumbnails regenerate for the restored bytes.
     if let Ok(meta) = std::fs::metadata(&source_path) {
@@ -756,6 +772,16 @@ mod tests {
         assert!(revert_edit_recipe_inner(&db, "item-1").await.unwrap());
         assert_eq!(std::fs::read(&source).unwrap(), b"original-bytes");
         assert!(!backup.exists());
+        let leftovers: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.contains(".tmp-"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "the atomic restore must not leave temp files behind: {leftovers:?}"
+        );
         let journals: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM edit_backups WHERE media_id = 'item-1'")
                 .fetch_one(&db)
@@ -864,6 +890,51 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(recipes, 0);
+    }
+
+    #[tokio::test]
+    async fn test_failed_revert_keeps_the_edited_file_and_the_journal() {
+        let db = test_db().await;
+        let dir = temp_dir("restore-fails");
+        // The catalog says this path is a file, but a directory now sits
+        // there, so the final rename cannot replace it.
+        let source = dir.join("photo.jpg");
+        std::fs::create_dir(&source).expect("create blocking directory");
+        let backup = dir.join("originals").join("item-6.jpg");
+        std::fs::create_dir_all(backup.parent().unwrap()).unwrap();
+        std::fs::write(&backup, b"original-bytes").unwrap();
+
+        insert_media(&db, "item-6", &source).await;
+        insert_journal(&db, "item-6", &source, &backup).await;
+
+        let error = revert_edit_recipe_inner(&db, "item-6")
+            .await
+            .expect_err("a restore that cannot replace the target must fail");
+        assert!(
+            error.message.contains("Could not finish writing"),
+            "unexpected error: {}",
+            error.message
+        );
+
+        assert!(backup.exists(), "the journaled original must be kept");
+        let journals: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM edit_backups WHERE media_id = 'item-6'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(journals, 1, "the journal must survive a failed restore");
+        let leftovers: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.contains(".tmp-"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "a failed restore must not leave temp files behind: {leftovers:?}"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }
 

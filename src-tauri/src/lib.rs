@@ -235,6 +235,7 @@ pub fn run() {
             vacuum_catalog,
             // Batch
             batch_export,
+            choose_export_folder,
             cancel_batch_export,
             // Duplicates
             find_duplicates,

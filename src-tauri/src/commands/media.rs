@@ -983,14 +983,14 @@ pub async fn render_edited(
     catalog: State<'_, crate::Catalog>,
 ) -> Result<ExportResult, CommandError> {
     // Validate the source path against registered library folders before doing
-    // any work, so a crafted request cannot read arbitrary files.
+    // any work, so a crafted request cannot read arbitrary files. With no
+    // folders registered the catalog is the only thing that can vouch for a
+    // path, and `validate_path_under_registered_roots` enforces that.
     let db = super::get_db(&catalog)?;
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
         .fetch_all(&db)
         .await?;
-    if !registered.is_empty() {
-        super::validate_path_under_registered_roots(&request.source_path, &registered)?;
-    }
+    super::validate_path_under_registered_roots(&request.source_path, &registered)?;
 
     let in_place = request.output_format == "in_place";
     let backup_path = if in_place {
@@ -1187,6 +1187,10 @@ fn render_edited_blocking(
             request.strip_metadata,
             &exif_data,
         )?;
+
+        // The rename below swaps the inode, so carry over what would otherwise
+        // be lost: POSIX mode, Finder tags, quarantine and other xattrs.
+        super::preserve_metadata(&source_path, guard.path());
 
         // Atomic rename. If it fails, the source is untouched; keep the
         // journaled original intact for a later revert.
@@ -2639,5 +2643,105 @@ mod edit_backup_tests {
         .await
         .expect_err("missing original should fail closed");
         assert!(error.message.contains("missing"));
+    }
+}
+
+#[cfg(test)]
+mod in_place_edit_tests {
+    use super::*;
+
+    fn work_dir(label: &str) -> std::path::PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("visto-in-place-{label}-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("create work dir");
+        dir
+    }
+
+    fn request_for(source: &std::path::Path) -> RenderRequest {
+        RenderRequest {
+            source_path: source.to_string_lossy().into_owned(),
+            media_id: Some("item-1".to_string()),
+            edits: EditValues::default(),
+            output_format: "in_place".to_string(),
+            quality: 90.0,
+            strip_metadata: false,
+            crop: None,
+        }
+    }
+
+    #[test]
+    fn in_place_edit_keeps_mode_and_extended_attributes() {
+        let dir = work_dir("metadata");
+        let source = dir.join("photo.png");
+        image::RgbaImage::from_pixel(16, 16, image::Rgba([12, 34, 56, 255]))
+            .save(&source)
+            .expect("write source image");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o640))
+                .expect("set mode");
+        }
+        let tag = "com.visto-gallery.test";
+        let xattr_supported = xattr::set(&source, tag, b"keep-me").is_ok();
+
+        let backup = dir.join("journaled-original.png");
+        std::fs::write(&backup, b"journal").expect("write backup placeholder");
+        let result = render_edited_blocking(request_for(&source), Some(backup.clone()))
+            .expect("in-place edit should succeed");
+
+        assert_eq!(result.output_path, source.to_string_lossy());
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&source).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o640, "in-place edit must keep the file mode");
+        }
+        if xattr_supported {
+            assert_eq!(
+                xattr::get(&source, tag).unwrap().as_deref(),
+                Some(&b"keep-me"[..]),
+                "in-place edit must keep Finder tags and other xattrs"
+            );
+        }
+
+        // The replacement must not leave its temp sibling behind, and the
+        // journaled original must not be touched.
+        let mut names: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            vec![
+                "journaled-original.png".to_string(),
+                "photo.png".to_string()
+            ],
+            "only the file and its journal may remain"
+        );
+        assert_eq!(std::fs::read(&backup).unwrap(), b"journal");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn in_place_edit_requires_a_journaled_original() {
+        let dir = work_dir("no-journal");
+        let source = dir.join("photo.png");
+        image::RgbaImage::from_pixel(4, 4, image::Rgba([1, 2, 3, 255]))
+            .save(&source)
+            .expect("write source image");
+
+        let error = match render_edited_blocking(request_for(&source), None) {
+            Ok(_) => panic!("in-place edits without a journal must fail closed"),
+            Err(error) => error,
+        };
+        assert!(error.message.contains("journaled original"));
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

@@ -1,5 +1,4 @@
 import type { MutableRefObject, RefObject } from "react";
-import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { tauri } from "../engine/commands/tauri";
 import { clearEditDraft } from "../engine/stores";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
@@ -447,13 +446,18 @@ export function AppScreenRouter({
           onSetQuality={batch.setQuality}
           onSetStripMetadata={batch.setStripMetadata}
           onSetMaxDimension={batch.setMaxDimension}
-          onChooseFolder={async () => {
-            const folder = await openFileDialog({
-              directory: true,
-              multiple: false,
-              title: "Choose export folder",
-            });
-            if (typeof folder === "string") batch.setOutputFolder(folder);
+          onChooseFolder={() => {
+            void tauri.batch
+              .chooseFolder()
+              .then((folder) => {
+                if (typeof folder === "string") batch.setOutputFolder(folder);
+              })
+              .catch((error) => {
+                // Dismissing the native folder dialog is not an error.
+                if (errorCode(error) !== "cancelled") {
+                  console.error("Could not choose an export folder", error);
+                }
+              });
           }}
           onOpenFolder={() => {
             if (batch.outputFolder) tauri.items.openFolder(batch.outputFolder);

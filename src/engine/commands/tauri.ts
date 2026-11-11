@@ -198,6 +198,8 @@ export const tauri = {
     export: (request: BatchExportRequest): Promise<BatchExportResult> =>
       invoke("batch_export", { request }),
 
+    chooseFolder: (): Promise<string> => invoke("choose_export_folder"),
+
     cancel: (): Promise<void> => invoke("cancel_batch_export"),
   },
 

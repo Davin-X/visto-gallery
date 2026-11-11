@@ -167,6 +167,8 @@ pub struct BatchExportRequest {
 #[ts(optional_fields)]
 pub struct BatchExportItem {
     pub id: String,
+    /// Advisory only: `batch_export` replaces this with the catalog path for
+    /// `id`, so a crafted request cannot point an export at another file.
     pub source_path: String,
     pub index: u32,
     /// `photo`, `video`, or `raw`. Optional so older callers still work.
