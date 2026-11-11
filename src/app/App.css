@@ -1169,11 +1169,13 @@ body.is-resizing .photo-inspector {
 /* Gallery Grid
    `auto-fill` lets the column count follow the window. The maximum track
    width caps how far a tile can stretch, so picking Small and then shrinking
-   the window no longer produces huge thumbnails. */
+   the window no longer produces huge thumbnails. `space-evenly` spends the
+   leftover width as margins and inter-tile gaps instead of leaving a blank
+   band on the right. */
 .gallery-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 260px));
-  justify-content: start;
+  justify-content: space-evenly;
   gap: 16px;
   align-content: start;
 }
