@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../../engine/stores/useSettingsStore";
 import { usePlaybackStore } from "../../engine/stores/usePlaybackStore";
 import {
@@ -81,7 +82,19 @@ function VideoPlayer({
   const [pictureInPictureError, setPictureInPictureError] = useState<string | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [autoAdvance, setAutoAdvance] = useState(false);
-  const [failed, setFailed] = useState(() => !canPlayVideoInApp(path, name));
+  // Playback source resolution. WebKit plays the original file when it can
+  // decode it; anything else is remuxed losslessly by the backend and served
+  // from the cache. `preparing` covers the gap, so an undecodable container
+  // never reaches <video> at all — not even on the first paint, where WebKit
+  // would start pulling the whole file for nothing.
+  const [resolvedSrc, setResolvedSrc] = useState(() =>
+    canPlayVideoInApp(path, name) ? src : "",
+  );
+  const [preparing, setPreparing] = useState(
+    () => Boolean(path) && !canPlayVideoInApp(path, name),
+  );
+  const [failureDetail, setFailureDetail] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [videoError, setVideoError] = useState<MediaError | null>(null);
   const [players, setPlayers] = useState<ExternalPlayer[]>([]);
   const [openError, setOpenError] = useState<string | null>(null);
@@ -117,11 +130,129 @@ function VideoPlayer({
     };
   }, [src, showPlayerActivity]);
 
+  const requestPlaybackPlan = useCallback(
+    async (forceRemux: boolean) => {
+      if (!path) return null;
+      try {
+        return await tauri.items.preparePlayback(path, forceRemux);
+      } catch {
+        return null;
+      }
+    },
+    [path],
+  );
+
+  // Re-copy a file that probed as playable but decoded no frames. WKWebView
+  // reports nothing useful for a damaged index, so a remux is the only way to
+  // tell a broken container apart from an unsupported codec.
+  const remuxRetriedRef = useRef(false);
+  // Resolves true when the retry produced a playable copy.
+  const retryRemuxRef = useRef<() => Promise<boolean>>(() => Promise.resolve(false));
+  retryRemuxRef.current = async () => {
+    if (!path || remuxRetriedRef.current) return false;
+    remuxRetriedRef.current = true;
+    setPreparing(true);
+    const plan = await requestPlaybackPlan(true);
+    setPreparing(false);
+    if (!plan || plan.strategy !== "remuxed") return false;
+    setFailureDetail(null);
+    setVideoError(null);
+    setFailed(false);
+    setResolvedSrc(convertFileSrc(plan.path));
+    return true;
+  };
+
   // A different item can use a different container, so re-evaluate on change.
+  // Containers the allow-list accepts load immediately: a probe would only add
+  // latency to the common case, and a failure is still caught by the frame
+  // checks, which fall back to a forced remux.
   useEffect(() => {
-    setFailed(!canPlayVideoInApp(path, name));
+    let cancelled = false;
+    remuxRetriedRef.current = false;
+    setFailureDetail(null);
     setOpenError(null);
-  }, [src, path, name]);
+    setVideoError(null);
+    setFailed(false);
+    const nativeByExtension = canPlayVideoInApp(path, name);
+    setResolvedSrc(nativeByExtension ? src : "");
+    setPreparing(Boolean(path) && !nativeByExtension);
+    if (!path) return;
+
+    void requestPlaybackPlan(false).then((plan) => {
+      if (cancelled) return;
+      setPreparing(false);
+      // No backend (browser preview, harness): behave exactly as before.
+      if (!plan) {
+        setResolvedSrc(src);
+        return;
+      }
+      if (plan.strategy === "unsupported") {
+        setFailureDetail(plan.detail ?? null);
+        setFailed(true);
+        return;
+      }
+      // A probe can also unlock a container the allow-list did not know.
+      setResolvedSrc(plan.strategy === "remuxed" ? convertFileSrc(plan.path) : src);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [src, path, name, requestPlaybackPlan]);
+
+  // Report one media-element snapshot per opened video (and every error) to
+  // the app log. Without it a black picture that reports no error leaves no
+  // trace at all, since the webview console is not visible in a Tauri window.
+  useEffect(() => {
+    if (!path) return;
+    const report = (label: string) => {
+      const video = ref.current;
+      if (!video) return;
+      const element = video as HTMLVideoElement & {
+        getVideoPlaybackQuality?: () => { totalVideoFrames?: number };
+        webkitDecodedFrameCount?: number;
+      };
+      const error = video.error;
+      const rect = video.getBoundingClientRect();
+      const style = window.getComputedStyle(video);
+      const sample = {
+        src: video.currentSrc,
+        // The box separates "not decoding" from "decoding but not laid out":
+        // a 0-height or hidden element has data and no visible picture.
+        box: `${Math.round(rect.width)}x${Math.round(rect.height)}`,
+        display: style.display,
+        visibility: style.visibility,
+        opacity: style.opacity,
+        objectFit: style.objectFit,
+        readyState: video.readyState,
+        networkState: video.networkState,
+        paused: video.paused,
+        currentTime: Math.round(video.currentTime * 100) / 100,
+        duration: Number.isFinite(video.duration) ? video.duration : -1,
+        size: `${video.videoWidth}x${video.videoHeight}`,
+        errorCode: error?.code ?? 0,
+        errorMessage: error?.message ?? "",
+        decodedFrames:
+          element.getVideoPlaybackQuality?.()?.totalVideoFrames ??
+          element.webkitDecodedFrameCount ??
+          -1,
+      };
+      void tauri.items
+        .logPlaybackDiagnostic(label, JSON.stringify(sample))
+        .catch(() => {});
+    };
+    const video = ref.current;
+    const onError = () => report("error");
+    video?.addEventListener("error", onError);
+    // Report immediately as well: a quick click through the queue must still
+    // leave a trace, and a missing line would otherwise look like a crash.
+    report("mount");
+    const timer = window.setTimeout(() => report("state"), 2500);
+    return () => {
+      window.clearTimeout(timer);
+      video?.removeEventListener("error", onError);
+    };
+  }, [resolvedSrc, path]);
 
   // Only look up external players when something actually failed.
   useEffect(() => {
@@ -186,7 +317,7 @@ function VideoPlayer({
   }, [itemId, name, registerPlayback, unregisterPlayback, syncPlayback]);
 
   useEffect(() => {
-    const video = ref.current;
+    const video = ref.current as HTMLVideoElement | null;
     if (!video) return;
 
     // Restore playback state from store if this is the same itemId
@@ -229,6 +360,138 @@ function VideoPlayer({
       setMuted(false);
     }
 
+    let noVideoTrackTimer: number | null = null;
+    let noDecodedFramesTimer: number | null = null;
+    let sawVideoFrame = false;
+
+    const markPlaybackFailure = () => {
+      if (failed) return;
+      setVideoError({ code: 3 } as MediaError);
+      // A file can probe as playable and still decode nothing (damaged index,
+      // odd edit list). Try the remux once before giving up on in-app playback;
+      // the viewer keeps the frame and shows "Preparing playback…" meanwhile.
+      void retryRemuxRef.current().then((recovered) => {
+        if (!recovered) setFailed(true);
+      });
+    };
+
+    const getDecodedFrameCount = () => {
+      const quality = (
+        video as HTMLVideoElement & {
+          getVideoPlaybackQuality?: () => { totalVideoFrames?: number };
+        }
+      ).getVideoPlaybackQuality?.();
+      if (quality && typeof quality.totalVideoFrames === "number") {
+        return quality.totalVideoFrames;
+      }
+      const webkitDecoded = (video as HTMLVideoElement & { webkitDecodedFrameCount?: number })
+        .webkitDecodedFrameCount;
+      return typeof webkitDecoded === "number" ? webkitDecoded : null;
+    };
+
+    // WebKit exposes requestVideoFrameCallback but never calls it when the
+    // stream produces no frames. That leaves a black picture with a working
+    // transport bar and advancing time, and no `error` event — nothing else in
+    // this component notices, because dimensions are reported normally. A real
+    // video presents its first frame well inside this window.
+    let frameWatchdog: number | null = null;
+    const startFrameWatchdog = () => {
+      if (sawVideoFrame || failed) return;
+      if (frameWatchdog) window.clearTimeout(frameWatchdog);
+      frameWatchdog = window.setTimeout(() => {
+        const media = ref.current;
+        if (!media || sawVideoFrame || failed) return;
+        if (media.paused || media.currentTime < 0.15) return;
+        markPlaybackFailure();
+      }, 1500);
+    };
+
+    const checkDecodedFrames = () => {
+      if (failed || sawVideoFrame) return;
+      const el = ref.current as any;
+      if (!el) return;
+      // With a frame callback available the watchdog above is the reliable
+      // signal; decoded-frame counters lag or stay at zero in WebKit.
+      if ("requestVideoFrameCallback" in el) return;
+      if (el.readyState < 2) return;
+      const decoded = getDecodedFrameCount();
+      if (decoded !== null && decoded > 0) {
+        sawVideoFrame = true;
+        if (noDecodedFramesTimer) {
+          window.clearTimeout(noDecodedFramesTimer);
+          noDecodedFramesTimer = null;
+        }
+        return;
+      }
+      if (decoded === null) return;
+      const progressing =
+        (el.currentTime > 0.25 || !el.paused) &&
+        (Number.isFinite(el.duration) || el.currentTime > 0.25);
+      if (!progressing) return;
+      if (noDecodedFramesTimer) window.clearTimeout(noDecodedFramesTimer);
+      noDecodedFramesTimer = window.setTimeout(() => {
+        const media = ref.current as any;
+        if (!media) return;
+        const nextDecoded = getDecodedFrameCount();
+        const stillProgressing =
+          (media.currentTime > 0.25 || !media.paused) &&
+          (Number.isFinite(media.duration) || media.currentTime > 0.25);
+        if (!failed && !sawVideoFrame && stillProgressing && nextDecoded === 0) {
+          markPlaybackFailure();
+        }
+      }, 2000);
+    };
+
+    const checkVideoTrack = () => {
+      // Some files (e.g. unsupported video codec inside a supported container)
+      // play audio but expose no decodable video frames. Treat as a playback
+      // failure so the user can open the file in an external player.
+      // Be conservative: dimensions can be reported late, and playable videos
+      // must not be misclassified as audio-only.
+      if (failed) return;
+      if (video.readyState >= 2 && video.videoWidth === 0 && video.videoHeight === 0) {
+        if (noVideoTrackTimer) window.clearTimeout(noVideoTrackTimer);
+        noVideoTrackTimer = window.setTimeout(() => {
+          if (
+            video.readyState >= 2 &&
+            video.videoWidth === 0 &&
+            video.videoHeight === 0 &&
+            (video.currentTime > 0 || !video.paused || Number.isFinite(video.duration))
+          ) {
+            markPlaybackFailure();
+          }
+        }, 1500);
+      } else if (video.videoWidth > 0 || video.videoHeight > 0) {
+        if (noVideoTrackTimer) {
+          window.clearTimeout(noVideoTrackTimer);
+          noVideoTrackTimer = null;
+        }
+        checkDecodedFrames();
+      }
+    };
+
+    const requestFrameCallback = (
+      video as HTMLVideoElement & {
+        requestVideoFrameCallback?: (callback: () => void) => number;
+        cancelVideoFrameCallback?: (id: number) => void;
+      }
+    ).requestVideoFrameCallback;
+    let videoFrameCallbackId: number | null = null;
+    if (typeof requestFrameCallback === "function") {
+      const onFrame = () => {
+        sawVideoFrame = true;
+        if (noDecodedFramesTimer) {
+          window.clearTimeout(noDecodedFramesTimer);
+          noDecodedFramesTimer = null;
+        }
+      };
+      try {
+        videoFrameCallbackId = requestFrameCallback.call(video, onFrame);
+      } catch {
+        videoFrameCallbackId = null;
+      }
+    }
+
     const onMetadata = () => {
       const nextDuration = Number.isFinite(video.duration) ? video.duration : 0;
       setDuration(nextDuration);
@@ -241,6 +504,7 @@ function VideoPlayer({
     const onTimeUpdate = () => {
       setTime(video.currentTime);
       syncPlayback({ time: video.currentTime });
+      checkDecodedFrames();
     };
     const onPlay = () => {
       setPlaying(true);
@@ -251,9 +515,23 @@ function VideoPlayer({
       syncPlayback({ playing: false });
     };
 
+    const onLoadedData = () => checkVideoTrack();
+    const onPlaying = () => {
+      onPlay();
+      checkVideoTrack();
+      checkDecodedFrames();
+      startFrameWatchdog();
+    };
+
+    const onCanPlay = () => {
+      checkVideoTrack();
+      checkDecodedFrames();
+    };
     video.addEventListener("loadedmetadata", onMetadata);
+    video.addEventListener("loadeddata", onLoadedData);
+    video.addEventListener("canplay", onCanPlay);
     video.addEventListener("timeupdate", onTimeUpdate);
-    video.addEventListener("play", onPlay);
+    video.addEventListener("play", onPlaying);
     video.addEventListener("pause", onPause);
     // A second, belt-and-suspenders attempt once the media is actually ready:
     // the mount-time play() can lose the race against the canplay event in
@@ -263,14 +541,36 @@ function VideoPlayer({
       video.addEventListener("canplay", attemptAutoPlay, { once: true });
     }
     if (video.readyState >= 1) onMetadata();
+    if (video.readyState >= 2) {
+      checkVideoTrack();
+      checkDecodedFrames();
+    }
     return () => {
+      if (noVideoTrackTimer) window.clearTimeout(noVideoTrackTimer);
+      if (noDecodedFramesTimer) window.clearTimeout(noDecodedFramesTimer);
+      if (frameWatchdog) window.clearTimeout(frameWatchdog);
+      if (
+        videoFrameCallbackId !== null &&
+        typeof (video as HTMLVideoElement & { cancelVideoFrameCallback?: (id: number) => void })
+          .cancelVideoFrameCallback === "function"
+      ) {
+        try {
+          (
+            video as HTMLVideoElement & { cancelVideoFrameCallback?: (id: number) => void }
+          ).cancelVideoFrameCallback!(videoFrameCallbackId);
+        } catch {
+          // ignore
+        }
+      }
       video.removeEventListener("loadedmetadata", onMetadata);
+      video.removeEventListener("loadeddata", onLoadedData);
+      video.removeEventListener("canplay", onCanPlay);
       video.removeEventListener("timeupdate", onTimeUpdate);
-      video.removeEventListener("play", onPlay);
+      video.removeEventListener("play", onPlaying);
       video.removeEventListener("pause", onPause);
       video.removeEventListener("canplay", attemptAutoPlay);
     };
-  }, [src, syncPlayback]);
+  }, [resolvedSrc, syncPlayback]);
 
   useEffect(() => {
     const video = ref.current;
@@ -278,7 +578,7 @@ function VideoPlayer({
     setPictureInPictureSupported(supportsPictureInPicture(video));
     setPictureInPictureError(null);
     return observePictureInPicture(video, setPictureInPicture);
-  }, [src]);
+  }, [resolvedSrc]);
 
   useEffect(() => {
     const video = ref.current;
@@ -298,7 +598,7 @@ function VideoPlayer({
     };
     video.addEventListener("ended", onEnded);
     return () => video.removeEventListener("ended", onEnded);
-  }, [src, autoAdvance, active, compact, onNext, syncPlayback]);
+  }, [resolvedSrc, autoAdvance, active, compact, onNext, syncPlayback]);
 
   // Pause playback when the player host is removed, such as after Stop.
   useEffect(() => {
@@ -310,7 +610,7 @@ function VideoPlayer({
     };
   }, []);
 
-  // Keyboard shortcuts for video (when focused)
+  // Keyboard shortcuts for active video playback
   const adjustVolume = useCallback((delta: number) => {
     setVolume((current) => {
       const next = Math.min(1, Math.max(0, current + delta));
@@ -321,8 +621,16 @@ function VideoPlayer({
 
   useEffect(() => {
     const video = ref.current;
-    if (!video) return;
+    if (!video || compact || !active) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      ) {
+        return;
+      }
       if (e.key === " ") {
         e.preventDefault();
         e.stopPropagation();
@@ -361,9 +669,9 @@ function VideoPlayer({
         setMuted((m) => !m);
       }
     };
-    video.addEventListener("keydown", handleKeyDown);
-    return () => video.removeEventListener("keydown", handleKeyDown);
-  }, [onFullscreen, adjustVolume]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [active, compact, onFullscreen, adjustVolume]);
 
   useEffect(() => {
     const video = ref.current;
@@ -450,7 +758,7 @@ function VideoPlayer({
 
   // A double-click means "fullscreen". Delay the single-click toggle briefly so
   // the second click of a double-click does not pause and resume the video.
-  const handleVideoClick = () => {
+  const handleSurfaceToggle = () => {
     showPlayerActivity();
     if (clickTimerRef.current) {
       window.clearTimeout(clickTimerRef.current);
@@ -516,6 +824,7 @@ function VideoPlayer({
           </p>
         )}
         {openError && <p className="viewer-video-feedback error">{openError}</p>}
+        {failureDetail && <p className="viewer-video-feedback">{failureDetail}</p>}
       </div>
     );
   }
@@ -525,21 +834,35 @@ function VideoPlayer({
       className="video-player-surface"
       onPointerMove={showPlayerActivity}
       onPointerDown={showPlayerActivity}
+      onClick={(event) => {
+        if (event.target !== event.currentTarget) return;
+        handleSurfaceToggle();
+      }}
     >
+      {preparing && !compact && (
+        <div className="viewer-video-preparing" role="status">
+          Preparing playback…
+        </div>
+      )}
       <video
         ref={ref}
         className={`viewer-video${compact ? " viewer-video-compact" : ""}`}
-        src={src}
+        src={resolvedSrc || undefined}
         width={width ?? undefined}
         height={height ?? undefined}
         style={{
-          aspectRatio: width && height ? `auto ${width} / ${height}` : "auto",
+          width: "100%",
+          height: "100%",
+          maxWidth: "100%",
+          maxHeight: "100%",
+          objectFit: "contain",
+          objectPosition: "center",
         }}
         autoPlay={videoAutoPlay || forceAutoPlay}
         loop={videoLoop && !autoAdvance && !compact}
         playsInline
         preload="metadata"
-        onClick={handleVideoClick}
+        onClick={handleSurfaceToggle}
         onDoubleClick={(event) => {
           event.stopPropagation();
           onFullscreen?.();
@@ -735,6 +1058,30 @@ function VideoPlayer({
             >
               <PictureInPictureIcon size={14} />
             </button>
+            {path && (
+              <button
+                type="button"
+                onClick={() => void openExternally()}
+                aria-label="Open in default app"
+                title="Open in default app"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </button>
+            )}
             {onFullscreen && (
               <button
                 type="button"

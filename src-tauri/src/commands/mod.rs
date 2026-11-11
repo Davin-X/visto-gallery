@@ -10,6 +10,7 @@ mod finder_tags;
 mod import_pipeline;
 mod library;
 mod media;
+mod playback;
 mod roots;
 mod scan_jobs;
 mod settings;
@@ -42,6 +43,7 @@ pub(crate) use import_pipeline::{
 pub(crate) use import_pipeline::{inspect_media_file, kind_for_ext};
 pub use library::*;
 pub use media::*;
+pub use playback::*;
 use notify::Watcher;
 pub use roots::*;
 pub use scan_jobs::ScanJobs;
