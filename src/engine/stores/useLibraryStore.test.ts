@@ -35,6 +35,7 @@ vi.mock("../commands/tauri", () => ({
         hasMore: false,
         totalCount: 0,
       }),
+      getMatchingIds: vi.fn().mockResolvedValue([]),
       getFolders: vi.fn().mockResolvedValue([]),
       getRoots: vi.fn().mockResolvedValue([]),
       cancelScan: vi.fn().mockResolvedValue(undefined),
@@ -156,11 +157,14 @@ test("viewer filmstrip follows media category and the active browsing scope", ()
     inspectedId: photo.id,
   });
   useLibraryStore.getState().refreshDerived();
+  // Items pass through in the order the backend paginates them (sort column
+  // whitelisted server-side, `id` tie-break). The fixture feeds them in
+  // backend order — the store no longer re-sorts.
   expect(useLibraryStore.getState().viewerItems.map((item) => item.id)).toEqual([
-    "album-photo",
     "photo",
     "video",
     "raw",
+    "album-photo",
   ]);
 
   useLibraryStore.setState({ filter: "Videos" });
@@ -743,4 +747,106 @@ test("one failing catalog list does not blank the others", async () => {
   expect(state.tags.map((tag) => tag.name)).toEqual(["travel"]);
   expect(state.notice).toMatch(/Smart Albums/);
   expect(state.notice).not.toMatch(/albums, |tags|sources/);
+});
+
+test("loadNextPage keeps the first-page totalCount when continuation pages carry none", async () => {
+  const a = makeItem("a", "a.jpg");
+  const b = makeItem("b", "b.jpg");
+  useLibraryStore.setState({
+    items: [a],
+    totalCount: 10,
+    hasMore: true,
+    nextCursor: "page-2",
+    page: 0,
+    loadingNextPage: false,
+    // The stored row came from the first page; the continuation is expected
+    // to return null so this stays 10, not 0.
+  });
+  vi.mocked(tauri.library.getItems).mockResolvedValueOnce({
+    items: [b],
+    hasMore: true,
+    nextCursor: "page-3",
+    totalCount: null,
+  });
+
+  await useLibraryStore.getState().loadNextPage();
+
+  expect(useLibraryStore.getState().totalCount).toBe(10);
+  expect(useLibraryStore.getState().page).toBe(1);
+  expect(useLibraryStore.getState().loadingNextPage).toBe(false);
+});
+
+test("hidden gallery pages with cursor and loadMoreHiddenItems appends", async () => {
+  const hiddenA = makeItem("hidden-a", "hidden-a.jpg");
+  hiddenA.hidden = true;
+  const hiddenB = makeItem("hidden-b", "hidden-b.jpg");
+  hiddenB.hidden = true;
+
+  useLibraryStore.setState({
+    hiddenItems: [],
+    hiddenCount: 0,
+    hiddenCursor: null,
+    hiddenHasMore: false,
+    hiddenLoading: false,
+  });
+  vi.mocked(tauri.library.getHiddenItems)
+    .mockResolvedValueOnce({
+      items: [hiddenA],
+      hasMore: true,
+      nextCursor: "hidden-2",
+      totalCount: 2,
+    })
+    .mockResolvedValueOnce({
+      items: [hiddenB],
+      hasMore: false,
+      nextCursor: null,
+      totalCount: null,
+    });
+  (window as any).__TAURI_INTERNALS__ = {};
+
+  await useLibraryStore.getState().loadHiddenItems();
+  expect(useLibraryStore.getState().hiddenItems.map((item) => item.id)).toEqual(["hidden-a"]);
+  expect(useLibraryStore.getState().hiddenCursor).toBe("hidden-2");
+  expect(useLibraryStore.getState().hiddenHasMore).toBe(true);
+  expect(useLibraryStore.getState().hiddenCount).toBe(2);
+
+  await useLibraryStore.getState().loadMoreHiddenItems();
+  expect(useLibraryStore.getState().hiddenItems.map((item) => item.id)).toEqual([
+    "hidden-a",
+    "hidden-b",
+  ]);
+  expect(useLibraryStore.getState().hiddenHasMore).toBe(false);
+  expect(useLibraryStore.getState().hiddenCount).toBe(2);
+
+  delete (window as any).__TAURI_INTERNALS__;
+});
+
+test("selectAll with more pages on the server selects every match without loading the window", async () => {
+  const items = [makeItem("a", "a.jpg"), makeItem("b", "b.mp4", false, "video")];
+  useLibraryStore.setState({
+    items,
+    totalCount: 5_000,
+    hasMore: true,
+    pageSize: 250,
+    selectedIds: [],
+  });
+  vi.mocked(tauri.library.getMatchingIds).mockResolvedValue(["a", "b", "c", "d", "e"]);
+
+  useLibraryStore.getState().selectAll();
+  await vi.waitFor(() => {
+    expect(useLibraryStore.getState().selectedIds).toEqual(["a", "b", "c", "d", "e"]);
+  });
+});
+
+test("toggleSelectAll deselects everything when the full match set is selected", async () => {
+  const items = [makeItem("a", "a.jpg")];
+  useLibraryStore.setState({
+    items,
+    totalCount: 3,
+    hasMore: true,
+    selectedIds: ["a", "b", "c"],
+  });
+
+  useLibraryStore.getState().toggleSelectAll();
+  expect(useLibraryStore.getState().selectedIds).toEqual([]);
 });

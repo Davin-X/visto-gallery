@@ -629,6 +629,16 @@ function LibraryScreen(props: LibraryScreenProps) {
   }, [library.loadedViewKey, props.hiddenView, scrollKey, viewKey]);
 
   const loadMore = () => {
+    if (props.hiddenView) {
+      // The Hidden gallery is its own paginated query (`get_hidden_items`).
+      // Use the same near-bottom trigger as the main grid, but route to the
+      // hidden pager instead of the library one.
+      const state = useLibraryStore.getState();
+      if (!state.hiddenLoading && state.hiddenHasMore) {
+        void state.loadMoreHiddenItems();
+      }
+      return;
+    }
     if (supportsGridVirtualization) {
       // The virtualizer handles local DOM windowing. Near-bottom scrolling
       // should fetch the next catalog page without stepping a second,

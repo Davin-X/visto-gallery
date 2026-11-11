@@ -57,7 +57,13 @@ animated?: boolean, albumId?: string, query?: string, tags?: Array<string>, date
  */
 cursor?: string, sortBy?: "capturedAt" | "modifiedAt" | "name" | "size" | "kind", sortOrder?: "asc" | "desc", };
 
-export type LibraryItemsPage = { items: Array<MediaItem>, hasMore: boolean, nextCursor?: string | null, totalCount: number, };
+export type LibraryItemsPage = { items: Array<MediaItem>, hasMore: boolean, nextCursor?: string | null, 
+/**
+ * Present only on the first page for the current filter. Continuation
+ * (`cursor`-paginated) pages return `null` so the frontend can keep the
+ * earlier count instead of re-running a full `COUNT(*)` per page.
+ */
+totalCount?: number | null, };
 
 export type LibraryStats = { photos: number, videos: number, raws: number, 
 /**

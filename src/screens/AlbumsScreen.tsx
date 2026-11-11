@@ -34,19 +34,23 @@ function AlbumsScreen(props: AlbumsScreenProps) {
   // complete membership is loaded only when a card is opened.
   const albums = React.useMemo(() => {
     const byId = new Map(overviews.map((overview) => [overview.id, overview]));
-    return (props.albums || []).map((album: any, index: number) => {
+    return (props.albums || []).map((album: any) => {
       const overview = byId.get(album.id);
       const coverItems: MediaItem[] = overview?.coverItems ?? [];
       const photos = coverItems
         .filter((item: any) => item.kind === "photo" || item.kind === "video")
         .slice(0, 3);
+      // The backend persists a per-album color_index (0-3); the render index used to win instead,
+      // so cards swapped colours on every sort or overview refresh.
+      const colorIndex = Number(album.colorIndex ?? 0);
+      const palette = ["coral", "violet", "blue", "green"];
       return {
         ...album,
         itemCount: overview?.itemCount ?? album.itemCount,
         photos,
         albumItems: coverItems,
         count: Number(overview?.itemCount ?? album.itemCount),
-        color: ["coral", "violet", "blue", "green"][index % 4],
+        color: palette[((colorIndex % 4) + 4) % 4],
       };
     });
   }, [props.albums, overviews]);

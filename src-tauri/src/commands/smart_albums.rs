@@ -149,7 +149,10 @@ async fn count_matches(
         },
     )
     .await?;
-    Ok(page.total_count)
+    // A count request carries no cursor, so the page always carries the total.
+    Ok(page
+        .total_count
+        .expect("count request must return a total_count"))
 }
 
 async fn cover_items_for(
