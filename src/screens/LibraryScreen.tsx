@@ -2197,7 +2197,11 @@ function LibraryScreen(props: LibraryScreenProps) {
                         (() => {
                           const ext = (sel.extension || "").toLowerCase();
                           const isAnimatedPhoto =
-                            !!(sel as any).isAnimated || !!(sel as any).animated || ext === "gif" || ext === "webp" || ext === "apng";
+                            !!(sel as any).isAnimated ||
+                            !!(sel as any).animated ||
+                            ext === "gif" ||
+                            ext === "webp" ||
+                            ext === "apng";
                           return isAnimatedPhoto ? (
                             <span className="inspector-video-preview">
                               <img
@@ -2248,7 +2252,9 @@ function LibraryScreen(props: LibraryScreenProps) {
                             ? "RAW"
                             : (sel as any).isAnimated ||
                                 !!(sel as any).animated ||
-                                ["gif", "webp", "apng"].includes((sel.extension || "").toLowerCase())
+                                ["gif", "webp", "apng"].includes(
+                                  (sel.extension || "").toLowerCase(),
+                                )
                               ? "Animation"
                               : "Photo"}
                       </span>

@@ -1187,7 +1187,9 @@ export const useLibraryStore = create<LibraryState>()(
         if (!targets.length) return;
         const prevs = new Map(targets.map((i) => [i.id, { ...i }]));
         set((s) => ({
-          items: s.items.map((i) => (ids.includes(i.id) ? { ...i, colorLabel: colorLabel || null } : i)),
+          items: s.items.map((i) =>
+            ids.includes(i.id) ? { ...i, colorLabel: colorLabel || null } : i,
+          ),
         }));
         get().refreshDerived();
         try {
