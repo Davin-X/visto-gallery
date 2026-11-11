@@ -1167,12 +1167,13 @@ body.is-resizing .photo-inspector {
 }
 
 /* Gallery Grid
-   `auto-fill` + `minmax` lets the column count follow the window instead of
-   being pinned to a fixed 3/4/2 at every width. Each layout mode only differs
-   by the smallest comfortable tile width. */
+   `auto-fill` lets the column count follow the window. The maximum track
+   width caps how far a tile can stretch, so picking Small and then shrinking
+   the window no longer produces huge thumbnails. */
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 260px));
+  justify-content: start;
   gap: 16px;
   align-content: start;
 }
@@ -1186,39 +1187,39 @@ body.is-resizing .photo-inspector {
 }
 
 .gallery-grid.thumb-small {
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 200px));
 }
 
 .gallery-grid.thumb-large {
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 340px));
 }
 
 .library-layout.with-inspector
   .gallery-grid.thumb-small:not(.layout-overview):not(.layout-columns):not(.layout-details):not(
     .layout-timeline
   ) {
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 200px));
 }
 
 .library-layout.with-inspector
   .gallery-grid.thumb-large:not(.layout-overview):not(.layout-columns):not(.layout-details):not(
     .layout-timeline
   ) {
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 340px));
 }
 
 .library-layout.with-inspector
   .gallery-grid.thumb-medium:not(.layout-overview):not(.layout-columns):not(.layout-details):not(
     .layout-timeline
   ) {
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(210px, 260px));
 }
 /* Fallback for unknown thumbnail sizes */
 .library-layout.with-inspector
   .gallery-grid:not(.layout-overview):not(.layout-columns):not(.layout-details):not(
     .layout-timeline
   ):not(.thumb-small):not(.thumb-medium):not(.thumb-large) {
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(210px, 260px));
 }
 
 .gallery-grid.layout-overview {
@@ -1526,7 +1527,7 @@ body.is-resizing .photo-inspector {
 /* Timeline: grouped by month with section headers. Requires JS grouping. */
 .gallery-grid.layout-timeline {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(224px, 264px));
   gap: 16px;
 }
 
@@ -8021,13 +8022,13 @@ body.is-resizing .photo-inspector {
 /* Timeline keeps its month divisions editorial and legible while letting the
    thumbnail preference control the density of each date group. */
 .gallery-grid.layout-timeline.thumb-small {
-  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(176px, 216px));
 }
 .gallery-grid.layout-timeline.thumb-medium {
-  grid-template-columns: repeat(auto-fill, minmax(224px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(224px, 264px));
 }
 .gallery-grid.layout-timeline.thumb-large {
-  grid-template-columns: repeat(auto-fill, minmax(288px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(288px, 348px));
 }
 
 .gallery-grid.layout-timeline .timeline-group {

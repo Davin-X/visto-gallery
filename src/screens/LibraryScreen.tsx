@@ -738,9 +738,18 @@ function LibraryScreen(props: LibraryScreenProps) {
           : props.showInspector
             ? 210
             : 220;
+    // Track maxima mirror the `minmax(min, max)` ceiling in App.css so the
+    // row height estimate matches what actually renders.
+    const maxTileWidth = overview
+      ? Number.POSITIVE_INFINITY
+      : thumbnailSize === "small"
+        ? 200
+        : thumbnailSize === "large"
+          ? 340
+          : 260;
     const availableWidth = Math.max(minTileWidth, gridViewport.width - GRID_HORIZONTAL_PADDING);
     const columns = Math.max(1, Math.floor((availableWidth + gap) / (minTileWidth + gap)));
-    const tileWidth = (availableWidth - gap * (columns - 1)) / columns;
+    const tileWidth = Math.min(maxTileWidth, (availableWidth - gap * (columns - 1)) / columns);
     const estimatedTileHeight = tileWidth * (overview ? 10 / 16 : 1) + 58;
     const rowHeight = measuredTileHeight ?? estimatedTileHeight;
     const rowStride = rowHeight + gap;
