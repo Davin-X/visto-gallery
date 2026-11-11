@@ -764,7 +764,7 @@ function EditScreen(props: EditScreenProps) {
     ));
 
     return (
-      <div className="edit-page">
+      <div className="edit-page edit-page--empty">
         {/* No photo is open yet, so this uses the same plain heading as the
             other screens. The boxed toolbar (back button, "Original safe"
             chip) belongs to an open photo. */}
@@ -1148,8 +1148,6 @@ function EditScreen(props: EditScreenProps) {
                     top: `${crop.y * 100}%`,
                     width: `${crop.width * 100}%`,
                     height: `${crop.height * 100}%`,
-                    border: "2px solid #ffffff",
-                    boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.48)",
                     cursor: "move",
                   }}
                   tabIndex={0}
@@ -1685,21 +1683,14 @@ function EditScreen(props: EditScreenProps) {
             aria-modal="true"
             aria-labelledby="edit-confirm-replace-title"
           >
-            <h3 id="edit-confirm-replace-title" style={{ margin: "0 0 8px", color: "var(--text)" }}>
+            <h3 id="edit-confirm-replace-title" className="edit-modal-title">
               Replace original file?
             </h3>
-            <p
-              style={{
-                margin: "0 0 16px",
-                color: "var(--muted)",
-                lineHeight: 1.5,
-                fontSize: "13px",
-              }}
-            >
+            <p className="edit-modal-body">
               This bakes your current edits into <b>{props.item.name}</b> on disk. A backup is kept
               so you can undo this anytime using <b>Restore original</b>.
             </p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <div className="edit-modal-actions">
               <button
                 className="quiet-button"
                 type="button"
@@ -1737,21 +1728,14 @@ function EditScreen(props: EditScreenProps) {
             aria-modal="true"
             aria-labelledby="edit-confirm-revert-title"
           >
-            <h3 id="edit-confirm-revert-title" style={{ margin: "0 0 8px", color: "var(--text)" }}>
+            <h3 id="edit-confirm-revert-title" className="edit-modal-title">
               Restore original file?
             </h3>
-            <p
-              style={{
-                margin: "0 0 16px",
-                color: "var(--muted)",
-                lineHeight: 1.5,
-                fontSize: "13px",
-              }}
-            >
+            <p className="edit-modal-body">
               If <b>{props.item.name}</b> was previously replaced in-place, this restores the
               unedited backup file. If there is no backup, it resets your draft adjustments.
             </p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <div className="edit-modal-actions">
               <button
                 type="button"
                 className="quiet-button"

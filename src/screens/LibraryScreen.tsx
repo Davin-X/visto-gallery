@@ -33,8 +33,8 @@ import {
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import { PanelResizer } from "../design/components/PanelResizer";
 import { KindBadge, KindDot } from "../design/components/KindBadge";
-import VideoThumb from "../design/components/VideoThumb";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
+import VideoThumb from "../design/components/VideoThumb";
 import { useDraftTransforms } from "../engine/stores/useEditStore";
 import { draftImageStyle } from "../engine/utils/draftImage";
 import { searchShortcutLabel } from "../engine/utils/shortcut";
@@ -160,7 +160,7 @@ interface LibraryScreenProps {
   onSetHiddenForIds: (ids: string[], hidden: boolean) => void | Promise<void>;
   onSetSelection: (ids: string[]) => void;
   onSetRatingForIds: (ids: string[], rating: number) => void | Promise<void>;
-  onSetColorLabelForIds: (ids: string[], colorLabel: string) => void | Promise<void>;
+  onSetColorLabelForIds: (ids: string[], colorLabel: string | null) => void | Promise<void>;
   onToggleFavorite: (id: string) => void | Promise<void>;
   onToggleHidden: (id: string) => void | Promise<void>;
   onToggleInspector: () => void;
@@ -619,7 +619,6 @@ function LibraryScreen(props: LibraryScreenProps) {
     void refillDepth().then(jumpToSavedOffset);
     // `restoredScrollKeyRef` makes this run once per view; item-count changes
     // during the depth refill must not restart the effect.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [library.loadedViewKey, props.hiddenView, scrollKey, viewKey]);
 
   const loadMore = () => {
@@ -983,7 +982,7 @@ function LibraryScreen(props: LibraryScreenProps) {
         {
           label: "None",
           icon: <span className="ctx-dot ctx-dot-none" />,
-          onClick: () => props.onSetColorLabelForIds?.([item.id], ""),
+          onClick: () => props.onSetColorLabelForIds?.([item.id], null),
         },
         {
           label: "Red",
@@ -1072,23 +1071,18 @@ function LibraryScreen(props: LibraryScreenProps) {
       <section className="library-center">
         <header className="library-header">
           {inAlbum ? (
-            <div className="album-detail-top">
+            <header className="page-heading album-detail-top">
               <button
-                className="quiet-button album-breadcrumb"
+                className="album-breadcrumb"
                 type="button"
                 onClick={() => props.onOpenAlbums?.()}
-                style={{
-                  fontSize: 15,
-                  fontWeight: 600,
-                  padding: "8px 12px",
-                  gap: 6,
-                  marginRight: 12,
-                }}
               >
-                <span style={{ fontSize: 14 }}>←</span>
-                <AlbumsIcon size={17} /> All albums
+                <span className="album-breadcrumb-arrow" aria-hidden="true">
+                  ←
+                </span>
+                <AlbumsIcon size={14} /> All albums
               </button>
-              <div className="album-detail-heading">
+              <div className="album-detail-head">
                 <div className={`album-detail-cover${activeAlbumPhotos.length ? "" : " is-empty"}`}>
                   {activeAlbumPhotos.length ? (
                     <AlbumPhotoStack
@@ -1097,12 +1091,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                       albumItems={activeAlbumItems}
                     />
                   ) : (
-                    <AlbumsIcon size={27} />
+                    <AlbumsIcon size={22} />
                   )}
                 </div>
                 <div className="album-detail-copy">
                   <p className="eyebrow">ALBUM</p>
                   <h1>{activeAlbumName}</h1>
+                  <p className="page-subtitle">
+                    {activeAlbumCount.toLocaleString()} {activeAlbumCount === 1 ? "item" : "items"}
+                  </p>
                 </div>
                 <div className="album-detail-actions">
                   <button
@@ -1137,16 +1134,37 @@ function LibraryScreen(props: LibraryScreenProps) {
                   </button>
                 </div>
               </div>
-            </div>
+            </header>
           ) : (
-            <header className="library-header-row">
+            <header className="page-heading">
               <div className="header-left">
                 <p className="eyebrow">
                   {props.hiddenView ? "OUT OF THE GALLERY" : "YOUR COLLECTION"}
                 </p>
-                <div className="header-title-row">
-                  <h1>{props.hiddenView ? "Hidden" : "All Photos"}</h1>
-                </div>
+                <h1>
+                  {props.hiddenView
+                    ? "Hidden"
+                    : props.filter === "Photos"
+                      ? "Photos"
+                      : props.filter === "Videos"
+                        ? "Videos"
+                        : props.filter === "RAW"
+                          ? "RAW"
+                          : props.filter === "Animations"
+                            ? "Animations"
+                            : props.filter === "Favorites"
+                              ? "Favorites"
+                              : "All Media"}
+                </h1>
+                {/* The hidden-view note lives in the heading instead of a
+                    banner row so the sticky header stays short. When nothing is
+                    hidden the empty state already says the same thing. */}
+                {props.hiddenView && props.items.length > 0 && (
+                  <p className="page-subtitle">
+                    Hidden from the gallery only — files stay on disk at their original paths and
+                    are not encrypted.
+                  </p>
+                )}
               </div>
               <div className="header-actions">
                 {!props.hiddenView && (
@@ -1202,16 +1220,6 @@ function LibraryScreen(props: LibraryScreenProps) {
             </header>
           )}
 
-          {props.hiddenView && (
-            <div className="hidden-disclaimer" role="note">
-              <EyeOffIcon size={15} />
-              <span>
-                Hidden from the gallery only. Files stay on disk at their original paths and are not
-                encrypted.
-              </span>
-            </div>
-          )}
-
           <div className="collection-toolbar">
             <div className="search-field">
               <span className="search-icon">
@@ -1263,7 +1271,8 @@ function LibraryScreen(props: LibraryScreenProps) {
                     <span className="slideshow-label">Slideshow</span>
                   </button>
                 )}
-                {!props.hiddenView && (
+                {/* An album already has Add Items in its header. */}
+                {!props.hiddenView && !inAlbum && (
                   <button
                     className="toolbar-button"
                     type="button"
@@ -1710,7 +1719,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                           )}
                           {item.favorite && !masked(item) ? (
                             <span className="tile-favorite" aria-label="Favorite">
-                              <HeartIcon size={11} filled />
+                              <HeartIcon size={10} filled />
                             </span>
                           ) : null}
                           {item.colorLabel && !masked(item) ? (
@@ -1892,7 +1901,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                                     )}
                                     {item.favorite && !masked(item) ? (
                                       <span className="tile-favorite" aria-label="Favorite">
-                                        <HeartIcon size={11} filled />
+                                        <HeartIcon size={10} filled />
                                       </span>
                                     ) : null}
                                     {item.colorLabel && !masked(item) ? (
@@ -2050,7 +2059,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                         )}
                         {item.favorite && !masked(item) ? (
                           <span className="tile-favorite" aria-label="Favorite">
-                            <HeartIcon size={11} filled />
+                            <HeartIcon size={10} filled />
                           </span>
                         ) : null}
                         {item.colorLabel && !masked(item) ? (
@@ -2185,18 +2194,39 @@ function LibraryScreen(props: LibraryScreenProps) {
                       {...holdHandlers(sel.id)}
                     >
                       {sel.kind === "photo" ? (
-                        // A cached 512px preview, not the original: a 40 MB
-                        // photo does not need a full decode for this frame,
-                        // and a missing or offline file shows "Preview
-                        // unavailable" instead of a broken image.
-                        <CachedThumbnail
-                          itemId={sel.id}
-                          name={tileAlt(sel)}
-                          size={512}
-                          eager
-                          showStatus
-                          style={draftImageStyle(draftTransforms, sel.id)}
-                        />
+                        (() => {
+                          const ext = (sel.extension || "").toLowerCase();
+                          const isAnimatedPhoto =
+                            !!(sel as any).isAnimated ||
+                            !!(sel as any).animated ||
+                            ext === "gif" ||
+                            ext === "webp" ||
+                            ext === "apng";
+                          return isAnimatedPhoto ? (
+                            <span className="inspector-video-preview">
+                              <img
+                                src={assetUrl(sel.path)}
+                                alt={tileAlt(sel)}
+                                draggable={false}
+                                style={draftImageStyle(draftTransforms, sel.id)}
+                              />
+                            </span>
+                          ) : (
+                            // A cached 512px preview, not the original: a 40 MB
+                            // photo does not need a full decode for this frame,
+                            // and a missing or offline file shows "Preview
+                            // unavailable" instead of a broken image.
+                            <CachedThumbnail
+                              itemId={sel.id}
+                              name={tileAlt(sel)}
+                              size={512}
+                              eager
+                              showStatus
+                              fallbackSrc={assetUrl(sel.path)}
+                              style={draftImageStyle(draftTransforms, sel.id)}
+                            />
+                          );
+                        })()
                       ) : sel.kind === "video" ? (
                         <span className="inspector-video-preview">
                           <video
@@ -2216,7 +2246,17 @@ function LibraryScreen(props: LibraryScreenProps) {
                       )}
                       <span>Double-click to view</span>
                       <span className="inspector-type-badge">
-                        {sel.kind === "video" ? "Video" : sel.kind === "raw" ? "RAW" : "Photo"}
+                        {sel.kind === "video"
+                          ? "Video"
+                          : sel.kind === "raw"
+                            ? "RAW"
+                            : (sel as any).isAnimated ||
+                                !!(sel as any).animated ||
+                                ["gif", "webp", "apng"].includes(
+                                  (sel.extension || "").toLowerCase(),
+                                )
+                              ? "Animation"
+                              : "Photo"}
                       </span>
                     </button>
                     {sel.kind === "video" && props.onPlayBackground && (
@@ -2342,7 +2382,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                               aria-pressed={active}
                               title={active ? `Clear ${color} label` : `${label} label`}
                               onClick={() =>
-                                props.onSetColorLabelForIds([sel.id], active ? "" : color)
+                                props.onSetColorLabelForIds([sel.id], active ? null : color)
                               }
                             >
                               <span className={`ctx-dot ctx-dot-${color}`} />

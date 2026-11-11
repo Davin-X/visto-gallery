@@ -1917,14 +1917,15 @@ pub async fn set_rating(
 }
 
 /// Set the color label on a media item. Valid values: red, yellow, green,
-/// blue, purple. Pass empty string to clear.
+/// blue, purple. Pass null (or empty string) to clear.
 #[tauri::command]
 pub async fn set_color_label(
     item_id: String,
-    color_label: String,
+    color_label: Option<String>,
     catalog: State<'_, crate::Catalog>,
 ) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
+    let color_label = color_label.filter(|value| !value.is_empty());
     sqlx::query("UPDATE media_items SET color_label = ?, updated_at = ? WHERE id = ?")
         .bind(color_label)
         .bind(super::now_ms())

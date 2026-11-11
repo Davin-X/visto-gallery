@@ -108,9 +108,7 @@ export function AppTopBar({
 
   return (
     <header className="topbar" onMouseDown={onMouseDown} onDoubleClick={onDoubleClick}>
-      <div className="topbar-brand">
-        <b>VistoGallery</b>
-      </div>
+      <div className="topbar-brand" aria-hidden="true" />
       <div className="topbar-context">
         {screen === "Library" ? (
           activeAlbumName ? (
@@ -135,95 +133,97 @@ export function AppTopBar({
           </span>
         )}
       </div>
-      {nowPlaying && onNowPlayingExpand && onNowPlayingToggle && onNowPlayingStop && (
-        <NowPlaying
-          name={nowPlaying.name}
-          playing={nowPlaying.playing}
-          onExpand={onNowPlayingExpand}
-          onToggle={onNowPlayingToggle}
-          onStop={onNowPlayingStop}
-          onPrevious={nowPlaying.navigable ? onNowPlayingPrevious : undefined}
-          onNext={nowPlaying.navigable ? onNowPlayingNext : undefined}
-        />
-      )}
-      <div className="topbar-actions">
-        <button
-          className="icon-button"
-          type="button"
-          aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-          aria-pressed={sidebarOpen}
-          title={sidebarOpen ? "Hide sidebar (⌘\\)" : "Show sidebar (⌘\\)"}
-          onClick={onToggleSidebar}
-        >
-          <PanelLeftIcon size={18} />
-        </button>
-        <button
-          className="icon-button"
-          type="button"
-          aria-label={
-            !inspectorAvailable
-              ? "Inspector available in Library and Hidden"
-              : showInspector
-                ? "Hide inspector"
-                : "Show inspector"
-          }
-          aria-pressed={inspectorAvailable && showInspector}
-          disabled={!inspectorAvailable}
-          title={
-            inspectorAvailable
-              ? showInspector
-                ? "Hide inspector (⌥⌘I)"
-                : "Show inspector (⌥⌘I)"
-              : "Inspector is available in Library and Hidden"
-          }
-          onClick={onToggleInspector}
-        >
-          <PanelRightIcon size={18} />
-        </button>
-        <button
-          className="icon-button"
-          type="button"
-          aria-label={`Appearance: ${APPEARANCE_LABEL[appearance]}. Switch to ${appearanceNextLabel}`}
-          title={`Appearance: ${APPEARANCE_LABEL[appearance]} — switch to ${appearanceNextLabel}`}
-          onClick={onToggleAppearance}
-        >
-          {appearance === "light" ? (
-            <SunIcon size={18} />
-          ) : appearance === "dark" ? (
-            <MoonIcon size={18} />
-          ) : (
-            <MonitorIcon size={18} />
-          )}
-        </button>
-        <button
-          className="icon-button"
-          type="button"
-          aria-label="Accent color"
-          title="Cycle accent color"
-          onClick={onCycleAccent}
-        >
-          <span
-            style={{
-              width: 14,
-              height: 14,
-              borderRadius: "50%",
-              background: (ACCENT_PALETTE.find((c) => c.id === accentColor) || ACCENT_PALETTE[0])[
-                dark ? "dark" : "light"
-              ],
-              display: "inline-block",
-              border: "1px solid rgba(0,0,0,0.2)",
-            }}
+      <div className="topbar-trailing">
+        {nowPlaying && onNowPlayingExpand && onNowPlayingToggle && onNowPlayingStop && (
+          <NowPlaying
+            name={nowPlaying.name}
+            playing={nowPlaying.playing}
+            onExpand={onNowPlayingExpand}
+            onToggle={onNowPlayingToggle}
+            onStop={onNowPlayingStop}
+            onPrevious={nowPlaying.navigable ? onNowPlayingPrevious : undefined}
+            onNext={nowPlaying.navigable ? onNowPlayingNext : undefined}
           />
-        </button>
-        <button
-          className="icon-button"
-          type="button"
-          aria-label="Settings"
-          title="Settings"
-          onClick={onOpenSettings}
-        >
-          <GearIcon size={18} />
-        </button>
+        )}
+        <div className="topbar-actions">
+          <button
+            className="icon-button"
+            type="button"
+            aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+            aria-pressed={sidebarOpen}
+            title={sidebarOpen ? "Hide sidebar (⌘\\)" : "Show sidebar (⌘\\)"}
+            onClick={onToggleSidebar}
+          >
+            <PanelLeftIcon size={18} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label={
+              !inspectorAvailable
+                ? "Inspector available in Library and Hidden"
+                : showInspector
+                  ? "Hide inspector"
+                  : "Show inspector"
+            }
+            aria-pressed={inspectorAvailable && showInspector}
+            disabled={!inspectorAvailable}
+            title={
+              inspectorAvailable
+                ? showInspector
+                  ? "Hide inspector (⌥⌘I)"
+                  : "Show inspector (⌥⌘I)"
+                : "Inspector is available in Library and Hidden"
+            }
+            onClick={onToggleInspector}
+          >
+            <PanelRightIcon size={18} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label={`Appearance: ${APPEARANCE_LABEL[appearance]}. Switch to ${appearanceNextLabel}`}
+            title={`Appearance: ${APPEARANCE_LABEL[appearance]} — switch to ${appearanceNextLabel}`}
+            onClick={onToggleAppearance}
+          >
+            {appearance === "light" ? (
+              <SunIcon size={18} />
+            ) : appearance === "dark" ? (
+              <MoonIcon size={18} />
+            ) : (
+              <MonitorIcon size={18} />
+            )}
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Accent color"
+            title="Cycle accent color"
+            onClick={onCycleAccent}
+          >
+            <span
+              style={{
+                width: 14,
+                height: 14,
+                borderRadius: "50%",
+                background: (ACCENT_PALETTE.find((c) => c.id === accentColor) || ACCENT_PALETTE[0])[
+                  dark ? "dark" : "light"
+                ],
+                display: "inline-block",
+                border: "1px solid rgba(0,0,0,0.2)",
+              }}
+            />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Settings"
+            title="Settings"
+            onClick={onOpenSettings}
+          >
+            <GearIcon size={18} />
+          </button>
+        </div>
       </div>
     </header>
   );

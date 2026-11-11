@@ -2,9 +2,9 @@
 
 .settings-page {
   width: 100%;
-  max-width: 1080px;
+  max-width: var(--page-max);
   margin: 0 auto;
-  padding: 32px 40px 48px;
+  padding: var(--page-top) var(--page-gutter) var(--space-8);
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -25,9 +25,9 @@
 
 .settings-tabs {
   display: flex;
-  gap: 0;
+  gap: var(--space-2);
   border-bottom: 1px solid var(--line);
-  margin-bottom: 28px;
+  margin-bottom: var(--space-7);
   /* Keep all five tabs reachable on narrow windows instead of clipping them. */
   overflow-x: auto;
   overflow-y: hidden;
@@ -47,55 +47,14 @@
 }
 
 /* ===== PAGE HEADING ===== */
+/* Same shape as every other screen; only the flex behaviour is page-specific
+   so the settings panel below stays the single scroll owner. */
 .settings-page > .page-heading {
-  margin-bottom: 30px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  text-align: left;
-}
-
-.settings-page > .page-heading .eyebrow {
-  margin: 0 0 8px;
-  color: var(--faint);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.settings-page > .page-heading h1 {
-  margin: 0 0 6px;
-  color: var(--ink);
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-}
-
-.settings-page > .page-heading .page-subtitle {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.5;
+  flex: 0 0 auto;
 }
 
 /* Medium windows: tighten padding so the centered page doesn't look lost
    between the narrow (≤960px) and wide (>1200px) layouts. */
-@media (max-width: 1200px) {
-  .settings-page {
-    padding: 24px 32px 36px;
-  }
-
-  .settings-page > .page-heading {
-    margin-bottom: 24px;
-  }
-
-  .settings-page > .page-heading h1 {
-    font-size: 24px;
-  }
-}
-
 .settings-tabs::-webkit-scrollbar {
   height: 6px;
 }
@@ -1807,13 +1766,13 @@
 }
 
 .settings-tabs {
-  gap: 4px;
+  gap: var(--space-2);
   border-bottom-color: var(--line-strong);
 }
 
 .settings-tab {
-  min-height: 42px;
-  border-radius: 8px 8px 0 0;
+  min-height: var(--control-height);
+  border-radius: var(--control-radius) var(--control-radius) 0 0;
   transition:
     color 0.15s ease,
     background-color 0.15s ease,

@@ -35,8 +35,11 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # No --with-deps: that shells out to apt, and the hosted runner's Ubuntu
+      # mirror has been failing to resolve, which failed the gate before a
+      # single benchmark ran. Install the browser only.
       - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - name: Build frontend (includes harness)
         run: npm run build
       - name: Run performance regression gate

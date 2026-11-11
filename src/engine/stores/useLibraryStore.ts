@@ -206,9 +206,9 @@ export interface LibraryState {
   setFavoriteForIds: (ids: string[], favorite: boolean) => Promise<void>;
   setHiddenForIds: (ids: string[], hidden: boolean) => Promise<void>;
   setRating: (id: string, rating: number) => Promise<void>;
-  setColorLabel: (id: string, colorLabel: string) => Promise<void>;
+  setColorLabel: (id: string, colorLabel: string | null) => Promise<void>;
   setRatingForIds: (ids: string[], rating: number) => Promise<void>;
-  setColorLabelForIds: (ids: string[], colorLabel: string) => Promise<void>;
+  setColorLabelForIds: (ids: string[], colorLabel: string | null) => Promise<void>;
   updateItemTags: (id: string, tags: string[]) => Promise<void>;
   deleteItems: (ids: string[]) => Promise<DeleteItemsOutcome>;
 
@@ -546,9 +546,12 @@ export const useLibraryStore = create<LibraryState>()(
         try {
           const state = get();
           const viewFilter = { ...currentLibraryFilter(state), ...(filter || {}) };
+          const normalizedColorLabel = viewFilter.colorLabel ?? undefined;
+          viewFilter.colorLabel = normalizedColorLabel;
           const viewKey = JSON.stringify(viewFilter);
           const dto: LibraryFilterDTO = {
             ...viewFilter,
+            colorLabel: normalizedColorLabel,
             limit: state.pageSize,
             cursor: undefined,
           };
@@ -1146,7 +1149,7 @@ export const useLibraryStore = create<LibraryState>()(
         if (!item) return;
         const prev = { ...item };
         set((s) => ({
-          items: s.items.map((i) => (i.id === id ? { ...i, colorLabel } : i)),
+          items: s.items.map((i) => (i.id === id ? { ...i, colorLabel: colorLabel || null } : i)),
         }));
         get().refreshDerived();
         try {
@@ -1184,7 +1187,9 @@ export const useLibraryStore = create<LibraryState>()(
         if (!targets.length) return;
         const prevs = new Map(targets.map((i) => [i.id, { ...i }]));
         set((s) => ({
-          items: s.items.map((i) => (ids.includes(i.id) ? { ...i, colorLabel } : i)),
+          items: s.items.map((i) =>
+            ids.includes(i.id) ? { ...i, colorLabel: colorLabel || null } : i,
+          ),
         }));
         get().refreshDerived();
         try {
