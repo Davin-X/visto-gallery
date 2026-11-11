@@ -132,9 +132,10 @@ export function AppScreenRouter({
     await edit.open(item);
     setScreen("Edit");
   };
-  // The viewer's right-click shares the grid's item menu, so star ratings,
-  // colour labels, album membership and delete work without extra buttons.
-  const viewerMenuActions: ItemMenuActions = {
+  // The viewer and the video player share the grid's item menu, so star
+  // ratings, colour labels, album membership and delete work without extra
+  // buttons on either screen.
+  const itemMenuActions: ItemMenuActions = {
     onEdit: (item) => void openViewerEdit(item),
     onCopyTagsToFinder: copyTagsToFinderForIds,
     onOpenAlbumPicker: (ids) => openAlbumPicker(ids),
@@ -286,7 +287,7 @@ export function AppScreenRouter({
           onOpenEdit={openViewerEdit}
           onContextMenu={(items, event) => {
             const target = items[0];
-            if (target) openContextMenu(buildItemContextMenu(target, viewerMenuActions), event);
+            if (target) openContextMenu(buildItemContextMenu(target, itemMenuActions), event);
           }}
           assetUrl={assetUrl}
           hasMore={photoViewerHasMore}
@@ -307,6 +308,9 @@ export function AppScreenRouter({
         onNext={playNextVideo}
         queueHasMore={queueHasMore}
         onLoadMoreQueue={onLoadMoreQueue}
+        onContextMenu={(target, event) =>
+          openContextMenu(buildItemContextMenu(target, itemMenuActions), event)
+        }
       />
 
       {screen === "Edit" && (
