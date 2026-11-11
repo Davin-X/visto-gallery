@@ -95,7 +95,9 @@ mod thumbnail_cache_tests {
 
         assert_ne!(photo, video);
         assert!(photo.contains(":v1"));
-        assert!(video.contains(":v2"));
+        // v3 also invalidates the "No preview" placeholder cached for
+        // containers QuickLook could not open (VP9/AV1 in MP4).
+        assert!(video.contains(":v3"));
     }
 
     #[cfg(target_os = "macos")]
