@@ -38,7 +38,6 @@ import type {
   UpdateCheckResult,
   LibraryStats,
   ExternalPlayer,
-  MediaProbe,
   PreparedPlayback,
 } from "../types/commands";
 
@@ -112,8 +111,6 @@ export const tauri = {
       invoke("open_with_player", { path, player }),
 
     externalVideoPlayers: (): Promise<ExternalPlayer[]> => invoke("external_video_players"),
-
-    probeMedia: (path: string): Promise<MediaProbe> => invoke("probe_media", { path }),
 
     // `forceRemux` re-copies a file that probed as playable but produced no
     // decoded frames — the only reliable way to catch a broken index.

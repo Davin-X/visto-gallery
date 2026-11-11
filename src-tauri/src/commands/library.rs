@@ -2063,14 +2063,94 @@ pub async fn set_color_label(
     catalog: State<'_, crate::Catalog>,
 ) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
+    apply_color_label(&db, &item_id, color_label).await
+}
+
+/// Core implementation of `set_color_label`, extracted so it can be tested
+/// against an in-memory database without a Tauri `State`.
+///
+/// `None` and an empty string both write NULL: the inspector's "none" option and
+/// clearing an existing label are the same operation, and both must store an
+/// absent value rather than leaving the old one behind.
+pub async fn apply_color_label(
+    db: &SqlitePool,
+    item_id: &str,
+    color_label: Option<String>,
+) -> Result<(), CommandError> {
     let color_label = color_label.filter(|value| !value.is_empty());
     sqlx::query("UPDATE media_items SET color_label = ?, updated_at = ? WHERE id = ?")
         .bind(color_label)
         .bind(super::now_ms())
-        .bind(&item_id)
-        .execute(&db)
+        .bind(item_id)
+        .execute(db)
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod color_label_tests {
+    use super::apply_color_label;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn label_db() -> sqlx::SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory db");
+        sqlx::query(
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, color_label TEXT, updated_at INTEGER)",
+        )
+        .execute(&db)
+        .await
+        .expect("create media_items");
+        sqlx::query("INSERT INTO media_items (id, color_label) VALUES ('a', 'red')")
+            .execute(&db)
+            .await
+            .expect("seed row");
+        db
+    }
+
+    async fn stored(db: &sqlx::SqlitePool) -> Option<String> {
+        sqlx::query_scalar("SELECT color_label FROM media_items WHERE id = 'a'")
+            .fetch_one(db)
+            .await
+            .expect("read color label")
+    }
+
+    #[tokio::test]
+    async fn clearing_writes_null_rather_than_leaving_the_old_label() {
+        let db = label_db().await;
+        assert_eq!(stored(&db).await.as_deref(), Some("red"));
+
+        apply_color_label(&db, "a", None)
+            .await
+            .expect("clear label");
+
+        assert_eq!(stored(&db).await, None, "clearing must store NULL");
+    }
+
+    #[tokio::test]
+    async fn an_empty_string_clears_like_none() {
+        let db = label_db().await;
+
+        apply_color_label(&db, "a", Some(String::new()))
+            .await
+            .expect("clear with empty string");
+
+        assert_eq!(stored(&db).await, None);
+    }
+
+    #[tokio::test]
+    async fn setting_a_label_replaces_the_previous_one() {
+        let db = label_db().await;
+
+        apply_color_label(&db, "a", Some("blue".to_string()))
+            .await
+            .expect("set label");
+
+        assert_eq!(stored(&db).await.as_deref(), Some("blue"));
+    }
 }
 
 /// Core implementation of `update_item_tags`, extracted so it can be tested

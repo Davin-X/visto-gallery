@@ -87,12 +87,8 @@ function VideoPlayer({
   // from the cache. `preparing` covers the gap, so an undecodable container
   // never reaches <video> at all — not even on the first paint, where WebKit
   // would start pulling the whole file for nothing.
-  const [resolvedSrc, setResolvedSrc] = useState(() =>
-    canPlayVideoInApp(path, name) ? src : "",
-  );
-  const [preparing, setPreparing] = useState(
-    () => Boolean(path) && !canPlayVideoInApp(path, name),
-  );
+  const [resolvedSrc, setResolvedSrc] = useState(() => (canPlayVideoInApp(path, name) ? src : ""));
+  const [preparing, setPreparing] = useState(() => Boolean(path) && !canPlayVideoInApp(path, name));
   const [failureDetail, setFailureDetail] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [videoError, setVideoError] = useState<MediaError | null>(null);
@@ -148,24 +144,29 @@ function VideoPlayer({
   const remuxRetriedRef = useRef(false);
   // Resolves true when the retry produced a playable copy.
   const retryRemuxRef = useRef<() => Promise<boolean>>(() => Promise.resolve(false));
-  retryRemuxRef.current = async () => {
-    if (!path || remuxRetriedRef.current) return false;
-    remuxRetriedRef.current = true;
-    setPreparing(true);
-    const plan = await requestPlaybackPlan(true);
-    setPreparing(false);
-    if (!plan || plan.strategy !== "remuxed") return false;
-    setFailureDetail(null);
-    setVideoError(null);
-    setFailed(false);
-    setResolvedSrc(convertFileSrc(plan.path));
-    return true;
-  };
+  // Assigned in an effect, not during render: a render React throws away would
+  // otherwise leave a callback from an uncommitted tree in the ref.
+  useEffect(() => {
+    retryRemuxRef.current = async () => {
+      if (!path || remuxRetriedRef.current) return false;
+      remuxRetriedRef.current = true;
+      setPreparing(true);
+      const plan = await requestPlaybackPlan(true);
+      setPreparing(false);
+      if (!plan || plan.strategy !== "remuxed") return false;
+      setFailureDetail(null);
+      setVideoError(null);
+      setFailed(false);
+      setResolvedSrc(convertFileSrc(plan.path));
+      return true;
+    };
+  }, [path, requestPlaybackPlan]);
 
   // A different item can use a different container, so re-evaluate on change.
-  // Containers the allow-list accepts load immediately: a probe would only add
-  // latency to the common case, and a failure is still caught by the frame
-  // checks, which fall back to a forced remux.
+  // The extension allow-list decides what can start playing immediately, but the
+  // probe runs either way: an extension predicts very little about a file (an
+  // MP4 can carry `hev1` HEVC that WebKit refuses, a Matroska can carry VP9), and
+  // its answer arrives fast enough that it can only ever upgrade the source.
   useEffect(() => {
     let cancelled = false;
     remuxRetriedRef.current = false;
@@ -237,9 +238,7 @@ function VideoPlayer({
           element.webkitDecodedFrameCount ??
           -1,
       };
-      void tauri.items
-        .logPlaybackDiagnostic(label, JSON.stringify(sample))
-        .catch(() => {});
+      void tauri.items.logPlaybackDiagnostic(label, JSON.stringify(sample)).catch(() => {});
     };
     const video = ref.current;
     const onError = () => report("error");
@@ -555,9 +554,8 @@ function VideoPlayer({
           .cancelVideoFrameCallback === "function"
       ) {
         try {
-          (
-            video as HTMLVideoElement & { cancelVideoFrameCallback?: (id: number) => void }
-          ).cancelVideoFrameCallback!(videoFrameCallbackId);
+          (video as HTMLVideoElement & { cancelVideoFrameCallback?: (id: number) => void })
+            .cancelVideoFrameCallback!(videoFrameCallbackId);
         } catch {
           // ignore
         }
@@ -570,7 +568,9 @@ function VideoPlayer({
       video.removeEventListener("pause", onPause);
       video.removeEventListener("canplay", attemptAutoPlay);
     };
-  }, [resolvedSrc, syncPlayback]);
+    // `failed` is a dependency because the guards below short-circuit on it;
+    // reading it from an older render made them permanently false.
+  }, [resolvedSrc, syncPlayback, failed]);
 
   useEffect(() => {
     const video = ref.current;
@@ -626,8 +626,7 @@ function VideoPlayer({
       const target = e.target as HTMLElement | null;
       if (
         target &&
-        (target.isContentEditable ||
-          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
       ) {
         return;
       }
