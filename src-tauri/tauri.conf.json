@@ -48,6 +48,10 @@
     "targets": [
       "dmg"
     ],
+    "externalBin": [
+      "binaries/ffmpeg",
+      "binaries/ffprobe"
+    ],
     "icon": [
       "icons/icon.png",
       "icons/icon.icns",

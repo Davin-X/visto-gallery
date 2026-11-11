@@ -10,7 +10,13 @@ You need macOS, [Node.js](https://nodejs.org/) LTS, the [Rust toolchain](https:/
 git clone https://github.com/<your-username>/visto-gallery.git
 cd visto-gallery
 npm install
+npm run ffmpeg:build
 ```
+
+`npm run ffmpeg:build` compiles the `ffmpeg` and `ffprobe` sidecars into `src-tauri/binaries/`
+(git-ignored, a couple of minutes). The backend needs them for lossless video remuxing and for
+video posters, and `cargo build` refuses to run without them because `tauri.conf.json` lists them
+as `externalBin`. Pass `VISTO_FFMPEG_FORCE=1` to rebuild after changing `scripts/build-ffmpeg.sh`.
 
 `npm install` also points Git at the tracked hooks in `.githooks/`, which strip AI-assistant `Co-authored-by` trailers from commit messages so they don't show up as repository contributors. Re-run it with `sh scripts/setup-hooks.sh`.
 

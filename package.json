@@ -33,6 +33,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
+    "ffmpeg:build": "bash scripts/build-ffmpeg.sh",
     "test": "vitest run",
     "benchmark:library": "node scripts/benchmark-library-harness.mjs",
     "test:e2e": "playwright test",

@@ -1176,7 +1176,7 @@ fn generate_thumbnail_with_ffmpeg(
     size: u32,
     quality: u8,
 ) -> Result<(Vec<u8>, u32, u32), CommandError> {
-    let ffmpeg = super::playback::find_tool("ffmpeg").ok_or_else(|| {
+    let ffmpeg = crate::media_tools::find(crate::media_tools::FFMPEG).ok_or_else(|| {
         CommandError::new(
             ErrorCode::UnsupportedFormat,
             "ffmpeg is not installed, so this video has no preview".to_string(),

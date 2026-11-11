@@ -7,6 +7,9 @@ sample-library/
 node_modules/
 dist/
 src-tauri/target/
+
+# Bundled ffmpeg/ffprobe sidecars, built by scripts/build-ffmpeg.sh
+src-tauri/binaries/
 *.log
 npm-debug.log*
 yarn-debug.log*
