@@ -14,13 +14,15 @@
 //! live in an MP4 at all (AC-3, DTS, VP8, 10-bit H.264) is reported as
 //! unsupported rather than silently re-encoded.
 //!
-//! Both `ffprobe` and `ffmpeg` are resolved from a bundled sidecar first, then
-//! from the usual Homebrew paths, then from `PATH`. When neither is installed
-//! the extension allow-list keeps working as before, so the command never turns
-//! a missing tool into a broken player.
+//! Both tools come from [`crate::media_tools`]: the sidecars this app bundles
+//! first, then a Homebrew install, then `PATH`. When neither exists the
+//! extension allow-list keeps working as before, so a missing tool never turns
+//! into a broken player.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
@@ -29,7 +31,11 @@ use ts_rs::TS;
 use crate::errors::{CommandError, ErrorCode};
 
 /// Remuxed media kept in the cache before the oldest entries are removed.
-const PLAYBACK_CACHE_BUDGET_BYTES: u64 = 8 * 1024 * 1024 * 1024;
+///
+/// A copied 4K music video is over 100 MB, so this holds a few dozen of them —
+/// enough that re-opening something you watched recently is instant, small
+/// enough that nobody finds a multi-gigabyte folder they never asked for.
+const PLAYBACK_CACHE_BUDGET_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
 /// Containers `prepare_playback` may hand straight to `<video>` when no probe
 /// is available. Mirrors `IN_APP_VIDEO_EXTENSIONS` on the frontend.
@@ -88,35 +94,19 @@ enum ProbeFailure {
     Failed(String),
 }
 
-/// Locate a bundled sidecar, a Homebrew install, or a `PATH` entry.
-pub(crate) fn find_tool(name: &str) -> Option<PathBuf> {
-    if let Ok(dir) = std::env::var("VISTO_FFMPEG_DIR") {
-        let candidate = Path::new(&dir).join(name);
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-    // Tauri sidecars and bundled dylibs sit next to the executable.
-    if let Ok(executable) = std::env::current_exe() {
-        if let Some(dir) = executable.parent() {
-            for folder in [dir.to_path_buf(), dir.join("../Resources")] {
-                let candidate = folder.join(name);
-                if candidate.is_file() {
-                    return Some(candidate);
-                }
-            }
-        }
-    }
-    for dir in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"] {
-        let candidate = Path::new(dir).join(name);
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|dir| dir.join(name))
-        .find(|candidate| candidate.is_file())
+/// The remux gate for one cache key.
+///
+/// React StrictMode mounts the player effect twice, so two identical requests
+/// arrive within milliseconds of each other. Without a gate both would run
+/// ffmpeg over the same file, reading and writing the same gigabytes twice for
+/// one result. The second caller waits and then finds the finished file.
+fn remux_gate(key: &str) -> Arc<tokio::sync::Mutex<()>> {
+    static GATES: OnceLock<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> = OnceLock::new();
+    let mut gates = GATES
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .expect("remux gate map");
+    gates.entry(key.to_string()).or_default().clone()
 }
 
 /// Last `limit` characters of a tool's stderr, collapsed to one line.
@@ -137,7 +127,8 @@ fn stream_i64(value: &serde_json::Value, key: &str) -> Option<i64> {
 }
 
 fn probe_sync(source: &Path) -> Result<MediaProbe, ProbeFailure> {
-    let ffprobe = find_tool("ffprobe").ok_or(ProbeFailure::ToolMissing)?;
+    let ffprobe = crate::media_tools::find(crate::media_tools::FFPROBE)
+        .ok_or(ProbeFailure::ToolMissing)?;
     let output = Command::new(ffprobe)
         .args([
             "-v",
@@ -319,7 +310,8 @@ fn describe_codecs(probe: &MediaProbe) -> String {
 }
 
 fn remux_sync(source: &Path, target: &Path, hevc: bool, audio: AudioPlan) -> Result<(), String> {
-    let ffmpeg = find_tool("ffmpeg").ok_or_else(|| "ffmpeg was not found".to_string())?;
+    let ffmpeg = crate::media_tools::find(crate::media_tools::FFMPEG)
+        .ok_or_else(|| "the bundled ffmpeg is missing".to_string())?;
     // The video stream is never decoded: `-c:v copy` moves the coded frames into
     // a new MP4 with its index at the front, so the asset protocol can
     // range-request it. Audio is copied when WebKit can take it as-is and
@@ -541,6 +533,9 @@ pub async fn prepare_playback(
     let key = cache_key(&source, metadata.len(), modified_ms);
     let target = cache_root.join(format!("{key}.mp4"));
 
+    let gate = remux_gate(&key);
+    let _flight = gate.lock().await;
+    // A caller that waited on the gate may find the work already done.
     if !target.is_file() {
         let hevc = probe
             .as_ref()
@@ -693,14 +688,16 @@ mod tests {
     }
 
     /// End-to-end check of the real remux: a Matroska file must come back as an
-    /// MP4 whose video still probes as natively playable. Skipped when ffmpeg
-    /// is not installed, so CI without the tool stays green.
+    /// MP4 whose video still probes as natively playable. The fixture is VP9,
+    /// which the bundled sidecar can encode and which is what the VP9 Matroska
+    /// files in a real library look like. Skipped when ffmpeg is not installed,
+    /// so a checkout without the sidecars stays green.
     #[test]
     fn matroska_remuxes_into_a_natively_playable_mp4() {
-        let Some(ffmpeg) = find_tool("ffmpeg") else {
+        let Some(ffmpeg) = crate::media_tools::find(crate::media_tools::FFMPEG) else {
             return;
         };
-        if find_tool("ffprobe").is_none() {
+        if crate::media_tools::find(crate::media_tools::FFPROBE).is_none() {
             return;
         }
         let dir = std::env::temp_dir().join(format!("visto-remux-{}", std::process::id()));
@@ -724,7 +721,7 @@ mod tests {
                 "-t",
                 "1",
                 "-c:v",
-                "libx264",
+                "vp9",
                 "-pix_fmt",
                 "yuv420p",
                 "-c:a",
@@ -735,7 +732,8 @@ mod tests {
             .status()
             .expect("run ffmpeg");
         if !status.success() {
-            // No libx264 in this build of ffmpeg; nothing to assert.
+            // This build of ffmpeg cannot encode the fixture; nothing to assert.
+            // The bundled sidecar can, so the coverage is real in a release build.
             let _ = std::fs::remove_dir_all(&dir);
             return;
         }
@@ -747,7 +745,7 @@ mod tests {
         let target = dir.join("target.mp4");
         remux_sync(&source, &target, false, audio_plan(&before)).expect("remux");
         let after = probe_sync(&target).ok().expect("probe target");
-        assert_eq!(after.video_codec, "h264");
+        assert_eq!(after.video_codec, "vp9");
         assert_eq!(after.audio_codec.as_deref(), Some("aac"));
         assert!(plays_natively(&after, "mp4"), "remux must be playable");
 
@@ -758,10 +756,10 @@ mod tests {
     /// audio must come back with an AAC-LC track and playable video.
     #[test]
     fn ac3_matroska_is_remuxed_with_aac_audio() {
-        let Some(ffmpeg) = find_tool("ffmpeg") else {
+        let Some(ffmpeg) = crate::media_tools::find(crate::media_tools::FFMPEG) else {
             return;
         };
-        if find_tool("ffprobe").is_none() {
+        if crate::media_tools::find(crate::media_tools::FFPROBE).is_none() {
             return;
         }
         let dir = std::env::temp_dir().join(format!("visto-remux-ac3-{}", std::process::id()));
@@ -785,7 +783,7 @@ mod tests {
                 "-t",
                 "1",
                 "-c:v",
-                "libx264",
+                "vp9",
                 "-pix_fmt",
                 "yuv420p",
                 "-c:a",

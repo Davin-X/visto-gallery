@@ -197,7 +197,17 @@ You need macOS, [Node.js](https://nodejs.org/) LTS, the [Rust toolchain](https:/
 
 ```bash
 npm install
+npm run ffmpeg:build
 ```
+
+The second command compiles the `ffmpeg` and `ffprobe` binaries the app ships. They are
+static, contain only the demuxers, decoders and encoders VistoGallery calls, and live in
+`src-tauri/binaries/` (git-ignored). Tauri copies them into the app bundle as sidecars and
+`cargo` will not build without them, so run it once after cloning. It takes a few minutes
+and needs nothing beyond the Xcode Command Line Tools.
+
+In development only, a missing sidecar falls back to a Homebrew `ffmpeg` if you have one,
+which is handy while iterating on the player. Bundles never rely on that fallback.
 
 The native app loads the frontend from the Vite dev server, so run it in one terminal:
 
