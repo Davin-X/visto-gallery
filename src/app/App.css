@@ -11653,11 +11653,33 @@ body.is-resizing .photo-inspector {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.24);
 }
 
+/* WebKit misplaces a composited <video> that is a centred grid item: the layer
+   is drawn outside its stage, which shows up as a black frame with live
+   controls and no error. A plain block box with the video filling it keeps the
+   picture exactly where object-fit puts it. Verified in a WKWebView render:
+   grid = no visible picture, block = correct letterboxing. */
 .video-player-surface {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: block;
+}
+
+/* Shown while an unsupported container is copied into the playback cache.
+   Sits above the empty frame and never intercepts clicks. */
+.viewer-video-preparing {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
 }
 
 .video-player-surface > .viewer-video {
