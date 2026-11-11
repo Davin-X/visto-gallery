@@ -4215,6 +4215,36 @@ body {
   font-size: 14px;
 }
 
+.app-frame .viewer-boundary-cue {
+  position: absolute;
+  bottom: 78px;
+  left: 50%;
+  z-index: 7;
+  padding: 8px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-2) 84%, transparent);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transform: translateX(-50%);
+  animation: viewer-boundary-cue-in 0.18s ease-out;
+}
+@keyframes viewer-boundary-cue-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
 .app-frame .empty-state {
   min-height: 250px;
   padding: 48px 24px;

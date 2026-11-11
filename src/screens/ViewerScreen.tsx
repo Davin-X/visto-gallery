@@ -91,6 +91,8 @@ function ViewerScreen(props: ViewerScreenProps) {
   const [stripStart, setStripStart] = useState(() =>
     Math.max(0, items.findIndex((item) => item.id === selected?.id) - stripWindowSize / 2),
   );
+  const [boundaryCue, setBoundaryCue] = useState<{ message: string; key: number } | null>(null);
+  const boundaryCueTimerRef = useRef<number | null>(null);
   const hideTimerRef = useRef<number | null>(null);
   const stripRef = useRef<HTMLDivElement | null>(null);
   const stripStrideRef = useRef(stripStride);
@@ -114,6 +116,32 @@ function ViewerScreen(props: ViewerScreenProps) {
     if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
     hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
   }, []);
+
+  useEffect(() => {
+    if (!boundaryCue) return;
+    if (boundaryCueTimerRef.current) window.clearTimeout(boundaryCueTimerRef.current);
+    boundaryCueTimerRef.current = window.setTimeout(() => setBoundaryCue(null), 1600);
+    return () => {
+      if (boundaryCueTimerRef.current) window.clearTimeout(boundaryCueTimerRef.current);
+    };
+  }, [boundaryCue]);
+
+  const handleNavigate = useCallback(
+    (delta: number) => {
+      if (items.length > 1 && selectedIndex >= 0) {
+        if (delta > 0 && selectedIndex === items.length - 1) {
+          setBoundaryCue({ message: "End of view — back to the first photo", key: Date.now() });
+        } else if (delta < 0 && selectedIndex === 0) {
+          setBoundaryCue({
+            message: "Beginning of view — back to the last photo",
+            key: Date.now(),
+          });
+        }
+      }
+      props.onNavigate(delta);
+    },
+    [items.length, selectedIndex, props],
+  );
 
   useEffect(() => {
     flashHints();
@@ -287,20 +315,21 @@ function ViewerScreen(props: ViewerScreenProps) {
         </div>
         {inspectedVideo ? (
           <>
-            <h2>Videos don’t open in the Viewer</h2>
-            <p>
-              The item you’re inspecting is a video. Press the play button on its tile (or the Now
-              Playing chip) to watch it.
-            </p>
+            <h2>Videos don’t open in the viewer</h2>
+            <p>This item is a video. Open it from its tile to play it, or close the viewer.</p>
           </>
         ) : (
           <>
-            <h2>No viewable media yet</h2>
+            <h2>Nothing to view</h2>
             <p>
-              This view has no photos. Import photos or RAW files, or open a video from its tile.
+              There is no photo or RAW file left in this view. Import media, or close the viewer to
+              pick up where you left off.
             </p>
           </>
         )}
+        <button type="button" className="primary-button" onClick={props.onClose}>
+          Back to library
+        </button>
       </div>
     );
 
@@ -441,7 +470,7 @@ function ViewerScreen(props: ViewerScreenProps) {
         <button
           className="viewer-arrow left"
           type="button"
-          onClick={() => props.onNavigate(-1)}
+          onClick={() => handleNavigate(-1)}
           aria-label="Previous"
           title="Previous item (←)"
         >
@@ -538,12 +567,22 @@ function ViewerScreen(props: ViewerScreenProps) {
         <button
           className="viewer-arrow right"
           type="button"
-          onClick={() => props.onNavigate(1)}
+          onClick={() => handleNavigate(1)}
           aria-label="Next"
           title="Next item (→)"
         >
           <ChevronRightIcon size={21} strokeWidth={2.1} />
         </button>
+        {boundaryCue && (
+          <div
+            key={boundaryCue.key}
+            className="viewer-boundary-cue"
+            role="status"
+            aria-live="polite"
+          >
+            {boundaryCue.message}
+          </div>
+        )}
         <div
           className={`viewer-overlay-top${hintsVisible ? "" : " hidden"}`}
           onMouseEnter={() => {
