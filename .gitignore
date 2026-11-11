@@ -7,6 +7,11 @@ sample-library/
 node_modules/
 dist/
 src-tauri/target/
+
+# Bundled ffmpeg/ffprobe sidecars, built by scripts/build-ffmpeg.sh
+src-tauri/binaries/
+# ffmpeg source download when VISTO_FFMPEG_WORK points into the repo (CI does)
+.ffmpeg-work/
 *.log
 npm-debug.log*
 yarn-debug.log*

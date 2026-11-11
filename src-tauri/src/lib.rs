@@ -13,6 +13,7 @@ mod media_animation;
 mod media_dimensions;
 mod media_kind;
 mod media_signature;
+mod media_tools;
 mod menu;
 mod models;
 
@@ -192,6 +193,8 @@ pub fn run() {
             open_file,
             open_with_player,
             external_video_players,
+            prepare_playback,
+            log_playback_diagnostic,
             open_folder,
             // Albums
             create_album,

@@ -920,7 +920,9 @@ pub(crate) fn thumbnail_cache_key(
     kind: &str,
     quality: u8,
 ) -> String {
-    let version = if kind == "video" { "v2" } else { "v1" };
+    // Bumping the video version invalidates the cached "No preview" placeholder
+    // written for containers QuickLook could not open.
+    let version = if kind == "video" { "v3" } else { "v1" };
     format!("{item_id}:{modified_at}:{source_size}:{thumbnail_size}:{version}:q{quality}")
 }
 
@@ -1036,10 +1038,30 @@ pub(crate) fn generate_cached_thumbnail(
                 return Ok(result);
             }
         }
-        // Video files: try QuickLook thumbnail generator (qlmanage).
+        // Video files: QuickLook covers what macOS can decode, and ffmpeg covers
+        // the rest. QuickLook has no VP9/AV1 decoder: it returns nothing — or
+        // hangs until the timeout — and the grid was left with "No preview" for
+        // a video the player itself could play.
         if kind == "video" {
-            if let Ok(result) = generate_thumbnail_with_qlmanage(source, destination, size) {
-                return Ok(result);
+            if quicklook_handles_container(source) {
+                if let Ok(result) = generate_thumbnail_with_qlmanage(source, destination, size) {
+                    return Ok(result);
+                }
+                if let Ok(result) =
+                    generate_thumbnail_with_ffmpeg(source, destination, size, quality)
+                {
+                    return Ok(result);
+                }
+            } else {
+                // Skip the guaranteed timeout for containers QuickLook never opens.
+                if let Ok(result) =
+                    generate_thumbnail_with_ffmpeg(source, destination, size, quality)
+                {
+                    return Ok(result);
+                }
+                if let Ok(result) = generate_thumbnail_with_qlmanage(source, destination, size) {
+                    return Ok(result);
+                }
             }
         }
 
@@ -1125,6 +1147,122 @@ fn generate_placeholder_thumbnail(
     std::fs::write(&temporary, &bytes)?;
     commit_thumbnail_file(&temporary, destination)?;
     Ok((bytes, width, height))
+}
+
+/// Containers macOS QuickLook can open. Anything else would only burn the
+/// ten-second `qlmanage` timeout before producing nothing.
+#[cfg(target_os = "macos")]
+fn quicklook_handles_container(source: &str) -> bool {
+    let extension = Path::new(source)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default()
+        .to_lowercase();
+    !matches!(
+        extension.as_str(),
+        "mkv"
+            | "avi"
+            | "wmv"
+            | "flv"
+            | "webm"
+            | "ts"
+            | "m2ts"
+            | "mts"
+            | "mpg"
+            | "mpeg"
+            | "vob"
+            | "ogv"
+            | "3gp"
+    )
+}
+
+/// Extract a poster frame with ffmpeg.
+///
+/// QuickLook relies on the system decoders, so containers and codecs macOS does
+/// not ship (VP9 and AV1 in MP4 are the common ones from social downloads) get no
+/// thumbnail at all. ffmpeg decodes them, which keeps the grid and filmstrip
+/// consistent with what the player can actually play.
+#[cfg(target_os = "macos")]
+fn generate_thumbnail_with_ffmpeg(
+    source: &str,
+    destination: &Path,
+    size: u32,
+    quality: u8,
+) -> Result<(Vec<u8>, u32, u32), CommandError> {
+    let ffmpeg = crate::media_tools::find(crate::media_tools::FFMPEG).ok_or_else(|| {
+        CommandError::new(
+            ErrorCode::UnsupportedFormat,
+            "ffmpeg is not installed, so this video has no preview".to_string(),
+        )
+    })?;
+
+    let tmp_dir = std::env::temp_dir().join(format!("visto-ffmpeg-poster-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&tmp_dir)?;
+
+    let result = (|| {
+        let frame = tmp_dir.join("poster.jpg");
+        let filter = format!("scale={size}:-2:force_original_aspect_ratio=decrease");
+        let mut extracted = false;
+        // Opening frames are often black, so start slightly in — but a very
+        // short clip has no frame at 0.5s, hence the fallback to the first one.
+        for seek in ["0.5", "0"] {
+            let _ = std::fs::remove_file(&frame);
+            let output = std::process::Command::new(&ffmpeg)
+                .args(["-nostdin", "-v", "error", "-y", "-ss", seek, "-i", source])
+                .args(["-frames:v", "1", "-vf", &filter])
+                .arg(&frame)
+                .output()
+                .map_err(|error| {
+                    CommandError::internal(format!("ffmpeg could not run: {error}"))
+                })?;
+            if output.status.success() && frame.is_file() {
+                extracted = true;
+                break;
+            }
+        }
+        if !extracted {
+            return Err(CommandError::new(
+                ErrorCode::UnsupportedFormat,
+                "ffmpeg could not extract a frame from this video".to_string(),
+            ));
+        }
+
+        let image = image::ImageReader::open(&frame)
+            .map_err(|error| {
+                CommandError::io(format!("Could not read the extracted frame: {error}"))
+            })?
+            .with_guessed_format()
+            .map_err(|error| {
+                CommandError::new(
+                    ErrorCode::UnsupportedFormat,
+                    format!("Could not identify the extracted frame: {error}"),
+                )
+            })?
+            .decode()
+            .map_err(|error| {
+                CommandError::new(
+                    ErrorCode::UnsupportedFormat,
+                    format!("Could not decode the extracted frame: {error}"),
+                )
+            })?
+            .thumbnail(size, size)
+            .to_rgb8();
+        let (width, height) = (image.width(), image.height());
+        let mut bytes = Vec::new();
+        JpegEncoder::new_with_quality(&mut bytes, quality)
+            .encode(&image, width, height, image::ExtendedColorType::Rgb8)
+            .map_err(|error| {
+                CommandError::io(format!("Could not encode the video thumbnail: {error}"))
+            })?;
+
+        let temporary = destination.with_extension(format!("{}.tmp", Uuid::new_v4()));
+        std::fs::write(&temporary, &bytes)?;
+        commit_thumbnail_file(&temporary, destination)?;
+        Ok((bytes, width, height))
+    })();
+
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+    result
 }
 
 /// Generate a video thumbnail using macOS QuickLook (qlmanage).
@@ -1925,14 +2063,94 @@ pub async fn set_color_label(
     catalog: State<'_, crate::Catalog>,
 ) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
+    apply_color_label(&db, &item_id, color_label).await
+}
+
+/// Core implementation of `set_color_label`, extracted so it can be tested
+/// against an in-memory database without a Tauri `State`.
+///
+/// `None` and an empty string both write NULL: the inspector's "none" option and
+/// clearing an existing label are the same operation, and both must store an
+/// absent value rather than leaving the old one behind.
+pub async fn apply_color_label(
+    db: &SqlitePool,
+    item_id: &str,
+    color_label: Option<String>,
+) -> Result<(), CommandError> {
     let color_label = color_label.filter(|value| !value.is_empty());
     sqlx::query("UPDATE media_items SET color_label = ?, updated_at = ? WHERE id = ?")
         .bind(color_label)
         .bind(super::now_ms())
-        .bind(&item_id)
-        .execute(&db)
+        .bind(item_id)
+        .execute(db)
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod color_label_tests {
+    use super::apply_color_label;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn label_db() -> sqlx::SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory db");
+        sqlx::query(
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, color_label TEXT, updated_at INTEGER)",
+        )
+        .execute(&db)
+        .await
+        .expect("create media_items");
+        sqlx::query("INSERT INTO media_items (id, color_label) VALUES ('a', 'red')")
+            .execute(&db)
+            .await
+            .expect("seed row");
+        db
+    }
+
+    async fn stored(db: &sqlx::SqlitePool) -> Option<String> {
+        sqlx::query_scalar("SELECT color_label FROM media_items WHERE id = 'a'")
+            .fetch_one(db)
+            .await
+            .expect("read color label")
+    }
+
+    #[tokio::test]
+    async fn clearing_writes_null_rather_than_leaving_the_old_label() {
+        let db = label_db().await;
+        assert_eq!(stored(&db).await.as_deref(), Some("red"));
+
+        apply_color_label(&db, "a", None)
+            .await
+            .expect("clear label");
+
+        assert_eq!(stored(&db).await, None, "clearing must store NULL");
+    }
+
+    #[tokio::test]
+    async fn an_empty_string_clears_like_none() {
+        let db = label_db().await;
+
+        apply_color_label(&db, "a", Some(String::new()))
+            .await
+            .expect("clear with empty string");
+
+        assert_eq!(stored(&db).await, None);
+    }
+
+    #[tokio::test]
+    async fn setting_a_label_replaces_the_previous_one() {
+        let db = label_db().await;
+
+        apply_color_label(&db, "a", Some("blue".to_string()))
+            .await
+            .expect("set label");
+
+        assert_eq!(stored(&db).await.as_deref(), Some("blue"));
+    }
 }
 
 /// Core implementation of `update_item_tags`, extracted so it can be tested

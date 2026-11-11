@@ -38,6 +38,7 @@ import type {
   UpdateCheckResult,
   LibraryStats,
   ExternalPlayer,
+  PreparedPlayback,
 } from "../types/commands";
 
 // Type-safe command wrappers
@@ -110,6 +111,16 @@ export const tauri = {
       invoke("open_with_player", { path, player }),
 
     externalVideoPlayers: (): Promise<ExternalPlayer[]> => invoke("external_video_players"),
+
+    // `forceRemux` re-copies a file that probed as playable but produced no
+    // decoded frames — the only reliable way to catch a broken index.
+    preparePlayback: (path: string, forceRemux = false): Promise<PreparedPlayback> =>
+      invoke("prepare_playback", { path, forceRemux }),
+
+    // The webview console is invisible in a Tauri window, so playback problems
+    // are relayed to the app log instead.
+    logPlaybackDiagnostic: (label: string, payload: string): Promise<void> =>
+      invoke("log_playback_diagnostic", { label, payload }),
 
     openFolder: (path: string): Promise<void> => invoke("open_folder", { path }),
   },
