@@ -435,7 +435,7 @@ function ViewerScreen(props: ViewerScreenProps) {
                 aspectRatio:
                   selected.width && selected.height
                     ? `auto ${selected.width} / ${selected.height}`
-                    : "auto",
+                    : undefined,
                 width: props.fitMode === "fill" ? "100%" : undefined,
                 height: props.fitMode === "fill" ? "100%" : undefined,
                 maxWidth:
