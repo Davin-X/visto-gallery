@@ -202,13 +202,11 @@ function LibraryScreen(props: LibraryScreenProps) {
       usePlaybackStore.getState().toggle();
       return;
     }
-    // Containers WebKit cannot decode are prepared — remuxed on demand — by the
-    // player itself, not by the hidden background element. Open the player for
-    // those instead of starting a background session that would stay silent.
-    if (!canPlayVideoInApp(item.path, item.name)) {
-      props.onOpenViewer?.(item.id);
-      return;
-    }
+    // Every video plays in the background session, whatever its container: the
+    // background host is the same player component and prepares (losslessly
+    // remuxes) an unplayable file before it starts, exactly like the full player.
+    // Opening the player screen for one container instead made the same button
+    // do two different things depending on the file.
     props.onPlayBackground?.(item.id);
   };
   const [showRefreshHint, setShowRefreshHint] = useState(false);
