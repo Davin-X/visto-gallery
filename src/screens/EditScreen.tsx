@@ -812,10 +812,10 @@ function EditScreen(props: EditScreenProps) {
               className="quiet-button edit-back-btn"
               type="button"
               onClick={() => props.onBack?.()}
-              title="Return to Library"
+              title="Back to Library"
+              aria-label="Back to Library"
             >
-              <ArrowLeftIcon size={15} />
-              <span>Library</span>
+              <ArrowLeftIcon size={16} />
             </button>
             <div className="edit-title-group">
               <div className="edit-title-row">
@@ -842,10 +842,10 @@ function EditScreen(props: EditScreenProps) {
             className="quiet-button edit-back-btn"
             type="button"
             onClick={handleDone}
-            title="Return to Library (auto-saves draft)"
+            title="Back to Library (auto-saves draft)"
+            aria-label="Back to Library"
           >
-            <ArrowLeftIcon size={15} />
-            <span>Library</span>
+            <ArrowLeftIcon size={16} />
           </button>
 
           <div className="edit-title-group">
