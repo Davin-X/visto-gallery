@@ -14,6 +14,7 @@ import {
   BatchIcon,
   CheckIcon,
   DetailsIcon,
+  FullscreenIcon,
   EyeIcon,
   EyeOffIcon,
   FolderIcon,
@@ -1391,6 +1392,14 @@ function LibraryScreen(props: LibraryScreenProps) {
                 >
                   <CheckIcon size={12} />
                   {allVisibleSelected ? "Deselect all" : "Select all"}
+                </button>
+                <button
+                  type="button"
+                  className="selection-bar-action"
+                  onClick={() => props.onOpenViewer?.(props.selectedIds[0])}
+                  title="Open the selected item in the viewer (Enter with Cmd/Ctrl)"
+                >
+                  <FullscreenIcon size={13} /> View
                 </button>
                 <button
                   type="button"

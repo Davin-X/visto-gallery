@@ -9,7 +9,6 @@ import {
   MonitorIcon,
   LibraryIcon,
   AlbumsIcon,
-  ViewerIcon,
   DuplicatesIcon,
   EditIcon,
   BatchIcon,
@@ -46,7 +45,6 @@ const NAV_ITEMS: Array<{
 }> = [
   { label: "Library", Icon: LibraryIcon, screen: "Library" },
   { label: "Albums", Icon: AlbumsIcon, screen: "Albums" },
-  { label: "Viewer", Icon: ViewerIcon, screen: "Viewer" },
   { label: "Duplicates", Icon: DuplicatesIcon, screen: "Duplicates" },
   { label: "Edit", Icon: EditIcon, screen: "Edit" },
   { label: "Batch", Icon: BatchIcon, screen: "Batch" },
