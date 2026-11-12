@@ -27,6 +27,8 @@ import {
   togglePictureInPicture,
 } from "../../engine/utils/pictureInPicture";
 
+type PlaybackSnapshot = ReturnType<typeof usePlaybackStore.getState>;
+
 // WKWebView can decode MP4/MOV (H.264/HEVC) and WebM, but not Matroska or AVI.
 // Files outside the supported list never reach the <video> element: WebKit
 // renders a black frame for them, which made the whole viewer look broken.
@@ -180,6 +182,10 @@ function VideoPlayer({
   // Re-copy a file that probed as playable but decoded no frames. WKWebView
   // reports nothing useful for a damaged index, so a remux is the only way to
   // tell a broken container apart from an unsupported codec.
+  // Chosen when an item is registered and re-used by the setup effect below: the
+  // store cannot answer "was this a handoff" once it has been pointed at the
+  // new item.
+  const handoffSnapshotRef = useRef<PlaybackSnapshot | null>(null);
   const remuxRetriedRef = useRef(false);
   // Resolves true when the retry produced a playable copy.
   const retryRemuxRef = useRef<() => Promise<boolean>>(() => Promise.resolve(false));
@@ -324,17 +330,22 @@ function VideoPlayer({
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
+    // Read the snapshot before registering: registerPlayback points the store at
+    // this item, so a check afterwards always matches. A queue switch then looked
+    // like a handoff for the same video, and the paused snapshot it restored
+    // turned autoplay off, so the next clip loaded but never started.
+    const previous = usePlaybackStore.getState();
+    const handoff = previous.itemId === itemId && previous.duration > 0;
+    handoffSnapshotRef.current = handoff ? previous : null;
     registerPlayback(video, { itemId, name: name || "Video" });
-    const state = usePlaybackStore.getState();
-    const hasSnapshot = state.itemId === itemId && state.duration > 0;
-    if (hasSnapshot) {
+    if (handoff) {
       // Handoff between foreground/background players: snapshot survived.
       // Resume playback if it was playing; sync volume/muted from snapshot.
-      if (state.playing && video.paused) {
+      if (previous.playing && video.paused) {
         void video.play().catch(() => {});
       }
-      video.volume = state.volume;
-      video.muted = state.muted;
+      video.volume = previous.volume;
+      video.muted = previous.muted;
     } else {
       // Fresh video: no snapshot to preserve; record current element state.
       syncPlayback({
@@ -344,6 +355,9 @@ function VideoPlayer({
         muted: video.muted,
         volume: video.volume,
       });
+      // A handoff can have turned the attribute off for the paused case above;
+      // a new item asks for playback again.
+      video.autoplay = videoAutoPlay || forceAutoPlay;
       // WKWebView is finicky about autoplay for tiny background hosts: the
       // attribute alone can stall indefinitely with the host page inert. Ask
       // for playback explicitly; it happens within the user's gesture when
@@ -352,7 +366,15 @@ function VideoPlayer({
       void video.play().catch(() => {});
     }
     return () => unregisterPlayback(video);
-  }, [itemId, name, registerPlayback, unregisterPlayback, syncPlayback]);
+  }, [
+    itemId,
+    name,
+    registerPlayback,
+    unregisterPlayback,
+    syncPlayback,
+    videoAutoPlay,
+    forceAutoPlay,
+  ]);
 
   // A queued video is a different timeline. The shared snapshot keeps the
   // *controls* (volume, mute, play/pause) across items, never the position,
@@ -377,16 +399,13 @@ function VideoPlayer({
     const video = ref.current as HTMLVideoElement | null;
     if (!video) return;
 
-    // Restore playback state from store if this is the same itemId
-    const {
-      itemId: storeItemId,
-      time,
-      volume,
-      muted,
-      playing,
-      duration,
-    } = usePlaybackStore.getState();
-    if (storeItemId === itemId && duration > 0) {
+    // Restore the snapshot only when the item was registered as a handoff. The
+    // store always looks like it belongs to this item here, because registering
+    // points it there, and the retained duration survives a queue switch on
+    // purpose.
+    const snapshot = handoffSnapshotRef.current;
+    const { time, volume, muted, playing, duration } = usePlaybackStore.getState();
+    if (snapshot && snapshot.itemId === itemId && snapshot.duration > 0) {
       // Restore saved state
       video.currentTime = time;
       video.volume = volume;
@@ -597,7 +616,7 @@ function VideoPlayer({
     // the mount-time play() can lose the race against the canplay event in
     // WKWebView, which silently leaves the video idle at 0:00.
     const attemptAutoPlay = () => void video.play().catch(() => {});
-    if (storeItemId !== itemId || duration === 0) {
+    if (!snapshot) {
       video.addEventListener("canplay", attemptAutoPlay, { once: true });
     }
     if (video.readyState >= 1) onMetadata();
