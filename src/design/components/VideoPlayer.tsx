@@ -1128,6 +1128,10 @@ function VideoPlayer({
             aria-hidden="true"
           >
             <span>
+              <kbd>J</kbd>
+              <kbd>K</kbd> Prev / Next
+            </span>
+            <span>
               <kbd>Space</kbd> Play / pause
             </span>
             <span>
@@ -1140,6 +1144,9 @@ function VideoPlayer({
             </span>
             <span>
               <kbd>F</kbd> Full screen
+            </span>
+            <span>
+              <kbd>L</kbd> Favorite
             </span>
             <span>
               <kbd>M</kbd> Mute
