@@ -1372,13 +1372,7 @@ export const useLibraryStore = create<LibraryState>()(
         if (!trimmed) return;
 
         const album = await tauri.albums.create(trimmed);
-        const ids =
-          itemIds ??
-          (get().selectedIds.length
-            ? get().selectedIds
-            : get().inspectedId
-              ? [get().inspectedId!]
-              : []);
+        const ids = itemIds ?? (get().selectedIds.length ? get().selectedIds : []);
         if (ids.length) await tauri.albums.addItems(album.id, ids);
 
         // Reflect the new membership immediately. The album response only
