@@ -2361,8 +2361,10 @@ mod trash_restore_tests {
     use std::path::{Path, PathBuf};
 
     fn temp_dir(label: &str) -> PathBuf {
-        let path =
-            std::env::temp_dir().join(format!("visto-trash-restore-{label}-{}", uuid::Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!(
+            "visto-trash-restore-{label}-{}",
+            uuid::Uuid::new_v4()
+        ));
         std::fs::create_dir_all(&path).expect("create temp dir");
         path
     }
@@ -2449,7 +2451,10 @@ mod trash_restore_tests {
         assert_eq!(result.restored, vec![target.to_string_lossy().into_owned()]);
         assert!(result.failed.is_empty());
         assert_eq!(std::fs::read(&target).unwrap(), b"image bytes");
-        assert!(!trashed.exists(), "the trash entry must be gone after a restore");
+        assert!(
+            !trashed.exists(),
+            "the trash entry must be gone after a restore"
+        );
     }
 
     #[test]
@@ -2473,7 +2478,11 @@ mod trash_restore_tests {
         std::fs::write(&target, b"keep me").unwrap();
 
         let result = restore_from_trash(&trash, &[request(&target, Some(13))]);
-        assert_eq!(result.restored.len(), 1, "already-present file counts as restored");
+        assert_eq!(
+            result.restored.len(),
+            1,
+            "already-present file counts as restored"
+        );
         assert_eq!(std::fs::read(&target).unwrap(), b"keep me");
         assert!(trashed.exists(), "the trash entry is left untouched");
     }
