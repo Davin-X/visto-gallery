@@ -4780,6 +4780,14 @@ body.is-resizing .photo-inspector {
   max-width: 1120px;
 }
 
+/* Albums: the heading block is three lines tall, so the page action centres
+   against the whole block instead of hanging off the subtitle baseline. Scoped
+   rather than global: screens with a single-line heading keep the existing
+   bottom alignment, which is already right for them. */
+.albums-page > .page-heading {
+  align-items: center;
+}
+
 .albums-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
@@ -13141,20 +13149,18 @@ body.is-resizing .photo-inspector {
 .smart-albums-headrow {
   display: flex;
   width: 100%;
-  align-items: center;
+  align-items: baseline;
   gap: 4px;
 }
 
+/* Heading, count and the automatic-update note read as one line, in that order.
+   The note used to be thrown to the far right by margin-left:auto, which glued
+   it to View all and separated it from the heading it describes. */
 .smart-albums-heading-left {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-}
-
-.smart-albums-heading-left .eyebrow {
-  margin: 0;
-  font-size: 10px;
 }
 
 .smart-albums-heading-left h2,
@@ -13169,7 +13175,6 @@ body.is-resizing .photo-inspector {
 }
 
 .smart-albums-toggle-desc {
-  margin-left: auto;
   color: var(--muted);
   font-size: 11.5px;
   white-space: nowrap;
@@ -13193,6 +13198,8 @@ body.is-resizing .photo-inspector {
 
 .smart-albums-viewall {
   flex: 0 0 auto;
+  /* The action owns the free space now. */
+  margin-left: auto;
   border: 0;
   border-radius: 8px;
   padding: 4px 8px;

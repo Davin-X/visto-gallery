@@ -96,8 +96,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
           <p className="eyebrow">COLLECTIONS</p>
           <h1>Albums</h1>
           <p className="page-subtitle">
-            {albums.length.toLocaleString()} {albums.length === 1 ? "album" : "albums"} · Choose an
-            album to see its photos.
+            {albums.length.toLocaleString()} {albums.length === 1 ? "album" : "albums"}
           </p>
         </div>
         <div className="header-actions">
@@ -114,10 +113,10 @@ function AlbumsScreen(props: AlbumsScreenProps) {
         >
           <div className="smart-albums-headrow">
             <div className="smart-albums-heading-left">
-              <span className="eyebrow">SAVED FILTERS</span>
               <h2>Smart Albums</h2>
               <span className="smart-albums-count">
-                {props.smartAlbums!.length.toLocaleString()}
+                {props.smartAlbums!.length.toLocaleString()}{" "}
+                {props.smartAlbums!.length === 1 ? "album" : "albums"}
               </span>
               <span className="smart-albums-toggle-desc">Updates automatically</span>
             </div>
