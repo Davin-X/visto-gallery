@@ -49,6 +49,7 @@ import {
   resetDraftRevision,
   clearEditDraft,
   hasEditChanges,
+  pruneDrafts,
 } from "../../engine/stores/useEditStore";
 import type { EditValues } from "../../engine/types/media";
 
@@ -278,4 +279,93 @@ test("hasEditChanges accurately detects modifications", () => {
   expect(hasEditChanges(baseEdits, baseCrop)).toBe(false);
   expect(hasEditChanges({ ...baseEdits, exposure: 1 }, baseCrop)).toBe(true);
   expect(hasEditChanges(baseEdits, { ...baseCrop, enabled: true })).toBe(true);
+});
+
+test("pruneDrafts sweeps draft payloads the LRU order does not track", () => {
+  localStorage.setItem("edit:draft:tracked", JSON.stringify({ edits: baseEdits }));
+  localStorage.setItem("edit:draft:orphan", JSON.stringify({ edits: baseEdits }));
+  localStorage.setItem("edit:draft:order", JSON.stringify(["tracked"]));
+
+  pruneDrafts();
+
+  expect(localStorage.getItem("edit:draft:tracked")).not.toBeNull();
+  expect(localStorage.getItem("edit:draft:orphan")).toBeNull();
+  expect(JSON.parse(localStorage.getItem("edit:draft:order")!)).toEqual(["tracked"]);
+});
+
+test("the draft order key is not reported as a draft", async () => {
+  localStorage.setItem("edit:draft:item-1", JSON.stringify({ edits: baseEdits }));
+  localStorage.setItem("edit:draft:order", JSON.stringify(["item-1"]));
+
+  await useDraftMetaStore.getState().refresh();
+
+  const ids = useDraftMetaStore.getState().ids;
+  expect(ids.has("item-1")).toBe(true);
+  expect(ids.has("order")).toBe(false);
+});
+
+test("a full localStorage evicts the oldest draft instead of dropping the new one", async () => {
+  const originalSetItem = Storage.prototype.setItem;
+  const limit = 5000;
+  const storedBytes = () => {
+    let total = 0;
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith("edit:draft:") || key === "edit:draft:order") continue;
+      total += localStorage.getItem(key)?.length ?? 0;
+    }
+    return total;
+  };
+  const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+    this: Storage,
+    key: string,
+    value: string,
+  ) {
+    if (key.startsWith("edit:draft:") && key !== "edit:draft:order") {
+      const others = storedBytes() - (localStorage.getItem(key)?.length ?? 0);
+      if (others + value.length > limit) {
+        throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
+      }
+    }
+    return originalSetItem.call(this, key, value);
+  });
+
+  try {
+    // Three old drafts fill the store; each is 1600 characters, so the ~500
+    // byte current draft cannot fit until one is evicted.
+    for (const id of ["old-1", "old-2", "old-3"]) {
+      localStorage.setItem(`edit:draft:${id}`, "x".repeat(1600));
+    }
+    localStorage.setItem("edit:draft:order", JSON.stringify(["old-1", "old-2", "old-3"]));
+
+    useEditStore.setState({ item, values: { ...baseEdits, exposure: 20 } });
+    await useEditStore.getState().saveDraft();
+
+    // The current edit survived, at the cost of the least-recently-used draft.
+    expect(localStorage.getItem("edit:draft:item-1")).not.toBeNull();
+    expect(localStorage.getItem("edit:draft:old-1")).toBeNull();
+    expect(await tauri.edit.getRecipe("item-1")).not.toBeNull();
+  } finally {
+    spy.mockRestore();
+  }
+});
+
+test("an oversized draft still saves its recipe to SQLite", async () => {
+  const longHistory = Array.from({ length: 60 }, (_, index) => ({
+    ...baseEdits,
+    exposure: index,
+  }));
+  useEditStore.setState({
+    item,
+    values: { ...baseEdits, exposure: 20 },
+    history: longHistory,
+    historyIndex: longHistory.length - 1,
+  });
+
+  await useEditStore.getState().saveDraft();
+
+  // The localStorage cap applies to the fallback copy only; the recipe (the
+  // authoritative store) must still be written.
+  expect(localStorage.getItem("edit:draft:item-1")).toBeNull();
+  expect(await tauri.edit.getRecipe("item-1")).not.toBeNull();
 });
