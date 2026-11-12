@@ -529,6 +529,24 @@ function LibraryScreen(props: LibraryScreenProps) {
     );
   };
 
+  // Placeholders shown while the first page for this view loads, so a fresh
+  // filter or folder never flashes the empty state. Matches the grid tile's
+  // footprint; the details layout gets a row-shaped variant.
+  const skeletonView = () => (
+    <>
+      <span className="visually-hidden" role="status">
+        Loading library…
+      </span>
+      {props.layout === "details"
+        ? Array.from({ length: 10 }, (_, index) => (
+            <span key={index} className="library-skeleton-row" aria-hidden="true" />
+          ))
+        : Array.from({ length: 12 }, (_, index) => (
+            <span key={index} className="library-skeleton-tile" aria-hidden="true" />
+          ))}
+    </>
+  );
+
   // Progressive rendering. A library can hold tens of thousands of items and
   // mounting a tile for every one makes typing, clicking and filtering janky
   // (the whole grid reconciles on each state change). Render a page at a time
@@ -554,6 +572,11 @@ function LibraryScreen(props: LibraryScreenProps) {
   const scrollKey = `${viewKey}|${props.layout}|${thumbnailSize}${props.hiddenView ? "|hidden" : ""}`;
   const scrollKeyRef = useRef(scrollKey);
   scrollKeyRef.current = scrollKey;
+  // First page for this view hasn't arrived yet: show placeholders rather
+  // than flash the "empty library" copy while the query is in flight.
+  const awaitingFirstPage = props.hiddenView
+    ? library.hiddenLoading
+    : library.loadedViewKey !== viewKey;
   const renderLimitRef = useRef(renderLimit);
   renderLimitRef.current = renderLimit;
 
@@ -1549,6 +1572,7 @@ function LibraryScreen(props: LibraryScreenProps) {
             if (props.layout === "details") {
               return (
                 <div className="gallery-grid layout-details">
+                  {renderedItems.length === 0 && (awaitingFirstPage ? skeletonView() : emptyView())}
                   {renderedItems.map((item: any) => (
                     <article
                       key={item.id}
@@ -1693,7 +1717,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                       </span>
                     </article>
                   ))}
-                  {props.items.length === 0 && emptyView()}
+                  {props.items.length === 0 && (awaitingFirstPage ? skeletonView() : emptyView())}
                 </div>
               );
             }
@@ -1701,7 +1725,9 @@ function LibraryScreen(props: LibraryScreenProps) {
               return (
                 <div className={`gallery-grid layout-timeline thumb-${thumbnailSize}`}>
                   {timelineGroups.length === 0
-                    ? emptyView()
+                    ? awaitingFirstPage
+                      ? skeletonView()
+                      : emptyView()
                     : visibleTimelineGroups.map(({ key, label, items, count, visibleItems }) => {
                         const allSelected =
                           items.length > 0 &&
@@ -2045,7 +2071,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                     style={{ height: virtualGrid.bottomSpacer }}
                   />
                 )}
-                {props.items.length === 0 && emptyView()}
+                {props.items.length === 0 && (awaitingFirstPage ? skeletonView() : emptyView())}
               </div>
             );
           })()}
