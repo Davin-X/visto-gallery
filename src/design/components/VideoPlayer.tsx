@@ -330,8 +330,11 @@ function VideoPlayer({
     const video = ref.current;
     if (video) video.currentTime = 0;
     setTime(0);
-    setDuration(0);
-    syncPlayback({ time: 0, duration: 0 });
+    // Only the position belongs to the new item. Duration belongs to the
+    // element, and a source that brings a different one reports it through
+    // durationchange, so resetting it here only threw away a value that was
+    // still correct and left the readout with a zero total.
+    syncPlayback({ time: 0 });
   }, [itemId, syncPlayback]);
 
   useEffect(() => {
@@ -546,6 +549,9 @@ function VideoPlayer({
       checkDecodedFrames();
     };
     video.addEventListener("loadedmetadata", onMetadata);
+    // loadedmetadata fires once; a duration that arrives or changes later (a
+    // stream, or a source swapped under a mounted element) only reports here.
+    video.addEventListener("durationchange", onMetadata);
     video.addEventListener("loadeddata", onLoadedData);
     video.addEventListener("canplay", onCanPlay);
     video.addEventListener("timeupdate", onTimeUpdate);
@@ -580,6 +586,7 @@ function VideoPlayer({
         }
       }
       video.removeEventListener("loadedmetadata", onMetadata);
+      video.removeEventListener("durationchange", onMetadata);
       video.removeEventListener("loadeddata", onLoadedData);
       video.removeEventListener("canplay", onCanPlay);
       video.removeEventListener("timeupdate", onTimeUpdate);
