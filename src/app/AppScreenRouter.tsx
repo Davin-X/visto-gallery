@@ -9,7 +9,6 @@ import LibraryScreen from "../screens/LibraryScreen";
 import EditScreen from "../screens/EditScreen";
 import ViewerScreen from "../screens/ViewerScreen";
 import VideoPlayerScreen from "../screens/VideoPlayerScreen";
-import CameraLensBrowserScreen from "../screens/CameraLensBrowserScreen";
 import BatchScreen from "../screens/BatchScreen";
 import AlbumsScreen from "../screens/AlbumsScreen";
 import DuplicatesScreen from "../screens/DuplicatesScreen";
@@ -473,15 +472,6 @@ export function AppScreenRouter({
           onSetSelection={library.setSelectedIds}
           onRemoveItem={library.toggleSelection}
           assetUrl={assetUrl}
-        />
-      )}
-
-      {screen === "CameraLens" && (
-        <CameraLensBrowserScreen
-          items={library.items}
-          assetUrl={assetUrl}
-          onBack={() => setScreen("Library")}
-          onOpenViewer={(id?: string) => openViewer(id, "Library")}
         />
       )}
 

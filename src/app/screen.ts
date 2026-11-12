@@ -7,5 +7,4 @@ export type Screen =
   | "Edit"
   | "Batch"
   | "Hidden"
-  | "CameraLens"
   | "Settings";
