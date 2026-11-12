@@ -11,6 +11,7 @@ import React, {
 import { useKeyboard } from "../engine/hooks/useKeyboard";
 import {
   AlbumsIcon,
+  ChevronLeftIcon,
   BatchIcon,
   CheckIcon,
   DetailsIcon,
@@ -976,17 +977,16 @@ function LibraryScreen(props: LibraryScreenProps) {
         <header className="library-header">
           {inAlbum ? (
             <header className="page-heading album-detail-top">
-              <button
-                className="album-breadcrumb"
-                type="button"
-                onClick={() => props.onOpenAlbums?.()}
-              >
-                <span className="album-breadcrumb-arrow" aria-hidden="true">
-                  ←
-                </span>
-                <AlbumsIcon size={14} /> All albums
-              </button>
               <div className="album-detail-head">
+                <button
+                  className="album-back-button"
+                  type="button"
+                  onClick={() => props.onOpenAlbums?.()}
+                  aria-label="All albums"
+                  title="All albums"
+                >
+                  <ChevronLeftIcon size={18} strokeWidth={2.1} />
+                </button>
                 <div className={`album-detail-cover${activeAlbumPhotos.length ? "" : " is-empty"}`}>
                   {activeAlbumPhotos.length ? (
                     <AlbumPhotoStack
@@ -1000,10 +1000,13 @@ function LibraryScreen(props: LibraryScreenProps) {
                 </div>
                 <div className="album-detail-copy">
                   <p className="eyebrow">ALBUM</p>
-                  <h1>{activeAlbumName}</h1>
-                  <p className="page-subtitle">
-                    {activeAlbumCount.toLocaleString()} {activeAlbumCount === 1 ? "item" : "items"}
-                  </p>
+                  <h1>
+                    {activeAlbumName}
+                    <span className="album-count-inline">
+                      {activeAlbumCount.toLocaleString()}{" "}
+                      {activeAlbumCount === 1 ? "item" : "items"}
+                    </span>
+                  </h1>
                 </div>
                 <div className="album-detail-actions">
                   <button

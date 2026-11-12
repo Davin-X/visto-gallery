@@ -5049,37 +5049,40 @@ body.is-resizing .photo-inspector {
   min-width: 0;
 }
 
-.album-breadcrumb {
+/* Back button for the album detail view: compact chevron inline with the
+   cover, so the header needs no breadcrumb row above it. */
+.album-back-button {
   display: inline-flex;
   align-items: center;
-  align-self: flex-start;
-  gap: 6px;
-  height: 20px;
-  margin: 0;
-  padding: 0 6px 0 0;
-  border: 0;
-  border-radius: 6px;
+  justify-content: center;
+  align-self: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--muted);
-  font-size: 12.5px;
-  font-weight: 550;
-  white-space: nowrap;
   cursor: pointer;
-  transition: color 0.12s ease;
+  transition:
+    color 0.12s ease,
+    background 0.12s ease,
+    border-color 0.12s ease;
 }
 
-.album-breadcrumb-arrow {
-  font-size: 13px;
-  line-height: 1;
-  opacity: 0.75;
+.album-back-button:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: var(--line);
 }
 
-.album-breadcrumb:hover {
-  color: var(--accent-text);
-}
-
-.album-breadcrumb:hover .album-breadcrumb-arrow {
-  opacity: 1;
+.album-count-inline {
+  margin-left: 10px;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .album-detail-heading {
