@@ -806,7 +806,7 @@ function ViewerScreen(props: ViewerScreenProps) {
             {/* Occasional actions, one level down: they are the same weight in
                 the bar as zoom and full screen, but not the same frequency. */}
             {(selected.kind === "photo" || selected.kind === "raw") && (
-              <div className="viewer-more" ref={moreRef}>
+              <div className="media-anchor" ref={moreRef}>
                 <button
                   type="button"
                   aria-haspopup="menu"
@@ -819,7 +819,7 @@ function ViewerScreen(props: ViewerScreenProps) {
                   <MoreIcon size={15} />
                 </button>
                 {moreOpen && (
-                  <div className="viewer-more-menu" role="menu" aria-label="More actions">
+                  <div className="media-popover" role="menu" aria-label="More actions">
                     {selected.kind === "photo" && (
                       <button
                         type="button"
@@ -918,7 +918,7 @@ function ViewerScreen(props: ViewerScreenProps) {
               <FullscreenIcon size={14} />
               <span className="viewer-bar-label">Full screen</span>
             </button>
-            <div className="viewer-more viewer-help" ref={helpRef}>
+            <div className="media-anchor viewer-help" ref={helpRef}>
               <button
                 type="button"
                 aria-haspopup="dialog"
@@ -933,18 +933,18 @@ function ViewerScreen(props: ViewerScreenProps) {
               </button>
               {helpOpen && (
                 <div
-                  className="viewer-more-menu viewer-shortcuts"
+                  className="media-popover media-shortcuts"
                   role="dialog"
                   aria-label="Keyboard shortcuts"
                 >
                   {shortcutHints.map((hint) => (
                     <React.Fragment key={hint.label}>
-                      <span className="viewer-shortcut-keys">
+                      <span className="media-shortcut-keys">
                         {hint.keys.map((key) => (
                           <kbd key={key}>{key}</kbd>
                         ))}
                       </span>
-                      <span className="viewer-shortcut-label">{hint.label}</span>
+                      <span className="media-shortcut-label">{hint.label}</span>
                     </React.Fragment>
                   ))}
                 </div>

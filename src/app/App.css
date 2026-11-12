@@ -4238,13 +4238,8 @@ body.is-resizing .photo-inspector {
   color: #fff;
   transform: translateX(-50%);
   box-sizing: border-box;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-}
-
-.viewer-video-controls::-webkit-scrollbar {
-  display: none;
+  /* No scroll container: it clipped on both axes, which would hide the shortcut
+     list that opens above the bar. The seek input shrinks to make room instead. */
 }
 
 .viewer-video-controls button {
@@ -4261,6 +4256,16 @@ body.is-resizing .photo-inspector {
 
 .viewer-video-controls button:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+
+/* The shortcut button carries a word, unlike the icon-only transport buttons. */
+.viewer-video-controls .media-keys-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .viewer-video-controls input[type="range"] {
@@ -4598,12 +4603,12 @@ body.is-resizing .photo-inspector {
   }
 }
 
-.viewer-more {
+.media-anchor {
   position: relative;
   display: flex;
 }
 
-.viewer-more-menu {
+.media-popover {
   position: absolute;
   right: 0;
   bottom: calc(100% + 10px);
@@ -4619,7 +4624,7 @@ body.is-resizing .photo-inspector {
   box-shadow: 0 16px 38px rgba(0, 0, 0, 0.42);
 }
 
-.viewer-overlay-bottom .viewer-more-menu button {
+.viewer-overlay-bottom .media-popover button {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -4723,7 +4728,7 @@ body.is-resizing .photo-inspector {
 /* Shortcut list, opened from the help button in the bar. It used to be a strip
    pinned to the top-right corner of the stage, which was the last thing still
    overlaying the picture. */
-.viewer-shortcuts {
+.media-shortcuts {
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
@@ -4749,12 +4754,12 @@ body.is-resizing .photo-inspector {
     opacity 0.35s ease,
     visibility 0.35s ease;
 }
-.viewer-shortcut-keys {
+.media-shortcut-keys {
   display: inline-flex;
   justify-content: flex-end;
   gap: 4px;
 }
-.viewer-shortcuts kbd {
+.media-shortcuts kbd {
   display: inline-flex;
   align-items: center;
   height: 18px;
@@ -4767,7 +4772,7 @@ body.is-resizing .photo-inspector {
   font-size: 10px;
   font-weight: 600;
 }
-.viewer-shortcut-label {
+.media-shortcut-label {
   color: rgba(255, 255, 255, 0.82);
   font-size: 12px;
 }
@@ -11913,53 +11918,6 @@ body.is-resizing .photo-inspector {
   transform: translate(-50%, 0);
 }
 
-.video-player-hints {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  max-width: calc(100% - 32px);
-  padding: 7px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 9px;
-  background: rgba(15, 18, 23, 0.74);
-  backdrop-filter: blur(10px);
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 11px;
-  white-space: nowrap;
-  pointer-events: none;
-  transition:
-    opacity 180ms ease,
-    transform 180ms ease;
-}
-
-.video-player-hints.is-hidden {
-  opacity: 0;
-  transform: translateY(-4px);
-}
-
-.video-player-hints > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.video-player-hints kbd {
-  display: inline-flex;
-  align-items: center;
-  min-height: 18px;
-  padding: 0 5px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.92);
-  font-family: inherit;
-  font-size: 10px;
-}
-
 .video-player-stage .viewer-video-controls button {
   min-width: 32px;
   min-height: 32px;
@@ -12363,16 +12321,6 @@ body.is-resizing .photo-inspector {
 
   .video-player-stage .viewer-video-controls .video-volume {
     display: none;
-  }
-
-  .video-player-hints {
-    right: 8px;
-    left: 8px;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 6px 10px;
-    padding: 6px 8px;
-    font-size: 9px;
   }
 
   .video-pip-error {

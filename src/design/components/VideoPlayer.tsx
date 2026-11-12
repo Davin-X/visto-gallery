@@ -11,6 +11,7 @@ import {
   PauseIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  InfoIcon,
 } from "./icons";
 import { tauri } from "../../engine/commands/tauri";
 import type { ExternalPlayer } from "../../engine/types/commands";
@@ -29,6 +30,18 @@ import {
 // WKWebView can decode MP4/MOV (H.264/HEVC) and WebM, but not Matroska or AVI.
 // Files outside the supported list never reach the <video> element: WebKit
 // renders a black frame for them, which made the whole viewer look broken.
+
+// Shortcut list for the transport bar. Same keys the strip that used to float
+// over the video listed, in the order they are reached for.
+const PLAYER_SHORTCUTS: Array<{ keys: string[]; label: string }> = [
+  { keys: ["J", "K"], label: "Prev / next" },
+  { keys: ["Space"], label: "Play / pause" },
+  { keys: ["←", "→"], label: "Seek" },
+  { keys: ["↑", "↓"], label: "Volume" },
+  { keys: ["M"], label: "Mute" },
+  { keys: ["L"], label: "Favorite" },
+  { keys: ["F"], label: "Full screen" },
+];
 
 function VideoPlayer({
   itemId,
@@ -70,12 +83,13 @@ function VideoPlayer({
   const clickTimerRef = useRef<number | null>(null);
   const controlsRef = useRef<HTMLDivElement | null>(null);
   const controlsTimerRef = useRef<number | null>(null);
-  const hintsTimerRef = useRef<number | null>(null);
   const controlsFocusedRef = useRef(false);
   const [playing, setPlaying] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [keyboardFocusWithinControls, setKeyboardFocusWithinControls] = useState(false);
-  const [hintsVisible, setHintsVisible] = useState(true);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpOpenRef = useRef(false);
+  const helpRef = useRef<HTMLDivElement | null>(null);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(() => usePlaybackStore.getState().lastVolume);
@@ -100,17 +114,31 @@ function VideoPlayer({
 
   const scheduleControlsHide = useCallback(() => {
     if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
-    if (!playing || controlsFocusedRef.current) return;
+    // The shortcut list is a child of the transport, so fading the transport
+    // would take it away mid-read.
+    if (!playing || controlsFocusedRef.current || helpOpenRef.current) return;
     controlsTimerRef.current = window.setTimeout(() => setControlsVisible(false), 3500);
   }, [playing]);
 
   const showPlayerActivity = useCallback(() => {
     setControlsVisible(true);
-    setHintsVisible(true);
     scheduleControlsHide();
-    if (hintsTimerRef.current) window.clearTimeout(hintsTimerRef.current);
-    hintsTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
   }, [scheduleControlsHide]);
+
+  // Shortcuts open from the transport instead of floating over the video, the
+  // way the stills viewer keeps its list in the bar. A click anywhere else
+  // closes the list.
+  useEffect(() => {
+    helpOpenRef.current = helpOpen;
+    if (!helpOpen) return;
+    if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
+    setControlsVisible(true);
+    const onPointerDown = (event: PointerEvent) => {
+      if (!helpRef.current?.contains(event.target as Node)) setHelpOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [helpOpen]);
 
   useEffect(() => {
     if (playing) {
@@ -125,7 +153,6 @@ function VideoPlayer({
     showPlayerActivity();
     return () => {
       if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
-      if (hintsTimerRef.current) window.clearTimeout(hintsTimerRef.current);
     };
   }, [src, showPlayerActivity]);
 
@@ -1131,35 +1158,38 @@ function VideoPlayer({
                 <FullscreenIcon size={14} />
               </button>
             )}
-          </div>
-          <div
-            className={`video-player-hints${hintsVisible ? "" : " is-hidden"}`}
-            aria-hidden="true"
-          >
-            <span>
-              <kbd>J</kbd>
-              <kbd>K</kbd> Prev / Next
-            </span>
-            <span>
-              <kbd>Space</kbd> Play / pause
-            </span>
-            <span>
-              <kbd>←</kbd>
-              <kbd>→</kbd> Seek
-            </span>
-            <span>
-              <kbd>↑</kbd>
-              <kbd>↓</kbd> Volume
-            </span>
-            <span>
-              <kbd>F</kbd> Full screen
-            </span>
-            <span>
-              <kbd>L</kbd> Favorite
-            </span>
-            <span>
-              <kbd>M</kbd> Mute
-            </span>
+            <div className="media-anchor" ref={helpRef}>
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={helpOpen}
+                aria-label="Keyboard shortcuts"
+                title="Keyboard shortcuts"
+                className="media-keys-button"
+                onClick={() => setHelpOpen((value) => !value)}
+              >
+                <InfoIcon size={14} />
+                <span className="media-keys-label">Keys</span>
+              </button>
+              {helpOpen && (
+                <div
+                  className="media-popover media-shortcuts"
+                  role="dialog"
+                  aria-label="Keyboard shortcuts"
+                >
+                  {PLAYER_SHORTCUTS.map((hint) => (
+                    <React.Fragment key={hint.label}>
+                      <span className="media-shortcut-keys">
+                        {hint.keys.map((key) => (
+                          <kbd key={key}>{key}</kbd>
+                        ))}
+                      </span>
+                      <span className="media-shortcut-label">{hint.label}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           {pictureInPictureError && (
             <p className="video-pip-error" role="status">
