@@ -25,6 +25,8 @@ function renderPhotoViewer(
   onToggleFitMode = vi.fn(),
   fitMode: "fit" | "actual" | "fill" = "fit",
 ) {
+  const onNavigate = vi.fn();
+  const onToggleFavorite = vi.fn();
   const photo = makeMediaItem({
     id: "photo",
     name: "photo.jpg",
@@ -46,7 +48,7 @@ function renderPhotoViewer(
     extension: "mp4",
     kind: "video",
   });
-  return render(
+  const result = render(
     <ViewerScreen
       active
       items={[photo, ...(photoCount > 1 ? [secondPhoto] : []), video]}
@@ -55,7 +57,7 @@ function renderPhotoViewer(
       fitMode={fitMode}
       rotation={0}
       flipX={false}
-      onNavigate={vi.fn()}
+      onNavigate={onNavigate}
       onSetPhoto={vi.fn()}
       onSetZoom={vi.fn()}
       onZoomIn={vi.fn()}
@@ -67,13 +69,14 @@ function renderPhotoViewer(
       onResetTransform={vi.fn()}
       onToggleFullscreen={vi.fn()}
       onClose={vi.fn()}
-      onToggleFavorite={vi.fn()}
+      onToggleFavorite={onToggleFavorite}
       onToggleHidden={vi.fn()}
       onOpenEdit={vi.fn()}
       onContextMenu={vi.fn()}
       assetUrl={(path) => path}
     />,
   );
+  return { ...result, onNavigate, onToggleFavorite };
 }
 
 describe("photo viewer", () => {
@@ -144,5 +147,63 @@ describe("photo viewer", () => {
     expect(screen.getByText(/Videos don’t open in the Viewer/)).toBeInTheDocument();
     expect(screen.getByText(/play button on its tile/)).toBeInTheDocument();
     expect(document.querySelector(".viewer-stage video")).toBeNull();
+  });
+});
+
+describe("photo viewer keyboard shortcuts", () => {
+  it("advances to the next photo with Space and K, and back with J", () => {
+    const { onNavigate } = renderPhotoViewer("photo", 2);
+
+    fireEvent.keyDown(window, { key: " " });
+    expect(onNavigate).toHaveBeenLastCalledWith(1);
+
+    fireEvent.keyDown(window, { key: "k" });
+    expect(onNavigate).toHaveBeenLastCalledWith(1);
+
+    fireEvent.keyDown(window, { key: "K" });
+    expect(onNavigate).toHaveBeenLastCalledWith(1);
+
+    fireEvent.keyDown(window, { key: "j" });
+    expect(onNavigate).toHaveBeenLastCalledWith(-1);
+
+    fireEvent.keyDown(window, { key: "J" });
+    expect(onNavigate).toHaveBeenLastCalledWith(-1);
+    expect(onNavigate).toHaveBeenCalledTimes(5);
+  });
+
+  it("favorites the current photo with F and L", () => {
+    const { onToggleFavorite } = renderPhotoViewer("photo", 1);
+
+    fireEvent.keyDown(window, { key: "f" });
+    expect(onToggleFavorite).toHaveBeenLastCalledWith("photo");
+
+    fireEvent.keyDown(window, { key: "L" });
+    expect(onToggleFavorite).toHaveBeenLastCalledWith("photo");
+    expect(onToggleFavorite).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves ⌘/Ctrl/⌥ combinations alone so they are not swallowed as plain keys", () => {
+    const { onNavigate, onToggleFavorite } = renderPhotoViewer("photo", 2);
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    fireEvent.keyDown(window, { key: "j", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "l", altKey: true });
+
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(onToggleFavorite).not.toHaveBeenCalled();
+  });
+
+  it("ignores shortcuts when focus is inside an editable field", () => {
+    const { onNavigate, onToggleFavorite } = renderPhotoViewer("photo", 2);
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+
+    fireEvent.keyDown(input, { key: " " });
+    fireEvent.keyDown(input, { key: "j" });
+    fireEvent.keyDown(input, { key: "l" });
+
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(onToggleFavorite).not.toHaveBeenCalled();
+    input.remove();
   });
 });

@@ -296,7 +296,7 @@ function ViewerScreen(props: ViewerScreenProps) {
       if (!selected) return;
       if (!props.active) return;
       // Ignore if typing in an input, or if the slideshow overlay is driving.
-      if ((e.target as HTMLElement).closest("input, textarea, select")) return;
+      if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select")) return;
       if (useSlideshowStore.getState().isOpen) return;
       // These are bare-key shortcuts. A ⌘/Ctrl/⌥ combination belongs to the
       // global map (⌘F focuses search, ⌘R reloads), so it must not also
@@ -338,13 +338,29 @@ function ViewerScreen(props: ViewerScreenProps) {
           e.preventDefault();
           props.onSetZoom(200);
           break;
+        case " ":
+        case "k":
+        case "K":
+          // Space advances, and K mirrors J below so a keyboard-first user
+          // never has to leave the home row.
+          e.preventDefault();
+          props.onNavigate(1);
+          break;
+        case "j":
+        case "J":
+          e.preventDefault();
+          props.onNavigate(-1);
+          break;
+        case "l":
+        case "L":
+          e.preventDefault();
+          props.onToggleFavorite(selected.id);
+          break;
         case "f":
         case "F":
           e.preventDefault();
           props.onToggleFavorite(selected.id);
           break;
-        case " ":
-          return;
       }
     };
 
@@ -683,7 +699,10 @@ function ViewerScreen(props: ViewerScreenProps) {
         >
           <span>
             <kbd>←</kbd>
-            <kbd>→</kbd> Navigate
+            <kbd>→</kbd>
+            <kbd>J</kbd>
+            <kbd>K</kbd>
+            <kbd>Space</kbd> Navigate
           </span>
           <span>
             <kbd>↑</kbd>
@@ -704,7 +723,8 @@ function ViewerScreen(props: ViewerScreenProps) {
             </span>
           )}
           <span>
-            <kbd>F</kbd> Favorite
+            <kbd>F</kbd>
+            <kbd>L</kbd> Favorite
           </span>
           <span>
             <kbd>Esc</kbd> Close

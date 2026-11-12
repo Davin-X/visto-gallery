@@ -805,7 +805,9 @@ function App() {
       }
       return;
     }
-    if ((screen === "Viewer" || screen === "Video") && !e.defaultPrevented) {
+    // Arrows stay on the video player (±5 s seek); the photo viewer keeps
+    // ←/→ for navigating, so only that screen gets the global navigation.
+    if (screen === "Viewer" && !e.defaultPrevented) {
       const target = e.target as HTMLElement;
       const isEditable =
         target.isContentEditable ||
@@ -813,12 +815,10 @@ function App() {
         target.tagName === "TEXTAREA" ||
         target.tagName === "SELECT";
       if (!isEditable && e.key === "ArrowRight") {
-        if (screen === "Video") handlersRef.current.navigateVideo(1);
-        else handlersRef.current.navigateViewer(1);
+        handlersRef.current.navigateViewer(1);
       }
       if (!isEditable && e.key === "ArrowLeft") {
-        if (screen === "Video") handlersRef.current.navigateVideo(-1);
-        else handlersRef.current.navigateViewer(-1);
+        handlersRef.current.navigateViewer(-1);
       }
     }
     if (e.key === "Escape") {

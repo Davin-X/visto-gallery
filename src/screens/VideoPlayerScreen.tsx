@@ -42,6 +42,8 @@ interface VideoPlayerScreenProps {
   onLoadMoreQueue?: () => unknown;
   /** Opens the shared item menu for a queue video or the one playing. */
   onContextMenu?: (item: MediaItem, event: ReactMouseEvent) => void;
+  /** Favorites the video currently playing (L / F keyboard shortcuts). */
+  onToggleFavorite?: (id: string) => void;
 }
 
 export default function VideoPlayerScreen({
@@ -57,6 +59,7 @@ export default function VideoPlayerScreen({
   queueHasMore = false,
   onLoadMoreQueue,
   onContextMenu,
+  onToggleFavorite,
 }: VideoPlayerScreenProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const screenRef = useRef<HTMLElement | null>(null);
@@ -169,6 +172,7 @@ export default function VideoPlayerScreen({
           onFullscreen={() => void toggleFullscreen()}
           onNext={onNext}
           onPrevious={onPrevious}
+          onToggleFavorite={() => onToggleFavorite?.(item.id)}
         />
       </div>
 
