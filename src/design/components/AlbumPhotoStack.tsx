@@ -1,7 +1,5 @@
 import React from "react";
-import VideoThumb from "./VideoThumb";
 import { CachedThumbnail } from "./CachedThumbnail";
-import { canPlayVideoInApp } from "../../engine/utils/mediaTypes";
 import { useDraftTransforms } from "../../engine/stores/useEditStore";
 import { draftImageStyle } from "../../engine/utils/draftImage";
 
@@ -25,15 +23,7 @@ function albumStackPose(count: number, index: number) {
   return poses[index] || poses[0];
 }
 
-function AlbumPhotoStack({
-  photos,
-  assetUrl,
-  albumItems = [],
-}: {
-  photos: any[];
-  assetUrl: (path: string) => string;
-  albumItems?: any[];
-}) {
+function AlbumPhotoStack({ photos, albumItems = [] }: { photos: any[]; albumItems?: any[] }) {
   const draftTransforms = useDraftTransforms();
   return (
     <span className="album-stack">
@@ -56,11 +46,10 @@ function AlbumPhotoStack({
             }
           >
             {albumItems[photoIndex]?.kind === "video" ? (
-              canPlayVideoInApp(item.path, item.name) ? (
-                <VideoThumb src={assetUrl(item.path)} name={item.name} />
-              ) : (
-                <CachedThumbnail itemId={item.id} name={item.name} size={128} />
-              )
+              // Every other surface renders videos from the backend's cached
+              // poster; a live <video> here re-composited on the hover fan and
+              // flashed black in WebKit. Same source of frame everywhere.
+              <CachedThumbnail itemId={item.id} name={item.name} size={128} />
             ) : (
               // Covers are small: a cached 256px thumbnail instead of the
               // original, with a quiet placeholder when the file is missing.
