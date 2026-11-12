@@ -89,6 +89,26 @@ function AlbumsScreen(props: AlbumsScreenProps) {
     setSmartAlbumsExpanded((value) => !value);
   }, []);
 
+  // The strip scrolls sideways with its scrollbar hidden, so a fade is the only
+  // cue that more albums sit past the right edge. Track the scroll position
+  // rather than assuming overflow: at the end of the row the fade has to go.
+  const smartListRef = React.useRef<HTMLDivElement | null>(null);
+  const [smartListHasMore, setSmartListHasMore] = React.useState(false);
+  const syncSmartListOverflow = React.useCallback(() => {
+    const list = smartListRef.current;
+    if (!list) return;
+    setSmartListHasMore(list.scrollWidth - list.clientWidth - list.scrollLeft > 4);
+  }, []);
+
+  React.useEffect(() => {
+    syncSmartListOverflow();
+    const list = smartListRef.current;
+    if (!list || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(syncSmartListOverflow);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [syncSmartListOverflow, props.smartAlbums, smartAlbumsExpanded]);
+
   return (
     <div className="feature-page albums-page">
       <div className="page-heading">
@@ -108,7 +128,9 @@ function AlbumsScreen(props: AlbumsScreenProps) {
 
       {(props.smartAlbums?.length ?? 0) > 0 && (
         <section
-          className={`smart-albums-section${smartAlbumsExpanded ? " is-expanded" : ""}`}
+          className={`smart-albums-section${smartAlbumsExpanded ? " is-expanded" : ""}${
+            smartListHasMore ? " has-more" : ""
+          }`}
           aria-label="Smart Albums"
         >
           <div className="smart-albums-headrow">
@@ -131,7 +153,15 @@ function AlbumsScreen(props: AlbumsScreenProps) {
               </button>
             )}
           </div>
-          <div id="smart-albums-list" className="smart-albums-list">
+          <div
+            id="smart-albums-list"
+            ref={smartListRef}
+            className="smart-albums-list"
+            role="list"
+            aria-label="Smart albums"
+            tabIndex={0}
+            onScroll={syncSmartListOverflow}
+          >
             {props.smartAlbums!.map((album) => {
               const filter = album.filter;
               let badge = "📷";
@@ -144,27 +174,28 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 .filter((item: any) => item.kind === "photo" || item.kind === "video")
                 .slice(0, 3);
               return (
-                <button
-                  key={album.id}
-                  type="button"
-                  className="smart-album-tile"
-                  onClick={() => props.onOpenSmartAlbum?.(album.id)}
-                  onContextMenu={(e) => props.onSmartAlbumContextMenu?.(album, e)}
-                  title={`Open ${album.name}`}
-                >
-                  <span className="smart-album-tile-cover">
-                    {coverPhotos.length ? (
-                      <AlbumPhotoStack
-                        photos={coverPhotos}
-                        assetUrl={props.assetUrl}
-                        albumItems={album.coverItems ?? []}
-                      />
-                    ) : (
-                      <span className="smart-album-tile-cover-empty">{badge}</span>
-                    )}
-                  </span>
-                  <AlbumMeta name={album.name} count={formatAlbumCount(album.itemCount)} />
-                </button>
+                <div className="smart-album-item" role="listitem" key={album.id}>
+                  <button
+                    type="button"
+                    className="smart-album-tile"
+                    onClick={() => props.onOpenSmartAlbum?.(album.id)}
+                    onContextMenu={(e) => props.onSmartAlbumContextMenu?.(album, e)}
+                    title={`Open ${album.name}`}
+                  >
+                    <span className="smart-album-tile-cover">
+                      {coverPhotos.length ? (
+                        <AlbumPhotoStack
+                          photos={coverPhotos}
+                          assetUrl={props.assetUrl}
+                          albumItems={album.coverItems ?? []}
+                        />
+                      ) : (
+                        <span className="smart-album-tile-cover-empty">{badge}</span>
+                      )}
+                    </span>
+                    <AlbumMeta name={album.name} count={formatAlbumCount(album.itemCount)} />
+                  </button>
+                </div>
               );
             })}
           </div>
