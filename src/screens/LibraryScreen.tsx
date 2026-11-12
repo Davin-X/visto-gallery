@@ -1578,9 +1578,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                               fallbackSrc={assetUrl(item.path)}
                             />
                           ) : (
-                            <span className="raw-tile">
-                              <KindBadge kind={item.kind} />
-                            </span>
+                            <CachedThumbnail
+                              itemId={item.id}
+
+                              name={tileAlt(item)}
+
+                              size={thumbnailPixels}
+
+                              style={draftImageStyle(draftTransforms, item.id)}
+                            />
                           )}
                           {item.kind === "video" && props.onPlayBackground && (
                             <button
@@ -1756,9 +1762,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                                         fallbackSrc={assetUrl(item.path)}
                                       />
                                     ) : (
-                                      <span className="raw-tile">
-                                        <KindBadge kind={item.kind} />
-                                      </span>
+                                      <CachedThumbnail
+                                        itemId={item.id}
+
+                                        name={tileAlt(item)}
+
+                                        size={thumbnailPixels}
+
+                                        style={draftImageStyle(draftTransforms, item.id)}
+                                      />
                                     )}
                                     {item.kind === "video" && props.onPlayBackground && (
                                       <button
@@ -1914,9 +1926,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                             fallbackSrc={assetUrl(item.path)}
                           />
                         ) : (
-                          <span className="raw-tile">
-                            <KindBadge kind={item.kind} />
-                          </span>
+                          <CachedThumbnail
+                            itemId={item.id}
+
+                            name={tileAlt(item)}
+
+                            size={thumbnailPixels}
+
+                            style={draftImageStyle(draftTransforms, item.id)}
+                          />
                         )}
                         {item.kind === "video" && props.onPlayBackground && (
                           <button
@@ -2143,9 +2161,15 @@ function LibraryScreen(props: LibraryScreenProps) {
                           />
                         </span>
                       ) : (
-                        <span className="raw-tile">
-                          <KindBadge kind={sel.kind} />
-                        </span>
+                        <CachedThumbnail
+                          itemId={sel.id}
+
+                          name={tileAlt(sel)}
+
+                          size={thumbnailPixels}
+
+                          style={draftImageStyle(draftTransforms, sel.id)}
+                        />
                       )}
                       <span>Double-click to view</span>
                       <span className="inspector-type-badge">
