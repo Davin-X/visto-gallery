@@ -42,7 +42,6 @@ export type Screen =
   | "Library"
   | "Viewer"
   | "Explore"
-  | "CameraLens"
   | "Duplicates"
   | "Edit"
   | "Batch"
