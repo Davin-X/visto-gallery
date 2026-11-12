@@ -406,11 +406,45 @@ async fn restore_backup_into_catalog(db: &SqlitePool, path: &str) -> Result<(), 
     }
     .await;
 
-    let _ = sqlx::query("DETACH DATABASE restore_src")
+    if let Err(error) = sqlx::query("DETACH DATABASE restore_src")
         .execute(&mut *conn)
-        .await;
+        .await
+    {
+        // Never return a connection that still has `restore_src` attached to
+        // the pool: every later query on it would unexpectedly see the
+        // backup's tables. Closing retires the connection instead. The restore
+        // itself is committed, so the caller still gets a success result.
+        tracing::error!(
+            "could not detach the restore database; closing the connection so the ATTACH cannot leak into the pool: {error}"
+        );
+        let _ = conn.close().await;
+    }
 
     restore
+}
+
+/// Grant asset-protocol read access for every folder the catalog now lists,
+/// returning the folders whose grant failed.
+///
+/// `library_folders` is replaced wholesale by a restore, but the asset scope is
+/// only populated at startup and by each import. Without replaying the grants
+/// here, a restored library renders as blank tiles through the asset protocol
+/// until the next launch. Grant failures are reported, not fatal: the catalog
+/// is already committed.
+async fn grant_restored_folders<F>(
+    db: &SqlitePool,
+    mut grant: F,
+) -> Result<Vec<String>, sqlx::Error>
+where
+    F: FnMut(&str) -> Result<(), String>,
+{
+    let folders: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders ORDER BY path")
+        .fetch_all(db)
+        .await?;
+    Ok(folders
+        .into_iter()
+        .filter(|folder| grant(folder).is_err())
+        .collect())
 }
 
 struct MissingPathReport {
@@ -489,6 +523,25 @@ pub async fn restore_catalog_backup(
 
     restore_backup_into_catalog(&db, &isolated_path).await?;
     drop(isolated);
+
+    // The restore replaced `library_folders`, so replay those paths into the
+    // asset scope before returning a catalog whose media the UI cannot render.
+    match grant_restored_folders(&db, |folder| {
+        app.asset_protocol_scope()
+            .allow_directory(folder, true)
+            .map_err(|error| error.to_string())
+    })
+    .await
+    {
+        Ok(failed) if failed.is_empty() => {}
+        Ok(failed) => tracing::error!(
+            "restored folders could not be granted to the asset protocol scope: {failed:?}"
+        ),
+        Err(error) => {
+            tracing::error!("could not read restored folders to grant asset scope: {error}")
+        }
+    }
+
     // The snapshot just taken is the newest, so it always survives pruning.
     prune_pre_restore_snapshots(&backup_dir, PRE_RESTORE_SNAPSHOTS_KEPT);
     let missing = report_missing_paths(&db).await?;
@@ -592,6 +645,19 @@ mod tests {
         ));
         let _ = std::fs::remove_file(&path);
         path
+    }
+
+    /// Every database currently visible on the pool's connection. `restore_src`
+    /// must never be among them: the pool connection is reused by later
+    /// queries, so a leaked ATTACH would silently expose the backup.
+    async fn attached_databases(db: &SqlitePool) -> Vec<String> {
+        sqlx::query("PRAGMA database_list")
+            .fetch_all(db)
+            .await
+            .expect("list attached databases")
+            .into_iter()
+            .map(|row| row.get::<String, _>("name"))
+            .collect()
     }
 
     #[tokio::test]
@@ -699,6 +765,11 @@ mod tests {
         restore_backup_into_catalog(&db, backup_path.to_str().unwrap())
             .await
             .unwrap();
+        assert_eq!(
+            attached_databases(&db).await,
+            vec!["main".to_string()],
+            "the restore source must be detached before the connection is reused"
+        );
         let restored_path: String =
             sqlx::query_scalar("SELECT path FROM media_items WHERE id = 'm1'")
                 .fetch_one(&db)
@@ -757,6 +828,11 @@ mod tests {
             error.message.contains("smart_albums"),
             "unexpected error: {error}"
         );
+        assert_eq!(
+            attached_databases(&db).await,
+            vec!["main".to_string()],
+            "a failed restore must still detach its source before reuse"
+        );
 
         let current_path: String =
             sqlx::query_scalar("SELECT path FROM media_items WHERE id = 'm1'")
@@ -768,6 +844,44 @@ mod tests {
         db.close().await;
         let _ = std::fs::remove_file(catalog_path);
         let _ = std::fs::remove_file(backup_path);
+    }
+
+    #[tokio::test]
+    async fn grant_restored_folders_grants_each_folder_and_reports_failures() {
+        let (db, catalog_path) = catalog_db().await;
+        for folder in ["/library/one", "/library/two", "/library/three"] {
+            sqlx::query("INSERT INTO library_folders (path, added_at) VALUES (?, 0)")
+                .bind(folder)
+                .execute(&db)
+                .await
+                .unwrap();
+        }
+
+        let mut granted = Vec::new();
+        let failed = grant_restored_folders(&db, |folder| {
+            granted.push(folder.to_string());
+            if folder == "/library/two" {
+                Err("scope refused".to_string())
+            } else {
+                Ok(())
+            }
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(
+            granted,
+            ["/library/one", "/library/three", "/library/two"],
+            "every restored folder is offered to the scope, not just the first"
+        );
+        assert_eq!(
+            failed,
+            ["/library/two".to_string()],
+            "a refused folder is reported so it can be logged"
+        );
+
+        db.close().await;
+        let _ = std::fs::remove_file(catalog_path);
     }
 
     #[test]
