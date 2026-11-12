@@ -2650,6 +2650,21 @@ body.is-resizing .photo-inspector {
   background: var(--orange);
 }
 
+/* A ring means "derived": a subset of the real kinds, not a kind of its own.
+   The hue still says which kind the row counts, the shape says it is a view. */
+.kind-dot.ring {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--blue);
+}
+
+.kind-dot.video.ring {
+  box-shadow: inset 0 0 0 1.5px var(--green);
+}
+
+.kind-dot.raw.ring {
+  box-shadow: inset 0 0 0 1.5px var(--orange);
+}
+
 /* Page Heading — one shape for every screen: eyebrow, title, optional
    subtitle on the left; actions on the right. */
 .page-heading {
@@ -4919,15 +4934,6 @@ body.is-resizing .photo-inspector {
   border-radius: 16px;
   color: var(--faint);
   background: color-mix(in srgb, var(--surface-3) 55%, transparent);
-}
-
-.album-cover-placeholder small {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--muted);
-  opacity: 0.8;
 }
 
 /* One meta row for both an album card and a smart-album tile: accent slot,

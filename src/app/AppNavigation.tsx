@@ -367,7 +367,7 @@ export function AppSidebar({
         </span>
       </div>
       <div className="stat-row">
-        <KindDot kind="photo" />
+        <KindDot kind="photo" variant="ring" />
         <span className="stat-label">Animations</span>
         <span className="stat-value">
           {stats.animations.toLocaleString()}
@@ -375,7 +375,7 @@ export function AppSidebar({
         </span>
       </div>
       <div className="stat-row">
-        <KindDot kind="photo" />
+        <KindDot kind="photo" variant="ring" />
         <span className="stat-label">Favorites</span>
         <span className="stat-value">
           {stats.favorites.toLocaleString()}
@@ -386,7 +386,7 @@ export function AppSidebar({
           only appears if an older catalog holds something else. */}
       {stats.uncategorized > 0 && (
         <div className="stat-row">
-          <KindDot kind="photo" />
+          <KindDot kind="photo" variant="ring" />
           <span className="stat-label">Uncategorized</span>
           <span className="stat-value">
             {stats.uncategorized.toLocaleString()}
@@ -395,7 +395,7 @@ export function AppSidebar({
         </div>
       )}
       <div className="stat-row hidden">
-        <KindDot kind="photo" />
+        <KindDot kind="photo" variant="ring" />
         <span className="stat-label">Hidden</span>
         <span className="stat-value">
           {stats.hidden.toLocaleString()}

@@ -203,7 +203,6 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 ) : (
                   <span className="album-cover-placeholder">
                     <AlbumsIcon size={30} />
-                    {album.count === 0 && <small>Empty</small>}
                   </span>
                 )}
               </span>
