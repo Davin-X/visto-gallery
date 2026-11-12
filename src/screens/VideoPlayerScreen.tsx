@@ -14,16 +14,21 @@ import type { MediaItem } from "../engine/types/media";
 function PlaybackTimeChip({ itemDuration }: { itemDuration?: number | null }) {
   const time = usePlaybackStore((state) => state.time);
   const duration = usePlaybackStore((state) => state.duration);
+  // A container can report a duration shorter than the last decoded frame, and
+  // both sides are floored independently, which printed an impossible
+  // "0:01 / 0:00". Never show more elapsed time than there is total.
+  const total = duration || itemDuration || 0;
+  const elapsed = total > 0 ? Math.min(time, total) : time;
   return (
     <span
       className="video-player-meta-chip video-player-meta-chip-time"
       title="Elapsed / total duration"
     >
-      <span>{formatDuration(time)}</span>
+      <span>{formatDuration(elapsed)}</span>
       <span className="video-player-meta-sep" aria-hidden="true">
         /
       </span>
-      <span>{formatDuration(duration || itemDuration || 0)}</span>
+      <span>{formatDuration(total)}</span>
     </span>
   );
 }
@@ -179,7 +184,9 @@ export default function VideoPlayerScreen({
       <footer className="video-player-queue">
         <div className="video-player-queue-heading">
           <div className="video-player-queue-summary">
-            <span className="video-player-queue-label">Up next</span>
+            {/* This row includes the video that is playing, so it is the queue,
+                not what comes after it. */}
+            <span className="video-player-queue-label">Queue</span>
             <span>
               {queue.length === 1 ? "1 video" : `${queue.length} videos`}
               {queueHasMore ? " · scroll for more" : ""}

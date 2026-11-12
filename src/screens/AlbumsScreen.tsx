@@ -26,6 +26,33 @@ function formatAlbumCount(itemCount: unknown): string {
   return `${count.toLocaleString()} ${count === 1 ? "item" : "items"}`;
 }
 
+/**
+ * The meta row both an album card and a smart-album tile end in: accent slot,
+ * name (cut in the middle so similar names stay distinguishable) and count,
+ * right-aligned. Sharing it is what stops the two from drifting into different
+ * layouts again — they already had once.
+ */
+function AlbumMeta({
+  color,
+  name,
+  count,
+}: {
+  /** A stored album's accent. Smart albums have none — they are a saved filter,
+   *  not an object with an identity — so they show no dot rather than a hollow
+   *  one, which read as a missing image. */
+  color?: string;
+  name: string;
+  count: string;
+}) {
+  return (
+    <span className="album-meta">
+      {color && <i className={`album-dot ${color}`} aria-hidden="true" />}
+      <MiddleTruncate className="album-meta-name" text={name} tailLength={6} />
+      <span className="album-meta-count">{count}</span>
+    </span>
+  );
+}
+
 function AlbumsScreen(props: AlbumsScreenProps) {
   const overviews = useLibraryStore((s) => s.albumOverviews);
 
@@ -63,6 +90,26 @@ function AlbumsScreen(props: AlbumsScreenProps) {
     setSmartAlbumsExpanded((value) => !value);
   }, []);
 
+  // The strip scrolls sideways with its scrollbar hidden, so a fade is the only
+  // cue that more albums sit past the right edge. Track the scroll position
+  // rather than assuming overflow: at the end of the row the fade has to go.
+  const smartListRef = React.useRef<HTMLDivElement | null>(null);
+  const [smartListHasMore, setSmartListHasMore] = React.useState(false);
+  const syncSmartListOverflow = React.useCallback(() => {
+    const list = smartListRef.current;
+    if (!list) return;
+    setSmartListHasMore(list.scrollWidth - list.clientWidth - list.scrollLeft > 4);
+  }, []);
+
+  React.useEffect(() => {
+    syncSmartListOverflow();
+    const list = smartListRef.current;
+    if (!list || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(syncSmartListOverflow);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [syncSmartListOverflow, props.smartAlbums, smartAlbumsExpanded]);
+
   return (
     <div className="feature-page albums-page">
       <div className="page-heading">
@@ -70,8 +117,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
           <p className="eyebrow">COLLECTIONS</p>
           <h1>Albums</h1>
           <p className="page-subtitle">
-            {albums.length.toLocaleString()} {albums.length === 1 ? "album" : "albums"} · Choose an
-            album to see its photos.
+            {albums.length.toLocaleString()} {albums.length === 1 ? "album" : "albums"}
           </p>
         </div>
         <div className="header-actions">
@@ -83,15 +129,17 @@ function AlbumsScreen(props: AlbumsScreenProps) {
 
       {(props.smartAlbums?.length ?? 0) > 0 && (
         <section
-          className={`smart-albums-section${smartAlbumsExpanded ? " is-expanded" : ""}`}
+          className={`smart-albums-section${smartAlbumsExpanded ? " is-expanded" : ""}${
+            smartListHasMore ? " has-more" : ""
+          }`}
           aria-label="Smart Albums"
         >
           <div className="smart-albums-headrow">
             <div className="smart-albums-heading-left">
-              <span className="eyebrow">SAVED FILTERS</span>
               <h2>Smart Albums</h2>
               <span className="smart-albums-count">
-                {props.smartAlbums!.length.toLocaleString()}
+                {props.smartAlbums!.length.toLocaleString()}{" "}
+                {props.smartAlbums!.length === 1 ? "album" : "albums"}
               </span>
               <span className="smart-albums-toggle-desc">Updates automatically</span>
             </div>
@@ -106,7 +154,15 @@ function AlbumsScreen(props: AlbumsScreenProps) {
               </button>
             )}
           </div>
-          <div id="smart-albums-list" className="smart-albums-list">
+          <div
+            id="smart-albums-list"
+            ref={smartListRef}
+            className="smart-albums-list"
+            role="list"
+            aria-label="Smart albums"
+            tabIndex={0}
+            onScroll={syncSmartListOverflow}
+          >
             {props.smartAlbums!.map((album) => {
               const filter = album.filter;
               let badge = "📷";
@@ -119,34 +175,28 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 .filter((item: any) => item.kind === "photo" || item.kind === "video")
                 .slice(0, 3);
               return (
-                <button
-                  key={album.id}
-                  type="button"
-                  className="smart-album-tile"
-                  onClick={() => props.onOpenSmartAlbum?.(album.id)}
-                  onContextMenu={(e) => props.onSmartAlbumContextMenu?.(album, e)}
-                  title={`Open ${album.name}`}
-                >
-                  <span className="smart-album-tile-cover">
-                    {coverPhotos.length ? (
-                      <AlbumPhotoStack
-                        photos={coverPhotos}
-                        assetUrl={props.assetUrl}
-                        albumItems={album.coverItems ?? []}
-                      />
-                    ) : (
-                      <span className="smart-album-tile-cover-empty">{badge}</span>
-                    )}
-                  </span>
-                  <MiddleTruncate
-                    className="smart-album-tile-name"
-                    text={album.name}
-                    tailLength={6}
-                  />
-                  <span className="smart-album-tile-count">
-                    {formatAlbumCount(album.itemCount)}
-                  </span>
-                </button>
+                <div className="smart-album-item" role="listitem" key={album.id}>
+                  <button
+                    type="button"
+                    className="smart-album-tile"
+                    onClick={() => props.onOpenSmartAlbum?.(album.id)}
+                    onContextMenu={(e) => props.onSmartAlbumContextMenu?.(album, e)}
+                    title={`Open ${album.name}`}
+                  >
+                    <span className="smart-album-tile-cover">
+                      {coverPhotos.length ? (
+                        <AlbumPhotoStack
+                          photos={coverPhotos}
+                          assetUrl={props.assetUrl}
+                          albumItems={album.coverItems ?? []}
+                        />
+                      ) : (
+                        <span className="smart-album-tile-cover-empty">{badge}</span>
+                      )}
+                    </span>
+                    <AlbumMeta name={album.name} count={formatAlbumCount(album.itemCount)} />
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -185,23 +235,14 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 ) : (
                   <span className="album-cover-placeholder">
                     <AlbumsIcon size={30} />
-                    {album.count === 0 && <small>Empty</small>}
                   </span>
                 )}
               </span>
-              <span className="album-card-meta">
-                <span className="album-card-name">
-                  <i className={`album-dot ${album.color}`} />
-                  {/* Names often differ only at the end ("Trip 2023", "Trip
-                      2024"), so keep the end visible when space runs out. */}
-                  <MiddleTruncate text={album.name} tailLength={6} />
-                </span>
-                <span className="album-card-count">
-                  {album.count > 0
-                    ? `${album.count.toLocaleString()} ${album.count === 1 ? "item" : "items"}`
-                    : "Empty"}
-                </span>
-              </span>
+              <AlbumMeta
+                color={album.color}
+                name={album.name}
+                count={formatAlbumCount(album.count)}
+              />
             </button>
           ))}
         </div>

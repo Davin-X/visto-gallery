@@ -11,6 +11,7 @@ import {
   PauseIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  InfoIcon,
 } from "./icons";
 import { tauri } from "../../engine/commands/tauri";
 import type { ExternalPlayer } from "../../engine/types/commands";
@@ -26,9 +27,23 @@ import {
   togglePictureInPicture,
 } from "../../engine/utils/pictureInPicture";
 
+type PlaybackSnapshot = ReturnType<typeof usePlaybackStore.getState>;
+
 // WKWebView can decode MP4/MOV (H.264/HEVC) and WebM, but not Matroska or AVI.
 // Files outside the supported list never reach the <video> element: WebKit
 // renders a black frame for them, which made the whole viewer look broken.
+
+// Shortcut list for the transport bar. Same keys the strip that used to float
+// over the video listed, in the order they are reached for.
+const PLAYER_SHORTCUTS: Array<{ keys: string[]; label: string }> = [
+  { keys: ["J", "K"], label: "Prev / next" },
+  { keys: ["Space"], label: "Play / pause" },
+  { keys: ["←", "→"], label: "Seek" },
+  { keys: ["↑", "↓"], label: "Volume" },
+  { keys: ["M"], label: "Mute" },
+  { keys: ["L"], label: "Favorite" },
+  { keys: ["F"], label: "Full screen" },
+];
 
 function VideoPlayer({
   itemId,
@@ -70,12 +85,14 @@ function VideoPlayer({
   const clickTimerRef = useRef<number | null>(null);
   const controlsRef = useRef<HTMLDivElement | null>(null);
   const controlsTimerRef = useRef<number | null>(null);
-  const hintsTimerRef = useRef<number | null>(null);
   const controlsFocusedRef = useRef(false);
+  const barHoveredRef = useRef(false);
   const [playing, setPlaying] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [keyboardFocusWithinControls, setKeyboardFocusWithinControls] = useState(false);
-  const [hintsVisible, setHintsVisible] = useState(true);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpOpenRef = useRef(false);
+  const helpRef = useRef<HTMLDivElement | null>(null);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(() => usePlaybackStore.getState().lastVolume);
@@ -100,17 +117,39 @@ function VideoPlayer({
 
   const scheduleControlsHide = useCallback(() => {
     if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
-    if (!playing || controlsFocusedRef.current) return;
-    controlsTimerRef.current = window.setTimeout(() => setControlsVisible(false), 3500);
+    // The shortcut list is a child of the transport, so fading the transport
+    // would take it away mid-read, and a pointer resting on the bar means the
+    // hand is already there: it used to disappear under the cursor.
+    if (!playing || controlsFocusedRef.current || helpOpenRef.current || barHoveredRef.current)
+      return;
+    controlsTimerRef.current = window.setTimeout(() => {
+      // Re-checked when the timer fires, not only when it is set: a timer started
+      // before the pointer arrived would otherwise hide the bar under the hand
+      // that just moved onto it.
+      if (barHoveredRef.current) return;
+      setControlsVisible(false);
+    }, 3500);
   }, [playing]);
 
   const showPlayerActivity = useCallback(() => {
     setControlsVisible(true);
-    setHintsVisible(true);
     scheduleControlsHide();
-    if (hintsTimerRef.current) window.clearTimeout(hintsTimerRef.current);
-    hintsTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
   }, [scheduleControlsHide]);
+
+  // Shortcuts open from the transport instead of floating over the video, the
+  // way the stills viewer keeps its list in the bar. A click anywhere else
+  // closes the list.
+  useEffect(() => {
+    helpOpenRef.current = helpOpen;
+    if (!helpOpen) return;
+    if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
+    setControlsVisible(true);
+    const onPointerDown = (event: PointerEvent) => {
+      if (!helpRef.current?.contains(event.target as Node)) setHelpOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [helpOpen]);
 
   useEffect(() => {
     if (playing) {
@@ -125,7 +164,6 @@ function VideoPlayer({
     showPlayerActivity();
     return () => {
       if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
-      if (hintsTimerRef.current) window.clearTimeout(hintsTimerRef.current);
     };
   }, [src, showPlayerActivity]);
 
@@ -144,6 +182,10 @@ function VideoPlayer({
   // Re-copy a file that probed as playable but decoded no frames. WKWebView
   // reports nothing useful for a damaged index, so a remux is the only way to
   // tell a broken container apart from an unsupported codec.
+  // Chosen when an item is registered and re-used by the setup effect below: the
+  // store cannot answer "was this a handoff" once it has been pointed at the
+  // new item.
+  const handoffSnapshotRef = useRef<PlaybackSnapshot | null>(null);
   const remuxRetriedRef = useRef(false);
   // Resolves true when the retry produced a playable copy.
   const retryRemuxRef = useRef<() => Promise<boolean>>(() => Promise.resolve(false));
@@ -288,17 +330,22 @@ function VideoPlayer({
   useEffect(() => {
     const video = ref.current;
     if (!video) return;
+    // Read the snapshot before registering: registerPlayback points the store at
+    // this item, so a check afterwards always matches. A queue switch then looked
+    // like a handoff for the same video, and the paused snapshot it restored
+    // turned autoplay off, so the next clip loaded but never started.
+    const previous = usePlaybackStore.getState();
+    const handoff = previous.itemId === itemId && previous.duration > 0;
+    handoffSnapshotRef.current = handoff ? previous : null;
     registerPlayback(video, { itemId, name: name || "Video" });
-    const state = usePlaybackStore.getState();
-    const hasSnapshot = state.itemId === itemId && state.duration > 0;
-    if (hasSnapshot) {
+    if (handoff) {
       // Handoff between foreground/background players: snapshot survived.
       // Resume playback if it was playing; sync volume/muted from snapshot.
-      if (state.playing && video.paused) {
+      if (previous.playing && video.paused) {
         void video.play().catch(() => {});
       }
-      video.volume = state.volume;
-      video.muted = state.muted;
+      video.volume = previous.volume;
+      video.muted = previous.muted;
     } else {
       // Fresh video: no snapshot to preserve; record current element state.
       syncPlayback({
@@ -308,6 +355,9 @@ function VideoPlayer({
         muted: video.muted,
         volume: video.volume,
       });
+      // A handoff can have turned the attribute off for the paused case above;
+      // a new item asks for playback again.
+      video.autoplay = videoAutoPlay || forceAutoPlay;
       // WKWebView is finicky about autoplay for tiny background hosts: the
       // attribute alone can stall indefinitely with the host page inert. Ask
       // for playback explicitly; it happens within the user's gesture when
@@ -316,7 +366,15 @@ function VideoPlayer({
       void video.play().catch(() => {});
     }
     return () => unregisterPlayback(video);
-  }, [itemId, name, registerPlayback, unregisterPlayback, syncPlayback]);
+  }, [
+    itemId,
+    name,
+    registerPlayback,
+    unregisterPlayback,
+    syncPlayback,
+    videoAutoPlay,
+    forceAutoPlay,
+  ]);
 
   // A queued video is a different timeline. The shared snapshot keeps the
   // *controls* (volume, mute, play/pause) across items, never the position,
@@ -327,27 +385,33 @@ function VideoPlayer({
   useEffect(() => {
     if (lastItemIdRef.current === itemId) return;
     lastItemIdRef.current = itemId;
+    // The shortcut list was opened for the video that just left.
+    setHelpOpen(false);
     const video = ref.current;
     if (video) video.currentTime = 0;
     setTime(0);
-    setDuration(0);
-    syncPlayback({ time: 0, duration: 0 });
+    // Only the position belongs to the new item. Duration belongs to the
+    // element, and a source that brings a different one reports it through
+    // durationchange, so resetting it here only threw away a value that was
+    // still correct and left the readout with a zero total.
+    syncPlayback({ time: 0 });
   }, [itemId, syncPlayback]);
 
   useEffect(() => {
     const video = ref.current as HTMLVideoElement | null;
     if (!video) return;
 
-    // Restore playback state from store if this is the same itemId
-    const {
-      itemId: storeItemId,
-      time,
-      volume,
-      muted,
-      playing,
-      duration,
-    } = usePlaybackStore.getState();
-    if (storeItemId === itemId && duration > 0) {
+    // Restore the snapshot only when the item was registered as a handoff, and
+    // restore it from that snapshot rather than from the store: registering
+    // points the store at this item, and the retained duration survives a queue
+    // switch on purpose, so reading it back here cannot tell the two apart.
+    // Consumed on read: this effect also re-runs when the source is replaced or
+    // a remux gives up, and a snapshot left in the ref would rewind a session
+    // that has long moved on.
+    const snapshot = handoffSnapshotRef.current;
+    handoffSnapshotRef.current = null;
+    if (snapshot && snapshot.itemId === itemId && snapshot.duration > 0) {
+      const { time, volume, muted, playing, duration } = snapshot;
       // Restore saved state
       video.currentTime = time;
       video.volume = volume;
@@ -372,6 +436,8 @@ function VideoPlayer({
       setPlaying(false);
       setTime(0);
       setDuration(0);
+      // Safe to read after registering: the store only ever writes lastVolume
+      // from the volume effect, never while registering an item.
       const lastVolume = usePlaybackStore.getState().lastVolume;
       setVolume(lastVolume);
       video.volume = lastVolume;
@@ -546,6 +612,9 @@ function VideoPlayer({
       checkDecodedFrames();
     };
     video.addEventListener("loadedmetadata", onMetadata);
+    // loadedmetadata fires once; a duration that arrives or changes later (a
+    // stream, or a source swapped under a mounted element) only reports here.
+    video.addEventListener("durationchange", onMetadata);
     video.addEventListener("loadeddata", onLoadedData);
     video.addEventListener("canplay", onCanPlay);
     video.addEventListener("timeupdate", onTimeUpdate);
@@ -555,7 +624,7 @@ function VideoPlayer({
     // the mount-time play() can lose the race against the canplay event in
     // WKWebView, which silently leaves the video idle at 0:00.
     const attemptAutoPlay = () => void video.play().catch(() => {});
-    if (storeItemId !== itemId || duration === 0) {
+    if (!snapshot) {
       video.addEventListener("canplay", attemptAutoPlay, { once: true });
     }
     if (video.readyState >= 1) onMetadata();
@@ -580,6 +649,7 @@ function VideoPlayer({
         }
       }
       video.removeEventListener("loadedmetadata", onMetadata);
+      video.removeEventListener("durationchange", onMetadata);
       video.removeEventListener("loadeddata", onLoadedData);
       video.removeEventListener("canplay", onCanPlay);
       video.removeEventListener("timeupdate", onTimeUpdate);
@@ -942,6 +1012,19 @@ function VideoPlayer({
               controlsFocusedRef.current = false;
               setKeyboardFocusWithinControls(false);
             }}
+            onPointerOver={(event) => {
+              // pointerover bubbles from every child of the bar, so a move between
+              // its buttons is not a re-entry.
+              if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+              barHoveredRef.current = true;
+              if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
+              setControlsVisible(true);
+            }}
+            onPointerOut={(event) => {
+              if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+              barHoveredRef.current = false;
+              scheduleControlsHide();
+            }}
             onFocusCapture={(event) => {
               const keyboardFocused =
                 event.target instanceof HTMLElement && event.target.matches(":focus-visible");
@@ -983,7 +1066,9 @@ function VideoPlayer({
             >
               −10
             </button>
-            <span className="video-time">{formatDuration(time)}</span>
+            <span className="video-time">
+              {formatDuration(duration > 0 ? Math.min(time, duration) : time)}
+            </span>
             <input
               type="range"
               min={0}
@@ -1122,35 +1207,38 @@ function VideoPlayer({
                 <FullscreenIcon size={14} />
               </button>
             )}
-          </div>
-          <div
-            className={`video-player-hints${hintsVisible ? "" : " is-hidden"}`}
-            aria-hidden="true"
-          >
-            <span>
-              <kbd>J</kbd>
-              <kbd>K</kbd> Prev / Next
-            </span>
-            <span>
-              <kbd>Space</kbd> Play / pause
-            </span>
-            <span>
-              <kbd>←</kbd>
-              <kbd>→</kbd> Seek
-            </span>
-            <span>
-              <kbd>↑</kbd>
-              <kbd>↓</kbd> Volume
-            </span>
-            <span>
-              <kbd>F</kbd> Full screen
-            </span>
-            <span>
-              <kbd>L</kbd> Favorite
-            </span>
-            <span>
-              <kbd>M</kbd> Mute
-            </span>
+            <div className="media-anchor" ref={helpRef}>
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={helpOpen}
+                aria-label="Keyboard shortcuts"
+                title="Keyboard shortcuts"
+                className="media-keys-button"
+                onClick={() => setHelpOpen((value) => !value)}
+              >
+                <InfoIcon size={14} />
+                <span className="media-keys-label">Keys</span>
+              </button>
+              {helpOpen && (
+                <div
+                  className="media-popover media-shortcuts"
+                  role="dialog"
+                  aria-label="Keyboard shortcuts"
+                >
+                  {PLAYER_SHORTCUTS.map((hint) => (
+                    <React.Fragment key={hint.label}>
+                      <span className="media-shortcut-keys">
+                        {hint.keys.map((key) => (
+                          <kbd key={key}>{key}</kbd>
+                        ))}
+                      </span>
+                      <span className="media-shortcut-label">{hint.label}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           {pictureInPictureError && (
             <p className="video-pip-error" role="status">

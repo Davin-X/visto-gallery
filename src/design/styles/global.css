@@ -1,14 +1,14 @@
 :root {
   /* Global overlay layer scale (lowest → highest). Screen-internal stacking
      stays in the small 0–40 range; only full-app surfaces live here. */
-  --z-dropdown: 40;    /* transient menus/popovers anchored to chrome */
-  --z-popover: 100;    /* anchored popovers above screen content */
-  --z-slideshow: 200;  /* full-app playback overlay */
-  --z-overlay: 300;    /* modal dialogs + backdrops */
-  --z-compare: 320;    /* compare surface above the viewer */
-  --z-toast: 410;      /* toasts / busy indicators */
+  --z-dropdown: 40; /* transient menus/popovers anchored to chrome */
+  --z-popover: 100; /* anchored popovers above screen content */
+  --z-slideshow: 200; /* full-app playback overlay */
+  --z-overlay: 300; /* modal dialogs + backdrops */
+  --z-compare: 320; /* compare surface above the viewer */
+  --z-toast: 410; /* toasts / busy indicators */
   --z-context-menu: 1000;
-  --z-error: 10000;    /* fatal error boundary — always on top */
+  --z-error: 10000; /* fatal error boundary — always on top */
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #242a31;
   background: #e9edf1;
@@ -1648,22 +1648,6 @@ kbd {
   color: rgba(255, 255, 255, 0.8);
   font-size: 12px;
 }
-.viewer-overlay-bottom {
-  position: absolute;
-  right: 50%;
-  bottom: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 9px;
-  transform: translateX(50%);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 7px;
-  background: rgba(25, 29, 34, 0.82);
-  color: white;
-  white-space: nowrap;
-  backdrop-filter: blur(10px);
-}
 .viewer-overlay-bottom button {
   border: 0;
   background: transparent;
@@ -2941,8 +2925,6 @@ kbd {
   color: var(--accent-text);
 }
 .app-frame,
-
-
 .app-frame .gallery-grid .tile-caption {
   gap: 6px;
   padding-top: 8px;
@@ -3615,6 +3597,9 @@ body {
   --faint: #778394;
   --line: #e1e6ec;
   --line-strong: #cbd3dd;
+  /* Cards that lift on hover (album cards, smart-album tiles) share this, so
+     the light and dark themes each get a shadow that actually reads. */
+  --card-hover-shadow: 0 8px 24px rgba(20, 30, 45, 0.09);
   /* Accent tokens: a single accent setting drives every --blue reference in
      the UI, so the accent picker actually changes buttons, links, active
      nav, sliders and focus rings. */
@@ -3701,6 +3686,9 @@ body {
   --faint: #7d8799;
   --line: #2a3042;
   --line-strong: #353c52;
+  /* The light shadow disappears on a near-black surface, so the dark theme
+     gets a deeper one instead of the same value at low opacity. */
+  --card-hover-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
   --accent: #3b82f6;
   --blue: var(--accent);
   --accent-hover: #2563eb;
@@ -3811,14 +3799,7 @@ body {
   min-height: 0;
 }
 
-.app-frame
-  :is(
-    .primary-button,
-    .quiet-button,
-    .outline-button,
-    .danger-button,
-    .toolbar-button
-  ) {
+.app-frame :is(.primary-button, .quiet-button, .outline-button, .danger-button, .toolbar-button) {
   min-height: var(--control-height);
   border-radius: var(--control-radius);
   font-size: var(--control-font-size);
@@ -4320,6 +4301,7 @@ body {
     .canvas-actions button,
     .viewer-overlay-bottom button,
     .slideshow-controls button,
+
   ) {
   display: inline-flex;
   align-items: center;

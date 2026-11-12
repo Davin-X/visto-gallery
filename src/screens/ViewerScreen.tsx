@@ -8,7 +8,9 @@ import {
   FlipIcon,
   FullscreenIcon,
   HeartIcon,
+  InfoIcon,
   MinusIcon,
+  MoreIcon,
   PlusIcon,
   RotateIcon,
   SlideshowIcon,
@@ -100,6 +102,59 @@ function ViewerScreen(props: ViewerScreenProps) {
     Math.max(0, items.findIndex((item) => item.id === selected?.id) - stripWindowSize / 2),
   );
   const hideTimerRef = useRef<number | null>(null);
+  const barHoveredRef = useRef(false);
+
+  // The bar fades after a pause so the frame stays clean, but only while the
+  // pointer is away from it: a timer started by stage movement used to fire with
+  // the pointer resting on the bar, so it jumped away from the hand reaching for
+  // it. Pointer over the bar wins over every other reason to hide.
+  const scheduleBarHide = useCallback(() => {
+    if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+    if (barHoveredRef.current) return;
+    hideTimerRef.current = window.setTimeout(() => {
+      // Re-checked when the timer fires, not only when it is set: a timer started
+      // before the pointer arrived would otherwise hide the bar under the hand
+      // that just moved onto it.
+      if (barHoveredRef.current) return;
+      setHintsVisible(false);
+    }, 3500);
+  }, []);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpRef = useRef<HTMLDivElement | null>(null);
+
+  // Rotate, flip and hide live behind one menu in the docked bar instead of
+  // sitting at the same weight as zoom and full screen, and the shortcut list
+  // opens from a help button beside it rather than as a strip pinned over the
+  // picture. Clicking elsewhere closes either; Escape is left to the viewer,
+  // which closes the whole surface.
+  useEffect(() => {
+    if (!moreOpen && !helpOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!moreRef.current?.contains(target)) setMoreOpen(false);
+      if (!helpRef.current?.contains(target)) setHelpOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [moreOpen, helpOpen]);
+
+  // The idle timer fades the bar out, and a popover is a child of the bar, so
+  // it would fade with it. Hold the bar open while one is showing, then restart
+  // the timer once both are closed. The first render is skipped so opening the
+  // viewer does not start a countdown it never had before.
+  const popoverOpenedRef = useRef(false);
+  useEffect(() => {
+    if (moreOpen || helpOpen) {
+      popoverOpenedRef.current = true;
+      if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+      return;
+    }
+    if (!popoverOpenedRef.current) return;
+    scheduleBarHide();
+  }, [moreOpen, helpOpen, scheduleBarHide]);
   const stripRef = useRef<HTMLDivElement | null>(null);
   const stripStrideRef = useRef(stripStride);
   const stripStartRef = useRef(stripStart);
@@ -114,14 +169,13 @@ function ViewerScreen(props: ViewerScreenProps) {
   const startSlideshow = useCallback(() => {
     useSlideshowStore.getState().open(photoItems, selected?.id);
   }, [photoItems, selected?.id]);
+  const shortcutHints = buildShortcuts(selected?.kind);
 
-  // Shortcut hints are shown on open and whenever the pointer moves over the
-  // stage, then fade away after a short pause so the frame stays clean.
+  // Hints show on open and on stage movement, then fade via the shared timer.
   const flashHints = useCallback(() => {
     setHintsVisible(true);
-    if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
-  }, []);
+    scheduleBarHide();
+  }, [scheduleBarHide]);
 
   useEffect(() => {
     setPan({ x: 0, y: 0 });
@@ -183,6 +237,11 @@ function ViewerScreen(props: ViewerScreenProps) {
   };
 
   useEffect(() => {
+    // A popover belongs to the item it was opened for. Left open across a
+    // navigation it would point at the next photo, and its first click would
+    // rotate or hide something the user never opened it for.
+    setMoreOpen(false);
+    setHelpOpen(false);
     flashHints();
     return () => {
       if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
@@ -522,15 +581,20 @@ function ViewerScreen(props: ViewerScreenProps) {
           props.onSetZoom(props.zoom === 100 ? 200 : 100);
         }}
       >
-        <button
-          className="viewer-arrow left"
-          type="button"
-          onClick={() => props.onNavigate(-1)}
-          aria-label="Previous"
-          title="Previous item (←)"
-        >
-          <ChevronLeftIcon size={21} strokeWidth={2.1} />
-        </button>
+        {/* Video keeps the floating arrows: its own transport bar already owns
+            the stage floor, and a second bar there would collide with it.
+            Stills get the same pair inside the docked bar below. */}
+        {selected.kind === "video" && (
+          <button
+            className="viewer-arrow left"
+            type="button"
+            onClick={() => props.onNavigate(-1)}
+            aria-label="Previous"
+            title="Previous item (←)"
+          >
+            <ChevronLeftIcon size={21} strokeWidth={2.1} />
+          </button>
+        )}
         {selected.kind === "photo" || selected.kind === "raw" ? (
           <>
             {selected.kind === "photo" ? (
@@ -651,15 +715,17 @@ function ViewerScreen(props: ViewerScreenProps) {
             )}
           </>
         ) : null}
-        <button
-          className="viewer-arrow right"
-          type="button"
-          onClick={() => props.onNavigate(1)}
-          aria-label="Next"
-          title="Next item (→)"
-        >
-          <ChevronRightIcon size={21} strokeWidth={2.1} />
-        </button>
+        {selected.kind === "video" && (
+          <button
+            className="viewer-arrow right"
+            type="button"
+            onClick={() => props.onNavigate(1)}
+            aria-label="Next"
+            title="Next item (→)"
+          >
+            <ChevronRightIcon size={21} strokeWidth={2.1} />
+          </button>
+        )}
         <div
           className={`viewer-overlay-top${hintsVisible ? "" : " hidden"}`}
           onMouseEnter={() => {
@@ -667,7 +733,9 @@ function ViewerScreen(props: ViewerScreenProps) {
             if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
           }}
           onMouseLeave={() => {
-            hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
+            // Shared timer, so leaving the transform readout never hides the bar
+            // while the pointer is resting on it.
+            scheduleBarHide();
           }}
         >
           <span className="viewer-transform-state">
@@ -676,64 +744,70 @@ function ViewerScreen(props: ViewerScreenProps) {
             {props.flipX ? "Flipped" : ""}
           </span>
         </div>
-        {/* Compact shortcut hints live in the stage corner so the frame keeps
-            all of its room for the media and the control bar. */}
-        <div className={`viewer-hints${hintsVisible ? "" : " hidden"}`} aria-hidden="true">
-          <span>
-            <kbd>←</kbd>
-            <kbd>→</kbd>
-            <kbd>J</kbd>
-            <kbd>K</kbd>
-            <kbd>Space</kbd> Navigate
-          </span>
-          <span>
-            <kbd>↑</kbd>
-            <kbd>↓</kbd> Zoom
-          </span>
-          {selected.kind === "photo" && (
-            <span>
-              <kbd>R</kbd>
-              <kbd>X</kbd> Rotate/Flip
-            </span>
-          )}
-          <span>
-            <kbd>0</kbd> Reset zoom
-          </span>
-          {(selected.kind === "photo" || selected.kind === "raw") && (
-            <span>
-              <kbd>1</kbd> 200%
-            </span>
-          )}
-          <span>
-            <kbd>L</kbd> Favorite
-          </span>
-          <span>
-            <kbd>F</kbd> Full screen
-          </span>
-          <span>
-            <kbd>Esc</kbd> Close
-          </span>
-        </div>
         {selected.kind !== "video" && (
           <div
             className={`viewer-overlay-bottom${hintsVisible ? "" : " hidden"}`}
-            onMouseEnter={() => {
+            onPointerOver={(event) => {
+              // pointerover bubbles from every child; only a move in from outside
+              // the bar counts as arriving on it.
+              if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+              barHoveredRef.current = true;
               setHintsVisible(true);
               if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
             }}
-            onMouseLeave={() => {
-              hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
+            onPointerOut={(event) => {
+              if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+              barHoveredRef.current = false;
+              scheduleBarHide();
             }}
           >
+            <button
+              type="button"
+              className="viewer-arrow is-docked"
+              onClick={() => props.onNavigate(-1)}
+              aria-label="Previous"
+              title="Previous item (←)"
+            >
+              <ChevronLeftIcon size={19} strokeWidth={2.1} />
+            </button>
+            <button
+              type="button"
+              className="viewer-arrow is-docked"
+              onClick={() => props.onNavigate(1)}
+              aria-label="Next"
+              title="Next item (→)"
+            >
+              <ChevronRightIcon size={19} strokeWidth={2.1} />
+            </button>
+            <span className="viewer-divider" />
             {(selected.kind === "photo" || selected.kind === "raw") && (
               <>
+                {/* Stepper around the value, then the fit mode: the value sits
+                    between the two controls that change it. */}
                 <button
                   type="button"
+                  onClick={() => props.onSetZoom(Math.max(25, props.zoom - 25))}
+                  aria-label="Zoom out"
+                  title="Zoom out (↓)"
+                >
+                  <MinusIcon size={15} />
+                </button>
+                <button
+                  type="button"
+                  className="viewer-zoom-value"
                   onClick={props.onResetZoom}
                   aria-label="Reset zoom"
                   title="Reset zoom"
                 >
                   {props.zoom}%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => props.onSetZoom(Math.min(300, props.zoom + 25))}
+                  aria-label="Zoom in"
+                  title="Zoom in (↑)"
+                >
+                  <PlusIcon size={15} />
                 </button>
                 <button
                   type="button"
@@ -753,86 +827,156 @@ function ViewerScreen(props: ViewerScreenProps) {
                       ? "Fill"
                       : "Fit"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => props.onSetZoom(Math.max(25, props.zoom - 25))}
-                  aria-label="Zoom out"
-                  title="Zoom out (↓)"
-                >
-                  <MinusIcon size={15} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => props.onSetZoom(Math.min(300, props.zoom + 25))}
-                  aria-label="Zoom in"
-                  title="Zoom in (↑)"
-                >
-                  <PlusIcon size={15} />
-                </button>
                 <span className="viewer-divider" />
               </>
             )}
-            {selected.kind === "photo" && (
-              <button
-                type="button"
-                onClick={() => props.onRotate(90)}
-                aria-label="Rotate 90 degrees"
-                title="Rotate 90°"
-              >
-                <RotateIcon size={14} /> Rotate
-              </button>
-            )}
-            {selected.kind === "photo" && (
-              <button
-                type="button"
-                onClick={() => props.onToggleFlip()}
-                aria-label="Flip horizontally"
-                title="Flip horizontal"
-                className={props.flipX ? "active" : ""}
-              >
-                <FlipIcon size={14} /> Flip
-              </button>
-            )}
-            {selected.kind === "photo" && (props.rotation !== 0 || props.flipX) && (
-              <button
-                type="button"
-                onClick={() => props.onResetTransform()}
-                aria-label="Reset rotation and flip"
-                title="Reset rotation & flip"
-              >
-                Reset
-              </button>
+            {/* Occasional actions, one level down: they are the same weight in
+                the bar as zoom and full screen, but not the same frequency. */}
+            {(selected.kind === "photo" || selected.kind === "raw") && (
+              <div className="media-anchor" ref={moreRef}>
+                <button
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={moreOpen}
+                  aria-label="More actions"
+                  title="More actions"
+                  className={moreOpen ? "active" : ""}
+                  onClick={() => setMoreOpen((value) => !value)}
+                >
+                  <MoreIcon size={15} />
+                </button>
+                {moreOpen && (
+                  <div className="media-popover" role="menu" aria-label="More actions">
+                    {selected.kind === "photo" && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-label="Rotate 90 degrees"
+                        onClick={() => {
+                          props.onRotate(90);
+                          setMoreOpen(false);
+                        }}
+                      >
+                        <RotateIcon size={14} /> Rotate 90°
+                      </button>
+                    )}
+                    {selected.kind === "photo" && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-label="Flip horizontally"
+                        className={props.flipX ? "active" : ""}
+                        onClick={() => {
+                          props.onToggleFlip();
+                          setMoreOpen(false);
+                        }}
+                      >
+                        <FlipIcon size={14} /> Flip horizontally
+                      </button>
+                    )}
+                    {selected.kind === "photo" && (props.rotation !== 0 || props.flipX) && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-label="Reset rotation and flip"
+                        onClick={() => {
+                          props.onResetTransform();
+                          setMoreOpen(false);
+                        }}
+                      >
+                        Reset rotation and flip
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label={selected.hidden ? "Unhide item" : "Hide item"}
+                      onClick={() => {
+                        void props.onToggleHidden(selected.id);
+                        setMoreOpen(false);
+                      }}
+                    >
+                      <EyeOffIcon size={14} /> {selected.hidden ? "Unhide" : "Hide"}
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
             <button
               type="button"
               onClick={() => props.onToggleFavorite(selected.id)}
               aria-pressed={!!selected.favorite}
               aria-label={selected.favorite ? "Remove favorite" : "Add favorite"}
+              title={selected.favorite ? "Remove favorite (L)" : "Favorite (L)"}
             >
-              <HeartIcon size={14} filled={!!selected.favorite} /> Favorite
-            </button>
-            <button
-              type="button"
-              onClick={() => void props.onToggleHidden(selected.id)}
-              aria-pressed={!!selected.hidden}
-              aria-label={selected.hidden ? "Unhide item" : "Hide item"}
-            >
-              <EyeOffIcon size={14} />
-              {selected.hidden ? "Unhide" : "Hide"}
+              <HeartIcon size={14} filled={!!selected.favorite} />
+              <span className="viewer-bar-label">
+                {selected.favorite ? "Unfavorite" : "Favorite"}
+              </span>
             </button>
             {selected.kind === "photo" && (
-              <button type="button" onClick={() => props.onOpenEdit(selected)}>
-                <EditIcon size={14} /> Edit
+              <button
+                type="button"
+                onClick={() => props.onOpenEdit(selected)}
+                aria-label="Edit photo"
+                title="Edit photo"
+              >
+                <EditIcon size={14} /> <span className="viewer-bar-label">Edit</span>
               </button>
             )}
             {selected.kind === "photo" && photoItems.length > 1 && (
-              <button type="button" onClick={startSlideshow} aria-label="Start photo slideshow">
-                <SlideshowIcon size={14} /> Slideshow
+              <button
+                type="button"
+                onClick={startSlideshow}
+                aria-label="Start photo slideshow"
+                title="Start photo slideshow"
+              >
+                <SlideshowIcon size={14} />
+                <span className="viewer-bar-label">Slideshow</span>
               </button>
             )}
-            <button type="button" onClick={() => void props.onToggleFullscreen()}>
-              <FullscreenIcon size={14} /> Full screen
+            <span className="viewer-divider" />
+            <button
+              type="button"
+              onClick={() => void props.onToggleFullscreen()}
+              aria-label="Toggle full screen"
+              title="Full screen (F)"
+            >
+              <FullscreenIcon size={14} />
+              <span className="viewer-bar-label">Full screen</span>
             </button>
+            <div className="media-anchor" ref={helpRef}>
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={helpOpen}
+                aria-label="Keyboard shortcuts"
+                title="Keyboard shortcuts"
+                className={helpOpen ? "active" : ""}
+                onClick={() => setHelpOpen((value) => !value)}
+              >
+                <InfoIcon size={15} />
+                <span className="viewer-bar-label">Keys</span>
+              </button>
+              {helpOpen && (
+                <div
+                  className="media-popover media-shortcuts"
+                  role="dialog"
+                  aria-label="Keyboard shortcuts"
+                >
+                  {shortcutHints.map((hint) => (
+                    <React.Fragment key={hint.label}>
+                      <span className="media-shortcut-keys">
+                        {hint.keys.map((key) => (
+                          <kbd key={key}>{key}</kbd>
+                        ))}
+                      </span>
+                      <span className="media-shortcut-label">{hint.label}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -891,3 +1035,24 @@ function ViewerScreen(props: ViewerScreenProps) {
 }
 
 export default ViewerScreen;
+
+// Shortcut list shown from the help button in the bar. Same keys as the strip
+// that used to float over the top of the picture, plus the ones that only apply
+// to stills.
+function buildShortcuts(kind: string | undefined) {
+  const photo = kind === "photo";
+  const still = photo || kind === "raw";
+  const rows: Array<{ keys: string[]; label: string }> = [
+    { keys: ["←", "→", "J", "K", "Space"], label: "Navigate" },
+    { keys: ["↑", "↓"], label: "Zoom" },
+  ];
+  if (photo) rows.push({ keys: ["R", "X"], label: "Rotate / flip" });
+  rows.push({ keys: ["0"], label: "Reset zoom" });
+  if (still) rows.push({ keys: ["1"], label: "200%" });
+  rows.push(
+    { keys: ["L"], label: "Favorite" },
+    { keys: ["F"], label: "Full screen" },
+    { keys: ["Esc"], label: "Close" },
+  );
+  return rows;
+}

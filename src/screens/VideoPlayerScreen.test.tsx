@@ -67,7 +67,7 @@ describe("video player screen", () => {
     );
 
     expect(screen.getByRole("heading", { level: 1, name: "video-a.mp4" })).toBeInTheDocument();
-    expect(screen.getByText("Up next")).toBeInTheDocument();
+    expect(screen.getByText("Queue")).toBeInTheDocument();
     expect(screen.getByText("2 videos")).toBeInTheDocument();
     expect(screen.getByTestId("video-player")).toHaveAttribute("data-item-id", "video-a");
     expect(screen.getByTestId("video-player")).toHaveAttribute("data-width", "1920");

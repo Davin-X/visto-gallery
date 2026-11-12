@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { KindDot } from "../design/components/KindBadge";
 import { NowPlaying } from "../design/components/NowPlaying";
 import {
   GearIcon,
@@ -14,6 +13,12 @@ import {
   BatchIcon,
   FolderIcon,
   EyeOffIcon,
+  GridIcon,
+  PlayIcon,
+  CropIcon,
+  SparkleIcon,
+  HeartIcon,
+  TagIcon,
   PanelLeftIcon,
   PanelRightIcon,
   ChartIcon,
@@ -343,7 +348,7 @@ export function AppSidebar({
   const libraryStatsRows = (
     <>
       <div className="stat-row">
-        <KindDot kind="photo" />
+        <GridIcon className="stat-icon is-photo" size={13} strokeWidth={1.7} />
         <span className="stat-label">Photos</span>
         <span className="stat-value">
           {stats.photos.toLocaleString()}
@@ -351,7 +356,7 @@ export function AppSidebar({
         </span>
       </div>
       <div className="stat-row">
-        <KindDot kind="video" />
+        <PlayIcon className="stat-icon is-video" size={13} strokeWidth={1.7} />
         <span className="stat-label">Videos</span>
         <span className="stat-value">
           {stats.videos.toLocaleString()}
@@ -359,7 +364,7 @@ export function AppSidebar({
         </span>
       </div>
       <div className="stat-row">
-        <KindDot kind="raw" />
+        <CropIcon className="stat-icon is-raw" size={13} strokeWidth={1.7} />
         <span className="stat-label">RAW</span>
         <span className="stat-value">
           {stats.raws.toLocaleString()}
@@ -367,7 +372,7 @@ export function AppSidebar({
         </span>
       </div>
       <div className="stat-row">
-        <KindDot kind="photo" />
+        <SparkleIcon className="stat-icon" size={13} strokeWidth={1.7} />
         <span className="stat-label">Animations</span>
         <span className="stat-value">
           {stats.animations.toLocaleString()}
@@ -375,7 +380,7 @@ export function AppSidebar({
         </span>
       </div>
       <div className="stat-row">
-        <KindDot kind="photo" />
+        <HeartIcon className="stat-icon" size={13} strokeWidth={1.7} />
         <span className="stat-label">Favorites</span>
         <span className="stat-value">
           {stats.favorites.toLocaleString()}
@@ -386,7 +391,7 @@ export function AppSidebar({
           only appears if an older catalog holds something else. */}
       {stats.uncategorized > 0 && (
         <div className="stat-row">
-          <KindDot kind="photo" />
+          <TagIcon className="stat-icon" size={13} strokeWidth={1.7} />
           <span className="stat-label">Uncategorized</span>
           <span className="stat-value">
             {stats.uncategorized.toLocaleString()}
@@ -395,7 +400,7 @@ export function AppSidebar({
         </div>
       )}
       <div className="stat-row hidden">
-        <KindDot kind="photo" />
+        <EyeOffIcon className="stat-icon" size={13} strokeWidth={1.7} />
         <span className="stat-label">Hidden</span>
         <span className="stat-value">
           {stats.hidden.toLocaleString()}
