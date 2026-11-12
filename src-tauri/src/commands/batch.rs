@@ -402,6 +402,112 @@ mod thumbnail_cache_tests {
     }
 
     #[tokio::test]
+    async fn a_relinked_row_survives_prune_from_the_same_snapshot() {
+        use super::{
+            catalog_rows_under_root, prune_missing_items_from, relink_moved_items_from,
+            upsert_media_batch, MediaItem,
+        };
+
+        let db = move_test_db().await;
+        let root = std::env::temp_dir().join(format!("visto-gallery-snapshot-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create test dir");
+
+        let before = root.join("beach.jpg");
+        fs::write(&before, vec![7u8; 4096]).expect("write file");
+        let mut item = MediaItem::new(
+            before.to_string_lossy().into_owned(),
+            "beach.jpg".into(),
+            "jpg".into(),
+            "photo".into(),
+            4096,
+            1000,
+        );
+        item.content_signature = crate::media_signature::content_signature(&before);
+        upsert_media_batch(&db, &[(item, None, None)])
+            .await
+            .expect("insert item");
+
+        let after = root.join("beach-renamed.jpg");
+        fs::rename(&before, &after).expect("move file");
+        let mut seen = HashSet::new();
+        seen.insert(after.to_string_lossy().into_owned());
+
+        // The scan loads the rows once, before the walk's results are applied.
+        let catalog = catalog_rows_under_root(&db, root.to_str().unwrap())
+            .await
+            .expect("load snapshot");
+        assert_eq!(catalog.len(), 1, "snapshot holds this root's rows");
+        assert_eq!(
+            catalog[0].path,
+            before.to_string_lossy(),
+            "the snapshot predates the move"
+        );
+
+        let relinked = relink_moved_items_from(&db, &catalog, root.to_str().unwrap(), &seen)
+            .await
+            .expect("relink should succeed");
+        assert_eq!(relinked, 1);
+
+        // Pruning from that stale snapshot must not delete the row it already
+        // re-pointed: the row no longer exists under the old id.
+        let pruned = prune_missing_items_from(&db, &catalog, root.to_str().unwrap(), &seen)
+            .await
+            .expect("prune should succeed");
+        assert_eq!(pruned, 0, "the re-pointed row must survive the prune");
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM media_items")
+                .fetch_one(&db)
+                .await
+                .expect("count items"),
+            1,
+            "the moved file keeps exactly one row"
+        );
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[tokio::test]
+    async fn the_catalog_snapshot_only_reads_the_scanned_root() {
+        use super::{catalog_rows_under_root, upsert_media_batch, MediaItem};
+
+        let db = move_test_db().await;
+        let base = std::env::temp_dir().join(format!("visto-gallery-scope-{}", Uuid::new_v4()));
+        let inside = base.join("inside");
+        let elsewhere = base.join("elsewhere");
+        fs::create_dir_all(&inside).expect("create inside");
+        fs::create_dir_all(&elsewhere).expect("create elsewhere");
+
+        let here = MediaItem::new(
+            inside.join("here.jpg").to_string_lossy().into_owned(),
+            "here.jpg".into(),
+            "jpg".into(),
+            "photo".into(),
+            10,
+            1000,
+        );
+        let away = MediaItem::new(
+            elsewhere.join("away.jpg").to_string_lossy().into_owned(),
+            "away.jpg".into(),
+            "jpg".into(),
+            "photo".into(),
+            10,
+            1000,
+        );
+        upsert_media_batch(&db, &[(here.clone(), None, None), (away, None, None)])
+            .await
+            .expect("insert items");
+
+        let snapshot = catalog_rows_under_root(&db, inside.to_str().unwrap())
+            .await
+            .expect("load snapshot");
+        assert_eq!(snapshot.len(), 1, "only the scanned root's rows are read");
+        assert_eq!(snapshot[0].id, here.id);
+        assert_eq!(snapshot[0].size, 10);
+
+        fs::remove_dir_all(&base).ok();
+    }
+
+    #[tokio::test]
     async fn ambiguous_matches_are_left_to_the_import_path() {
         use super::{relink_moved_items, upsert_media_batch, MediaItem};
 

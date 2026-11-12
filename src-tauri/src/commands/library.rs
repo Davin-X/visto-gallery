@@ -58,24 +58,18 @@ pub async fn scan_library(
 
     // A normal startup scan only needs to inspect new or changed files. The
     // explicit Rescan action passes `force` to re-read every file header.
-    // Only rows under this root can match a walked path, so load just those.
+    //
+    // One load answers three questions: which files are already known, which
+    // rows vanished from this root, which rows to prune. It is scoped to the
+    // root, so scanning one folder never reads another folder's rows.
+    let catalog = catalog_rows_under_root(&db, &root_path).await?;
     let known_files: Arc<HashMap<String, (i64, i64)>> = Arc::new(if force {
         HashMap::new()
     } else {
-        let prefix = format!(
-            "{}/",
-            super::normalize_root(&root_path).trim_end_matches('/')
-        );
-        sqlx::query_as::<_, (String, i64, i64)>(
-            "SELECT path, size, modified_at FROM media_items WHERE substr(path, 1, length(?)) = ?",
-        )
-        .bind(&prefix)
-        .bind(&prefix)
-        .fetch_all(&db)
-        .await?
-        .into_iter()
-        .map(|(path, size, modified_at)| (path, (size, modified_at)))
-        .collect()
+        catalog
+            .iter()
+            .map(|row| (row.path.clone(), (row.size, row.modified_at)))
+            .collect()
     });
 
     // Discover the media paths once, on the blocking pool: a large tree can
@@ -105,7 +99,7 @@ pub async fn scan_library(
     // plus an import: re-key its row (and its album, tag and edit relations) to
     // the new path before the import loop writes anything.
     if !job.is_cancelled() && !had_walk_error {
-        let relinked = relink_moved_items(&db, &root_path, &seen_paths).await?;
+        let relinked = relink_moved_items_from(&db, &catalog, &root_path, &seen_paths).await?;
         if relinked > 0 {
             eprintln!("visto: followed {relinked} moved file(s) under {root_path}");
         }
@@ -174,11 +168,13 @@ pub async fn scan_library(
     hydrate_relations(&db, &mut items).await?;
 
     // Prune catalog entries for files that disappeared from this source.
-    // Only do this if the walk completed fully without errors. Rows that were
-    // re-pointed above now sit at a path this walk saw, so they survive.
+    // Only do this if the walk completed fully without errors. The snapshot is
+    // still valid here: rows added by the import loop all sit at a path this
+    // walk saw, and a row re-pointed above no longer exists under its old id,
+    // so pruning it by that id is a no-op.
     let cancelled = job.is_cancelled();
     let removed_count = if !cancelled && !had_walk_error {
-        prune_missing_items(&db, &root_path, &seen_paths).await?
+        prune_missing_items_from(&db, &catalog, &root_path, &seen_paths).await?
     } else {
         0
     };

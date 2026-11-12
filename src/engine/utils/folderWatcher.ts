@@ -20,9 +20,14 @@ export interface FolderChangeCoalescer {
 export function createFolderChangeCoalescer(
   onFlush: (paths: string[]) => void,
   delayMs = 800,
+  maxWaitMs = 5000,
 ): FolderChangeCoalescer {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let paths = new Set<string>();
+  // A steady stream of events must not postpone the scan forever. Remember
+  // when the oldest pending event arrived and never wait past `maxWaitMs` from
+  // that point, however often the quiet window is restarted.
+  let oldestPendingAt: number | null = null;
 
   const clear = () => {
     if (timer) clearTimeout(timer);
@@ -31,6 +36,7 @@ export function createFolderChangeCoalescer(
 
   const flush = () => {
     clear();
+    oldestPendingAt = null;
     if (paths.size === 0) return;
     const batch = [...paths];
     paths = new Set();
@@ -40,12 +46,16 @@ export function createFolderChangeCoalescer(
   return {
     push(path) {
       paths.add(path);
+      const now = Date.now();
+      if (oldestPendingAt === null) oldestPendingAt = now;
       clear();
-      timer = setTimeout(flush, delayMs);
+      const remainingMaxWait = Math.max(0, maxWaitMs - (now - oldestPendingAt));
+      timer = setTimeout(flush, Math.min(delayMs, remainingMaxWait));
     },
     flush,
     cancel() {
       clear();
+      oldestPendingAt = null;
       paths = new Set();
     },
     pending() {
@@ -123,21 +133,27 @@ export function createAutoImportController(options: {
   scan: (path: string) => Promise<void>;
   onError: (path: string, error: unknown) => void;
   delayMs?: number;
+  /** Longest a pending change may wait while events keep arriving. */
+  maxWaitMs?: number;
 }): AutoImportController {
   const inFlight = new Set<Promise<void>>();
-  const coalescer = createFolderChangeCoalescer((paths) => {
-    if (!options.isEnabled()) return;
-    for (const path of paths) {
-      let task: Promise<void>;
-      task = options
-        .scan(path)
-        .catch((error) => options.onError(path, error))
-        .finally(() => {
-          inFlight.delete(task);
-        });
-      inFlight.add(task);
-    }
-  }, options.delayMs ?? 800);
+  const coalescer = createFolderChangeCoalescer(
+    (paths) => {
+      if (!options.isEnabled()) return;
+      for (const path of paths) {
+        let task: Promise<void>;
+        task = options
+          .scan(path)
+          .catch((error) => options.onError(path, error))
+          .finally(() => {
+            inFlight.delete(task);
+          });
+        inFlight.add(task);
+      }
+    },
+    options.delayMs ?? 800,
+    options.maxWaitMs ?? 5000,
+  );
 
   return {
     changed: (path) => coalescer.push(path),

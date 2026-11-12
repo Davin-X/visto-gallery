@@ -198,19 +198,27 @@ pub(crate) async fn upsert_media_batch(
 /// This is deliberately conservative: the caller only invokes it after a
 /// complete, uncancelled walk with no directory errors. A disconnected drive or
 /// an unreadable subfolder must never wipe the catalog.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) async fn prune_missing_items(
     db: &SqlitePool,
     root: &str,
     seen_paths: &HashSet<String>,
 ) -> Result<usize, CommandError> {
-    let candidates: Vec<(String, String)> = sqlx::query_as("SELECT id, path FROM media_items")
-        .fetch_all(db)
-        .await?;
+    let catalog = super::repo::catalog_rows_under_root(db, root).await?;
+    prune_missing_items_from(db, &catalog, root, seen_paths).await
+}
 
-    let missing: Vec<String> = candidates
-        .into_iter()
-        .filter(|(_, path)| path_is_inside(path, root) && !seen_paths.contains(path))
-        .map(|(id, _)| id)
+/// [`prune_missing_items`] against an already-loaded catalog snapshot.
+pub(crate) async fn prune_missing_items_from(
+    db: &SqlitePool,
+    catalog: &[super::repo::CatalogRow],
+    root: &str,
+    seen_paths: &HashSet<String>,
+) -> Result<usize, CommandError> {
+    let missing: Vec<&String> = catalog
+        .iter()
+        .filter(|row| path_is_inside(&row.path, root) && !seen_paths.contains(&row.path))
+        .map(|row| &row.id)
         .collect();
     if missing.is_empty() {
         return Ok(0);
@@ -219,13 +227,14 @@ pub(crate) async fn prune_missing_items(
     // Stay below SQLite's bound-parameter limit and delete every relation in
     // one transaction so a partial prune cannot leave orphaned album/tag rows.
     const DELETE_CHUNK: usize = 500;
+    let mut removed: usize = 0;
     let mut transaction = db.begin().await?;
     for chunk in missing.chunks(DELETE_CHUNK) {
         for table in ["media_tags", "album_items"] {
             let mut query =
                 QueryBuilder::<Sqlite>::new(format!("DELETE FROM {table} WHERE media_id IN ("));
             let mut values = query.separated(", ");
-            for id in chunk {
+            for id in chunk.iter().copied() {
                 values.push_bind(id);
             }
             values.push_unseparated(")");
@@ -234,15 +243,21 @@ pub(crate) async fn prune_missing_items(
 
         let mut query = QueryBuilder::<Sqlite>::new("DELETE FROM media_items WHERE id IN (");
         let mut values = query.separated(", ");
-        for id in chunk {
+        for id in chunk.iter().copied() {
             values.push_bind(id);
         }
         values.push_unseparated(")");
-        query.build().execute(&mut *transaction).await?;
+        // Count rows actually removed, not candidates: a row that was already
+        // re-pointed by a move this scan no longer exists under its old id.
+        removed += query
+            .build()
+            .execute(&mut *transaction)
+            .await?
+            .rows_affected() as usize;
     }
     transaction.commit().await?;
 
-    Ok(missing.len())
+    Ok(removed)
 }
 
 pub(crate) async fn import_media_file(
