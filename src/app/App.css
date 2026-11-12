@@ -1181,6 +1181,62 @@ body.is-resizing .photo-inspector {
   pointer-events: none;
 }
 
+/* Placeholders shown while the first page of a view loads. The tile footprint
+   matches a grid card; the details layout gets a row-shaped variant. Shimmer
+   runs at a low contrast so a slow first paint reads as loading, not as a
+   broken render. */
+.library-skeleton-tile,
+.library-skeleton-row {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+}
+
+.library-skeleton-tile {
+  display: block;
+  min-height: 218px;
+  border-radius: 16px;
+}
+
+.library-skeleton-row {
+  display: block;
+  grid-column: 1 / -1;
+  min-height: 52px;
+  border-radius: 10px;
+}
+
+.library-skeleton-tile::after,
+.library-skeleton-row::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in srgb, var(--surface-2) 75%, transparent) 50%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  animation: library-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes library-skeleton-shimmer {
+  from {
+    background-position: 140% 0;
+  }
+  to {
+    background-position: -40% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-skeleton-tile::after,
+  .library-skeleton-row::after {
+    animation: none;
+  }
+}
+
 .gallery-grid.thumb-small {
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 }
