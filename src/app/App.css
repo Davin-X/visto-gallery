@@ -13155,29 +13155,18 @@ body.is-resizing .photo-inspector {
    and it made the twelve real albums below look like loose thumbnails. The
    heading row and the strip's top rule do the grouping. */
 .smart-albums-section {
-  position: relative;
   margin: 0 0 16px;
   padding: 0;
 }
 
 /* The strip scrolls horizontally with its scrollbar hidden, so without this
-   fade there is no cue that two more albums sit past the right edge. It tracks
-   the scroll position: at the end of the row, it is gone. */
-.smart-albums-section::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 64px;
-  background: linear-gradient(to right, transparent, var(--surface));
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  pointer-events: none;
-}
-
-.smart-albums-section.has-more::after {
-  opacity: 1;
+   fade there is no cue that more albums sit past the right edge. It masks the
+   scroller itself rather than overlaying the section: as an overlay anchored
+   to the section it also sat on top of the head row, dimming the end of the
+   View all control. Masking needs no surface colour to match, either. */
+.smart-albums-section.has-more .smart-albums-list {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 64px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 64px), transparent);
 }
 
 .smart-albums-headrow {
