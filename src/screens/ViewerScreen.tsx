@@ -72,6 +72,9 @@ function ViewerScreen(props: ViewerScreenProps) {
   // Drag-to-pan for zoomed photos. State resets when the selected item
   // changes and whenever zoom/fitMode moves away from its last value.
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  // True while a drag is in flight: the photo's transform transition would
+  // otherwise make every pointer move lag 180 ms behind the cursor.
+  const [panning, setPanning] = useState(false);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef({
     pointerId: -1,
@@ -128,6 +131,7 @@ function ViewerScreen(props: ViewerScreenProps) {
 
   useEffect(() => {
     setPan({ x: 0, y: 0 });
+    setPanning(false);
   }, [selected?.id]);
 
   // Whenever zoom changes, clamp the current pan back inside the new image
@@ -150,6 +154,7 @@ function ViewerScreen(props: ViewerScreenProps) {
     if (event.button !== 0) return;
     if ((event.target as HTMLElement).closest("button, input, a")) return;
     stageRef.current?.setPointerCapture(event.pointerId);
+    setPanning(true);
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -179,6 +184,7 @@ function ViewerScreen(props: ViewerScreenProps) {
   const handleStagePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     if (dragRef.current.pointerId !== event.pointerId) return;
     dragRef.current.pointerId = -1;
+    setPanning(false);
     stageRef.current?.releasePointerCapture(event.pointerId);
   };
 
@@ -525,15 +531,12 @@ function ViewerScreen(props: ViewerScreenProps) {
           <ChevronLeftIcon size={21} strokeWidth={2.1} />
         </button>
         {selected.kind === "photo" || selected.kind === "raw" ? (
-          <div
-            className="photo-frame"
-            style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0)` }}
-          >
+          <>
             {selected.kind === "photo" ? (
               <>
                 <img
                   key={`${selected.id}-${selected.size}-${selected.modifiedAt}`}
-                  className={`photo-viewer-image${photoStatus === "loaded" ? " is-loaded" : ""}`}
+                  className={`photo-viewer-image${photoStatus === "loaded" ? " is-loaded" : ""}${panning ? " is-panning" : ""}`}
                   src={props.assetUrl(selected.path) + `?v=${selected.modifiedAt}-${selected.size}`}
                   alt={selected.name}
                   decoding="async"
@@ -588,6 +591,7 @@ function ViewerScreen(props: ViewerScreenProps) {
                           : "100%",
                     objectFit: props.fitMode === "fill" ? "cover" : "contain",
                     transform: [
+                      `translate3d(${pan.x}px, ${pan.y}px, 0)`,
                       `rotate(${props.rotation || 0}deg)`,
                       `scaleX(${props.flipX ? -1 : 1})`,
                       draftTransformStyle(draftTransforms.get(selected.id)),
@@ -634,6 +638,7 @@ function ViewerScreen(props: ViewerScreenProps) {
                         : "100%",
                   objectFit: "contain",
                   transform: [
+                    `translate3d(${pan.x}px, ${pan.y}px, 0)`,
                     `rotate(${props.rotation || 0}deg)`,
                     `scaleX(${props.flipX ? -1 : 1})`,
                     `scale(${props.zoom / 100})`,
@@ -643,7 +648,7 @@ function ViewerScreen(props: ViewerScreenProps) {
                 }}
               />
             )}
-          </div>
+          </>
         ) : null}
         <button
           className="viewer-arrow right"

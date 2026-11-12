@@ -4271,16 +4271,13 @@ body.is-resizing .photo-inspector {
     transform 180ms ease;
 }
 
-.viewer-stage .photo-frame {
-  display: grid;
-  place-items: center;
-  max-width: 100%;
-  max-height: 100%;
-  will-change: transform;
-}
-
 .viewer-stage > .photo-viewer-image.is-loaded {
   opacity: 1;
+}
+
+/* Dragging must track the cursor, so the easing only applies to zoom/rotate. */
+.viewer-stage > .photo-viewer-image.is-panning {
+  transition: opacity 180ms ease;
 }
 
 .photo-preview-state {
