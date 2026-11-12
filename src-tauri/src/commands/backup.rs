@@ -265,12 +265,33 @@ pub async fn validate_catalog_backup(path: String) -> Result<BackupInfo, Command
     inspect_backup(&isolated.path_str()).await
 }
 
+/// Copies one table between the two attached databases, keeping only the
+/// columns the backup actually carries. Backups written by older builds may
+/// lack columns this build has (e.g. hidden_reason before 2026-11); restore
+/// what is present rather than fail the whole restore.
 async fn copy_table(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     table: &str,
     columns: &[&str],
 ) -> Result<(), CommandError> {
-    let columns = columns.join(", ");
+    let present: std::collections::HashSet<String> = sqlx::query_scalar::<_, String>(
+        "SELECT name FROM restore_src.pragma_table_info(?)",
+    )
+    .bind(table)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(|e| CommandError::database(format!("Could not read {table}'s schema: {e}")))?
+    .into_iter()
+    .collect();
+    let kept: Vec<String> = columns
+        .iter()
+        .filter(|column| present.contains(**column))
+        .map(|column| column.to_string())
+        .collect();
+    if kept.is_empty() {
+        return Ok(());
+    }
+    let columns = kept.join(", ");
     sqlx::query(&format!(
         "INSERT INTO {table} ({columns}) SELECT {columns} FROM restore_src.{table}"
     ))
@@ -332,6 +353,7 @@ async fn restore_backup_into_catalog(db: &SqlitePool, path: &str) -> Result<(), 
                 "sha256",
                 "favorite",
                 "hidden",
+                "hidden_reason",
                 "import_session_id",
                 "created_at",
                 "updated_at",
@@ -597,7 +619,7 @@ mod tests {
             .connect_with(options)
             .await
             .expect("open catalog");
-        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)")
+        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, hidden_reason TEXT, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)")
             .execute(&db)
             .await
             .unwrap();

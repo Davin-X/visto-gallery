@@ -21,6 +21,10 @@ interface HiddenScreenProps {
   /** Start a background session for a video without leaving the grid. */
   onPlayBackground?: (id: string) => void;
   onPlaySlideshow?: (ids?: string[]) => void;
+  /** Library stats; used for the un-filtered hidden total so the empty state
+   * and the inspector gate don't flip off just because a filter matches
+   * nothing. */
+  libraryStats?: { hidden: number };
 }
 
 function HiddenScreen(props: HiddenScreenProps) {
@@ -35,8 +39,8 @@ function HiddenScreen(props: HiddenScreenProps) {
       deleteItems: s.deleteItems,
       hiddenCount: s.hiddenCount,
       hiddenFilter: s.hiddenFilter,
-      hiddenItems: s.hiddenItems,
       hiddenQuery: s.hiddenQuery,
+      hiddenItems: s.hiddenItems,
       inspectItem: s.inspectItem,
       inspectedId: s.inspectedId,
       items: s.items,
@@ -75,8 +79,6 @@ function HiddenScreen(props: HiddenScreenProps) {
     }),
     [library.hiddenItems],
   );
-  const filter = library.hiddenFilter;
-  const query = library.hiddenQuery;
   const [pendingReveal, setPendingReveal] = useState<
     | { kind: "viewer"; id?: string }
     | { kind: "background"; id: string }
@@ -85,20 +87,9 @@ function HiddenScreen(props: HiddenScreenProps) {
     | null
   >(null);
 
-  const items = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return library.hiddenItems.filter((item: MediaItem) => {
-      if (filter === "Photos" && item.kind !== "photo") return false;
-      if (filter === "Videos" && item.kind !== "video") return false;
-      if (filter === "RAW" && item.kind !== "raw") return false;
-      if (filter === "Animations" && !item.isAnimated) return false;
-      if (filter === "Favorites" && !item.favorite) return false;
-      if (!normalized) return true;
-      return `${item.name} ${item.path} ${item.extension} ${item.kind} ${item.camera || ""} ${item.lens || ""} ${(item.tags || []).join(" ")}`
-        .toLowerCase()
-        .includes(normalized);
-    });
-  }, [library.hiddenItems, filter, query]);
+  // The list arrives server-side filtered (query/kind/rating/label/date,
+  // paged cursor) since 2026-11; nothing is filtered again here.
+  const items = library.hiddenItems;
 
   useEffect(() => {
     const onOpenHidden = (event: Event) => {
@@ -239,15 +230,15 @@ function HiddenScreen(props: HiddenScreenProps) {
         items={items}
         inspectedId={library.inspectedId}
         selectedIds={library.selectedIds}
-        filter={filter}
-        query={query}
+        filter={library.hiddenFilter}
+        query={library.hiddenQuery}
         layout={library.layout}
         // With nothing hidden there is nothing to inspect; give the empty
         // state the full width instead of an empty panel.
-        showInspector={library.showInspector && library.hiddenCount > 0}
+        showInspector={library.showInspector && (props.libraryStats?.hidden ?? library.hiddenCount) > 0}
         activeAlbum={null}
         albums={library.albums}
-        hiddenCount={library.hiddenCount}
+        hiddenCount={props.libraryStats?.hidden ?? library.hiddenCount}
         libraryStats={hiddenLibraryStats}
         onInspectItem={library.inspectItem}
         onToggleSelect={library.toggleSelection}

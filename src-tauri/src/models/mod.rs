@@ -31,6 +31,9 @@ pub struct MediaItem {
     pub sha256: Option<String>,
     pub favorite: bool,
     pub hidden: bool,
+    /// Why the item is hidden: 'manual' for app-driven hides, NULL when
+    /// unknown (rows hidden before this column existed).
+    pub hidden_reason: Option<String>,
     /// Whether the catalog treats this item as animated content, i.e. the file
     /// contains more than one frame or an animation sequence.
     ///
@@ -124,6 +127,9 @@ impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for MediaItem {
             sha256: row.try_get("sha256")?,
             favorite: row.try_get("favorite")?,
             hidden: row.try_get("hidden")?,
+            // Test catalogs and pre-012 backups may lack the column; a missing
+            // value is indistinguishable from "no reason recorded".
+            hidden_reason: row.try_get("hidden_reason").ok().flatten(),
             is_animated: row.try_get("is_animated")?,
             content_signature: row.try_get("content_signature")?,
             rating: row.try_get("rating")?,
@@ -181,6 +187,7 @@ impl MediaItem {
             sha256: None,
             favorite: false,
             hidden: false,
+            hidden_reason: None,
             is_animated: false,
             content_signature: None,
             rating: None,

@@ -982,3 +982,77 @@ describe("showNotice", () => {
     expect(useLibraryStore.getState().noticeAction).toBeNull();
   });
 });
+
+describe("hidden view server-side filtering", () => {
+  beforeEach(() => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    useLibraryStore.setState({ hiddenFilter: "All", hiddenQuery: "" });
+  });
+  afterEach(() => {
+    delete (window as any).__TAURI_INTERNALS__;
+  });
+
+  it("loads hidden items with the mapped filter when setHiddenFilter changes", async () => {
+    useLibraryStore.getState().setHiddenFilter("Videos");
+
+    expect(tauri.library.getHiddenItems).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "video", hidden: true }),
+    );
+  });
+
+  it("loads hidden items with the Favorites filter as favorite-only", async () => {
+    useLibraryStore.getState().setHiddenFilter("Favorites");
+
+    expect(tauri.library.getHiddenItems).toHaveBeenCalledWith(
+      expect.objectContaining({ favorite: true, hidden: true }),
+    );
+  });
+
+  it("loads bare hidden items again when the filter returns to All", async () => {
+    useLibraryStore.getState().setHiddenFilter("Photos");
+    useLibraryStore.getState().clearHiddenFilters();
+
+    expect(tauri.library.getHiddenItems).toHaveBeenLastCalledWith(
+      expect.objectContaining({ limit: expect.any(Number) }),
+    );
+    const filter = vi.mocked(tauri.library.getHiddenItems).mock.calls[
+      vi.mocked(tauri.library.getHiddenItems).mock.calls.length - 1
+    ][0]!;
+    expect(filter.kind).toBeUndefined();
+    expect(filter.query).toBeUndefined();
+  });
+
+  it("passes a debounced query through to get_hidden_items", async () => {
+    vi.useFakeTimers();
+    useLibraryStore.getState().setHiddenQuery("holiday");
+    expect(tauri.library.getHiddenItems).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(200);
+    expect(tauri.library.getHiddenItems).toHaveBeenCalledWith(
+      expect.objectContaining({ query: "holiday", hidden: true }),
+    );
+    vi.useRealTimers();
+  });
+
+  it("continuation pages carry the same filter", async () => {
+    useLibraryStore.setState({ hiddenFilter: "Photos" });
+    vi.mocked(tauri.library.getHiddenItems).mockResolvedValueOnce({
+      items: [makeItem("a", "a.jpg")],
+      hasMore: true,
+      nextCursor: "cursor-2",
+      totalCount: 10,
+    } as never);
+
+    await useLibraryStore.getState().loadHiddenItems();
+    expect(tauri.library.getHiddenItems).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: "photo" }),
+    );
+
+    await useLibraryStore.getState().loadMoreHiddenItems();
+    const filter = vi.mocked(tauri.library.getHiddenItems).mock.calls[
+      vi.mocked(tauri.library.getHiddenItems).mock.calls.length - 1
+    ][0]!;
+    expect(filter.kind).toBe("photo");
+    expect(filter.cursor).toBe("cursor-2");
+  });
+});

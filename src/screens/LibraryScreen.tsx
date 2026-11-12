@@ -2450,6 +2450,18 @@ function LibraryScreen(props: LibraryScreenProps) {
                             <span className="info-label">Modified</span>
                             <span className="info-value">{formatFileDateTime(sel.modifiedAt)}</span>
                           </div>
+                          {sel.hidden && (
+                            <div className="info-row">
+                              <span className="info-label">Hidden</span>
+                              <span className="info-value">
+                                {sel.hiddenReason === "manual"
+                                  ? "Hidden manually"
+                                  : sel.hiddenReason
+                                    ? `Hidden (${sel.hiddenReason})`
+                                    : "No reason recorded"}
+                              </span>
+                            </div>
+                          )}
                         </>
                       )}
                     </div>

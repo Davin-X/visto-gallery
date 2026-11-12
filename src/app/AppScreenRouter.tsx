@@ -231,7 +231,7 @@ export function AppScreenRouter({
           progress={library.progress}
           notice={showNotice}
           assetUrl={assetUrl}
-          hiddenCount={library.hiddenCount}
+          hiddenCount={libraryStats.hidden}
         />
       )}
 

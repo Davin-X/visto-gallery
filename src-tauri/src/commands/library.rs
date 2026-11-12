@@ -2098,12 +2098,18 @@ pub async fn toggle_favorite(
 pub async fn toggle_hidden(
     item_id: String,
     hidden: bool,
+    reason: Option<String>,
     catalog: State<'_, crate::Catalog>,
     app: tauri::AppHandle,
 ) -> Result<(), CommandError> {
     let db = super::get_db(&catalog)?;
-    let changed = sqlx::query("UPDATE media_items SET hidden = ?, updated_at = ? WHERE id = ?")
+    let changed = sqlx::query("UPDATE media_items SET hidden = ?, hidden_reason = ?, updated_at = ? WHERE id = ?")
         .bind(if hidden { 1i32 } else { 0i32 })
+        .bind(if hidden {
+            reason.filter(|value| !value.is_empty()).or(Some("manual".to_string()))
+        } else {
+            None
+        })
         .bind(super::now_ms())
         .bind(&item_id)
         .execute(&db)

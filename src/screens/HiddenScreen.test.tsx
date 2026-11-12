@@ -137,18 +137,18 @@ describe("HiddenScreen", () => {
     expect(props.hiddenCount).toBe(2);
   });
 
-  it("filters hidden items by type when hiddenFilter changes", () => {
+  it("passes the server-filtered page through untouched when hiddenFilter changes", () => {
     renderHiddenScreen();
     let props = mockedLibraryScreen.mock.calls[0][0];
     expect(props.filter).toBe("All");
     expect(props.items).toHaveLength(2);
 
-    // Switch to Photos filter
+    // Filtering happens server-side (get_hidden_items with the hiddenFilter
+    // mapped into the page query); the screen renders the page it got.
     renderHiddenScreen({ hiddenFilter: "Photos" });
     props = mockedLibraryScreen.mock.calls[1][0];
     expect(props.filter).toBe("Photos");
-    expect(props.items).toHaveLength(1);
-    expect(props.items[0].kind).toBe("photo");
+    expect(props.items).toHaveLength(2);
   });
 
   it("allows inspecting a hidden item", () => {
