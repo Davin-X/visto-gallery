@@ -232,11 +232,13 @@ impl TrashSink for OsTrash {
 /// Files are trashed in batches via one AppleScript `tell Finder delete`
 /// call per batch on macOS — Finder's native Trash supports "Put Back" and a
 /// single invocation per batch means one sound per batch instead of one per
-/// file. `TRASH_CANCEL` is checked between batches so Cancel is responsive.
+/// file. The run's own cancel token is checked between batches, so Cancel is
+/// responsive without touching other trash operations.
 async fn execute_trash<P>(
     db: &sqlx::SqlitePool,
     targets: Vec<(String, String)>,
     sink: Arc<dyn TrashSink>,
+    cancel: &super::CancelToken<'_>,
     progress: P,
 ) -> Result<TrashResult, CommandError>
 where
@@ -254,7 +256,7 @@ where
     const TRASH_BATCH: usize = 50;
 
     for chunk in targets.chunks(TRASH_BATCH) {
-        if super::TRASH_CANCEL.load(Ordering::SeqCst) {
+        if cancel.is_cancelled() {
             for (id, _) in chunk {
                 failed.push(TrashError {
                     id: id.clone(),
@@ -284,7 +286,7 @@ where
                 // Batch failed: try each file individually so partial
                 // successes still count and failures are reported per-id.
                 for (id, path) in chunk {
-                    if super::TRASH_CANCEL.load(Ordering::SeqCst) {
+                    if cancel.is_cancelled() {
                         failed.push(TrashError {
                             id: id.clone(),
                             code: ErrorCode::Cancelled,
@@ -396,9 +398,11 @@ async fn remove_trashed_rows(
 pub async fn move_to_trash(
     ids: Vec<String>,
     catalog: State<'_, crate::Catalog>,
+    state: State<'_, crate::AppState>,
     window: Window,
 ) -> Result<TrashResult, CommandError> {
-    super::TRASH_CANCEL.store(false, Ordering::SeqCst);
+    // Per-invocation flag: a second trash run cannot clear this one's Cancel.
+    let cancel = state.trash_cancel.start();
 
     let db = super::get_db(&catalog)?;
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
@@ -427,6 +431,7 @@ pub async fn move_to_trash(
         &db,
         targets,
         Arc::new(OsTrash::new()),
+        &cancel,
         |processed, total, current| {
             let mut payload = json!({
                 "phase": "trashing",
@@ -2397,6 +2402,8 @@ mod trash_flow_tests {
 
         let fake = Arc::new(FakeTrash::default());
         let sink: Arc<dyn TrashSink> = fake.clone();
+        let group = super::super::CancelGroup::default();
+        let cancel = group.start();
         let outcome = execute_trash(
             &db,
             vec![
@@ -2404,6 +2411,7 @@ mod trash_flow_tests {
                 ("b".to_string(), b.to_string_lossy().into_owned()),
             ],
             sink,
+            &cancel,
             |_, _, _| {},
         )
         .await
@@ -2442,6 +2450,8 @@ mod trash_flow_tests {
             moved: Mutex::new(Vec::new()),
         });
         let sink: Arc<dyn TrashSink> = fake.clone();
+        let group = super::super::CancelGroup::default();
+        let cancel = group.start();
         let outcome = execute_trash(
             &db,
             vec![
@@ -2449,6 +2459,7 @@ mod trash_flow_tests {
                 ("bad".to_string(), bad.to_string_lossy().into_owned()),
             ],
             sink,
+            &cancel,
             |_, _, _| {},
         )
         .await
@@ -2485,7 +2496,9 @@ mod trash_flow_tests {
         }
 
         let sink: Arc<dyn TrashSink> = Arc::new(PanickingTrash);
-        let outcome = execute_trash(&db, targets, sink, |_, _, _| {})
+        let group = super::super::CancelGroup::default();
+        let cancel = group.start();
+        let outcome = execute_trash(&db, targets, sink, &cancel, |_, _, _| {})
             .await
             .expect("trash targets");
 
@@ -2512,10 +2525,13 @@ mod trash_flow_tests {
             .expect("drop edit_backups");
 
         let sink: Arc<dyn TrashSink> = Arc::new(FakeTrash::default());
+        let group = super::super::CancelGroup::default();
+        let cancel = group.start();
         let outcome = execute_trash(
             &db,
             vec![("a".to_string(), a.to_string_lossy().into_owned())],
             sink,
+            &cancel,
             |_, _, _| {},
         )
         .await

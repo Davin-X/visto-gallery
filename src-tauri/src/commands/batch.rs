@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
-pub async fn cancel_batch_export() -> Result<(), CommandError> {
-    super::BATCH_CANCEL.store(true, Ordering::SeqCst);
+pub async fn cancel_batch_export(state: State<'_, crate::AppState>) -> Result<(), CommandError> {
+    state.batch_cancel.cancel_all();
     Ok(())
 }
 
@@ -1048,9 +1048,11 @@ pub async fn batch_export(
     app: tauri::AppHandle,
     mut request: BatchExportRequest,
     catalog: State<'_, crate::Catalog>,
+    state: State<'_, crate::AppState>,
 ) -> Result<BatchExportResult, CommandError> {
-    // A new run always starts un-cancelled.
-    super::BATCH_CANCEL.store(false, Ordering::SeqCst);
+    // This run's own flag: a new export cannot clear another export's Cancel.
+    let cancel = state.batch_cancel.start();
+    let cancel_flag = cancel.flag();
 
     if request.items.is_empty() {
         return Err(CommandError::invalid(
@@ -1107,7 +1109,7 @@ pub async fn batch_export(
         let mut cancelled = false;
 
         for (position, item) in request.items.iter().enumerate() {
-            if super::BATCH_CANCEL.load(Ordering::SeqCst) {
+            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
                 cancelled = true;
                 break;
             }

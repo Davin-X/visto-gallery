@@ -27,7 +27,7 @@ pub use batch::*;
 #[allow(unused_imports)]
 pub(crate) use batch_pipeline::{export_batch_item, render_batch_filename};
 pub use cancel::{cancel_move_to_trash, cancel_scan};
-pub(crate) use cancel::{BATCH_CANCEL, DUPLICATE_CANCEL, TRASH_CANCEL};
+pub(crate) use cancel::{CancelGroup, CancelToken};
 pub use duplicates::*;
 pub use edit_recipes::*;
 pub use finder_tags::{merge_finder_tags, read_finder_tags, write_finder_tags};
