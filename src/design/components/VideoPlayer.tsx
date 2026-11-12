@@ -399,13 +399,13 @@ function VideoPlayer({
     const video = ref.current as HTMLVideoElement | null;
     if (!video) return;
 
-    // Restore the snapshot only when the item was registered as a handoff. The
-    // store always looks like it belongs to this item here, because registering
-    // points it there, and the retained duration survives a queue switch on
-    // purpose.
+    // Restore the snapshot only when the item was registered as a handoff, and
+    // restore it from that snapshot rather than from the store: registering
+    // points the store at this item, and the retained duration survives a queue
+    // switch on purpose, so reading it back here cannot tell the two apart.
     const snapshot = handoffSnapshotRef.current;
-    const { time, volume, muted, playing, duration } = usePlaybackStore.getState();
     if (snapshot && snapshot.itemId === itemId && snapshot.duration > 0) {
+      const { time, volume, muted, playing, duration } = snapshot;
       // Restore saved state
       video.currentTime = time;
       video.volume = volume;
@@ -430,6 +430,8 @@ function VideoPlayer({
       setPlaying(false);
       setTime(0);
       setDuration(0);
+      // Safe to read after registering: the store only ever writes lastVolume
+      // from the volume effect, never while registering an item.
       const lastVolume = usePlaybackStore.getState().lastVolume;
       setVolume(lastVolume);
       video.volume = lastVolume;

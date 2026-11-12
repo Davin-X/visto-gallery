@@ -143,3 +143,73 @@ describe("video player keyboard control", () => {
     expect(onToggleFavorite).not.toHaveBeenCalled();
   });
 });
+
+describe("same-video handoff", () => {
+  // jsdom leaves currentTime at zero and discards writes to it, but the player
+  // restores the saved position through it, so remember what was written.
+  const positions = new WeakMap<HTMLMediaElement, number>();
+  beforeAll(() => {
+    Object.defineProperty(window.HTMLMediaElement.prototype, "currentTime", {
+      configurable: true,
+      get(this: HTMLMediaElement) {
+        return positions.get(this) ?? 0;
+      },
+      set(this: HTMLMediaElement, value: number) {
+        positions.set(this, value);
+      },
+    });
+  });
+
+  // What a second player finds when the previous one has just unmounted: the
+  // element is gone, the snapshot for the same item is not.
+  const seedPreviousPlayer = (itemId: string, state: { playing: boolean; time: number }) => {
+    usePlaybackStore.setState({
+      element: null,
+      itemId: null,
+      name: "",
+      playing: false,
+      time: 0,
+      duration: 0,
+      muted: false,
+      volume: 1,
+      lastVolume: 1,
+    });
+    usePlaybackStore.getState().sync({
+      itemId,
+      name: `${itemId}.mp4`,
+      duration: 12,
+      volume: 0.4,
+      muted: true,
+      ...state,
+    });
+  };
+
+  it("resumes position, volume and playback when the same item remounts", () => {
+    seedPreviousPlayer("video-a", { playing: true, time: 5 });
+    const play = vi.mocked(window.HTMLMediaElement.prototype.play);
+    play.mockClear();
+
+    const { container } = renderPlayer({ itemId: "video-a", src: "/video-a.mp4" });
+    const video = container.querySelector("video")!;
+
+    expect(usePlaybackStore.getState().itemId).toBe("video-a");
+    expect(video.currentTime).toBe(5);
+    expect(video.volume).toBe(0.4);
+    expect(video.muted).toBe(true);
+    // The snapshot said playing, so the handoff asks for playback.
+    expect(play).toHaveBeenCalled();
+  });
+
+  it("keeps a paused handoff paused at the saved position", () => {
+    seedPreviousPlayer("video-b", { playing: false, time: 3 });
+    const pause = vi.mocked(window.HTMLMediaElement.prototype.pause);
+    pause.mockClear();
+
+    const { container } = renderPlayer({ itemId: "video-b", src: "/video-b.mp4" });
+    const video = container.querySelector("video")!;
+
+    expect(video.currentTime).toBe(3);
+    expect(video.autoplay).toBe(false);
+    expect(pause).toHaveBeenCalled();
+  });
+});
