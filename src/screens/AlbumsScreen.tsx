@@ -185,11 +185,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   >
                     <span className="smart-album-tile-cover">
                       {coverPhotos.length ? (
-                        <AlbumPhotoStack
-                          photos={coverPhotos}
-                          assetUrl={props.assetUrl}
-                          albumItems={album.coverItems ?? []}
-                        />
+                        <AlbumPhotoStack photos={coverPhotos} albumItems={album.coverItems ?? []} />
                       ) : (
                         <span className="smart-album-tile-cover-empty">{badge}</span>
                       )}
@@ -227,11 +223,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
             >
               <span className={`album-cover ${album.photos.length ? "" : "is-empty"}`}>
                 {album.photos.length ? (
-                  <AlbumPhotoStack
-                    photos={album.photos}
-                    assetUrl={props.assetUrl}
-                    albumItems={album.albumItems}
-                  />
+                  <AlbumPhotoStack photos={album.photos} albumItems={album.albumItems} />
                 ) : (
                   <span className="album-cover-placeholder">
                     <AlbumsIcon size={30} />
