@@ -667,6 +667,7 @@ function App() {
     navigateViewer: (delta: number) => void;
     navigateVideo: (delta: -1 | 1) => void;
     openViewer: (id: string) => void;
+    showSettings: () => void;
   }>({
     importFolder: () => {},
     importFiles: () => {},
@@ -676,6 +677,7 @@ function App() {
     navigateViewer: () => {},
     navigateVideo: () => {},
     openViewer: () => {},
+    showSettings: () => {},
   });
 
   // Unified keyboard shortcuts: a single window listener chains all handlers.
@@ -878,6 +880,8 @@ function App() {
         zoomOut: () => liveRef.current.viewer.zoomOut(),
         showAbout: () => setAboutOpen(true),
         checkUpdates: () => handlersRef.current.checkUpdates(true),
+        showSettings: () => handlersRef.current.showSettings(),
+        showShortcuts: () => setShortcutsCheatSheetOpen(true),
       };
       for (const event of [
         "menu-open-folder",
@@ -889,6 +893,8 @@ function App() {
         "menu-zoom-out",
         "menu-about",
         "menu-check-updates",
+        "menu-settings",
+        "menu-shortcuts",
       ]) {
         await register(event, () => dispatchNativeMenuEvent(event, menuHandlers));
       }
@@ -2158,6 +2164,7 @@ function App() {
     navigateViewer,
     navigateVideo: navigateVideoQueue,
     openViewer: (id: string) => openViewer(id),
+    showSettings: () => openScreen("Settings"),
   };
 
   const activeAlbumName = library.activeAlbum

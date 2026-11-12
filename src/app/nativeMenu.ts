@@ -14,7 +14,9 @@ export type NativeMenuEvent =
   | "menu-zoom-in"
   | "menu-zoom-out"
   | "menu-about"
-  | "menu-check-updates";
+  | "menu-check-updates"
+  | "menu-settings"
+  | "menu-shortcuts";
 
 export interface NativeMenuHandlers {
   importFolder: () => void;
@@ -26,6 +28,8 @@ export interface NativeMenuHandlers {
   zoomOut: () => void;
   showAbout: () => void;
   checkUpdates: () => void;
+  showSettings: () => void;
+  showShortcuts: () => void;
 }
 
 /**
@@ -60,6 +64,12 @@ export function dispatchNativeMenuEvent(event: string, handlers: NativeMenuHandl
       return true;
     case "menu-check-updates":
       handlers.checkUpdates();
+      return true;
+    case "menu-settings":
+      handlers.showSettings();
+      return true;
+    case "menu-shortcuts":
+      handlers.showShortcuts();
       return true;
     default:
       return false;
