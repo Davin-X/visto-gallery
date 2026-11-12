@@ -844,7 +844,7 @@ function ViewerScreen(props: ViewerScreenProps) {
             key={item.id}
             onClick={() => props.onSetPhoto(item.id)}
           >
-            {item.kind === "photo" ? (
+            {item.kind === "photo" || item.kind === "raw" ? (
               <CachedThumbnail
                 itemId={item.id}
                 name={item.name}
