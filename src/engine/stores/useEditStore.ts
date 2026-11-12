@@ -10,8 +10,9 @@ export interface DraftTransform {
   flip: boolean;
 }
 
-const draftKey = (itemId: string) => `edit:draft:${itemId}`;
-const draftOrderKey = "edit:draft:order";
+const draftPrefix = "edit:draft:";
+const draftKey = (itemId: string) => `${draftPrefix}${itemId}`;
+const draftOrderKey = `${draftPrefix}order`;
 
 const MAX_DRAFTS = 100;
 const MAX_DRAFT_SIZE_BYTES = 5 * 1024; // 5 KB per draft
@@ -35,9 +36,27 @@ function setDraftOrder(order: string[]) {
   }
 }
 
-function pruneDrafts() {
+export function pruneDrafts() {
   if (typeof localStorage === "undefined") return;
   const order = getDraftOrder();
+  const tracked = new Set(order);
+
+  // Sweep draft payloads the order does not track. Only ids in `order` are
+  // ever considered for eviction, so an orphan (a failed order write, or a key
+  // left by an older build) would otherwise sit in storage forever.
+  const orphans: string[] = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key?.startsWith(draftPrefix) || key === draftOrderKey) continue;
+    const id = key.slice(draftPrefix.length);
+    if (!tracked.has(id)) orphans.push(id);
+  }
+  for (const id of orphans) {
+    try {
+      localStorage.removeItem(draftKey(id));
+    } catch {}
+  }
+
   if (order.length <= MAX_DRAFTS) return;
   const toRemove = order.slice(0, order.length - MAX_DRAFTS);
   for (const id of toRemove) {
@@ -57,6 +76,30 @@ function notifyDraftChanged() {
   draftListeners.forEach((listener) => listener());
 }
 
+/** Write a draft payload, evicting least-recently-used drafts one at a time
+ *  when browser storage is full. Returns false when even an emptied store
+ *  refuses the write (disabled or private-mode storage). */
+function storeDraftPayload(itemId: string, payload: string): boolean {
+  try {
+    localStorage.setItem(draftKey(itemId), payload);
+    return true;
+  } catch {
+    const remaining = getDraftOrder().filter((id) => id !== itemId);
+    while (remaining.length > 0) {
+      const oldest = remaining.shift() as string;
+      try {
+        localStorage.removeItem(draftKey(oldest));
+      } catch {}
+      try {
+        localStorage.setItem(draftKey(itemId), payload);
+        setDraftOrder([...remaining, itemId]);
+        return true;
+      } catch {}
+    }
+    return false;
+  }
+}
+
 async function persistDraft(
   itemId: string,
   values: EditValues,
@@ -64,8 +107,10 @@ async function persistDraft(
   historyIndex: number,
   crop?: CropState,
 ) {
-  if (typeof localStorage === "undefined") return;
-  try {
+  // The SQLite recipe is authoritative; localStorage is only the fallback
+  // used when that write has not happened yet. Keep them independent so a
+  // browser-storage problem can never drop the authoritative save.
+  if (typeof localStorage !== "undefined") {
     const payload = JSON.stringify({
       edits: values,
       crop,
@@ -73,22 +118,20 @@ async function persistDraft(
       historyIndex,
       updatedAt: Date.now(),
     });
-    // Enforce per-draft size cap: drop oversized drafts.
-    if (new TextEncoder().encode(payload).length > MAX_DRAFT_SIZE_BYTES) {
-      return;
+    // The size cap applies to the fallback copy only: a long undo history must
+    // not stop the recipe itself from being saved.
+    if (new TextEncoder().encode(payload).length <= MAX_DRAFT_SIZE_BYTES) {
+      if (storeDraftPayload(itemId, payload)) {
+        // Move itemId to the end of the LRU order (most recently used) and
+        // prune anything beyond the cap.
+        setDraftOrder([...getDraftOrder().filter((id) => id !== itemId), itemId]);
+        pruneDrafts();
+      } else {
+        console.warn(
+          `Local draft for ${itemId} was not stored: browser storage is full or unavailable.`,
+        );
+      }
     }
-    localStorage.setItem(draftKey(itemId), payload);
-
-    // Update LRU order: move itemId to end (most recently used).
-    let order = getDraftOrder();
-    order = order.filter((id) => id !== itemId);
-    order.push(itemId);
-    setDraftOrder(order);
-
-    // Prune oldest drafts beyond the cap.
-    pruneDrafts();
-  } catch {
-    // A full or unavailable localStorage should not break editing.
   }
   try {
     await tauri.edit.saveRecipe({
@@ -170,8 +213,8 @@ export const useDraftMetaStore = create<DraftMetaState>((set) => ({
       try {
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
-          if (key?.startsWith("edit:draft:")) {
-            const mediaId = key.slice("edit:draft:".length);
+          if (key?.startsWith(draftPrefix) && key !== draftOrderKey) {
+            const mediaId = key.slice(draftPrefix.length);
             ids.add(mediaId);
             if (!transforms.has(mediaId)) {
               const raw = localStorage.getItem(key);
@@ -214,8 +257,10 @@ function removeDraftMeta(itemId: string) {
   useDraftMetaStore.setState({ ids: nextIds, transforms: nextTransforms });
 }
 
-// Refresh on module load so drafts and transforms are available immediately on startup.
+// Refresh on module load so drafts and transforms are available immediately on
+// startup, and sweep storage a crashed or older build may have left untracked.
 if (typeof window !== "undefined") {
+  pruneDrafts();
   void useDraftMetaStore.getState().refresh();
 }
 
