@@ -4,6 +4,51 @@ import { expect, test } from "@playwright/test";
 // play-in-background <button>. Invalid HTML, and React logged a
 // validateDOMNesting warning in dev. The tile is now an article with a
 // transparent open overlay and sibling play control.
+async function readAlignment(page: import("@playwright/test").Page) {
+  const labels = ["Name", "Captured", "Kind", "Size"];
+  // The sort button sits inside a .details-col with 12px side padding, so a
+  // header's button starts 12px right of its grid track. The row cells are
+  // grid items with the same padding, so compare track edges, not text.
+  return page.evaluate((wanted) => {
+    const headers = wanted.map((label) => {
+      const header = Array.from(
+        document.querySelectorAll<HTMLElement>(".details-sort-header"),
+      ).find((element) => element.textContent?.trim().startsWith(label));
+      const cell = header?.closest<HTMLElement>(".details-col");
+      return cell ? cell.getBoundingClientRect().left : null;
+    });
+    const row = document.querySelector<HTMLElement>(".gallery-grid.layout-details .gallery-tile")!;
+    const open = row.querySelector<HTMLElement>(".tile-open-button")!;
+    const cells = [
+      row.querySelector<HTMLElement>(".tile-caption b"),
+      row.querySelector<HTMLElement>(".tile-date"),
+      row.querySelector<HTMLElement>(".tile-kind"),
+      row.querySelector<HTMLElement>(".tile-size"),
+    ].map((element) => (element ? element.getBoundingClientRect().left : null));
+    const rowBox = row.getBoundingClientRect();
+    const openBox = open.getBoundingClientRect();
+    return {
+      headers,
+      cells,
+      overlayCoversRow:
+        Math.abs(openBox.width - rowBox.width) <= 1.5 &&
+        Math.abs(openBox.height - rowBox.height) <= 1.5,
+    };
+  }, labels);
+}
+
+function expectDetailsAligned(layout: Awaited<ReturnType<typeof readAlignment>>) {
+  layout.headers.forEach((left, index) => {
+    expect(left, "header cells exist").not.toBeNull();
+    expect(layout.cells[index], "row cells exist").not.toBeNull();
+    expect(
+      Math.abs((left as number) - (layout.cells[index] as number)),
+      "row cell stays under its header column",
+    ).toBeLessThan(1.5);
+  });
+  expect(layout.overlayCoversRow).toBe(true);
+}
+
 test("library tiles keep open and play as sibling buttons", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -93,39 +138,14 @@ test("details rows stay aligned with their header after the row box change", asy
   await page.setViewportSize({ width: 1500, height: 900 });
   await page.goto("/harness.html?benchmark=40&videos=8", { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".gallery-tile");
+  // Wide enough that the inspector's compact-width rules do not shift the
+  // details header; this test pins the row box, not the inspector layout.
   await page.getByRole("button", { name: "Details view", exact: true }).click();
   await page.waitForSelector(".gallery-grid.layout-details .gallery-tile");
 
-  const layout = await page.evaluate(() => {
-    const labels = ["Name", "Captured", "Kind", "Size"];
-    // The sort button sits inside a .details-col with 12px side padding, so a
-    // header's button starts 12px right of its grid track. The row cells are
-    // grid items with the same padding, so compare track edges, not text.
-    const headers = labels.map((label) => {
-      const header = Array.from(
-        document.querySelectorAll<HTMLElement>(".details-sort-header"),
-      ).find((element) => element.textContent?.trim().startsWith(label));
-      const cell = header?.closest<HTMLElement>(".details-col");
-      return cell ? cell.getBoundingClientRect().left : null;
-    });
-    const row = document.querySelector<HTMLElement>(".gallery-grid.layout-details .gallery-tile")!;
-    const open = row.querySelector<HTMLElement>(".tile-open-button")!;
-    const cells = [
-      row.querySelector<HTMLElement>(".tile-caption b"),
-      row.querySelector<HTMLElement>(".tile-date"),
-      row.querySelector<HTMLElement>(".tile-kind"),
-      row.querySelector<HTMLElement>(".tile-size"),
-    ].map((element) => (element ? element.getBoundingClientRect().left : null));
-    const rowBox = row.getBoundingClientRect();
-    const openBox = open.getBoundingClientRect();
-    return {
-      headers,
-      cells,
-      overlayCoversRow:
-        Math.abs(openBox.width - rowBox.width) <= 1.5 &&
-        Math.abs(openBox.height - rowBox.height) <= 1.5,
-    };
-  });
+  const layout = await readAlignment(page);
+  expect(layout.headers).toHaveLength(4);
+  expectDetailsAligned(layout);
 
   const detailsCheck = await page.evaluate(() => {
     const row = document.querySelector<HTMLElement>(".gallery-grid.layout-details .gallery-tile")!;
@@ -143,14 +163,23 @@ test("details rows stay aligned with their header after the row box change", asy
     /selected/,
   );
   await expect(page.locator(".viewer-screen")).toHaveCount(0);
+});
 
-  layout.headers.forEach((left, index) => {
-    expect(left, "header cells exist").not.toBeNull();
-    expect(layout.cells[index], "row cells exist").not.toBeNull();
-    expect(
-      Math.abs((left as number) - (layout.cells[index] as number)),
-      "row cell stays under its header column",
-    ).toBeLessThan(1.5);
-  });
-  expect(layout.overlayCoversRow).toBe(true);
+test("details header and rows stay aligned with the inspector open at 1280px", async ({ page }) => {
+  // 1280px is inside the inspector's compact-width breakpoint (<=1299px),
+  // where the sticky details header used to be padded narrower than the
+  // rows by one gutter on each side.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/harness.html?benchmark=40&videos=8", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".gallery-tile");
+  const showInspector = page.getByRole("button", { name: "Show inspector", exact: true });
+  if (await showInspector.count()) {
+    await showInspector.click();
+  }
+  await expect(page.getByRole("button", { name: "Hide inspector", exact: true })).toHaveCount(1);
+  await page.getByRole("button", { name: "Details view", exact: true }).click();
+  await page.waitForSelector(".gallery-grid.layout-details .gallery-tile");
+
+  const layout = await readAlignment(page);
+  expectDetailsAligned(layout);
 });

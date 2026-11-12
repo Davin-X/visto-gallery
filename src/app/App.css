@@ -5548,11 +5548,6 @@ body.is-resizing .photo-inspector {
     padding-right: var(--page-gutter);
   }
 
-  .library-layout.with-inspector .details-header-sticky {
-    padding-left: var(--page-gutter);
-    padding-right: var(--page-gutter);
-  }
-
   .library-layout.with-inspector .library-header .page-heading {
     margin-bottom: 10px;
     column-gap: 12px;
