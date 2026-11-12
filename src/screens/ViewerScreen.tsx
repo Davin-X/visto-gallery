@@ -237,6 +237,11 @@ function ViewerScreen(props: ViewerScreenProps) {
   };
 
   useEffect(() => {
+    // A popover belongs to the item it was opened for. Left open across a
+    // navigation it would point at the next photo, and its first click would
+    // rotate or hide something the user never opened it for.
+    setMoreOpen(false);
+    setHelpOpen(false);
     flashHints();
     return () => {
       if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
@@ -940,7 +945,7 @@ function ViewerScreen(props: ViewerScreenProps) {
               <FullscreenIcon size={14} />
               <span className="viewer-bar-label">Full screen</span>
             </button>
-            <div className="media-anchor viewer-help" ref={helpRef}>
+            <div className="media-anchor" ref={helpRef}>
               <button
                 type="button"
                 aria-haspopup="dialog"

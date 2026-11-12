@@ -385,6 +385,8 @@ function VideoPlayer({
   useEffect(() => {
     if (lastItemIdRef.current === itemId) return;
     lastItemIdRef.current = itemId;
+    // The shortcut list was opened for the video that just left.
+    setHelpOpen(false);
     const video = ref.current;
     if (video) video.currentTime = 0;
     setTime(0);
@@ -403,7 +405,11 @@ function VideoPlayer({
     // restore it from that snapshot rather than from the store: registering
     // points the store at this item, and the retained duration survives a queue
     // switch on purpose, so reading it back here cannot tell the two apart.
+    // Consumed on read: this effect also re-runs when the source is replaced or
+    // a remux gives up, and a snapshot left in the ref would rewind a session
+    // that has long moved on.
     const snapshot = handoffSnapshotRef.current;
+    handoffSnapshotRef.current = null;
     if (snapshot && snapshot.itemId === itemId && snapshot.duration > 0) {
       const { time, volume, muted, playing, duration } = snapshot;
       // Restore saved state

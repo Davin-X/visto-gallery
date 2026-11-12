@@ -553,10 +553,6 @@ export function DownloadIcon({ size = 16, className = "", strokeWidth = 1.8 }: I
 export function ChartIcon({ size = 18, className = "", strokeWidth = 1.8 }: IconProps) {
   return (
     <Svg size={size} className={className} strokeWidth={strokeWidth}>
-      {/* A donut in three slices. The panel behind this button splits the
-          library by kind, so a chart of parts reads at a glance; a single arc
-          just looked like a loading spinner and three bars said nothing about
-          composition. Butt caps keep the gaps crisp at rail size. */}
       {/* A pie with one filled slice: the panel behind this button splits the
           library by kind. The slice is filled rather than stroked because a
           thin ring of segments turns to mush at rail size, and three equal

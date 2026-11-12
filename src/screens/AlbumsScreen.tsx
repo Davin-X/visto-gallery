@@ -1,6 +1,7 @@
 import React from "react";
 import { AlbumsIcon, PlusIcon } from "../design/components/icons";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
+import { MiddleTruncate } from "../design/components/MiddleTruncate";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
 import type { Album, MediaItem } from "../engine/types/media";
 import type { SmartAlbum } from "../engine/types/commands";
@@ -46,9 +47,7 @@ function AlbumMeta({
   return (
     <span className="album-meta">
       {color && <i className={`album-dot ${color}`} aria-hidden="true" />}
-      <span className="album-meta-name" title={name}>
-        {name}
-      </span>
+      <MiddleTruncate className="album-meta-name" text={name} tailLength={6} />
       <span className="album-meta-count">{count}</span>
     </span>
   );
