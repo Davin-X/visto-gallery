@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "./icons";
-import { KindBadge } from "./KindBadge";
+import { CachedThumbnail } from "./CachedThumbnail";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { formatBytesSimple } from "../../engine/utils/mediaTypes";
 import { compareRows, differenceCount } from "../../engine/duplicates/compare";
@@ -64,11 +64,10 @@ function ComparePreview({
 }) {
   const transform = `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`;
   if (item.kind === "raw") {
+    // RAW files are decoded for thumbnails by the native backend; show the
+    // largest cached preview instead of a dead-end placeholder.
     return (
-      <span className="compare-raw">
-        <KindBadge kind="raw" />
-        <span>RAW preview needs the native backend</span>
-      </span>
+      <CachedThumbnail itemId={item.id} name={item.name} size={1024} eager style={{ transform }} />
     );
   }
   if (item.kind === "video") {

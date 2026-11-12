@@ -15,6 +15,7 @@ import {
   ViewerIcon,
 } from "../design/components/icons";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
+
 import { KindDot } from "../design/components/KindBadge";
 import { useDraftTransforms, draftTransformStyle } from "../engine/stores/useEditStore";
 import { useSlideshowStore } from "../engine/stores/useSlideshowStore";
@@ -68,6 +69,17 @@ function ViewerScreen(props: ViewerScreenProps) {
   const inspectedVideo = props.selected?.kind === "video";
   const selected = props.selected?.kind === "video" ? null : props.selected;
   const draftTransforms = useDraftTransforms();
+  // Drag-to-pan for zoomed photos. State resets when the selected item
+  // changes and whenever zoom/fitMode moves away from its last value.
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef({
+    pointerId: -1,
+    startX: 0,
+    startY: 0,
+    originX: 0,
+    originY: 0,
+  });
   // Folder context: the pill shows the containing folder, the subtle line the
   // full path. Deriving both from the media path keeps it honest (no fake
   // "LOCAL FILE" label).
@@ -113,6 +125,62 @@ function ViewerScreen(props: ViewerScreenProps) {
     if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
     hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
   }, []);
+
+  useEffect(() => {
+    setPan({ x: 0, y: 0 });
+  }, [selected?.id]);
+
+  // Whenever zoom changes, clamp the current pan back inside the new image
+  // box so the photo never gets stranded off-stage.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const scale = props.zoom / 100;
+    const rect = stage.getBoundingClientRect();
+    const limitX = Math.max(0, ((scale - 1) * rect.width) / 2);
+    const limitY = Math.max(0, ((scale - 1) * rect.height) / 2);
+    setPan((current) => ({
+      x: Math.min(limitX, Math.max(-limitX, current.x)),
+      y: Math.min(limitY, Math.max(-limitY, current.y)),
+    }));
+  }, [props.zoom, props.fitMode]);
+
+  const handleStagePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (props.zoom <= 100 || !selected) return;
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement).closest("button, input, a")) return;
+    stageRef.current?.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: pan.x,
+      originY: pan.y,
+    };
+  };
+
+  const handleStagePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (drag.pointerId !== event.pointerId) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    const scale = props.zoom / 100;
+    const rect = stage.getBoundingClientRect();
+    const limitX = Math.max(0, ((scale - 1) * rect.width) / 2);
+    const limitY = Math.max(0, ((scale - 1) * rect.height) / 2);
+    setPan({
+      x: Math.min(limitX, Math.max(-limitX, drag.originX + dx)),
+      y: Math.min(limitY, Math.max(-limitY, drag.originY + dy)),
+    });
+  };
+
+  const handleStagePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (dragRef.current.pointerId !== event.pointerId) return;
+    dragRef.current.pointerId = -1;
+    stageRef.current?.releasePointerCapture(event.pointerId);
+  };
 
   useEffect(() => {
     flashHints();
@@ -231,13 +299,13 @@ function ViewerScreen(props: ViewerScreenProps) {
 
       switch (e.key) {
         case "ArrowUp":
-          if (selected.kind === "photo") {
+          if (selected.kind === "photo" || selected.kind === "raw") {
             e.preventDefault();
             props.onSetZoom(Math.min(300, props.zoom + 25));
           }
           break;
         case "ArrowDown":
-          if (selected.kind === "photo") {
+          if (selected.kind === "photo" || selected.kind === "raw") {
             e.preventDefault();
             props.onSetZoom(Math.max(25, props.zoom - 25));
           }
@@ -427,13 +495,23 @@ function ViewerScreen(props: ViewerScreenProps) {
         </div>
       </header>
       <div
+        ref={stageRef}
         className="viewer-stage"
         aria-busy={selected.kind === "photo" && photoStatus === "loading"}
         onContextMenu={(event) => props.onContextMenu([selected], event)}
         onMouseMove={() => flashHints()}
+        onPointerDown={handleStagePointerDown}
+        onPointerMove={handleStagePointerMove}
+        onPointerUp={handleStagePointerUp}
+        onPointerCancel={handleStagePointerUp}
+        style={{
+          touchAction: props.zoom > 100 ? "none" : "auto",
+          cursor: props.zoom > 100 ? "grab" : "default",
+        }}
         onDoubleClick={(e) => {
           if ((e.target as HTMLElement).closest("button, input")) return;
-          if (selected.kind !== "photo") return;
+          if (selected.kind !== "photo" && selected.kind !== "raw") return;
+          setPan({ x: 0, y: 0 });
           props.onSetZoom(props.zoom === 100 ? 200 : 100);
         }}
       >
@@ -446,94 +524,127 @@ function ViewerScreen(props: ViewerScreenProps) {
         >
           <ChevronLeftIcon size={21} strokeWidth={2.1} />
         </button>
-        {selected.kind === "photo" ? (
-          <>
-            <img
-              key={`${selected.id}-${selected.size}-${selected.modifiedAt}`}
-              className={`photo-viewer-image${photoStatus === "loaded" ? " is-loaded" : ""}`}
-              src={props.assetUrl(selected.path) + `?v=${selected.modifiedAt}-${selected.size}`}
-              alt={selected.name}
-              decoding="async"
-              onLoad={() => setPhotoLoadState({ id: selected.id, status: "loaded" })}
-              onError={(e) => {
-                const target = e.currentTarget;
-                if (target.dataset.fallback === "1") {
-                  setPhotoLoadState({ id: selected.id, status: "failed" });
-                  target.alt = "Preview unavailable";
-                  target.src =
-                    "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
-                  return;
-                }
-                target.dataset.fallback = "1";
-                setPhotoLoadState({ id: selected.id, status: "loading" });
-                void tauri.library
-                  .getThumbnail({ itemId: selected.id, size: 1024 })
-                  .then((response) => {
-                    if (target.isConnected && response?.dataUrl) {
-                      target.src = response.dataUrl;
-                    } else if (target.isConnected) {
-                      setPhotoLoadState({ id: selected.id, status: "failed" });
-                    }
-                  })
-                  .catch(() => {
-                    if (target.isConnected) {
+        {selected.kind === "photo" || selected.kind === "raw" ? (
+          <div
+            className="photo-frame"
+            style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0)` }}
+          >
+            {selected.kind === "photo" ? (
+              <>
+                <img
+                  key={`${selected.id}-${selected.size}-${selected.modifiedAt}`}
+                  className={`photo-viewer-image${photoStatus === "loaded" ? " is-loaded" : ""}`}
+                  src={props.assetUrl(selected.path) + `?v=${selected.modifiedAt}-${selected.size}`}
+                  alt={selected.name}
+                  decoding="async"
+                  onLoad={() => setPhotoLoadState({ id: selected.id, status: "loaded" })}
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (target.dataset.fallback === "1") {
                       setPhotoLoadState({ id: selected.id, status: "failed" });
                       target.alt = "Preview unavailable";
                       target.src =
                         "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+                      return;
                     }
-                  });
-              }}
-              style={{
-                aspectRatio:
-                  selected.width && selected.height
-                    ? `auto ${selected.width} / ${selected.height}`
-                    : undefined,
-                width: props.fitMode === "actual" ? undefined : "100%",
-                height: props.fitMode === "actual" ? undefined : "100%",
-                maxWidth:
-                  props.fitMode === "actual"
-                    ? "none"
-                    : imageRotation % 180
-                      ? "min(100%, 100cqh)"
-                      : "100%",
-                maxHeight:
-                  props.fitMode === "actual"
-                    ? "none"
-                    : imageRotation % 180
-                      ? "min(100%, 100cqw)"
-                      : "100%",
-                objectFit: props.fitMode === "fill" ? "cover" : "contain",
-                transform: [
-                  `rotate(${props.rotation || 0}deg)`,
-                  `scaleX(${props.flipX ? -1 : 1})`,
-                  draftTransformStyle(draftTransforms.get(selected.id)),
-                  `scale(${props.zoom / 100})`,
-                ]
-                  .filter(Boolean)
-                  .join(" "),
-              }}
-            />
-            {photoStatus !== "loaded" && (
-              <div
-                className={`photo-preview-state${photoStatus === "failed" ? " is-failed" : ""}`}
-                role={photoStatus === "failed" ? "alert" : "status"}
-              >
-                <span className="photo-preview-indicator" aria-hidden="true" />
-                <span>
-                  {photoStatus === "failed"
-                    ? "Could not load this photo preview"
-                    : "Loading full-resolution photo…"}
-                </span>
-              </div>
+                    target.dataset.fallback = "1";
+                    setPhotoLoadState({ id: selected.id, status: "loading" });
+                    void tauri.library
+                      .getThumbnail({ itemId: selected.id, size: 1024 })
+                      .then((response) => {
+                        if (target.isConnected && response?.dataUrl) {
+                          target.src = response.dataUrl;
+                        } else if (target.isConnected) {
+                          setPhotoLoadState({ id: selected.id, status: "failed" });
+                        }
+                      })
+                      .catch(() => {
+                        if (target.isConnected) {
+                          setPhotoLoadState({ id: selected.id, status: "failed" });
+                          target.alt = "Preview unavailable";
+                          target.src =
+                            "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+                        }
+                      });
+                  }}
+                  style={{
+                    aspectRatio:
+                      selected.width && selected.height
+                        ? `auto ${selected.width} / ${selected.height}`
+                        : undefined,
+                    width: props.fitMode === "actual" ? undefined : "100%",
+                    height: props.fitMode === "actual" ? undefined : "100%",
+                    maxWidth:
+                      props.fitMode === "actual"
+                        ? "none"
+                        : imageRotation % 180
+                          ? "min(100%, 100cqh)"
+                          : "100%",
+                    maxHeight:
+                      props.fitMode === "actual"
+                        ? "none"
+                        : imageRotation % 180
+                          ? "min(100%, 100cqw)"
+                          : "100%",
+                    objectFit: props.fitMode === "fill" ? "cover" : "contain",
+                    transform: [
+                      `rotate(${props.rotation || 0}deg)`,
+                      `scaleX(${props.flipX ? -1 : 1})`,
+                      draftTransformStyle(draftTransforms.get(selected.id)),
+                      `scale(${props.zoom / 100})`,
+                    ]
+                      .filter(Boolean)
+                      .join(" "),
+                  }}
+                />
+                {photoStatus !== "loaded" && (
+                  <div
+                    className={`photo-preview-state${photoStatus === "failed" ? " is-failed" : ""}`}
+                    role={photoStatus === "failed" ? "alert" : "status"}
+                  >
+                    <span className="photo-preview-indicator" aria-hidden="true" />
+                    <span>
+                      {photoStatus === "failed"
+                        ? "Could not load this photo preview"
+                        : "Loading full-resolution photo…"}
+                    </span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <CachedThumbnail
+                itemId={selected.id}
+                name={selected.name}
+                size={1024}
+                eager
+                style={{
+                  width: props.fitMode === "actual" ? undefined : "100%",
+                  height: props.fitMode === "actual" ? undefined : "100%",
+                  maxWidth:
+                    props.fitMode === "actual"
+                      ? "none"
+                      : imageRotation % 180
+                        ? "min(100%, 100cqh)"
+                        : "100%",
+                  maxHeight:
+                    props.fitMode === "actual"
+                      ? "none"
+                      : imageRotation % 180
+                        ? "min(100%, 100cqw)"
+                        : "100%",
+                  objectFit: "contain",
+                  transform: [
+                    `rotate(${props.rotation || 0}deg)`,
+                    `scaleX(${props.flipX ? -1 : 1})`,
+                    `scale(${props.zoom / 100})`,
+                  ]
+                    .filter(Boolean)
+                    .join(" "),
+                }}
+              />
             )}
-          </>
-        ) : (
-          <div className="raw-viewer">
-            <b>{selected.extension.toUpperCase()}</b>
-            <span>RAW preview requires native backend</span>
           </div>
-        )}
+        ) : null}
         <button
           className="viewer-arrow right"
           type="button"
@@ -582,7 +693,7 @@ function ViewerScreen(props: ViewerScreenProps) {
           <span>
             <kbd>0</kbd> Reset zoom
           </span>
-          {selected.kind === "photo" && (
+          {(selected.kind === "photo" || selected.kind === "raw") && (
             <span>
               <kbd>1</kbd> 200%
             </span>
@@ -605,7 +716,7 @@ function ViewerScreen(props: ViewerScreenProps) {
               hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
             }}
           >
-            {selected.kind === "photo" && (
+            {(selected.kind === "photo" || selected.kind === "raw") && (
               <>
                 <button
                   type="button"
@@ -733,7 +844,7 @@ function ViewerScreen(props: ViewerScreenProps) {
             key={item.id}
             onClick={() => props.onSetPhoto(item.id)}
           >
-            {item.kind === "photo" ? (
+            {item.kind === "photo" || item.kind === "raw" ? (
               <CachedThumbnail
                 itemId={item.id}
                 name={item.name}
