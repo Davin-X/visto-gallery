@@ -2972,12 +2972,13 @@ kbd {
   position: relative;
 }
 .tile-open-button {
-  display: block;
-  width: 100%;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   padding: 0;
   border: 0;
   background: transparent;
-  text-align: left;
+  cursor: pointer;
 }
 .tile-select-check {
   position: absolute;

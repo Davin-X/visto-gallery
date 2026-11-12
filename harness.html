@@ -8,6 +8,9 @@
       const benchmarkItems = Number(params.get("benchmark") || 0);
       const isBenchmark = Number.isFinite(benchmarkItems) && benchmarkItems > 0;
       const totalItems = Math.max(0, Math.floor(benchmarkItems || 0));
+      // `videos=N` renders the first N synthetic items as videos so the tile's
+      // play-in-background action can be exercised.
+      const videoCount = Math.max(0, Math.floor(Number(params.get("videos") || 0)));
       const PAGE_SIZE = 250;
       const now = Date.UTC(2026, 10, 3, 12, 0, 0);
       const tinyImage =
@@ -16,12 +19,14 @@
       const makeItems = () =>
         Array.from({ length: totalItems }, (_, index) => {
           const capturedAt = now - index * 60_000;
+          const isVideo = index < videoCount;
+          const extension = isVideo ? "mp4" : "jpg";
           return {
             id: `benchmark-${index}`,
-            path: `/synthetic/benchmark-${index}.jpg`,
-            name: `benchmark-${index}.jpg`,
-            extension: "jpg",
-            kind: "photo",
+            path: `/synthetic/benchmark-${index}.${extension}`,
+            name: `benchmark-${index}.${extension}`,
+            extension,
+            kind: isVideo ? "video" : "photo",
             size: 1024 * 1024,
             modifiedAt: capturedAt,
             capturedAt,
@@ -64,8 +69,8 @@
         }
         if (command === "get_library_stats") {
           return {
-            photos: totalItems,
-            videos: 0,
+            photos: totalItems - videoCount,
+            videos: videoCount,
             raws: 0,
             animations: 0,
             animationsSize: 0,
