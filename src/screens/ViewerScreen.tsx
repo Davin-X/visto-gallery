@@ -893,22 +893,43 @@ function ViewerScreen(props: ViewerScreenProps) {
               onClick={() => props.onToggleFavorite(selected.id)}
               aria-pressed={!!selected.favorite}
               aria-label={selected.favorite ? "Remove favorite" : "Add favorite"}
+              title={selected.favorite ? "Remove favorite (L)" : "Favorite (L)"}
             >
-              <HeartIcon size={14} filled={!!selected.favorite} /> Favorite
+              <HeartIcon size={14} filled={!!selected.favorite} />
+              <span className="viewer-bar-label">
+                {selected.favorite ? "Unfavorite" : "Favorite"}
+              </span>
             </button>
             {selected.kind === "photo" && (
-              <button type="button" onClick={() => props.onOpenEdit(selected)}>
-                <EditIcon size={14} /> Edit
+              <button
+                type="button"
+                onClick={() => props.onOpenEdit(selected)}
+                aria-label="Edit photo"
+                title="Edit photo"
+              >
+                <EditIcon size={14} /> <span className="viewer-bar-label">Edit</span>
               </button>
             )}
             {selected.kind === "photo" && photoItems.length > 1 && (
-              <button type="button" onClick={startSlideshow} aria-label="Start photo slideshow">
-                <SlideshowIcon size={14} /> Slideshow
+              <button
+                type="button"
+                onClick={startSlideshow}
+                aria-label="Start photo slideshow"
+                title="Start photo slideshow"
+              >
+                <SlideshowIcon size={14} />
+                <span className="viewer-bar-label">Slideshow</span>
               </button>
             )}
             <span className="viewer-divider" />
-            <button type="button" onClick={() => void props.onToggleFullscreen()}>
-              <FullscreenIcon size={14} /> Full screen
+            <button
+              type="button"
+              onClick={() => void props.onToggleFullscreen()}
+              aria-label="Toggle full screen"
+              title="Full screen (F)"
+            >
+              <FullscreenIcon size={14} />
+              <span className="viewer-bar-label">Full screen</span>
             </button>
           </div>
         )}

@@ -4553,6 +4553,47 @@ body.is-resizing .photo-inspector {
   transform: none;
 }
 
+.viewer-bar-label {
+  white-space: nowrap;
+}
+
+/* Narrow windows. The bar must not scroll (a scroll container clips on both
+   axes, which hid the more menu opening out of it) and must not wrap (it became
+   two rows), so it drops its labels instead. The stage is roughly the window
+   minus the sidebar, and the labelled row needs about 730px of it, which fails
+   at the 960px window floor. Icons keep every control; title and aria-label
+   still name them. */
+@media (max-width: 1000px) {
+  .viewer-screen .viewer-overlay-bottom {
+    gap: 2px;
+    padding: 0 6px;
+  }
+  .viewer-screen .viewer-overlay-bottom button {
+    min-width: 34px;
+    padding: 0 9px;
+  }
+  .viewer-bar-label {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .viewer-screen .viewer-overlay-bottom {
+    gap: 0;
+    padding: 0 4px;
+  }
+  .viewer-screen .viewer-overlay-bottom button {
+    min-width: 30px;
+    padding: 0 6px;
+  }
+  .viewer-screen .viewer-overlay-bottom .viewer-zoom-value {
+    min-width: 46px;
+  }
+  .viewer-screen .viewer-overlay-bottom .viewer-divider {
+    margin: 0 2px;
+  }
+}
+
 .viewer-more {
   position: relative;
   display: flex;
