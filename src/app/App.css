@@ -4440,37 +4440,82 @@ body.is-resizing .photo-inspector {
   }
 }
 
-.viewer-overlay-bottom {
+/* Docked bar, matching the video player's transport: the viewer used to float
+   an eleven-button pill over the picture with a separate pair of arrows at
+   mid-height, which left the image wearing three control clusters. */
+/* Scoped to the screen: global.css is loaded after this file and carries its own
+   .viewer-overlay-bottom, and it owns the 50% anchoring used here. */
+.viewer-screen .viewer-overlay-bottom {
   position: absolute;
-  bottom: 14px;
+  bottom: 12px;
   left: 50%;
-  /* global.css also sets right: 50%; leaving it in place collapsed the pill to
-     a 34px sliver with the controls spilling out of it. */
   right: auto;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
-  background: rgba(18, 22, 28, 0.88);
-  backdrop-filter: blur(14px);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  gap: 4px;
+  /* max-content, not fit-content: an absolutely positioned box anchored at 50%
+     only gets to shrink-to-fit against the half of the stage left of that point
+     (614px here), so the row wrapped onto a second line. max-content asks for
+     the row it actually needs, and the transform keeps it centred. */
+  width: max-content;
+  max-width: calc(100% - 24px);
+  /* Tighter than the player's bar: that one is a transport with a timeline, this
+     is a row of compact controls, so 12px of air around a 32px control is
+     enough and the bar stops competing with the picture. */
+  min-height: 46px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  /* Full pill, matching the now-playing strip that sits in the top bar. */
+  border-radius: 999px;
+  background: rgba(16, 20, 26, 0.9);
+  backdrop-filter: blur(18px);
+  box-shadow:
+    0 16px 38px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   color: white;
 }
 
 .viewer-overlay-bottom button {
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 13px;
-  cursor: pointer;
-  padding: 5px 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0 10px;
+  border: 1px solid transparent;
   border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
   transition:
-    background 0.15s,
-    color 0.15s;
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.viewer-overlay-bottom button svg {
+  flex: 0 0 auto;
+  opacity: 0.9;
+}
+
+/* The zoom value is a readout first and a control second, so it keeps its text
+   weight and takes no hover fill between the two buttons that change it. */
+.viewer-overlay-bottom .viewer-zoom-value {
+  min-width: 52px;
+  padding: 0 4px;
+  color: rgba(255, 255, 255, 0.95);
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer-overlay-bottom .viewer-zoom-value:hover {
+  background: transparent;
+  color: #fff;
 }
 
 .viewer-overlay-bottom button:hover {
@@ -4488,6 +4533,59 @@ body.is-resizing .photo-inspector {
   color: #8fd3ff;
 }
 
+/* The step arrows are bar buttons now: no floating disc, no shadow, and they
+   do not shift on hover because the bar they sit in must not jump. */
+.viewer-overlay-bottom .viewer-arrow.is-docked {
+  position: static;
+  transform: none;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.viewer-overlay-bottom .viewer-arrow.is-docked:hover {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.12);
+  transform: none;
+}
+
+.viewer-more {
+  position: relative;
+  display: flex;
+}
+
+.viewer-more-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 11px;
+  background: rgba(18, 22, 28, 0.97);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.42);
+}
+
+.viewer-overlay-bottom .viewer-more-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  text-align: left;
+}
+
 .viewer-transform-state {
   color: rgba(255, 255, 255, 0.85);
   font-size: 12px;
@@ -4500,8 +4598,11 @@ body.is-resizing .photo-inspector {
 }
 
 .viewer-divider {
-  height: 16px;
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  flex: 0 0 auto;
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: rgba(255, 255, 255, 0.14);
 }
 
 /* File details as clean chips - compact and secondary to the image */
@@ -4905,10 +5006,10 @@ body.is-resizing .photo-inspector {
     /* Ends below the card fill, so the print box still reads as a recess
        against a --surface-2 card instead of dissolving into it. */
     linear-gradient(
-      135deg,
-      var(--surface-3),
-      color-mix(in srgb, var(--surface-3) 62%, var(--surface-2))
-    );
+        135deg,
+        var(--surface-3),
+        color-mix(in srgb, var(--surface-3) 62%, var(--surface-2))
+      );
 }
 
 .album-cover img,
@@ -8546,18 +8647,15 @@ body.is-resizing .photo-inspector {
 .viewer-overlay-bottom {
   z-index: 3;
   max-width: calc(100% - 32px);
+  min-height: 46px;
   box-sizing: border-box;
+  /* No scroll container and no wrapping. Scrolling clips on both axes and hid
+     the more menu that opens above the bar; wrapping broke the bar into two
+     rows. The row fits its controls by construction, so keep it one line. */
   flex-wrap: nowrap;
   justify-content: center;
   gap: 4px;
-  padding: 6px 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-.viewer-overlay-bottom::-webkit-scrollbar {
-  display: none;
+  padding: 6px 10px;
 }
 .viewer-overlay-bottom button {
   flex: 0 0 auto;
