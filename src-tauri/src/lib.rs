@@ -156,11 +156,6 @@ pub fn run() {
                     "file_quit" => {
                         app.exit(0);
                     }
-                    "view_fullscreen" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.set_fullscreen(true);
-                        }
-                    }
                     _ => {}
                 }
             });
