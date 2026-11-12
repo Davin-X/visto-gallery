@@ -13129,25 +13129,6 @@ body.is-resizing .photo-inspector {
   gap: 4px;
 }
 
-.smart-albums-toggle {
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
-  border: 0;
-  border-radius: 8px;
-  padding: 2px 4px;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.smart-albums-toggle:hover {
-  background: color-mix(in srgb, var(--ink) 4%, transparent);
-}
-
 .smart-albums-heading-left {
   display: flex;
   align-items: baseline;
@@ -13182,44 +13163,6 @@ body.is-resizing .photo-inspector {
   color: var(--muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-}
-
-.smart-albums-collapse {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease,
-    border-color 0.12s ease;
-}
-
-.smart-albums-collapse:hover {
-  background: var(--surface-3);
-  color: var(--ink);
-  border-color: var(--line-strong);
-}
-
-.smart-albums-chevron {
-  flex: 0 0 auto;
-  color: inherit;
-  transition: transform 0.18s ease;
-}
-
-.smart-albums-section.is-collapsed {
-  padding-bottom: 10px;
-}
-
-.smart-albums-section.is-collapsed .smart-albums-chevron {
-  transform: rotate(-90deg);
 }
 
 .smart-albums-section.is-expanded .smart-albums-list {
@@ -13271,7 +13214,9 @@ body.is-resizing .photo-inspector {
   gap: 10px;
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: 4px;
+  padding: 10px 2px 4px;
+  margin-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
   scrollbar-width: none;
   overscroll-behavior-x: contain;
 }

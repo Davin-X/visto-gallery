@@ -19,15 +19,8 @@ test("smart albums strip is visible, collapsible and expandable", async ({ page 
   );
   expect(smartBefore).toBeLessThan(gridBefore);
 
-  // Collapse hides the strip and persists.
-  await page.locator(".smart-albums-collapse").click();
-  await expect(page.locator(".smart-albums-list")).toHaveCount(0);
-
-  // Expand shows the tiles again.
-  await page.locator(".smart-albums-collapse").click();
-  await expect(page.locator(".smart-album-tile").first()).toBeVisible();
-
   // View all switches the strip to the wrapped grid.
+  await expect(page.locator(".smart-albums-collapse")).toHaveCount(0);
   await page.getByRole("button", { name: "View all", exact: true }).click();
   const wrapped = await page.evaluate(
     () => getComputedStyle(document.querySelector(".smart-albums-list")!).flexWrap,
