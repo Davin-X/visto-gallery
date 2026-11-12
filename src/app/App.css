@@ -4747,6 +4747,16 @@ body.is-resizing .photo-inspector {
     opacity 0.35s ease,
     visibility 0.35s ease;
 }
+
+/* A pointer resting on the bar outranks the idle fade. The timer already
+   refuses to hide a hovered bar; this covers a fade that is already in flight
+   when the pointer arrives. */
+.viewer-overlay-bottom:hover,
+.viewer-overlay-bottom:focus-within {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
 .viewer-arrow,
 .viewer-overlay-top,
 .viewer-overlay-bottom {
@@ -11910,6 +11920,14 @@ body.is-resizing .photo-inspector {
   opacity: 0;
   pointer-events: none;
   transform: translate(-50%, 8px);
+}
+
+/* Same rule as the viewer bar: hover outranks the idle fade. */
+.video-player-stage .viewer-video-controls:hover,
+.video-player-stage .viewer-video-controls:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%);
 }
 
 .video-player-stage .viewer-video-controls.is-keyboard-focused {

@@ -84,6 +84,7 @@ function VideoPlayer({
   const controlsRef = useRef<HTMLDivElement | null>(null);
   const controlsTimerRef = useRef<number | null>(null);
   const controlsFocusedRef = useRef(false);
+  const barHoveredRef = useRef(false);
   const [playing, setPlaying] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [keyboardFocusWithinControls, setKeyboardFocusWithinControls] = useState(false);
@@ -115,9 +116,17 @@ function VideoPlayer({
   const scheduleControlsHide = useCallback(() => {
     if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
     // The shortcut list is a child of the transport, so fading the transport
-    // would take it away mid-read.
-    if (!playing || controlsFocusedRef.current || helpOpenRef.current) return;
-    controlsTimerRef.current = window.setTimeout(() => setControlsVisible(false), 3500);
+    // would take it away mid-read, and a pointer resting on the bar means the
+    // hand is already there: it used to disappear under the cursor.
+    if (!playing || controlsFocusedRef.current || helpOpenRef.current || barHoveredRef.current)
+      return;
+    controlsTimerRef.current = window.setTimeout(() => {
+      // Re-checked when the timer fires, not only when it is set: a timer started
+      // before the pointer arrived would otherwise hide the bar under the hand
+      // that just moved onto it.
+      if (barHoveredRef.current) return;
+      setControlsVisible(false);
+    }, 3500);
   }, [playing]);
 
   const showPlayerActivity = useCallback(() => {
@@ -975,6 +984,19 @@ function VideoPlayer({
             onPointerDownCapture={() => {
               controlsFocusedRef.current = false;
               setKeyboardFocusWithinControls(false);
+            }}
+            onPointerOver={(event) => {
+              // pointerover bubbles from every child of the bar, so a move between
+              // its buttons is not a re-entry.
+              if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+              barHoveredRef.current = true;
+              if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
+              setControlsVisible(true);
+            }}
+            onPointerOut={(event) => {
+              if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+              barHoveredRef.current = false;
+              scheduleControlsHide();
             }}
             onFocusCapture={(event) => {
               const keyboardFocused =

@@ -102,6 +102,23 @@ function ViewerScreen(props: ViewerScreenProps) {
     Math.max(0, items.findIndex((item) => item.id === selected?.id) - stripWindowSize / 2),
   );
   const hideTimerRef = useRef<number | null>(null);
+  const barHoveredRef = useRef(false);
+
+  // The bar fades after a pause so the frame stays clean, but only while the
+  // pointer is away from it: a timer started by stage movement used to fire with
+  // the pointer resting on the bar, so it jumped away from the hand reaching for
+  // it. Pointer over the bar wins over every other reason to hide.
+  const scheduleBarHide = useCallback(() => {
+    if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+    if (barHoveredRef.current) return;
+    hideTimerRef.current = window.setTimeout(() => {
+      // Re-checked when the timer fires, not only when it is set: a timer started
+      // before the pointer arrived would otherwise hide the bar under the hand
+      // that just moved onto it.
+      if (barHoveredRef.current) return;
+      setHintsVisible(false);
+    }, 3500);
+  }, []);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -136,9 +153,8 @@ function ViewerScreen(props: ViewerScreenProps) {
       return;
     }
     if (!popoverOpenedRef.current) return;
-    if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
-  }, [moreOpen, helpOpen]);
+    scheduleBarHide();
+  }, [moreOpen, helpOpen, scheduleBarHide]);
   const stripRef = useRef<HTMLDivElement | null>(null);
   const stripStrideRef = useRef(stripStride);
   const stripStartRef = useRef(stripStart);
@@ -155,13 +171,11 @@ function ViewerScreen(props: ViewerScreenProps) {
   }, [photoItems, selected?.id]);
   const shortcutHints = buildShortcuts(selected?.kind);
 
-  // Shortcut hints are shown on open and whenever the pointer moves over the
-  // stage, then fade away after a short pause so the frame stays clean.
+  // Hints show on open and on stage movement, then fade via the shared timer.
   const flashHints = useCallback(() => {
     setHintsVisible(true);
-    if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
-  }, []);
+    scheduleBarHide();
+  }, [scheduleBarHide]);
 
   useEffect(() => {
     setPan({ x: 0, y: 0 });
@@ -714,7 +728,9 @@ function ViewerScreen(props: ViewerScreenProps) {
             if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
           }}
           onMouseLeave={() => {
-            hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
+            // Shared timer, so leaving the transform readout never hides the bar
+            // while the pointer is resting on it.
+            scheduleBarHide();
           }}
         >
           <span className="viewer-transform-state">
@@ -726,12 +742,18 @@ function ViewerScreen(props: ViewerScreenProps) {
         {selected.kind !== "video" && (
           <div
             className={`viewer-overlay-bottom${hintsVisible ? "" : " hidden"}`}
-            onMouseEnter={() => {
+            onPointerOver={(event) => {
+              // pointerover bubbles from every child; only a move in from outside
+              // the bar counts as arriving on it.
+              if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+              barHoveredRef.current = true;
               setHintsVisible(true);
               if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
             }}
-            onMouseLeave={() => {
-              hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
+            onPointerOut={(event) => {
+              if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+              barHoveredRef.current = false;
+              scheduleBarHide();
             }}
           >
             <button
