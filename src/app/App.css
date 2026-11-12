@@ -4440,29 +4440,32 @@ body.is-resizing .photo-inspector {
   }
 }
 
-/* Docked bar, matching the video player's transport: the viewer used to float
-   an eleven-button pill over the picture with a separate pair of arrows at
-   mid-height, which left the image wearing three control clusters. */
-/* Scoped to the screen: global.css is loaded after this file and carries its own
-   .viewer-overlay-bottom, and it owns the 50% anchoring used here. */
-.viewer-screen .viewer-overlay-bottom {
+/* The viewer bar. All of its declarations live here and nowhere else: global.css
+   and the responsive section each carried their own copy, so load order decided
+   the layout and this rule had to be scoped to .viewer-screen to win. It is a
+   docked pill sized by its controls, the player transport treatment without the
+   timeline, and it never scrolls or wraps - a scroll container clips on both
+   axes and hid the more menu that opens above it. */
+.viewer-overlay-bottom {
   position: absolute;
+  z-index: 3;
   bottom: 12px;
   left: 50%;
   right: auto;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
   gap: 4px;
   /* max-content, not fit-content: an absolutely positioned box anchored at 50%
      only gets to shrink-to-fit against the half of the stage left of that point
      (614px here), so the row wrapped onto a second line. max-content asks for
      the row it actually needs, and the transform keeps it centred. */
   width: max-content;
-  max-width: calc(100% - 24px);
-  /* Tighter than the player's bar: that one is a transport with a timeline, this
-     is a row of compact controls, so 12px of air around a 32px control is
-     enough and the bar stops competing with the picture. */
+  max-width: calc(100% - 32px);
+  /* Height comes from min-height plus the 34px controls centred in it, so the
+     vertical padding stays 0 and the bar is exactly as tall as intended. */
   min-height: 46px;
   padding: 0 8px;
   box-sizing: border-box;
@@ -4470,11 +4473,12 @@ body.is-resizing .photo-inspector {
   /* Full pill, matching the now-playing strip that sits in the top bar. */
   border-radius: 999px;
   background: rgba(16, 20, 26, 0.9);
+  color: white;
+  white-space: nowrap;
   backdrop-filter: blur(18px);
   box-shadow:
     0 16px 38px rgba(0, 0, 0, 0.38),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  color: white;
 }
 
 .viewer-overlay-bottom button {
@@ -8673,19 +8677,6 @@ body.is-resizing .photo-inspector {
   z-index: 3;
   align-items: center;
   gap: 12px;
-}
-.viewer-overlay-bottom {
-  z-index: 3;
-  max-width: calc(100% - 32px);
-  min-height: 46px;
-  box-sizing: border-box;
-  /* No scroll container and no wrapping. Scrolling clips on both axes and hid
-     the more menu that opens above the bar; wrapping broke the bar into two
-     rows. The row fits its controls by construction, so keep it one line. */
-  flex-wrap: nowrap;
-  justify-content: center;
-  gap: 4px;
-  padding: 6px 10px;
 }
 .viewer-overlay-bottom button {
   flex: 0 0 auto;
