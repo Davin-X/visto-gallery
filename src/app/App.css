@@ -2328,7 +2328,12 @@ body.is-resizing .photo-inspector {
 }
 
 .inspector-action {
-  flex: 1;
+  /* Buttons size to their own labels instead of splitting the row evenly, so
+     longer labels ("Open in default app") wrap to their own line rather than
+     truncating inside a too-narrow flex cell. */
+  flex: 1 1 auto;
+  min-width: max-content;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -8663,6 +8668,28 @@ body.is-resizing .photo-inspector {
 }
 .photo-inspector .inspector-section {
   padding-top: 15px;
+}
+
+/* File actions (Reveal / Open / Copy path) hold long labels, so they get
+   their own grid: three equal columns that wrap the label to a second line
+   instead of ellipsizing it like the icon-grid does. */
+.photo-inspector .inspector-file-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+.photo-inspector .inspector-file-actions button {
+  min-width: 0;
+  padding-inline: 4px;
+  overflow: hidden;
+}
+.photo-inspector .inspector-file-actions button span {
+  max-width: 100%;
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 .photo-inspector .inspector-section-head {
   margin-bottom: 9px;

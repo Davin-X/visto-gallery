@@ -2471,7 +2471,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                       <div className="inspector-section-head">
                         <b>File</b>
                       </div>
-                      <div className="inspector-actions" style={{ marginTop: 0 }}>
+                      <div className="inspector-file-actions">
                         <button
                           type="button"
                           className="inspector-action"
