@@ -102,7 +102,20 @@
           ];
         }
         if (command === "watch_folder" || command === "unwatch_folder") return null;
-        if (command === "get_smart_albums") return [];
+        if (command === "get_smart_albums") {
+          // A few seeded smart albums so the Albums page can be exercised with
+          // the collapsed section expanded.
+          const nowTs = Date.now();
+          return Array.from({ length: 8 }, (_, index) => ({
+            id: `smart-${index}`,
+            name: ["Favorites", "RAW+Jpeg", "Autumn shots", "Videos", "People", "2024", "Best of", "Travel"][index],
+            filter: index === 0 ? { favorite: true } : index === 1 ? { kind: "raw" } : { query: "autumn" },
+            itemCount: index === 0 ? 11 : 7,
+            coverItems: [],
+            createdAt: nowTs,
+            updatedAt: nowTs,
+          }));
+        }
         if (command === "get_albums") return [];
         if (command === "get_tags") return [];
         if (command === "get_album_overviews") {

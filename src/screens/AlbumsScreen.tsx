@@ -1,5 +1,5 @@
 import React from "react";
-import { AlbumsIcon, PlusIcon } from "../design/components/icons";
+import { AlbumsIcon, PlusIcon, ChevronDownIcon } from "../design/components/icons";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
@@ -55,6 +55,36 @@ function AlbumsScreen(props: AlbumsScreenProps) {
     });
   }, [props.albums, overviews]);
 
+  // A film-strip row above the grid keeps Smart Albums visible at a fixed,
+  // low height no matter how many there are. The chevron collapses it so the
+  // albums grid gets the full page; the choice persists.
+  const [smartAlbumsCollapsed, setSmartAlbumsCollapsed] = React.useState<boolean>(() => {
+    try {
+      return localStorage.getItem("vistogallery.smartAlbumsCollapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleSmartAlbums = React.useCallback(() => {
+    setSmartAlbumsCollapsed((value) => {
+      const next = !value;
+      try {
+        localStorage.setItem("vistogallery.smartAlbumsCollapsed", next ? "1" : "0");
+      } catch {
+        // storage unavailable; keep state in memory only
+      }
+      return next;
+    });
+  }, []);
+
+  // The film strip shows one row; "View all" expands it into the full
+  // multi-row grid. Shown only when there is something to expand into.
+  const [smartAlbumsExpanded, setSmartAlbumsExpanded] = React.useState(false);
+  const canExpandSmartAlbums = (props.smartAlbums?.length ?? 0) > 4;
+  const toggleSmartAlbumsExpanded = React.useCallback(() => {
+    setSmartAlbumsExpanded((value) => !value);
+  }, []);
+
   return (
     <div className="feature-page albums-page">
       <div className="page-heading">
@@ -72,6 +102,98 @@ function AlbumsScreen(props: AlbumsScreenProps) {
           </button>
         </div>
       </div>
+
+      {(props.smartAlbums?.length ?? 0) > 0 && (
+        <section
+          className={`smart-albums-section${smartAlbumsCollapsed ? " is-collapsed" : ""}${smartAlbumsExpanded ? " is-expanded" : ""}`}
+          aria-label="Smart Albums"
+        >
+          <div className="smart-albums-headrow">
+            <button
+              type="button"
+              className="smart-albums-toggle"
+              aria-expanded={!smartAlbumsCollapsed}
+              aria-controls="smart-albums-list"
+              onClick={toggleSmartAlbums}
+            >
+              <span className="smart-albums-heading-left">
+                <span className="eyebrow">SAVED FILTERS</span>
+                <h2>Smart Albums</h2>
+                <span className="smart-albums-count">
+                  {props.smartAlbums!.length.toLocaleString()}
+                </span>
+              </span>
+              <span className="smart-albums-toggle-desc">Updates automatically</span>
+            </button>
+            <button
+              type="button"
+              className="smart-albums-collapse"
+              aria-label={smartAlbumsCollapsed ? "Show Smart Albums" : "Hide Smart Albums"}
+              aria-expanded={!smartAlbumsCollapsed}
+              aria-controls="smart-albums-list"
+              onClick={toggleSmartAlbums}
+            >
+              <ChevronDownIcon size={15} className="smart-albums-chevron" />
+            </button>
+            {canExpandSmartAlbums && (
+              <button
+                type="button"
+                className="smart-albums-viewall"
+                onClick={toggleSmartAlbumsExpanded}
+                aria-pressed={smartAlbumsExpanded}
+              >
+                {smartAlbumsExpanded ? "Show less" : "View all"}
+              </button>
+            )}
+          </div>
+          {!smartAlbumsCollapsed && (
+            <div id="smart-albums-list" className="smart-albums-list">
+              {props.smartAlbums!.map((album) => {
+                const filter = album.filter;
+                let badge = "📷";
+                if (filter.kind === "video") badge = "▶️";
+                else if (filter.kind === "raw") badge = "📷";
+                else if (filter.favorite) badge = "❤️";
+                else if (filter.query) badge = "🔍";
+                else if (filter.tags?.length) badge = "🏷️";
+                const coverPhotos = (album.coverItems ?? [])
+                  .filter((item: any) => item.kind === "photo" || item.kind === "video")
+                  .slice(0, 3);
+                return (
+                  <button
+                    key={album.id}
+                    type="button"
+                    className="smart-album-tile"
+                    onClick={() => props.onOpenSmartAlbum?.(album.id)}
+                    onContextMenu={(e) => props.onSmartAlbumContextMenu?.(album, e)}
+                    title={`Open ${album.name}`}
+                  >
+                    <span className="smart-album-tile-cover">
+                      {coverPhotos.length ? (
+                        <AlbumPhotoStack
+                          photos={coverPhotos}
+                          assetUrl={props.assetUrl}
+                          albumItems={album.coverItems ?? []}
+                        />
+                      ) : (
+                        <span className="smart-album-tile-cover-empty">{badge}</span>
+                      )}
+                    </span>
+                    <MiddleTruncate
+                      className="smart-album-tile-name"
+                      text={album.name}
+                      tailLength={6}
+                    />
+                    <span className="smart-album-tile-count">
+                      {formatAlbumCount(album.itemCount)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
 
       {albums.length === 0 && (props.smartAlbums?.length ?? 0) === 0 ? (
         <div className="empty-state albums-empty">
@@ -125,61 +247,6 @@ function AlbumsScreen(props: AlbumsScreenProps) {
             </button>
           ))}
         </div>
-      )}
-      {(props.smartAlbums?.length ?? 0) > 0 && (
-        <section className="smart-albums-section" aria-label="Smart Albums">
-          <div className="smart-albums-heading">
-            <div className="page-heading--section">
-              <p className="eyebrow">SAVED FILTERS</p>
-              <h2>Smart Albums</h2>
-            </div>
-            <span className="section-desc">Updates automatically as your library changes.</span>
-          </div>
-          <div className="smart-albums-list">
-            {props.smartAlbums!.map((album) => {
-              const filter = album.filter;
-              let badge = "📷";
-              if (filter.kind === "video") badge = "▶️";
-              else if (filter.kind === "raw") badge = "📷";
-              else if (filter.favorite) badge = "❤️";
-              else if (filter.query) badge = "🔍";
-              else if (filter.tags?.length) badge = "🏷️";
-              const coverPhotos = (album.coverItems ?? [])
-                .filter((item: any) => item.kind === "photo" || item.kind === "video")
-                .slice(0, 3);
-              return (
-                <button
-                  key={album.id}
-                  type="button"
-                  className="smart-album-tile"
-                  onClick={() => props.onOpenSmartAlbum?.(album.id)}
-                  onContextMenu={(e) => props.onSmartAlbumContextMenu?.(album, e)}
-                  title={`Open ${album.name}`}
-                >
-                  <span className="smart-album-tile-cover">
-                    {coverPhotos.length ? (
-                      <AlbumPhotoStack
-                        photos={coverPhotos}
-                        assetUrl={props.assetUrl}
-                        albumItems={album.coverItems ?? []}
-                      />
-                    ) : (
-                      <span className="smart-album-tile-cover-empty">{badge}</span>
-                    )}
-                  </span>
-                  <MiddleTruncate
-                    className="smart-album-tile-name"
-                    text={album.name}
-                    tailLength={6}
-                  />
-                  <span className="smart-album-tile-count">
-                    {formatAlbumCount(album.itemCount)}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
       )}
     </div>
   );
