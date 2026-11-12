@@ -187,7 +187,6 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                       {coverPhotos.length ? (
                         <AlbumPhotoStack
                           photos={coverPhotos}
-                          assetUrl={props.assetUrl}
                           albumItems={album.coverItems ?? []}
                         />
                       ) : (
@@ -229,7 +228,6 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 {album.photos.length ? (
                   <AlbumPhotoStack
                     photos={album.photos}
-                    assetUrl={props.assetUrl}
                     albumItems={album.albumItems}
                   />
                 ) : (

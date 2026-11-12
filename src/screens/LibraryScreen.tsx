@@ -1041,7 +1041,6 @@ function LibraryScreen(props: LibraryScreenProps) {
                   {activeAlbumPhotos.length ? (
                     <AlbumPhotoStack
                       photos={activeAlbumPhotos}
-                      assetUrl={assetUrl}
                       albumItems={activeAlbumItems}
                     />
                   ) : (

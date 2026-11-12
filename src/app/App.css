@@ -5145,6 +5145,10 @@ body.is-resizing .photo-inspector {
   box-shadow: 0 6px 16px rgba(12, 18, 26, 0.18);
   transform: translate(var(--x), var(--y)) rotate(var(--r));
   transition: transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* Print layers stay composited instead of being re-rasterized on the hover
+     fan; a re-raster shows a blank frame for one tick (WebKit symptom — it
+     read as a white flash on hover). */
+  will-change: transform;
 }
 
 .album-stack-photo img,
