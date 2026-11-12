@@ -8,6 +8,7 @@ import {
   FlipIcon,
   FullscreenIcon,
   HeartIcon,
+  InfoIcon,
   MinusIcon,
   MoreIcon,
   PlusIcon,
@@ -103,18 +104,41 @@ function ViewerScreen(props: ViewerScreenProps) {
   const hideTimerRef = useRef<number | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpRef = useRef<HTMLDivElement | null>(null);
 
   // Rotate, flip and hide live behind one menu in the docked bar instead of
-  // sitting at the same weight as zoom and full screen. Clicking elsewhere
-  // closes it; Escape is left to the viewer, which closes the whole surface.
+  // sitting at the same weight as zoom and full screen, and the shortcut list
+  // opens from a help button beside it rather than as a strip pinned over the
+  // picture. Clicking elsewhere closes either; Escape is left to the viewer,
+  // which closes the whole surface.
   useEffect(() => {
-    if (!moreOpen) return;
+    if (!moreOpen && !helpOpen) return;
     const onPointerDown = (event: PointerEvent) => {
-      if (!moreRef.current?.contains(event.target as Node)) setMoreOpen(false);
+      const target = event.target as Node;
+      if (!moreRef.current?.contains(target)) setMoreOpen(false);
+      if (!helpRef.current?.contains(target)) setHelpOpen(false);
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [moreOpen]);
+  }, [moreOpen, helpOpen]);
+
+  // The idle timer fades the bar out, and a popover is a child of the bar, so
+  // it would fade with it. Hold the bar open while one is showing, then restart
+  // the timer once both are closed. The first render is skipped so opening the
+  // viewer does not start a countdown it never had before.
+  const popoverOpenedRef = useRef(false);
+  useEffect(() => {
+    if (moreOpen || helpOpen) {
+      popoverOpenedRef.current = true;
+      if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+      return;
+    }
+    if (!popoverOpenedRef.current) return;
+    if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = window.setTimeout(() => setHintsVisible(false), 3500);
+  }, [moreOpen, helpOpen]);
   const stripRef = useRef<HTMLDivElement | null>(null);
   const stripStrideRef = useRef(stripStride);
   const stripStartRef = useRef(stripStart);
@@ -129,6 +153,7 @@ function ViewerScreen(props: ViewerScreenProps) {
   const startSlideshow = useCallback(() => {
     useSlideshowStore.getState().open(photoItems, selected?.id);
   }, [photoItems, selected?.id]);
+  const shortcutHints = buildShortcuts(selected?.kind);
 
   // Shortcut hints are shown on open and whenever the pointer moves over the
   // stage, then fade away after a short pause so the frame stays clean.
@@ -698,44 +723,6 @@ function ViewerScreen(props: ViewerScreenProps) {
             {props.flipX ? "Flipped" : ""}
           </span>
         </div>
-        {/* Compact shortcut hints live in the stage corner so the frame keeps
-            all of its room for the media and the control bar. */}
-        <div className={`viewer-hints${hintsVisible ? "" : " hidden"}`} aria-hidden="true">
-          <span>
-            <kbd>←</kbd>
-            <kbd>→</kbd>
-            <kbd>J</kbd>
-            <kbd>K</kbd>
-            <kbd>Space</kbd> Navigate
-          </span>
-          <span>
-            <kbd>↑</kbd>
-            <kbd>↓</kbd> Zoom
-          </span>
-          {selected.kind === "photo" && (
-            <span>
-              <kbd>R</kbd>
-              <kbd>X</kbd> Rotate/Flip
-            </span>
-          )}
-          <span>
-            <kbd>0</kbd> Reset zoom
-          </span>
-          {(selected.kind === "photo" || selected.kind === "raw") && (
-            <span>
-              <kbd>1</kbd> 200%
-            </span>
-          )}
-          <span>
-            <kbd>L</kbd> Favorite
-          </span>
-          <span>
-            <kbd>F</kbd> Full screen
-          </span>
-          <span>
-            <kbd>Esc</kbd> Close
-          </span>
-        </div>
         {selected.kind !== "video" && (
           <div
             className={`viewer-overlay-bottom${hintsVisible ? "" : " hidden"}`}
@@ -931,6 +918,37 @@ function ViewerScreen(props: ViewerScreenProps) {
               <FullscreenIcon size={14} />
               <span className="viewer-bar-label">Full screen</span>
             </button>
+            <div className="viewer-more viewer-help" ref={helpRef}>
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={helpOpen}
+                aria-label="Keyboard shortcuts"
+                title="Keyboard shortcuts"
+                className={helpOpen ? "active" : ""}
+                onClick={() => setHelpOpen((value) => !value)}
+              >
+                <InfoIcon size={15} />
+              </button>
+              {helpOpen && (
+                <div
+                  className="viewer-more-menu viewer-shortcuts"
+                  role="dialog"
+                  aria-label="Keyboard shortcuts"
+                >
+                  {shortcutHints.map((hint) => (
+                    <React.Fragment key={hint.label}>
+                      <span className="viewer-shortcut-keys">
+                        {hint.keys.map((key) => (
+                          <kbd key={key}>{key}</kbd>
+                        ))}
+                      </span>
+                      <span className="viewer-shortcut-label">{hint.label}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -989,3 +1007,24 @@ function ViewerScreen(props: ViewerScreenProps) {
 }
 
 export default ViewerScreen;
+
+// Shortcut list shown from the help button in the bar. Same keys as the strip
+// that used to float over the top of the picture, plus the ones that only apply
+// to stills.
+function buildShortcuts(kind: string | undefined) {
+  const photo = kind === "photo";
+  const still = photo || kind === "raw";
+  const rows: Array<{ keys: string[]; label: string }> = [
+    { keys: ["←", "→", "J", "K", "Space"], label: "Navigate" },
+    { keys: ["↑", "↓"], label: "Zoom" },
+  ];
+  if (photo) rows.push({ keys: ["R", "X"], label: "Rotate / flip" });
+  rows.push({ keys: ["0"], label: "Reset zoom" });
+  if (still) rows.push({ keys: ["1"], label: "200%" });
+  rows.push(
+    { keys: ["L"], label: "Favorite" },
+    { keys: ["F"], label: "Full screen" },
+    { keys: ["Esc"], label: "Close" },
+  );
+  return rows;
+}

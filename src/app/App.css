@@ -4716,32 +4716,17 @@ body.is-resizing .photo-inspector {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-/* Shortcut hints sit in the top-right corner of the stage, clear of the
-   media and the top control row. */
-.viewer-hints {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 2;
-  display: flex;
+/* Shortcut list, opened from the help button in the bar. It used to be a strip
+   pinned to the top-right corner of the stage, which was the last thing still
+   overlaying the picture. */
+.viewer-shortcuts {
+  display: grid;
+  grid-template-columns: auto 1fr;
   align-items: center;
-  gap: 10px;
-  padding: 5px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 8px;
-  background: rgba(20, 24, 30, 0.72);
-  backdrop-filter: blur(8px);
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 11px;
+  gap: 7px 14px;
+  min-width: 208px;
+  padding: 10px 12px;
   white-space: nowrap;
-  transition:
-    opacity 0.35s ease,
-    transform 0.35s ease;
-}
-.viewer-hints.hidden {
-  opacity: 0;
-  transform: translateY(-4px);
-  pointer-events: none;
 }
 .viewer-arrow.hidden,
 .viewer-overlay-top.hidden,
@@ -4760,15 +4745,15 @@ body.is-resizing .photo-inspector {
     opacity 0.35s ease,
     visibility 0.35s ease;
 }
-.viewer-hints span {
+.viewer-shortcut-keys {
   display: inline-flex;
-  align-items: center;
+  justify-content: flex-end;
   gap: 4px;
 }
-.viewer-hints kbd {
+.viewer-shortcuts kbd {
   display: inline-flex;
   align-items: center;
-  height: 16px;
+  height: 18px;
   padding: 0 5px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 4px;
@@ -4777,6 +4762,10 @@ body.is-resizing .photo-inspector {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
   font-weight: 600;
+}
+.viewer-shortcut-label {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
 }
 
 /* Arrow buttons on sides of viewer */
@@ -12411,15 +12400,6 @@ body.is-resizing .photo-inspector {
   .viewer-overlay-bottom {
     bottom: 10px;
     max-width: calc(100% - 16px);
-  }
-
-  .viewer-hints {
-    right: 8px;
-    left: 8px;
-    justify-content: center;
-    gap: 6px;
-    overflow: hidden;
-    font-size: 9px;
   }
 
   .now-playing-name {
