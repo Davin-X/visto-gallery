@@ -2545,6 +2545,76 @@ mod trash_flow_tests {
         );
     }
 
+    /// Cancel must stop a trash run between batches — and only that run.
+    #[tokio::test]
+    async fn cancelling_a_trash_run_stops_between_batches_and_spares_other_runs() {
+        let db = test_db().await;
+        let dir = temp_dir("cancel");
+        let group = Arc::new(super::super::CancelGroup::default());
+
+        // 51 targets cross the 50-file batch boundary exactly once.
+        let mut targets = Vec::new();
+        for index in 0..51 {
+            let id = format!("item-{index:02}");
+            let path = dir.join(format!("{id}.jpg"));
+            write_file(&path);
+            insert_item(&db, &id, &path).await;
+            targets.push((id, path.to_string_lossy().into_owned()));
+        }
+
+        let fake = Arc::new(FakeTrash::default());
+        let sink: Arc<dyn TrashSink> = fake.clone();
+        let cancel = group.start();
+        // `execute_trash`'s progress callback is `Fn`, so count with an atomic.
+        let batches = std::sync::atomic::AtomicUsize::new(0);
+        let outcome = execute_trash(&db, targets.clone(), sink, &cancel, |_, _, current| {
+            // The final summary call passes no current file; only count batches.
+            if current.is_some() {
+                batches.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                // Cancel after the first batch has been handed to Finder.
+                group.cancel_all();
+            }
+        })
+        .await
+        .expect("trash targets");
+
+        assert_eq!(
+            batches.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "the cancel is seen before the second batch"
+        );
+        assert_eq!(outcome.trashed.len(), 50);
+        assert_eq!(
+            fake.moved().len(),
+            50,
+            "the cancelled batch must never reach the trash backend"
+        );
+        assert_eq!(outcome.failed.len(), 1);
+        assert_eq!(outcome.failed[0].id, "item-50");
+        assert_eq!(outcome.failed[0].code, crate::errors::ErrorCode::Cancelled);
+
+        // A run that starts after the cancel owns a fresh flag and completes.
+        let after = group.start();
+        assert!(!after.is_cancelled());
+        let extra = dir.join("after.jpg");
+        write_file(&extra);
+        insert_item(&db, "after", &extra).await;
+        let second_fake = Arc::new(FakeTrash::default());
+        let outcome = execute_trash(
+            &db,
+            vec![("after".to_string(), extra.to_string_lossy().into_owned())],
+            second_fake.clone(),
+            &after,
+            |_, _, _| {},
+        )
+        .await
+        .expect("second trash run");
+
+        assert_eq!(outcome.trashed, vec!["after".to_string()]);
+        assert_eq!(second_fake.moved().len(), 1);
+        assert!(outcome.failed.is_empty());
+    }
+
     /// The fallback decision depends on this classifier: only a refused
     /// Automation permission means no file has moved yet.
     #[cfg(target_os = "macos")]
