@@ -11550,6 +11550,15 @@ body.is-resizing .photo-inspector {
   flex-wrap: nowrap;
 }
 
+/* The back control takes one slot on the left, so the file name centres in the
+   space left over and lands 20px right of the stage it sits above. An empty
+   trailing slot of the same width puts the name back on the stage axis while
+   the button stays on the stage gutter. 32px is the control width below. */
+.page-heading.video-player-heading::after {
+  content: "";
+  flex: 0 0 32px;
+}
+
 .video-player-back {
   display: grid;
   flex: 0 0 auto;
