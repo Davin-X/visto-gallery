@@ -13529,3 +13529,109 @@ body.is-resizing .photo-inspector {
   background: var(--surface-3);
   color: var(--muted);
 }
+
+/* ==========================================================================
+   #16 — Library header controls: distinct groups instead of one long row of
+   pills, and one split button for the import actions.
+   ========================================================================== */
+
+.segmented-control {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.segmented-control .quick-filter {
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 11px;
+  box-shadow: none;
+}
+
+.segmented-control .quick-filter:hover {
+  background: color-mix(in srgb, var(--surface-2) 65%, transparent);
+}
+
+.segmented-control .quick-filter.active {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: none;
+}
+
+.segmented-control .quick-filter .filter-count {
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+}
+
+.segmented-control .quick-filter.active .filter-count {
+  background: color-mix(in srgb, var(--accent-contrast) 18%, transparent);
+  border-color: transparent;
+  color: var(--accent-contrast);
+}
+
+.filter-cluster-separator {
+  flex: 0 0 1px;
+  width: 1px;
+  height: 22px;
+  margin: 0 var(--space-1);
+  background: var(--line);
+}
+
+/* Split button: one primary action, variants behind a chevron. */
+.split-button {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.split-button .split-button-main {
+  border-radius: 8px 0 0 8px;
+}
+
+.split-button .split-button-toggle {
+  border-radius: 0 8px 8px 0;
+  border-left: 1px solid color-mix(in srgb, #fff 18%, transparent);
+  padding: 0 10px;
+  min-width: 0;
+}
+
+.split-button-panel {
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface-2);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.split-button-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.split-button-item:hover {
+  background: var(--surface-3);
+}
+
+.split-button-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
