@@ -195,10 +195,6 @@ body.is-resizing .photo-inspector {
 }
 
 @media (max-width: 600px) {
-  .viewer-video-controls {
-    gap: 4px;
-    padding: 6px 8px;
-  }
   .viewer-video-controls button {
     padding: 4px;
   }
@@ -4220,6 +4216,15 @@ body.is-resizing .photo-inspector {
   color: var(--red, #e5484d);
 }
 
+/* The transport bar. Every box declaration lives here. A second block scoped to
+   .video-player-stage used to override the width, padding, border, radius,
+   background and shadow, so the bar was a different size depending on which
+   screen drew it, and a media query at the top of the file carried a third set.
+   One rule now serves both screens.
+
+   No scroll container: it clipped on both axes, which hid the shortcut list that
+   opens above the bar, and it hid controls behind a scrollbar nobody could see.
+   The seek input shrinks to make room instead. */
 .viewer-video-controls {
   position: absolute;
   bottom: 18px;
@@ -4228,18 +4233,20 @@ body.is-resizing .photo-inspector {
   display: flex;
   align-items: center;
   gap: 6px;
-  max-width: min(560px, 90vw);
   width: 100%;
-  padding: 8px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 12px;
-  background: rgba(20, 24, 30, 0.9);
+  max-width: min(1040px, calc(100% - 32px));
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(15, 18, 23, 0.9);
   backdrop-filter: blur(12px);
   color: #fff;
   transform: translateX(-50%);
   box-sizing: border-box;
-  /* No scroll container: it clipped on both axes, which would hide the shortcut
-     list that opens above the bar. The seek input shrinks to make room instead. */
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
 }
 
 .viewer-video-controls button {
@@ -11897,23 +11904,6 @@ body.is-resizing .photo-inspector {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-}
-
-.video-player-stage .video-player-surface > .viewer-video-controls {
-  bottom: 18px;
-}
-
-.video-player-stage .viewer-video-controls {
-  max-width: min(1040px, calc(100% - 32px));
-  gap: 6px;
-  padding: 10px 12px;
-  border-color: rgba(255, 255, 255, 0.14);
-  border-radius: 14px;
-  background: rgba(15, 18, 23, 0.9);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
-  transition:
-    opacity 180ms ease,
-    transform 180ms ease;
 }
 
 .video-player-stage .viewer-video-controls.is-hidden {
