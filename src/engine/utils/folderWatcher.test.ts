@@ -28,6 +28,37 @@ describe("folder change coalescing", () => {
     expect(onFlush).toHaveBeenCalledWith(["/Photos"]);
   });
 
+  test("a steady stream of events cannot postpone the flush forever", () => {
+    const onFlush = vi.fn();
+    const coalescer = createFolderChangeCoalescer(onFlush, 800, 2000);
+
+    // One event every 100 ms: each one restarts the 800 ms quiet window, so
+    // without a cap nothing would ever flush.
+    for (let index = 0; index < 20; index += 1) {
+      coalescer.push(`/Photos/${index}.jpg`);
+      vi.advanceTimersByTime(100);
+    }
+
+    expect(onFlush).toHaveBeenCalledTimes(1);
+    expect(onFlush.mock.calls[0][0]).toHaveLength(20);
+    expect(coalescer.pending()).toEqual([]);
+  });
+
+  test("a quiet burst still flushes on the trailing edge", () => {
+    const onFlush = vi.fn();
+    const coalescer = createFolderChangeCoalescer(onFlush, 800, 5000);
+
+    coalescer.push("/Photos/a.jpg");
+    vi.advanceTimersByTime(700);
+    coalescer.push("/Photos/b.jpg");
+    vi.advanceTimersByTime(799);
+    expect(onFlush).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    expect(onFlush).toHaveBeenCalledTimes(1);
+    expect(onFlush).toHaveBeenCalledWith(["/Photos/a.jpg", "/Photos/b.jpg"]);
+  });
+
   test("flush can run immediately and cancel drops pending work", () => {
     const onFlush = vi.fn();
     const coalescer = createFolderChangeCoalescer(onFlush, 800);

@@ -37,7 +37,8 @@ pub use import_pipeline::supported_extensions;
 #[allow(unused_imports)]
 pub(crate) use import_pipeline::{
     file_modified_at, import_media_file, inspect_media_file_with_metadata, is_media_file,
-    prune_missing_items, remember_folder, upsert_media_batch, LIBRARY_COUNTS_CHANGED,
+    prune_missing_items, prune_missing_items_from, remember_folder, upsert_media_batch,
+    LIBRARY_COUNTS_CHANGED,
 };
 #[allow(unused_imports)]
 pub(crate) use import_pipeline::{inspect_media_file, kind_for_ext};
@@ -74,7 +75,12 @@ pub(crate) mod repo;
 pub mod security;
 pub use dto::*;
 pub use repo::{delete_library_database, get_tags};
-pub(crate) use repo::{relink_moved_items, ALBUM_SELECT, TAG_SELECT};
+// `relink_moved_items` is the single-shot form; the scan uses the snapshot
+// variant and the tests still exercise the wrapper.
+#[allow(unused_imports)]
+pub(crate) use repo::{
+    catalog_rows_under_root, relink_moved_items, relink_moved_items_from, ALBUM_SELECT, TAG_SELECT,
+};
 // ===== Helper Functions =====
 
 pub(crate) fn get_db(catalog: &State<'_, Catalog>) -> Result<SqlitePool, CommandError> {

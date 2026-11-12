@@ -6,7 +6,7 @@ use std::path::Path;
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Manager, State};
 
-use crate::commands::{file_modified_at, now_ms, path_is_inside};
+use crate::commands::{file_modified_at, normalize_root, now_ms, path_is_inside};
 use crate::errors::CommandError;
 use crate::models::{stable_id, Tag};
 use crate::{AppState, Catalog};
@@ -59,6 +59,63 @@ fn only_unused(candidates: Option<&Vec<usize>>, used: &[bool]) -> Option<usize> 
     Some(index)
 }
 
+/// One catalog row, in the shape the incremental scan needs.
+#[derive(Debug, Clone)]
+pub(crate) struct CatalogRow {
+    pub id: String,
+    pub path: String,
+    pub size: i64,
+    pub modified_at: i64,
+    pub content_signature: Option<String>,
+}
+
+/// Half-open range covering every path inside `root`.
+///
+/// A range keeps SQLite on the `path` index; `substr(path, 1, length(?)) = ?`
+/// looks equivalent but forces a scan of the whole catalog, which is exactly
+/// what a per-root scan must avoid. The prefix always ends in `/`, so bumping
+/// that byte yields an exclusive upper bound.
+fn root_path_range(root: &str) -> (String, String) {
+    let lower = format!("{}/", normalize_root(root).trim_end_matches('/'));
+    let mut upper = lower.clone();
+    upper.pop();
+    upper.push('0');
+    (lower, upper)
+}
+
+/// The catalog rows under `root`, and nothing else.
+///
+/// A scan used to read the whole `media_items` table two or three times: once
+/// for the incremental "already known" check, once for move detection, once for
+/// pruning. All three passes only ever look at paths inside the root being
+/// walked, so the filter belongs in SQL and one load answers all three.
+pub(crate) async fn catalog_rows_under_root(
+    db: &SqlitePool,
+    root: &str,
+) -> Result<Vec<CatalogRow>, CommandError> {
+    let (lower, upper) = root_path_range(root);
+    let rows: Vec<(String, String, i64, i64, Option<String>)> = sqlx::query_as(
+        "SELECT id, path, size, modified_at, content_signature FROM media_items \
+         WHERE path >= ? AND path < ?",
+    )
+    .bind(&lower)
+    .bind(&upper)
+    .fetch_all(db)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(
+            |(id, path, size, modified_at, content_signature)| CatalogRow {
+                id,
+                path,
+                size,
+                modified_at,
+                content_signature,
+            },
+        )
+        .collect())
+}
+
 /// Keep a moved or renamed file in the same catalog row.
 ///
 /// The id is derived from the path, so otherwise a move looks like a delete plus
@@ -71,16 +128,25 @@ fn only_unused(candidates: Option<&Vec<usize>>, used: &[bool]) -> Option<usize> 
 /// Both sides must be unambiguous, so a file that was copied (a duplicate) or a
 /// fingerprint shared by several vanished rows is left alone and handled by the
 /// ordinary import/prune path.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) async fn relink_moved_items(
     db: &SqlitePool,
     root: &str,
     seen_paths: &HashSet<String>,
 ) -> Result<usize, CommandError> {
-    let existing: Vec<(String, String)> = sqlx::query_as("SELECT id, path FROM media_items")
-        .fetch_all(db)
-        .await?;
-    let existing_paths: HashSet<&str> = existing.iter().map(|(_, path)| path.as_str()).collect();
-    let existing_ids: HashSet<&str> = existing.iter().map(|(id, _)| id.as_str()).collect();
+    let catalog = catalog_rows_under_root(db, root).await?;
+    relink_moved_items_from(db, &catalog, root, seen_paths).await
+}
+
+/// [`relink_moved_items`] against an already-loaded catalog snapshot, so a scan
+/// pays for the rows once.
+pub(crate) async fn relink_moved_items_from(
+    db: &SqlitePool,
+    catalog: &[CatalogRow],
+    root: &str,
+    seen_paths: &HashSet<String>,
+) -> Result<usize, CommandError> {
+    let existing_paths: HashSet<&str> = catalog.iter().map(|row| row.path.as_str()).collect();
     let mut added: Vec<&String> = seen_paths
         .iter()
         .filter(|path| !existing_paths.contains(path.as_str()))
@@ -89,16 +155,17 @@ pub(crate) async fn relink_moved_items(
         return Ok(0);
     }
 
-    let rows: Vec<(String, String, i64, i64, Option<String>)> =
-        sqlx::query_as("SELECT id, path, size, modified_at, content_signature FROM media_items")
-            .fetch_all(db)
-            .await?;
     // Rows whose file this walk did not see are the only move candidates.
-    let vanished: Vec<(&str, i64, i64, Option<String>)> = rows
+    let vanished: Vec<(&str, i64, i64, Option<String>)> = catalog
         .iter()
-        .filter(|(_, path, _, _, _)| path_is_inside(path, root) && !seen_paths.contains(path))
-        .map(|(id, _, size, modified_at, signature)| {
-            (id.as_str(), *size, *modified_at, signature.clone())
+        .filter(|row| path_is_inside(&row.path, root) && !seen_paths.contains(&row.path))
+        .map(|row| {
+            (
+                row.id.as_str(),
+                row.size,
+                row.modified_at,
+                row.content_signature.clone(),
+            )
         })
         .collect();
     if vanished.is_empty() {
@@ -145,8 +212,14 @@ pub(crate) async fn relink_moved_items(
         let Some(index) = index else {
             continue;
         };
-        // A hash collision must not rewrite another row's key.
-        if existing_ids.contains(stable_id(new_path).as_str()) {
+        // A hash collision must not rewrite another row's key. The snapshot
+        // only holds this root's rows, so ask the catalog about the new id.
+        let new_id = stable_id(new_path);
+        let collides: Option<i64> = sqlx::query_scalar("SELECT 1 FROM media_items WHERE id = ?")
+            .bind(&new_id)
+            .fetch_optional(db)
+            .await?;
+        if collides.is_some() {
             continue;
         }
         used[index] = true;
@@ -243,4 +316,28 @@ pub async fn delete_library_database(
         let _ = tokio::fs::remove_dir_all(&thumbnails).await;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::root_path_range;
+
+    #[test]
+    fn the_root_range_covers_only_paths_inside_it() {
+        let (lower, upper) = root_path_range("/Users/dev/Pictures/");
+        assert_eq!(lower, "/Users/dev/Pictures/");
+        assert_eq!(upper, "/Users/dev/Pictures0");
+        assert!("/Users/dev/Pictures/a.jpg" >= lower.as_str());
+        assert!("/Users/dev/Pictures/a.jpg" < upper.as_str());
+        // A sibling folder that merely shares the prefix must stay outside.
+        assert!("/Users/dev/Pictures2/a.jpg" >= upper.as_str());
+    }
+
+    #[test]
+    fn the_filesystem_root_range_covers_everything() {
+        let (lower, upper) = root_path_range("/");
+        assert_eq!(lower, "/");
+        assert!("/a.jpg" >= lower.as_str());
+        assert!("/a.jpg" < upper.as_str());
+    }
 }
