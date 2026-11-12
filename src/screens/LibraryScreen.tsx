@@ -199,6 +199,25 @@ function LibraryScreen(props: LibraryScreenProps) {
   const library = useLibraryStore();
   const playingId = usePlaybackStore((state) => state.itemId);
   const isPlaying = usePlaybackStore((state) => state.playing);
+  const [copiedPathFor, setCopiedPathFor] = useState<string | null>(null);
+  const copyPathTimeoutRef = useRef<number | null>(null);
+
+  const copyItemPath = useCallback((path: string, itemId: string) => {
+    if (copyPathTimeoutRef.current) window.clearTimeout(copyPathTimeoutRef.current);
+    void navigator.clipboard.writeText(path).then(() => {
+      setCopiedPathFor(itemId);
+      copyPathTimeoutRef.current = window.setTimeout(() => {
+        setCopiedPathFor((current) => (current === itemId ? null : current));
+      }, 1500);
+    });
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (copyPathTimeoutRef.current) window.clearTimeout(copyPathTimeoutRef.current);
+    },
+    [],
+  );
   /** In sync with the top bar: starts the item, or toggles its session. */
   const toggleBackground = (item: any) => {
     if (!item) return;
@@ -451,7 +470,15 @@ function LibraryScreen(props: LibraryScreenProps) {
         className={`empty-state${albumEmpty ? " album-empty-dropzone" : ""}${albumEmpty && props.albumDragOver ? " is-dragging" : ""}`}
         style={{ gridColumn: "1/-1" }}
       >
-        <span>{albumEmpty ? <AlbumsIcon size={30} /> : <ImageOffIcon size={28} />}</span>
+        <span>
+          {albumEmpty ? (
+            <AlbumsIcon size={30} />
+          ) : props.hasItems === false ? (
+            <ImageOffIcon size={28} />
+          ) : (
+            <SearchIcon size={28} />
+          )}
+        </span>
         <b>
           {albumEmpty
             ? props.albumDragOver
@@ -466,7 +493,7 @@ function LibraryScreen(props: LibraryScreenProps) {
             ? "Drag files here or use Add Items. You can also select photos in Library and choose Add to album."
             : props.hasItems === false
               ? "Add a folder to start indexing photos and videos."
-              : "Try another filter or search."}
+              : "Nothing in this view matches your search or filters."}
         </p>
         {albumEmpty ? (
           <div className="album-empty-actions">
@@ -502,6 +529,24 @@ function LibraryScreen(props: LibraryScreenProps) {
     );
   };
 
+  // Placeholders shown while the first page for this view loads, so a fresh
+  // filter or folder never flashes the empty state. Matches the grid tile's
+  // footprint; the details layout gets a row-shaped variant.
+  const skeletonView = () => (
+    <>
+      <span className="visually-hidden" role="status">
+        Loading library…
+      </span>
+      {props.layout === "details"
+        ? Array.from({ length: 10 }, (_, index) => (
+            <span key={index} className="library-skeleton-row" aria-hidden="true" />
+          ))
+        : Array.from({ length: 12 }, (_, index) => (
+            <span key={index} className="library-skeleton-tile" aria-hidden="true" />
+          ))}
+    </>
+  );
+
   // Progressive rendering. A library can hold tens of thousands of items and
   // mounting a tile for every one makes typing, clicking and filtering janky
   // (the whole grid reconciles on each state change). Render a page at a time
@@ -527,6 +572,11 @@ function LibraryScreen(props: LibraryScreenProps) {
   const scrollKey = `${viewKey}|${props.layout}|${thumbnailSize}${props.hiddenView ? "|hidden" : ""}`;
   const scrollKeyRef = useRef(scrollKey);
   scrollKeyRef.current = scrollKey;
+  // First page for this view hasn't arrived yet: show placeholders rather
+  // than flash the "empty library" copy while the query is in flight.
+  const awaitingFirstPage = props.hiddenView
+    ? library.hiddenLoading
+    : library.loadedViewKey !== viewKey;
   const renderLimitRef = useRef(renderLimit);
   renderLimitRef.current = renderLimit;
 
@@ -1522,6 +1572,7 @@ function LibraryScreen(props: LibraryScreenProps) {
             if (props.layout === "details") {
               return (
                 <div className="gallery-grid layout-details">
+                  {renderedItems.length === 0 && (awaitingFirstPage ? skeletonView() : emptyView())}
                   {renderedItems.map((item: any) => (
                     <article
                       key={item.id}
@@ -1666,7 +1717,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                       </span>
                     </article>
                   ))}
-                  {props.items.length === 0 && emptyView()}
+                  {props.items.length === 0 && (awaitingFirstPage ? skeletonView() : emptyView())}
                 </div>
               );
             }
@@ -1674,7 +1725,9 @@ function LibraryScreen(props: LibraryScreenProps) {
               return (
                 <div className={`gallery-grid layout-timeline thumb-${thumbnailSize}`}>
                   {timelineGroups.length === 0
-                    ? emptyView()
+                    ? awaitingFirstPage
+                      ? skeletonView()
+                      : emptyView()
                     : visibleTimelineGroups.map(({ key, label, items, count, visibleItems }) => {
                         const allSelected =
                           items.length > 0 &&
@@ -2018,7 +2071,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                     style={{ height: virtualGrid.bottomSpacer }}
                   />
                 )}
-                {props.items.length === 0 && emptyView()}
+                {props.items.length === 0 && (awaitingFirstPage ? skeletonView() : emptyView())}
               </div>
             );
           })()}
@@ -2362,6 +2415,29 @@ function LibraryScreen(props: LibraryScreenProps) {
                               </span>
                             </div>
                           )}
+                          {sel.exposure && (
+                            <div className="info-row">
+                              <span className="info-label">Exposure</span>
+                              <span className="info-value">{sel.exposure}</span>
+                            </div>
+                          )}
+                          {sel.iso != null && (
+                            <div className="info-row">
+                              <span className="info-label">ISO</span>
+                              <span className="info-value">{sel.iso}</span>
+                            </div>
+                          )}
+                          {typeof sel.latitude === "number" &&
+                            typeof sel.longitude === "number" &&
+                            Number.isFinite(sel.latitude) &&
+                            Number.isFinite(sel.longitude) && (
+                              <div className="info-row">
+                                <span className="info-label">GPS</span>
+                                <span className="info-value">
+                                  {sel.latitude.toFixed(4)}, {sel.longitude.toFixed(4)}
+                                </span>
+                              </div>
+                            )}
                           {sel.capturedAt && (
                             <div className="info-row">
                               <span className="info-label">Captured</span>
@@ -2378,6 +2454,42 @@ function LibraryScreen(props: LibraryScreenProps) {
                       )}
                     </div>
                   </div>
+                  {!masked(sel) && (
+                    <div className="inspector-section">
+                      <div className="inspector-section-head">
+                        <b>File</b>
+                      </div>
+                      <div className="inspector-actions" style={{ marginTop: 0 }}>
+                        <button
+                          type="button"
+                          className="inspector-action"
+                          onClick={() => void tauri.items.revealInFinder(sel.path)}
+                          title="Show this file in Finder"
+                        >
+                          <FolderIcon size={14} />
+                          <span>Reveal in Finder</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="inspector-action"
+                          onClick={() => void tauri.items.openFile(sel.path)}
+                          title="Open in the default app"
+                        >
+                          <PlayIcon size={14} />
+                          <span>Open in default app</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="inspector-action"
+                          onClick={() => copyItemPath(sel.path, sel.id)}
+                          title="Copy the full file path"
+                        >
+                          <DetailsIcon size={14} />
+                          <span>{copiedPathFor === sel.id ? "Path copied" : "Copy path"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {!masked(sel) && (
                     <div className="inspector-tags">
                       <div className="inspector-section-head">
