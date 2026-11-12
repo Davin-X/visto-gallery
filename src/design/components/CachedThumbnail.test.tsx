@@ -30,6 +30,7 @@ afterEach(() => {
   vi.resetAllMocks();
   vi.unstubAllGlobals();
   mocks.settings.thumbnailQuality = 78;
+  mocks.settings.maxCacheSizeGB = 4;
 });
 
 describe("CachedThumbnail", () => {
@@ -87,5 +88,32 @@ describe("CachedThumbnail", () => {
     await waitFor(() =>
       expect(mocks.getThumbnail).toHaveBeenCalledWith(expect.objectContaining({ quality: 92 })),
     );
+  });
+
+  it("evicts least-recently-used thumbnails to stay within the byte budget", async () => {
+    vi.stubGlobal("IntersectionObserver", NoIntersectionObserver);
+    // A quality change clears the shared cache, keeping this test independent.
+    mocks.settings.thumbnailQuality = 84;
+    mocks.settings.maxCacheSizeGB = 3 / (1024 * 1024 * 1024); // 3 KiB
+    mocks.getThumbnail.mockImplementation(async ({ itemId }: { itemId: string }) => ({
+      // ~723 UTF-8 bytes per entry, so four entries overflow the 2.7 KiB
+      // eviction target and the oldest one must go.
+      dataUrl: `data:image/jpeg;base64,${itemId.repeat(700)}`,
+    }));
+
+    const { rerender } = render(<CachedThumbnail itemId="a" name="a.jpg" size={128} eager />);
+    await waitFor(() => expect(mocks.getThumbnail).toHaveBeenCalledTimes(1));
+
+    let expected = 1;
+    for (const id of ["b", "c", "d"]) {
+      expected += 1;
+      rerender(<CachedThumbnail itemId={id} name={`${id}.jpg`} size={128} eager />);
+      await waitFor(() => expect(mocks.getThumbnail).toHaveBeenCalledTimes(expected));
+    }
+
+    // "a" was evicted, so asking for it again refetches instead of reusing.
+    rerender(<CachedThumbnail itemId="a" name="a.jpg" size={128} eager />);
+    await waitFor(() => expect(mocks.getThumbnail).toHaveBeenCalledTimes(5));
+    expect(mocks.getThumbnail).toHaveBeenLastCalledWith(expect.objectContaining({ itemId: "a" }));
   });
 });

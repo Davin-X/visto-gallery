@@ -316,22 +316,44 @@ fn remux_sync(source: &Path, target: &Path, hevc: bool, audio: AudioPlan) -> Res
     })
 }
 
-/// Drop the oldest remuxed files until the cache fits its budget.
+/// A `.partial.mp4` older than this is a crashed remux, not one in flight.
+const CACHE_TEMP_GRACE: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
+/// Drop the oldest remuxed files until the cache fits its budget. Leftover
+/// `.partial.mp4` files from a crashed remux are swept even when the cache is
+/// under budget, so they cannot accumulate forever.
 fn prune_cache(root: &Path, max_bytes: u64) {
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
     };
+    let cutoff = std::time::SystemTime::now().checked_sub(CACHE_TEMP_GRACE);
     let mut files: Vec<(std::time::SystemTime, u64, PathBuf)> = Vec::new();
     let mut total = 0_u64;
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().and_then(|extension| extension.to_str()) != Some("mp4") {
-            continue;
-        }
         let Ok(metadata) = entry.metadata() else {
             continue;
         };
         if !metadata.is_file() {
+            continue;
+        }
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
+        if name.ends_with(".partial.mp4") {
+            let stale = cutoff.is_some_and(|cutoff| {
+                metadata
+                    .modified()
+                    .map(|modified| modified <= cutoff)
+                    .unwrap_or(false)
+            });
+            if stale {
+                let _ = std::fs::remove_file(&path);
+            }
+            continue;
+        }
+        if path.extension().and_then(|extension| extension.to_str()) != Some("mp4") {
             continue;
         }
         total += metadata.len();
@@ -762,5 +784,34 @@ mod tests {
         let path = Path::new("/tmp/movie.mkv");
         assert_eq!(cache_key(path, 10, 1), cache_key(path, 10, 1));
         assert_ne!(cache_key(path, 10, 1), cache_key(path, 10, 2));
+    }
+
+    #[test]
+    fn prune_sweeps_stale_partial_remuxes_even_under_budget() {
+        let dir = std::env::temp_dir().join(format!(
+            "visto-gallery-remux-temp-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create cache dir");
+        let cached = dir.join("cached.mp4");
+        let stale = dir.join("cached.1111.partial.mp4");
+        let fresh = dir.join("next.2222.partial.mp4");
+        std::fs::write(&cached, [0_u8; 4]).expect("write cached remux");
+        std::fs::write(&stale, [0_u8; 4]).expect("write stale partial");
+        std::fs::write(&fresh, [0_u8; 4]).expect("write fresh partial");
+        let old = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 60 * 60);
+        filetime::set_file_mtime(&stale, filetime::FileTime::from_system_time(old))
+            .expect("age the partial file");
+
+        prune_cache(&dir, 1024);
+
+        assert!(!stale.exists(), "a crashed remux is swept");
+        assert!(
+            fresh.exists(),
+            "a partial that may still be in flight stays"
+        );
+        assert!(cached.exists(), "finished remuxes are untouched");
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

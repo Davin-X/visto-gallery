@@ -994,24 +994,63 @@ fn maybe_prune_thumbnail_cache(root: PathBuf, max_bytes: u64) {
     });
 }
 
+/// A cache temp file (`.tmp.` in the name) older than this is a crashed
+/// writer's leftover, not something still in flight.
+const CACHE_TEMP_GRACE: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
+/// Cache renders are written to `<digest>.<uuid>.tmp.jpg` and renamed into
+/// place, so a crash can leave the temp behind.
+fn is_cache_temp(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.contains(".tmp."))
+}
+
 /// Remove the oldest thumbnails until the directory fits the budget.
 /// Returns (deleted_count, bytes_freed, failed_count).
+///
+/// Temp files are swept regardless of the budget: a fresh one may still be
+/// mid-write, so it is skipped (and never counted), but a stale one is
+/// removed so it cannot sit in the cache forever.
 pub(crate) fn prune_thumbnail_cache(root: &Path, max_bytes: u64) -> (usize, u64, usize) {
     let Ok(entries) = std::fs::read_dir(root) else {
         return (0, 0, 0);
     };
 
+    let cutoff = SystemTime::now().checked_sub(CACHE_TEMP_GRACE);
     let mut files = Vec::new();
     let mut total = 0_u64;
+    let mut deleted = 0;
+    let mut bytes_freed = 0_u64;
+    let mut failed = 0;
+
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().and_then(|extension| extension.to_str()) != Some("jpg") {
-            continue;
-        }
         let Ok(metadata) = entry.metadata() else {
             continue;
         };
         if !metadata.is_file() {
+            continue;
+        }
+        if is_cache_temp(&path) {
+            let stale = cutoff.is_some_and(|cutoff| {
+                metadata
+                    .modified()
+                    .map(|modified| modified <= cutoff)
+                    .unwrap_or(false)
+            });
+            if stale {
+                match std::fs::remove_file(&path) {
+                    Ok(_) => {
+                        deleted += 1;
+                        bytes_freed += metadata.len();
+                    }
+                    Err(_) => failed += 1,
+                }
+            }
+            continue;
+        }
+        if path.extension().and_then(|extension| extension.to_str()) != Some("jpg") {
             continue;
         }
         let size = metadata.len();
@@ -1021,15 +1060,11 @@ pub(crate) fn prune_thumbnail_cache(root: &Path, max_bytes: u64) -> (usize, u64,
     }
 
     if total <= max_bytes {
-        return (0, 0, 0);
+        return (deleted, bytes_freed, failed);
     }
 
     // Cache files are written once, so modified time is a good proxy for age.
     files.sort_by_key(|(_, _, modified)| *modified);
-
-    let mut deleted = 0;
-    let mut bytes_freed = 0_u64;
-    let mut failed = 0;
 
     for (path, size, _) in files {
         if total <= max_bytes {

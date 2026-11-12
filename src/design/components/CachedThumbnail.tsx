@@ -94,6 +94,9 @@ function loadThumbnail(itemId: string, size: CachedThumbnailSize): Promise<strin
         })
         .then((response: any) => {
           const url = thumbnailToDataUrl(response);
+          // Real UTF-8 bytes, not `url.length`: a data URL is ASCII so the two
+          // match for the string itself, and TextEncoder keeps this correct if
+          // a non-ASCII prefix is ever used. The budget is about bytes held.
           const byteSize = new TextEncoder().encode(url).byteLength;
           thumbnailCache.set(key, url);
           thumbnailByteSizes.set(key, byteSize);

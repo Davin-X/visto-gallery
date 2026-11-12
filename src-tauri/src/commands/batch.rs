@@ -151,6 +151,34 @@ mod thumbnail_cache_tests {
         fs::remove_dir_all(&root).ok();
     }
 
+    #[test]
+    fn prune_sweeps_stale_cache_temps_even_under_budget() {
+        let root =
+            std::env::temp_dir().join(format!("visto-gallery-thumb-temp-test-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("create cache dir");
+        let real = root.join("digest.jpg");
+        let stale = root.join("digest.1111.tmp.jpg");
+        let fresh = root.join("digest.2222.tmp.jpg");
+        fs::write(&real, [0_u8; 10]).expect("write cache file");
+        fs::write(&stale, [0_u8; 10]).expect("write stale temp");
+        fs::write(&fresh, [0_u8; 10]).expect("write fresh temp");
+        let old = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 60 * 60);
+        filetime::set_file_mtime(&stale, filetime::FileTime::from_system_time(old))
+            .expect("age the temp file");
+
+        // The budget is not exceeded: only the stale temp may be removed.
+        let (deleted, freed, failed) = prune_thumbnail_cache(&root, 1024);
+
+        assert_eq!(deleted, 1, "the crashed writer's temp is swept");
+        assert_eq!(freed, 10);
+        assert_eq!(failed, 0);
+        assert!(!stale.exists());
+        assert!(fresh.exists(), "a fresh temp may still be mid-write");
+        assert!(real.exists(), "real cache entries are untouched");
+
+        fs::remove_dir_all(&root).ok();
+    }
+
     #[tokio::test]
     async fn prune_missing_items_removes_deleted_files() {
         use super::{prune_missing_items, upsert_media_batch, MediaItem};
