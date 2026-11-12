@@ -42,6 +42,7 @@ import { searchShortcutLabel } from "../engine/utils/shortcut";
 import { useLibraryStore, libraryViewKey } from "../engine/stores/useLibraryStore";
 import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { FilterDropdown } from "../design/components/FilterDropdown";
+import SplitButton from "../design/components/SplitButton";
 import { useSettingsStore } from "../engine/stores/useSettingsStore";
 import { useThumbnailSize, useInspectorWidth } from "../engine/stores/useSettingsStore";
 import { tauri } from "../engine/commands/tauri";
@@ -1095,28 +1096,22 @@ function LibraryScreen(props: LibraryScreenProps) {
                         ))}
                       </select>
                     </label>
-                    <button
-                      className="quiet-button"
-                      type="button"
+                    <SplitButton
+                      label="Add folder"
+                      icon={FolderIcon}
                       onClick={() => props.onImportFolder?.()}
                       disabled={props.busy}
-                      title="Add folder (⌘O)"
-                      aria-label="Add folder"
-                    >
-                      <FolderIcon size={15} />
-                      <span className="btn-label">Add folder</span>
-                    </button>
-                    <button
-                      className="primary-button"
-                      type="button"
-                      onClick={() => props.onImportFiles?.()}
-                      disabled={props.busy}
-                      title="Add files (⌘I)"
-                      aria-label="Add files"
-                    >
-                      <PlusIcon size={15} />
-                      <span className="btn-label">Add files</span>
-                    </button>
+                      menuLabel="More import options"
+                      items={[
+                        {
+                          key: "files",
+                          label: "Add files…",
+                          icon: PlusIcon,
+                          title: "Add files (⌘I)",
+                          onClick: () => props.onImportFiles?.(),
+                        },
+                      ]}
+                    />
                   </>
                 )}
               </div>
@@ -1295,46 +1290,49 @@ function LibraryScreen(props: LibraryScreenProps) {
 
           <div className="filter-cluster" role="group" aria-label="Filter by media type">
             <span className="smart-label">TYPE</span>
-            {(["All", "Photos", "Videos", "RAW", "Animations", "Favorites"] as const).map((f) => {
-              // Album/collection counts must come from the full collection on
-              // screen, not the type-filtered `props.items` (selecting "Photos"
-              // in an album with no photos would zero every count).
-              const count = props.activeAlbum
-                ? filterCounts[f]
-                : f === "All"
-                  ? (props.libraryStats?.photos ?? 0) +
-                    (props.libraryStats?.videos ?? 0) +
-                    (props.libraryStats?.raws ?? 0) +
-                    (props.libraryStats?.animations ?? 0)
-                  : f === "Photos"
-                    ? (props.libraryStats?.photos ?? 0)
-                    : f === "Videos"
-                      ? (props.libraryStats?.videos ?? 0)
-                      : f === "RAW"
-                        ? (props.libraryStats?.raws ?? 0)
-                        : f === "Animations"
-                          ? (props.libraryStats?.animations ?? 0)
-                          : (props.libraryStats?.favorites ?? 0);
-              return (
-                <button
-                  key={f}
-                  type="button"
-                  aria-pressed={props.filter === f}
-                  className={`quick-filter ${props.filter === f ? "active" : ""} ${
-                    count === 0 && f !== "All" ? "is-empty" : ""
-                  }`}
-                  title={
-                    count === 0 && f !== "All"
-                      ? `No ${f === "RAW" ? "RAW files" : f.toLowerCase()} here`
-                      : undefined
-                  }
-                  onClick={() => props.onChangeFilter(f as Filter)}
-                >
-                  {f}
-                  <span className="filter-count">{count.toLocaleString()}</span>
-                </button>
-              );
-            })}
+            <div className="segmented-control" role="group" aria-label="Media type">
+              {(["All", "Photos", "Videos", "RAW", "Animations", "Favorites"] as const).map((f) => {
+                // Album/collection counts must come from the full collection on
+                // screen, not the type-filtered `props.items` (selecting "Photos"
+                // in an album with no photos would zero every count).
+                const count = props.activeAlbum
+                  ? filterCounts[f]
+                  : f === "All"
+                    ? (props.libraryStats?.photos ?? 0) +
+                      (props.libraryStats?.videos ?? 0) +
+                      (props.libraryStats?.raws ?? 0) +
+                      (props.libraryStats?.animations ?? 0)
+                    : f === "Photos"
+                      ? (props.libraryStats?.photos ?? 0)
+                      : f === "Videos"
+                        ? (props.libraryStats?.videos ?? 0)
+                        : f === "RAW"
+                          ? (props.libraryStats?.raws ?? 0)
+                          : f === "Animations"
+                            ? (props.libraryStats?.animations ?? 0)
+                            : (props.libraryStats?.favorites ?? 0);
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    aria-pressed={props.filter === f}
+                    className={`quick-filter ${props.filter === f ? "active" : ""} ${
+                      count === 0 && f !== "All" ? "is-empty" : ""
+                    }`}
+                    title={
+                      count === 0 && f !== "All"
+                        ? `No ${f === "RAW" ? "RAW files" : f.toLowerCase()} here`
+                        : undefined
+                    }
+                    onClick={() => props.onChangeFilter(f as Filter)}
+                  >
+                    {f}
+                    <span className="filter-count">{count.toLocaleString()}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <span className="filter-cluster-separator" aria-hidden="true" />
             <FilterDropdown
               minRating={props.minRating}
               colorLabelFilter={props.colorLabelFilter}
