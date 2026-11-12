@@ -3615,6 +3615,9 @@ body {
   --faint: #778394;
   --line: #e1e6ec;
   --line-strong: #cbd3dd;
+  /* Cards that lift on hover (album cards, smart-album tiles) share this, so
+     the light and dark themes each get a shadow that actually reads. */
+  --card-hover-shadow: 0 8px 24px rgba(20, 30, 45, 0.09);
   /* Accent tokens: a single accent setting drives every --blue reference in
      the UI, so the accent picker actually changes buttons, links, active
      nav, sliders and focus rings. */
@@ -3701,6 +3704,9 @@ body {
   --faint: #7d8799;
   --line: #2a3042;
   --line-strong: #353c52;
+  /* The light shadow disappears on a near-black surface, so the dark theme
+     gets a deeper one instead of the same value at low opacity. */
+  --card-hover-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
   --accent: #3b82f6;
   --blue: var(--accent);
   --accent-hover: #2563eb;

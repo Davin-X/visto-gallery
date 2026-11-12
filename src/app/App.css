@@ -4795,20 +4795,24 @@ body.is-resizing .photo-inspector {
   overflow: visible;
   border: 1px solid var(--line);
   border-radius: 13px;
-  background: var(--surface);
+  /* --surface is also the page background, so it gave the card no fill at all:
+     the card was a hairline outline around art. --surface-2 is the card step. */
+  background: var(--surface-2);
   color: var(--text);
   text-align: left;
   cursor: pointer;
   transition:
-    transform 0.15s ease,
     border-color 0.15s ease,
     box-shadow 0.15s ease;
 }
 
-.album-card:hover {
-  transform: translateY(-2px);
+/* One hover for an album card and a smart-album tile alike: the border picks up
+   the accent and the card lifts on a shadow. No translate, so the shadow is
+   never clipped by the strip's horizontal scroll container. */
+.album-card:hover,
+.smart-album-tile:hover {
   border-color: color-mix(in srgb, var(--blue) 38%, var(--line));
-  box-shadow: 0 8px 24px rgba(20, 30, 45, 0.09);
+  box-shadow: var(--card-hover-shadow);
 }
 
 .album-card:focus-visible {
@@ -4829,7 +4833,13 @@ body.is-resizing .photo-inspector {
       color-mix(in srgb, var(--blue) 13%, transparent),
       transparent 56%
     ),
-    linear-gradient(135deg, var(--surface-3), var(--surface-2));
+    /* Ends below the card fill, so the print box still reads as a recess
+       against a --surface-2 card instead of dissolving into it. */
+    linear-gradient(
+      135deg,
+      var(--surface-3),
+      color-mix(in srgb, var(--surface-3) 62%, var(--surface-2))
+    );
 }
 
 .album-cover img,
@@ -13119,12 +13129,13 @@ body.is-resizing .photo-inspector {
 }
 
 /* Smart Albums overview */
+/* The tiles are the cards here, so the group carries no chrome of its own. A
+   bordered, filled box holding bordered, filled tiles was one frame too many,
+   and it made the twelve real albums below look like loose thumbnails. The
+   heading row and the strip's top rule do the grouping. */
 .smart-albums-section {
   margin: 0 0 16px;
-  padding: 6px 12px 10px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--surface-2) 64%, transparent);
+  padding: 0;
 }
 
 .smart-albums-headrow {
@@ -13242,16 +13253,14 @@ body.is-resizing .photo-inspector {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--surface);
+  background: var(--surface-2);
   color: var(--ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
-}
-
-.smart-album-tile:hover {
-  border-color: var(--line-strong);
-  background: var(--surface-2);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .smart-album-tile:focus-visible {
