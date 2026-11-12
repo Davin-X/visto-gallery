@@ -4908,15 +4908,18 @@ body.is-resizing .photo-inspector {
 /* Hover opens the fan: the prints lift, turn a few degrees further and grow
    slightly, so the stack reads as picked up rather than dragged apart. The
    delays let the print on top move first and the ones behind follow. */
-.album-card:hover .album-stack-photo {
+.album-card:hover .album-stack-photo,
+.smart-album-tile:hover .album-stack-photo {
   transform: translate(var(--hx), var(--hy)) rotate(var(--hr)) scale(1.04);
 }
 
-.album-card .album-stack-photo:nth-child(3) {
+.album-card .album-stack-photo:nth-child(3),
+.smart-album-tile .album-stack-photo:nth-child(3) {
   transition-delay: 20ms;
 }
 
-.album-card .album-stack-photo:nth-child(1) {
+.album-card .album-stack-photo:nth-child(1),
+.smart-album-tile .album-stack-photo:nth-child(1) {
   transition-delay: 40ms;
 }
 
