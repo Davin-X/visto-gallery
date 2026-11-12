@@ -2650,21 +2650,6 @@ body.is-resizing .photo-inspector {
   background: var(--orange);
 }
 
-/* A ring means "derived": a subset of the real kinds, not a kind of its own.
-   The hue still says which kind the row counts, the shape says it is a view. */
-.kind-dot.ring {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--blue);
-}
-
-.kind-dot.video.ring {
-  box-shadow: inset 0 0 0 1.5px var(--green);
-}
-
-.kind-dot.raw.ring {
-  box-shadow: inset 0 0 0 1.5px var(--orange);
-}
-
 /* Page Heading — one shape for every screen: eyebrow, title, optional
    subtitle on the left; actions on the right. */
 .page-heading {
@@ -3821,6 +3806,27 @@ body.is-resizing .photo-inspector {
 }
 .stat-row.hidden {
   opacity: 0.6;
+}
+
+/* The stat rows used an 8px colour chip, which said nothing on its own and read
+   as an unloaded avatar. Each row now shows the glyph for what it counts: the
+   three stored kinds keep their hue, and the derived views — Animations,
+   Favorites, Uncategorized, Hidden — are neutral, because they are views of
+   those kinds rather than kinds. */
+.stat-row .stat-icon {
+  color: var(--muted);
+}
+
+.stat-row .stat-icon.is-photo {
+  color: var(--blue);
+}
+
+.stat-row .stat-icon.is-video {
+  color: var(--green);
+}
+
+.stat-row .stat-icon.is-raw {
+  color: var(--orange);
 }
 .stat-row.size {
   margin-top: 0;
