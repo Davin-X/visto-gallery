@@ -3587,36 +3587,16 @@ body.is-resizing .photo-inspector {
     width: 100%;
     position: relative;
   }
-  /* Same accent identity as .sources-entry: default / hover / open steps. */
+  /* Footprint only. How a rail item is painted belongs to the shared rail block
+     below, so the button cannot drift from the navigation again. */
   .app-body.sidebar-collapsed .sidebar-stats-button {
     display: grid;
     place-items: center;
     width: 40px;
     height: 40px;
     padding: 0;
-    border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
     border-radius: 9px;
-    background: color-mix(in srgb, var(--blue-soft) 30%, var(--surface));
-    color: var(--accent-text);
     cursor: pointer;
-    transition:
-      background 0.15s ease,
-      border-color 0.15s ease,
-      color 0.15s ease;
-  }
-  .sidebar-stats-button:hover {
-    border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
-    background: color-mix(in srgb, var(--blue-soft) 52%, var(--surface));
-    color: var(--accent-text);
-  }
-  .sidebar-stats-button[aria-expanded="true"] {
-    border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
-    background: color-mix(in srgb, var(--blue-soft) 58%, var(--surface));
-    color: var(--accent-text);
-  }
-  .sidebar-stats-button:focus-visible {
-    outline: 2px solid var(--blue);
-    outline-offset: 2px;
   }
   /* Portaled to .app-frame (see AppNavigation.tsx): fixed positioning with
      top/left set inline from the button rect. An absolute popup inside the
@@ -3658,6 +3638,63 @@ body.is-resizing .photo-inspector {
   .sidebar-stats-popup .stat-row.size .stat-value {
     color: var(--accent-text);
   }
+  /* One rail language. Every item is the same slot with a bare glyph; the box is
+     a response — hover, focus, or a state — not a permanent frame. Sources and
+     stats used to carry accent borders and tints while the navigation sat bare,
+     which made one control strip look like two kinds of control. */
+  .app-body.sidebar-collapsed .nav-item,
+  .app-body.sidebar-collapsed .sources-entry,
+  .app-body.sidebar-collapsed .sidebar-stats-button,
+  .app-body.sidebar-collapsed .sidebar-collapse-toggle,
+  .app-body.sidebar-collapsed .sidebar-back-button {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  /* Glyphs follow their item rather than carrying a colour of their own. */
+  .app-body.sidebar-collapsed .nav-icon,
+  .app-body.sidebar-collapsed .sources-entry-icon,
+  .app-body.sidebar-collapsed .sidebar-back-icon {
+    color: inherit;
+  }
+
+  .app-body.sidebar-collapsed .nav-item:hover,
+  .app-body.sidebar-collapsed .sources-entry:hover,
+  .app-body.sidebar-collapsed .sidebar-stats-button:hover,
+  .app-body.sidebar-collapsed .sidebar-collapse-toggle:hover,
+  .app-body.sidebar-collapsed .sidebar-back-button:hover {
+    border-color: var(--line);
+    background: var(--surface-3);
+    color: var(--text);
+  }
+
+  .app-body.sidebar-collapsed .nav-item:focus-visible,
+  .app-body.sidebar-collapsed .sources-entry:focus-visible,
+  .app-body.sidebar-collapsed .sidebar-stats-button:focus-visible,
+  .app-body.sidebar-collapsed .sidebar-collapse-toggle:focus-visible,
+  .app-body.sidebar-collapsed .sidebar-back-button:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+    border-color: var(--line);
+    background: var(--surface-3);
+    color: var(--text);
+  }
+
+  /* The current screen and an open panel stay obvious: those are states, and
+     they keep the accent the rail used to spend on decoration. */
+  .app-body.sidebar-collapsed .nav-item.active,
+  .app-body.sidebar-collapsed .sources-entry.open,
+  .app-body.sidebar-collapsed .sidebar-stats-button[aria-expanded="true"] {
+    border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+    background: var(--blue-soft);
+    color: var(--accent-text);
+  }
+
   /* Footer: health dot and update dot only, both pinned to the left. The
      version string fits the 64px rail in compact type, so keep it visible. */
   .app-body.sidebar-collapsed .sidebar-footer {
