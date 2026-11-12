@@ -14,6 +14,8 @@ export function ShortcutsCheatSheet({ open, onClose }: { open: boolean; onClose:
         { key: "⌘/Ctrl + Alt + I", label: "Toggle inspector" },
         { key: "⌘/Ctrl + F", label: "Focus search" },
         { key: "→ / ←", label: "Next / previous item (viewer)" },
+        { key: "Space / K", label: "Next item (viewer)" },
+        { key: "J", label: "Previous item (viewer)" },
         { key: "⌘/Ctrl + Enter", label: "Open inspected item in viewer" },
       ],
     },
@@ -25,7 +27,8 @@ export function ShortcutsCheatSheet({ open, onClose }: { open: boolean; onClose:
         { key: "1", label: "Zoom to 200%" },
         { key: "R", label: "Rotate 90°" },
         { key: "X", label: "Flip horizontally" },
-        { key: "F", label: "Favorite the current item" },
+        { key: "L", label: "Favorite the current item" },
+        { key: "F", label: "Toggle full screen" },
       ],
     },
     {
@@ -45,6 +48,12 @@ export function ShortcutsCheatSheet({ open, onClose }: { open: boolean; onClose:
       items: [
         { key: "Escape", label: "Close viewer / inspector / dialogs" },
         { key: "Space", label: "Play / pause (video)" },
+        { key: "← / →", label: "Seek ±5 seconds (video)" },
+        { key: "↑ / ↓", label: "Volume up / down (video)" },
+        { key: "J / K", label: "Previous / next video" },
+        { key: "L", label: "Favorite the playing video" },
+        { key: "M", label: "Mute / unmute (video)" },
+        { key: "F", label: "Toggle fullscreen (video)" },
       ],
     },
     {

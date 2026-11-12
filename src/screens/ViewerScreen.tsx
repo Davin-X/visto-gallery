@@ -26,9 +26,6 @@ import { draftImageStyle } from "../engine/utils/draftImage";
 import type { MediaItem } from "../engine/types/media";
 import { formatItemDate } from "../engine/utils/mediaDate";
 
-/** Whether the viewer's shortcut legend has been shown in this app session. */
-let viewerLegendSeen = false;
-
 interface ViewerScreenProps {
   active: boolean;
   items: MediaItem[];
@@ -90,9 +87,6 @@ function ViewerScreen(props: ViewerScreenProps) {
     ? String(selected.path).replace(/\\/g, "/").split("/").slice(0, -1).join("/")
     : "";
   const [hintsVisible, setHintsVisible] = useState(true);
-  // The keyboard legend is a first-time aid: shown once per app session, then
-  // left to the ⌘/ cheat sheet so it stops covering the photo on every move.
-  const [legendVisible, setLegendVisible] = useState(!viewerLegendSeen);
   const [photoLoadState, setPhotoLoadState] = useState<{
     id: string;
     status: "loading" | "loaded" | "failed";
@@ -195,15 +189,6 @@ function ViewerScreen(props: ViewerScreenProps) {
     };
   }, [props.selected?.id, flashHints]);
 
-  useEffect(() => {
-    if (!legendVisible) return;
-    const timer = window.setTimeout(() => {
-      viewerLegendSeen = true;
-      setLegendVisible(false);
-    }, 5000);
-    return () => window.clearTimeout(timer);
-  }, [legendVisible]);
-
   // Measure the real stride from the rendered strip. The CSS owns the
   // thumbnail size and gap, so a duplicated constant drifts out of step with
   // the spacers and the strip renders the wrong slice of the list.
@@ -296,7 +281,7 @@ function ViewerScreen(props: ViewerScreenProps) {
       if (!selected) return;
       if (!props.active) return;
       // Ignore if typing in an input, or if the slideshow overlay is driving.
-      if ((e.target as HTMLElement).closest("input, textarea, select")) return;
+      if (e.target instanceof HTMLElement && e.target.closest("input, textarea, select")) return;
       if (useSlideshowStore.getState().isOpen) return;
       // These are bare-key shortcuts. A ⌘/Ctrl/⌥ combination belongs to the
       // global map (⌘F focuses search, ⌘R reloads), so it must not also
@@ -338,13 +323,29 @@ function ViewerScreen(props: ViewerScreenProps) {
           e.preventDefault();
           props.onSetZoom(200);
           break;
-        case "f":
-        case "F":
+        case " ":
+        case "k":
+        case "K":
+          // Space advances, and K mirrors J below so a keyboard-first user
+          // never has to leave the home row.
+          e.preventDefault();
+          props.onNavigate(1);
+          break;
+        case "j":
+        case "J":
+          e.preventDefault();
+          props.onNavigate(-1);
+          break;
+        case "l":
+        case "L":
           e.preventDefault();
           props.onToggleFavorite(selected.id);
           break;
-        case " ":
-          return;
+        case "f":
+        case "F":
+          e.preventDefault();
+          props.onToggleFullscreen();
+          break;
       }
     };
 
@@ -677,13 +678,13 @@ function ViewerScreen(props: ViewerScreenProps) {
         </div>
         {/* Compact shortcut hints live in the stage corner so the frame keeps
             all of its room for the media and the control bar. */}
-        <div
-          className={`viewer-hints${hintsVisible && legendVisible ? "" : " hidden"}`}
-          aria-hidden="true"
-        >
+        <div className={`viewer-hints${hintsVisible ? "" : " hidden"}`} aria-hidden="true">
           <span>
             <kbd>←</kbd>
-            <kbd>→</kbd> Navigate
+            <kbd>→</kbd>
+            <kbd>J</kbd>
+            <kbd>K</kbd>
+            <kbd>Space</kbd> Navigate
           </span>
           <span>
             <kbd>↑</kbd>
@@ -704,7 +705,10 @@ function ViewerScreen(props: ViewerScreenProps) {
             </span>
           )}
           <span>
-            <kbd>F</kbd> Favorite
+            <kbd>L</kbd> Favorite
+          </span>
+          <span>
+            <kbd>F</kbd> Full screen
           </span>
           <span>
             <kbd>Esc</kbd> Close

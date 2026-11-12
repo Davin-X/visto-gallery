@@ -41,6 +41,7 @@ function VideoPlayer({
   onFullscreen,
   onNext,
   onPrevious,
+  onToggleFavorite,
   compact = false,
   forceAutoPlay = false,
 }: {
@@ -57,6 +58,8 @@ function VideoPlayer({
   compact?: boolean;
   forceAutoPlay?: boolean;
   onPrevious?: () => void;
+  /** Favorite the playing item (L / F keyboard shortcuts). */
+  onToggleFavorite?: () => void;
 }) {
   const videoAutoPlay = useSettingsStore((s) => s.videoAutoPlay);
   const videoLoop = useSettingsStore((s) => s.videoLoop);
@@ -678,6 +681,18 @@ function VideoPlayer({
         e.preventDefault();
         e.stopPropagation();
         onFullscreen?.();
+      } else if (e.key === "j" || e.key === "J") {
+        e.preventDefault();
+        e.stopPropagation();
+        onPrevious?.();
+      } else if (e.key === "k" || e.key === "K") {
+        e.preventDefault();
+        e.stopPropagation();
+        void onNext?.();
+      } else if (e.key === "l" || e.key === "L") {
+        e.preventDefault();
+        e.stopPropagation();
+        onToggleFavorite?.();
       } else if (e.key === "m" || e.key === "M") {
         e.preventDefault();
         e.stopPropagation();
@@ -686,7 +701,7 @@ function VideoPlayer({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [active, compact, onFullscreen, adjustVolume]);
+  }, [active, compact, onFullscreen, onNext, onPrevious, onToggleFavorite, adjustVolume]);
 
   useEffect(() => {
     const video = ref.current;
@@ -1113,6 +1128,10 @@ function VideoPlayer({
             aria-hidden="true"
           >
             <span>
+              <kbd>J</kbd>
+              <kbd>K</kbd> Prev / Next
+            </span>
+            <span>
               <kbd>Space</kbd> Play / pause
             </span>
             <span>
@@ -1125,6 +1144,9 @@ function VideoPlayer({
             </span>
             <span>
               <kbd>F</kbd> Full screen
+            </span>
+            <span>
+              <kbd>L</kbd> Favorite
             </span>
             <span>
               <kbd>M</kbd> Mute

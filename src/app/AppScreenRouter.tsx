@@ -311,6 +311,7 @@ export function AppScreenRouter({
         onContextMenu={(target, event) =>
           openContextMenu(buildItemContextMenu(target, itemMenuActions), event)
         }
+        onToggleFavorite={library.toggleFavorite}
       />
 
       {screen === "Edit" && (
