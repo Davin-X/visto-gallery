@@ -27,7 +27,8 @@ export function ShortcutsCheatSheet({ open, onClose }: { open: boolean; onClose:
         { key: "1", label: "Zoom to 200%" },
         { key: "R", label: "Rotate 90°" },
         { key: "X", label: "Flip horizontally" },
-        { key: "F / L", label: "Favorite the current item" },
+        { key: "L", label: "Favorite the current item" },
+        { key: "F", label: "Toggle full screen" },
       ],
     },
     {

@@ -344,7 +344,7 @@ function ViewerScreen(props: ViewerScreenProps) {
         case "f":
         case "F":
           e.preventDefault();
-          props.onToggleFavorite(selected.id);
+          props.onToggleFullscreen();
           break;
       }
     };
@@ -705,8 +705,10 @@ function ViewerScreen(props: ViewerScreenProps) {
             </span>
           )}
           <span>
-            <kbd>F</kbd>
             <kbd>L</kbd> Favorite
+          </span>
+          <span>
+            <kbd>F</kbd> Full screen
           </span>
           <span>
             <kbd>Esc</kbd> Close

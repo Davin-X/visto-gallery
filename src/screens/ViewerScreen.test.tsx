@@ -27,6 +27,7 @@ function renderPhotoViewer(
 ) {
   const onNavigate = vi.fn();
   const onToggleFavorite = vi.fn();
+  const onToggleFullscreen = vi.fn();
   const photo = makeMediaItem({
     id: "photo",
     name: "photo.jpg",
@@ -67,7 +68,7 @@ function renderPhotoViewer(
       onRotate={vi.fn()}
       onToggleFlip={vi.fn()}
       onResetTransform={vi.fn()}
-      onToggleFullscreen={vi.fn()}
+      onToggleFullscreen={onToggleFullscreen}
       onClose={vi.fn()}
       onToggleFavorite={onToggleFavorite}
       onToggleHidden={vi.fn()}
@@ -76,7 +77,7 @@ function renderPhotoViewer(
       assetUrl={(path) => path}
     />,
   );
-  return { ...result, onNavigate, onToggleFavorite };
+  return { ...result, onNavigate, onToggleFavorite, onToggleFullscreen };
 }
 
 describe("photo viewer", () => {
@@ -171,15 +172,19 @@ describe("photo viewer keyboard shortcuts", () => {
     expect(onNavigate).toHaveBeenCalledTimes(5);
   });
 
-  it("favorites the current photo with F and L", () => {
-    const { onToggleFavorite } = renderPhotoViewer("photo", 1);
+  it("favorites the current photo with L and toggles full screen with F", () => {
+    const { onToggleFavorite, onToggleFullscreen } = renderPhotoViewer("photo", 1);
+
+    fireEvent.keyDown(window, { key: "l" });
+    expect(onToggleFavorite).toHaveBeenLastCalledWith("photo");
+    expect(onToggleFavorite).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(window, { key: "F" });
+    expect(onToggleFullscreen).toHaveBeenCalledOnce();
 
     fireEvent.keyDown(window, { key: "f" });
-    expect(onToggleFavorite).toHaveBeenLastCalledWith("photo");
-
-    fireEvent.keyDown(window, { key: "L" });
-    expect(onToggleFavorite).toHaveBeenLastCalledWith("photo");
-    expect(onToggleFavorite).toHaveBeenCalledTimes(2);
+    expect(onToggleFavorite).toHaveBeenCalledTimes(1);
+    expect(onToggleFullscreen).toHaveBeenCalledTimes(2);
   });
 
   it("leaves ⌘/Ctrl/⌥ combinations alone so they are not swallowed as plain keys", () => {
