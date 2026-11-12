@@ -983,7 +983,9 @@ function VideoPlayer({
             >
               −10
             </button>
-            <span className="video-time">{formatDuration(time)}</span>
+            <span className="video-time">
+              {formatDuration(duration > 0 ? Math.min(time, duration) : time)}
+            </span>
             <input
               type="range"
               min={0}
