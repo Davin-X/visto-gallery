@@ -614,6 +614,158 @@ pub async fn open_folder(path: String) -> Result<(), CommandError> {
     Ok(())
 }
 
+/// One item the caller wants pulled out of the Trash and put back. The
+/// restore never reads from or deletes catalog rows — the caller re-imports
+/// the restored paths afterwards.
+#[derive(serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashRestoreItem {
+    /// Absolute path the file lived at before it was trashed.
+    pub path: String,
+    /// `file_name()` of the trashed entry (trash holds flat entries).
+    pub name: String,
+    /// Size in bytes; used to disambiguate same-named trash entries.
+    pub size: Option<i64>,
+}
+
+#[derive(serde::Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashRestoreFailure {
+    pub path: String,
+    pub error: String,
+}
+
+#[derive(serde::Serialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashRestoreResult {
+    pub restored: Vec<String>,
+    pub failed: Vec<TrashRestoreFailure>,
+}
+
+struct TrashEntry {
+    path: PathBuf,
+    size: u64,
+}
+
+fn list_trash_entries(trash: &std::path::Path) -> Vec<TrashEntry> {
+    let mut entries = Vec::new();
+    let Ok(dir) = std::fs::read_dir(trash) else {
+        return entries;
+    };
+    for entry in dir.flatten() {
+        let path = entry.path();
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        if !metadata.is_file() {
+            continue;
+        }
+        entries.push(TrashEntry {
+            path,
+            size: metadata.len(),
+        });
+    }
+    entries
+}
+
+/// Pick the trash entry that belongs to a restore request: exact name match,
+/// and size match when the caller knows one. A sizeless request with a single
+/// candidate is accepted; several candidates without a size are ambiguous and
+/// refuse rather than guess.
+fn select_trash_match<'a>(
+    entries: &'a [TrashEntry],
+    name: &str,
+    size: Option<i64>,
+) -> Option<&'a TrashEntry> {
+    let mut named = entries.iter().filter(|entry| {
+        entry
+            .path
+            .file_name()
+            .map(|file_name| file_name == std::ffi::OsStr::new(name))
+            .unwrap_or(false)
+    });
+    if let Some(size) = size {
+        return named.find(|entry| entry.size == size.max(0) as u64);
+    }
+    let first = named.next()?;
+    if named.next().is_some() {
+        return None; // ambiguous
+    }
+    Some(first)
+}
+
+fn move_back(entry: &std::path::Path, target: &std::path::Path) -> Result<(), CommandError> {
+    if std::fs::rename(entry, target).is_ok() {
+        return Ok(());
+    }
+    // Cross-filesystem fallback (e.g. trash on another volume).
+    std::fs::copy(entry, target)
+        .map_err(|e| CommandError::io(format!("Could not restore {}: {}", target.display(), e)))?;
+    std::fs::remove_file(entry)
+        .map_err(|e| CommandError::io(format!("Could not restore {}: {}", target.display(), e)))?;
+    Ok(())
+}
+
+/// Move items out of the user's Trash back to the paths they were trashed
+/// from. This deliberately avoids Finder automation: a plain filesystem move
+/// works no matter which sink trashed the file (Finder script or NSFileManager
+/// fallback) and it is testable without driving Finder. The caller re-imports
+/// the restored paths into the catalog afterwards.
+fn restore_from_trash(trash: &std::path::Path, items: &[TrashRestoreItem]) -> TrashRestoreResult {
+    let entries = list_trash_entries(trash);
+    let mut restored = Vec::new();
+    let mut failed = Vec::new();
+    for item in items {
+        let fail = |error: String| TrashRestoreFailure {
+            path: item.path.clone(),
+            error,
+        };
+        let target = PathBuf::from(&item.path);
+        if item.name.is_empty() || item.name.contains(std::path::MAIN_SEPARATOR) {
+            failed.push(fail("Invalid file name.".to_string()));
+            continue;
+        }
+        if let Some(parent) = target.parent() {
+            if !parent.is_dir() {
+                failed.push(fail(format!(
+                    "Folder {} no longer exists.",
+                    parent.display()
+                )));
+                continue;
+            }
+        }
+        if target.exists() {
+            // Nothing to restore — the file is already back in place.
+            restored.push(item.path.clone());
+            continue;
+        }
+        match select_trash_match(&entries, &item.name, item.size) {
+            Some(entry) => match move_back(&entry.path, &target) {
+                Ok(()) => restored.push(item.path.clone()),
+                Err(error) => failed.push(fail(error.to_string())),
+            },
+            None => failed.push(fail(format!(
+                "Could not find {} in the Trash (it may have been purged).",
+                item.name
+            ))),
+        }
+    }
+    TrashRestoreResult { restored, failed }
+}
+
+#[tauri::command]
+pub async fn restore_trashed_items(
+    items: Vec<TrashRestoreItem>,
+) -> Result<TrashRestoreResult, CommandError> {
+    // restore is deliberately not scoped to the catalog: these files are by
+    // definition the user's trashed items and going back to the original
+    // location is the only thing this function does.
+    let trash = dirs::home_dir()
+        .map(|home| home.join(".Trash"))
+        .ok_or_else(|| CommandError::io("Could not locate the Trash folder.".to_string()))?;
+    Ok(restore_from_trash(&trash, &items))
+}
+
 /// Extract EXIF metadata from a file. Reusable by the scan path and the
 /// `read_exif` command. Returns an `ExifData` with `metadata_error` set on
 /// failure instead of propagating the error.
@@ -2200,6 +2352,148 @@ mod trash_validation_tests {
         assert_eq!(resolved.get("b").map(String::as_str), Some("/tmp/b.jpg"));
         assert!(!resolved.contains_key("missing"));
         assert_eq!(resolved.len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod trash_restore_tests {
+    use super::{list_trash_entries, restore_from_trash, select_trash_match, TrashRestoreItem};
+    use std::path::{Path, PathBuf};
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("visto-trash-restore-{label}-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&path).expect("create temp dir");
+        path
+    }
+
+    fn request(path: &Path, size: Option<i64>) -> TrashRestoreItem {
+        let name = path
+            .file_name()
+            .expect("target file name")
+            .to_string_lossy()
+            .into_owned();
+        TrashRestoreItem {
+            path: path.to_string_lossy().into_owned(),
+            name,
+            size,
+        }
+    }
+
+    #[test]
+    fn select_trash_match_prefers_the_exact_name_and_size() {
+        let trash = temp_dir("match-exact");
+        let small = trash.join("photo.jpg");
+        let big = trash.join("photo.jpg.moved");
+        std::fs::write(&small, b"small").unwrap();
+        std::fs::write(&big, b"big content here").unwrap();
+
+        let entries = list_trash_entries(&trash);
+        let matched = select_trash_match(&entries, "photo.jpg", Some(5));
+        match matched {
+            Some(entry) => assert_eq!(entry.path, small, "exact name and size must win"),
+            None => panic!("exact name and size must win"),
+        }
+    }
+
+    #[test]
+    fn select_trash_match_accepts_sizeless_unique_name() {
+        let trash = temp_dir("match-sizeless");
+        let only = trash.join("only.jpg");
+        std::fs::write(&only, b"data").unwrap();
+
+        let entries = list_trash_entries(&trash);
+        assert!(select_trash_match(&entries, "only.jpg", None).is_some());
+    }
+
+    #[test]
+    fn select_trash_match_refuses_ambiguous_sizeless_requests() {
+        let entries = vec![
+            super::TrashEntry {
+                path: PathBuf::from("/trash/photo.jpg"),
+                size: 10,
+            },
+            super::TrashEntry {
+                path: PathBuf::from("/trash/photo.jpg"),
+                size: 20,
+            },
+        ];
+        assert!(select_trash_match(&entries, "photo.jpg", None).is_none());
+        assert_eq!(
+            select_trash_match(&entries, "photo.jpg", Some(20)).map(|entry| entry.size),
+            Some(20),
+            "a size that matches disambiguates the pair"
+        );
+    }
+
+    #[test]
+    fn select_trash_match_rejects_size_mismatch_and_missing_name() {
+        let trash = temp_dir("match-mismatch");
+        let entry = trash.join("photo.jpg");
+        std::fs::write(&entry, b"12345").unwrap();
+
+        let entries = list_trash_entries(&trash);
+        assert!(select_trash_match(&entries, "photo.jpg", Some(6)).is_none());
+        assert!(select_trash_match(&entries, "other.jpg", Some(5)).is_none());
+    }
+
+    #[test]
+    fn restore_from_trash_moves_the_file_back_home() {
+        let trash = temp_dir("restore-move");
+        let home = temp_dir("restore-home");
+        let trashed = trash.join("vacation.jpg");
+        std::fs::write(&trashed, b"image bytes").unwrap();
+        let target = home.join("vacation.jpg");
+
+        let result = restore_from_trash(&trash, &[request(&target, Some(11))]);
+        assert_eq!(result.restored, vec![target.to_string_lossy().into_owned()]);
+        assert!(result.failed.is_empty());
+        assert_eq!(std::fs::read(&target).unwrap(), b"image bytes");
+        assert!(!trashed.exists(), "the trash entry must be gone after a restore");
+    }
+
+    #[test]
+    fn restore_from_trash_reports_missing_files() {
+        let trash = temp_dir("restore-missing");
+        let home = temp_dir("restore-missing-home");
+        let target = home.join("gone.jpg");
+
+        let result = restore_from_trash(&trash, &[request(&target, None)]);
+        assert!(result.restored.is_empty());
+        assert_eq!(result.failed.len(), 1);
+    }
+
+    #[test]
+    fn restore_from_trash_never_overwrites_an_existing_file() {
+        let trash = temp_dir("restore-exists");
+        let home = temp_dir("restore-exists-home");
+        let trashed = trash.join("keep.jpg");
+        std::fs::write(&trashed, b"trashed bytes").unwrap();
+        let target = home.join("keep.jpg");
+        std::fs::write(&target, b"keep me").unwrap();
+
+        let result = restore_from_trash(&trash, &[request(&target, Some(13))]);
+        assert_eq!(result.restored.len(), 1, "already-present file counts as restored");
+        assert_eq!(std::fs::read(&target).unwrap(), b"keep me");
+        assert!(trashed.exists(), "the trash entry is left untouched");
+    }
+
+    #[test]
+    fn restore_from_trash_refuses_names_with_separators() {
+        let trash = temp_dir("restore-traversal");
+        let home = temp_dir("restore-traversal-home");
+        let target = home.join("nested").join("photo.jpg");
+
+        let result = restore_from_trash(
+            &trash,
+            &[TrashRestoreItem {
+                path: target.to_string_lossy().into_owned(),
+                name: "../photo.jpg".to_string(),
+                size: None,
+            }],
+        );
+        assert!(result.restored.is_empty());
+        assert_eq!(result.failed.len(), 1);
     }
 }
 

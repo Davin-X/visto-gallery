@@ -149,6 +149,24 @@ export type TrashError = { id: string,
  */
 code: ErrorCode, error: string, };
 
+export type TrashRestoreItem = { 
+/**
+ * Absolute path the file lived at before it was trashed.
+ */
+path: string, 
+/**
+ * `file_name()` of the trashed entry (trash holds flat entries).
+ */
+name: string, 
+/**
+ * Size in bytes; used to disambiguate same-named trash entries.
+ */
+size: number | null, };
+
+export type TrashRestoreFailure = { path: string, error: string, };
+
+export type TrashRestoreResult = { restored: Array<string>, failed: Array<TrashRestoreFailure>, };
+
 export type DuplicateGroup = { id: string, sha256: string, size: number, items: Array<MediaItem>, };
 
 export type SmartAlbumFilter = { kind?: "photo" | "video" | "raw", favorite?: boolean | null, query?: string | null, tags?: Array<string> | null, dateFrom?: number | null, dateTo?: number | null, sourcePath?: string | null, rating?: number | null, colorLabel?: string | null, camera?: string | null, lens?: string | null, sortBy?: "capturedAt" | "modifiedAt" | "name" | "size" | "kind", sortOrder?: "asc" | "desc", };

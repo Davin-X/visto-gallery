@@ -959,3 +959,26 @@ test("a stale hidden-page request cannot clear hiddenLoading for a newer refetch
   ]);
   delete (window as any).__TAURI_INTERNALS__;
 });
+
+describe("showNotice", () => {
+  it("carries an optional action and clears it when the notice empties", () => {
+    useLibraryStore.getState().showNotice("deleted", undefined, {
+      label: "Undo",
+      run: () => {},
+    });
+    expect(useLibraryStore.getState().noticeAction?.label).toBe("Undo");
+
+    useLibraryStore.getState().showNotice("");
+    expect(useLibraryStore.getState().noticeAction).toBeNull();
+    expect(useLibraryStore.getState().notice).toBe("");
+  });
+
+  it("drops a stale action when the next notice has none", () => {
+    useLibraryStore.getState().showNotice("first", undefined, {
+      label: "Undo",
+      run: () => {},
+    });
+    useLibraryStore.getState().showNotice("second");
+    expect(useLibraryStore.getState().noticeAction).toBeNull();
+  });
+});

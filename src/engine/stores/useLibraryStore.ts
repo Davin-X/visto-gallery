@@ -132,6 +132,8 @@ export interface LibraryState {
   notice: string | null;
   /** Code behind `notice` when it came from a failed command. */
   noticeCode: ErrorCode | null;
+  /** Optional action rendered inside the notice toast (e.g. "Undo"). */
+  noticeAction: { label: string; run: () => void } | null;
 
   // Computed
   visibleItems: MediaItem[];
@@ -236,7 +238,11 @@ export interface LibraryState {
   // Actions - UI
   setBusy: (busy: boolean) => void;
   setProgress: (progress: LibraryState["progress"]) => void;
-  showNotice: (text: string, code?: ErrorCode | null) => void;
+  showNotice: (
+    text: string,
+    code?: ErrorCode | null,
+    action?: { label: string; run: () => void },
+  ) => void;
   /** Show a failed command's message, with its code for the toast tone. */
   showErrorNotice: (error: unknown, prefix?: string) => void;
 }
@@ -504,6 +510,7 @@ export const useLibraryStore = create<LibraryState>()(
       progress: null,
       notice: null,
       noticeCode: null,
+      noticeAction: null,
 
       // Pagination
       page: 0,
@@ -1754,10 +1761,14 @@ export const useLibraryStore = create<LibraryState>()(
       // UI
       setBusy: (busy) => set({ busy, ...(busy ? {} : { canceling: false }) }),
       setProgress: (progress) => set({ progress }),
-      showNotice: (text, code = null) => {
-        set({ notice: text, noticeCode: code ?? null });
+      showNotice: (text, code = null, action) => {
+        const noticeAction = text ? (action ?? null) : null;
+        set({ notice: text, noticeCode: code ?? null, noticeAction });
         if (text) {
-          setTimeout(() => set({ notice: "", noticeCode: null }), code ? 8000 : 3600);
+          // A notice carrying an action lingers longer: it must stay reachable
+          // long enough for the user to notice the toast and undo.
+          const dwell = code ? 8000 : noticeAction ? 10000 : 3600;
+          setTimeout(() => set({ notice: "", noticeCode: null, noticeAction: null }), dwell);
         }
       },
 

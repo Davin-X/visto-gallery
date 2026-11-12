@@ -12,6 +12,7 @@ import { AlbumsIcon, FolderIcon, PlusIcon, SearchIcon } from "../design/componen
 import { SourcesManager } from "../design/components/SourcesManager";
 import { tauri } from "../engine/commands/tauri";
 import type { LibraryFolder, UpdateCheckResult } from "../engine/types/commands";
+import type { DeleteRequest } from "../engine/types/deleteRequest";
 
 type AlbumDialogMode = "create" | "rename";
 
@@ -40,6 +41,7 @@ interface AppDialogsProps {
   setDeletingAlbum: (deleting: boolean) => void;
 
   itemPendingDeleteCount: number;
+  itemPendingDeleteSummary?: string | null;
   setItemPendingDeleteCount: (count: number) => void;
 
   albumRemovePending: { albumId: string; itemIds: string[] } | null;
@@ -99,7 +101,7 @@ interface AppDialogsProps {
   removeFolderDialogRef: RefObject<HTMLDivElement | null>;
   albumInputRef: RefObject<HTMLInputElement | null>;
   albumSearchRef: RefObject<HTMLInputElement | null>;
-  itemPendingDeleteRef: MutableRefObject<string[] | null>;
+  itemPendingDeleteRef: MutableRefObject<DeleteRequest | null>;
 }
 
 function Backdrop({
@@ -614,12 +616,15 @@ function DeleteAlbumDialog({
 function DeleteItemDialog({
   open,
   count,
+  summary,
   onClose,
   onConfirm,
   dialogRef,
 }: {
   open: boolean;
   count: number;
+  /** Optional breakdown shown under the count, e.g. "2 groups · 412 MB". */
+  summary?: string | null;
   onClose: () => void;
   onConfirm: () => void;
   dialogRef: RefObject<HTMLDivElement | null>;
@@ -651,6 +656,7 @@ function DeleteItemDialog({
           </b>
           ? They will be moved to Trash.
         </p>
+        {summary ? <p className="delete-album-summary">{summary}</p> : null}
         <div className="dialog-actions">
           <button type="button" className="quiet-button" onClick={onClose}>
             Cancel
@@ -928,6 +934,7 @@ export function AppDialogs(props: AppDialogsProps) {
     deletingAlbum,
     setAlbumPendingDelete,
     itemPendingDeleteCount,
+    itemPendingDeleteSummary,
     setItemPendingDeleteCount,
     albumRemovePending,
     setAlbumRemovePending,
@@ -1042,6 +1049,7 @@ export function AppDialogs(props: AppDialogsProps) {
       <DeleteItemDialog
         open={itemPendingDeleteCount > 0}
         count={itemPendingDeleteCount}
+        summary={itemPendingDeleteSummary}
         onClose={closeItemDialog}
         onConfirm={confirmDeleteItem}
         dialogRef={deleteItemDialogRef}

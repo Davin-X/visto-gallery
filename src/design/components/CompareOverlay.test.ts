@@ -1,5 +1,12 @@
 /// <reference types="vitest/globals" />
-import { clampPan, clampZoom, describeDifferences, MAX_ZOOM, MIN_ZOOM } from "./CompareOverlay";
+import {
+  clampPan,
+  clampZoom,
+  describeDifferences,
+  selectVisibleRows,
+  MAX_ZOOM,
+  MIN_ZOOM,
+} from "./CompareOverlay";
 
 test("zoom stays inside the allowed range", () => {
   expect(clampZoom(0.2)).toBe(MIN_ZOOM);
@@ -21,4 +28,15 @@ test("difference count reads as natural English", () => {
   expect(describeDifferences(0)).toBe("Identical metadata");
   expect(describeDifferences(1)).toBe("1 field differs");
   expect(describeDifferences(3)).toBe("3 fields differ");
+});
+
+test("differences-only drops rows that match, keeps everything otherwise", () => {
+  const rows = [
+    { label: "File", differs: true },
+    { label: "Size", differs: false },
+    { label: "Camera", differs: false },
+  ];
+  expect(selectVisibleRows(rows, true).map((row) => row.label)).toEqual(["File"]);
+  expect(selectVisibleRows(rows, false)).toHaveLength(3);
+  expect(selectVisibleRows([{ label: "Camera", differs: false }], true)).toHaveLength(0);
 });

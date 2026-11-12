@@ -15,6 +15,8 @@ import DuplicatesScreen from "../screens/DuplicatesScreen";
 import { SettingsScreen } from "../design/components/SettingsScreen";
 import type { LibraryFolder, LibraryStats, ErrorCode } from "../engine/types/commands";
 import type { MediaItem } from "../engine/types/media";
+import type { DeleteRequest } from "../engine/types/deleteRequest";
+import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { Screen } from "./screen";
 import { buildItemContextMenu, type ItemMenuActions } from "../engine/utils/itemContextMenu";
 
@@ -32,8 +34,9 @@ interface AppScreenRouterProps {
   openAlbumPicker: (itemIds?: string[]) => void;
   openContextMenu: (items: any[], e: React.MouseEvent) => void;
   searchInputRef: RefObject<HTMLInputElement | null>;
-  itemPendingDeleteRef: MutableRefObject<string[] | null>;
+  itemPendingDeleteRef: MutableRefObject<DeleteRequest | null>;
   setItemPendingDeleteCount: (count: number) => void;
+  setItemPendingDeleteSummary: (summary: string | null) => void;
   setFolderPendingRemove: (folder: LibraryFolder | null) => void;
   setRemoveAllSourcesDialogOpen: (open: boolean) => void;
   rescanSources: () => Promise<void>;
@@ -86,6 +89,7 @@ export function AppScreenRouter({
   searchInputRef,
   itemPendingDeleteRef,
   setItemPendingDeleteCount,
+  setItemPendingDeleteSummary,
   setFolderPendingRemove,
   setRemoveAllSourcesDialogOpen,
   rescanSources,
@@ -141,8 +145,9 @@ export function AppScreenRouter({
     onSetColorLabel: library.setColorLabelForIds,
     onToggleHidden: library.toggleHidden,
     onRequestDelete: (ids) => {
-      itemPendingDeleteRef.current = ids;
+      itemPendingDeleteRef.current = { ids };
       setItemPendingDeleteCount(ids.length);
+      setItemPendingDeleteSummary(null);
     },
   };
   return (
@@ -198,8 +203,9 @@ export function AppScreenRouter({
           onUpdateTags={library.updateItemTags}
           onDeleteItems={library.deleteItems}
           onRequestDeleteItems={(ids: string[]) => {
-            itemPendingDeleteRef.current = ids;
+            itemPendingDeleteRef.current = { ids };
             setItemPendingDeleteCount(ids.length);
+            setItemPendingDeleteSummary(null);
           }}
           onRequestRemoveFromAlbum={(albumId: string, itemIds: string[]) =>
             setAlbumRemovePending({ albumId, itemIds })
@@ -484,8 +490,9 @@ export function AppScreenRouter({
           onCreateAlbum={openAlbumDialog}
           onOpenAlbumPicker={(itemIds?: string[]) => openAlbumPicker(itemIds)}
           onRequestDeleteItems={(ids: string[]) => {
-            itemPendingDeleteRef.current = ids;
+            itemPendingDeleteRef.current = { ids };
             setItemPendingDeleteCount(ids.length);
+            setItemPendingDeleteSummary(null);
           }}
           onOpenEdit={async (item: any) => {
             if (item?.kind === "video") {
@@ -512,8 +519,31 @@ export function AppScreenRouter({
           progress={library.progress ?? null}
           assetUrl={assetUrl}
           onRequestDeleteItems={(ids: string[]) => {
-            itemPendingDeleteRef.current = ids;
+            // Gather what the confirmation needs to say *what* is going
+            // away, and what an undo would need to put the files back.
+            const idSet = new Set(ids);
+            const groups = (library.duplicates ?? []) as Array<{
+              items?: MediaItem[];
+            }>;
+            const itemById = new Map<string, MediaItem>();
+            for (const group of groups) {
+              for (const item of group.items ?? []) itemById.set(item.id, item);
+            }
+            const undoItems = ids
+              .map((id) => itemById.get(id))
+              .filter((item): item is MediaItem => item != null);
+            const reclaimable = undoItems.reduce((total, item) => total + (item.size || 0), 0);
+            const affectedGroups = groups.filter((group) =>
+              (group.items ?? []).some((item) => idSet.has(item.id)),
+            ).length;
+            const summary = `${affectedGroups} group${
+              affectedGroups === 1 ? "" : "s"
+            } · ${ids.length} file${ids.length === 1 ? "" : "s"} · ${formatBytesSimple(
+              reclaimable,
+            )} reclaimable`;
+            itemPendingDeleteRef.current = { ids, undoItems, summary };
             setItemPendingDeleteCount(ids.length);
+            setItemPendingDeleteSummary(summary);
           }}
           onHideIds={async (ids: string[]) => {
             if (!ids.length) return;

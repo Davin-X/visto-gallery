@@ -22,7 +22,8 @@ mod tests {
         LibraryStats, MediaProbe, PartialSettings, PlaybackStrategy, PreparedPlayback,
         RenderRequest, RestoreResult, RootPathMappingPreview, RootPathMappingResult, ScanResult,
         SmartAlbum, SmartAlbumFilter, StartupView, ThumbnailRequest, ThumbnailResponse,
-        ThumbnailSize, TrashError, TrashResult, UpdateCheck, ViewerZoomBehavior,
+        ThumbnailSize, TrashError, TrashRestoreFailure, TrashRestoreItem, TrashRestoreResult,
+        TrashResult, UpdateCheck, ViewerZoomBehavior,
     };
     use crate::errors::{CommandError, ErrorCode};
     use crate::media_kind::MediaKind;
@@ -85,6 +86,9 @@ mod tests {
             BatchExportError,
             TrashResult,
             TrashError,
+            TrashRestoreItem,
+            TrashRestoreFailure,
+            TrashRestoreResult,
             DuplicateGroup,
             SmartAlbumFilter,
             SmartAlbum,
