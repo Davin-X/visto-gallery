@@ -1,7 +1,6 @@
 import React from "react";
 import { AlbumsIcon, PlusIcon } from "../design/components/icons";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
-import { MiddleTruncate } from "../design/components/MiddleTruncate";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
 import type { Album, MediaItem } from "../engine/types/media";
 import type { SmartAlbum } from "../engine/types/commands";
@@ -37,16 +36,19 @@ function AlbumMeta({
   name,
   count,
 }: {
-  /** A stored album's accent. Smart albums have none: they are a saved filter,
-   *  not an object with an identity, so the slot shows an empty ring. */
+  /** A stored album's accent. Smart albums have none — they are a saved filter,
+   *  not an object with an identity — so they show no dot rather than a hollow
+   *  one, which read as a missing image. */
   color?: string;
   name: string;
   count: string;
 }) {
   return (
     <span className="album-meta">
-      <i className={color ? `album-dot ${color}` : "album-dot album-dot-ring"} aria-hidden="true" />
-      <MiddleTruncate className="album-meta-name" text={name} tailLength={6} />
+      {color && <i className={`album-dot ${color}`} aria-hidden="true" />}
+      <span className="album-meta-name" title={name}>
+        {name}
+      </span>
       <span className="album-meta-count">{count}</span>
     </span>
   );

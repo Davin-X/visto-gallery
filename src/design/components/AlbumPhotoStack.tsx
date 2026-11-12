@@ -8,16 +8,19 @@ import { draftImageStyle } from "../../engine/utils/draftImage";
 function albumStackPose(count: number, index: number) {
   const poses =
     count === 1
-      ? [{ x: -2, y: 0, r: -3, hx: -3, hy: -1, hr: -4 }]
+      ? [{ x: -2, y: 0, r: -3, hx: -3, hy: -3, hr: -4 }]
       : count === 2
         ? [
-            { x: -9, y: 5, r: -8, hx: -14, hy: 7, hr: -11 },
-            { x: 8, y: -2, r: 7, hx: 13, hy: -4, hr: 10 },
+            { x: -9, y: 5, r: -8, hx: -11, hy: 1, hr: -11 },
+            { x: 8, y: -2, r: 7, hx: 10, hy: -8, hr: 10 },
           ]
         : [
-            { x: -16, y: 8, r: -11, hx: -24, hy: 12, hr: -15 },
-            { x: 0, y: -4, r: -1, hx: 0, hy: -7, hr: -2 },
-            { x: 16, y: 7, r: 10, hx: 24, hy: 11, hr: 14 },
+            // Hover lifts the prints and turns them a few degrees further
+            // rather than dragging them sideways: the old offsets slid the
+            // outer two past the cover edge, where the crop cut them off.
+            { x: -16, y: 8, r: -11, hx: -18, hy: 1, hr: -15 },
+            { x: 0, y: -4, r: -1, hx: 0, hy: -10, hr: -2 },
+            { x: 16, y: 7, r: 10, hx: 18, hy: 0, hr: 14 },
           ];
   return poses[index] || poses[0];
 }
