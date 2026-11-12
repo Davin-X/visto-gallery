@@ -274,15 +274,14 @@ async fn copy_table(
     table: &str,
     columns: &[&str],
 ) -> Result<(), CommandError> {
-    let present: std::collections::HashSet<String> = sqlx::query_scalar::<_, String>(
-        "SELECT name FROM restore_src.pragma_table_info(?)",
-    )
-    .bind(table)
-    .fetch_all(&mut **tx)
-    .await
-    .map_err(|e| CommandError::database(format!("Could not read {table}'s schema: {e}")))?
-    .into_iter()
-    .collect();
+    let present: std::collections::HashSet<String> =
+        sqlx::query_scalar::<_, String>("SELECT name FROM restore_src.pragma_table_info(?)")
+            .bind(table)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(|e| CommandError::database(format!("Could not read {table}'s schema: {e}")))?
+            .into_iter()
+            .collect();
     let kept: Vec<String> = columns
         .iter()
         .filter(|column| present.contains(**column))
