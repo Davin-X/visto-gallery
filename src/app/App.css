@@ -4054,7 +4054,10 @@ body.is-resizing .photo-inspector {
   padding: 12px 16px 14px;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 80px);
+  /* Fill the pane rather than guessing the chrome height: the old
+     100vh - 80px was 26px short of .main-content, which left a dead band under
+     the filmstrip and cost the stage that much picture. */
+  height: 100%;
   min-height: 0;
   box-sizing: border-box;
   position: relative;
