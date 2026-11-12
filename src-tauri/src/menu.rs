@@ -13,6 +13,8 @@ const MENU_EVENTS: &[(&str, &str)] = &[
     ("view_zoom_out", "menu-zoom-out"),
     ("help_about", "menu-about"),
     ("help_check_updates", "menu-check-updates"),
+    ("help_shortcuts", "menu-shortcuts"),
+    ("file_settings", "menu-settings"),
 ];
 
 /// The window event a menu item id maps to, when there is one.
@@ -40,11 +42,6 @@ pub fn dispatch_menu_event(app: &AppHandle, id: &str) -> bool {
 
 pub fn create_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     // File menu
-    let new_window = MenuItemBuilder::new("New Window")
-        .id("file_new_window")
-        .accelerator("CmdOrCtrl+N")
-        .build(app)?;
-
     let open_folder = MenuItemBuilder::new("Open Folder…")
         .id("file_open_folder")
         .accelerator("CmdOrCtrl+O")
@@ -60,6 +57,11 @@ pub fn create_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         .accelerator("CmdOrCtrl+E")
         .build(app)?;
 
+    let settings = MenuItemBuilder::new("Settings…")
+        .id("file_settings")
+        .accelerator("CmdOrCtrl+,")
+        .build(app)?;
+
     let close_window = MenuItemBuilder::new("Close Window")
         .id("file_close_window")
         .accelerator("CmdOrCtrl+W")
@@ -72,11 +74,12 @@ pub fn create_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
 
     let file_menu = SubmenuBuilder::new(app, "File")
         .items(&[
-            &new_window,
             &open_folder,
             &import_files,
             &PredefinedMenuItem::separator(app)?,
             &export,
+            &PredefinedMenuItem::separator(app)?,
+            &settings,
             &PredefinedMenuItem::separator(app)?,
             &close_window,
             &PredefinedMenuItem::separator(app)?,
@@ -105,7 +108,8 @@ pub fn create_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         ])
         .build()?;
 
-    // View menu
+    // View menu. Full Screen uses muda's predefined item so the entry toggles
+    // both ways instead of only entering fullscreen.
     let toggle_sidebar = MenuItemBuilder::new("Toggle Sidebar")
         .id("view_toggle_sidebar")
         .accelerator("CmdOrCtrl+\\")
@@ -126,10 +130,7 @@ pub fn create_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         .accelerator("CmdOrCtrl+-")
         .build(app)?;
 
-    let fullscreen = MenuItemBuilder::new("Enter Full Screen")
-        .id("view_fullscreen")
-        .accelerator("Ctrl+Cmd+F")
-        .build(app)?;
+    let fullscreen = PredefinedMenuItem::fullscreen(app, Some("Toggle Full Screen"))?;
 
     let view_menu = SubmenuBuilder::new(app, "View")
         .items(&[
@@ -143,15 +144,20 @@ pub fn create_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         ])
         .build()?;
 
-    // Window menu
+    // Window menu. Zoom uses muda's predefined maximize toggle so the item
+    // does something (the custom "Zoom" had no handler and did nothing).
     let minimize = PredefinedMenuItem::minimize(app, None)?;
-    let zoom = MenuItemBuilder::new("Zoom").id("window_zoom").build(app)?;
+    let zoom = PredefinedMenuItem::maximize(app, Some("Zoom"))?;
 
     let window_menu = SubmenuBuilder::new(app, "Window")
         .items(&[&minimize, &zoom, &PredefinedMenuItem::separator(app)?])
         .build()?;
 
     // Help menu
+    let shortcuts = MenuItemBuilder::new("Keyboard Shortcuts…")
+        .id("help_shortcuts")
+        .build(app)?;
+
     let about = MenuItemBuilder::new("About VistoGallery")
         .id("help_about")
         .build(app)?;
@@ -161,7 +167,13 @@ pub fn create_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         .build(app)?;
 
     let help_menu = SubmenuBuilder::new(app, "Help")
-        .items(&[&about, &PredefinedMenuItem::separator(app)?, &check_updates])
+        .items(&[
+            &shortcuts,
+            &PredefinedMenuItem::separator(app)?,
+            &about,
+            &PredefinedMenuItem::separator(app)?,
+            &check_updates,
+        ])
         .build()?;
 
     MenuBuilder::new(app)
@@ -180,6 +192,8 @@ mod tests {
             menu_event_for_id("help_check_updates"),
             Some("menu-check-updates")
         );
+        assert_eq!(menu_event_for_id("help_shortcuts"), Some("menu-shortcuts"));
+        assert_eq!(menu_event_for_id("file_settings"), Some("menu-settings"));
     }
 
     #[test]

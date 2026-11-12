@@ -14,6 +14,8 @@ function handlers() {
     zoomOut: vi.fn(),
     showAbout: vi.fn(),
     checkUpdates: vi.fn(),
+    showSettings: vi.fn(),
+    showShortcuts: vi.fn(),
   };
 }
 
@@ -24,6 +26,15 @@ describe("native menu dispatch", () => {
     expect(actions.exportToBatch).toHaveBeenCalledTimes(1);
     expect(actions.importFolder).not.toHaveBeenCalled();
     expect(actions.importFiles).not.toHaveBeenCalled();
+  });
+
+  test("File > Settings… and Help > Keyboard Shortcuts… reach their actions", () => {
+    const actions = handlers();
+    expect(dispatchNativeMenuEvent("menu-settings", actions)).toBe(true);
+    expect(actions.showSettings).toHaveBeenCalledTimes(1);
+
+    expect(dispatchNativeMenuEvent("menu-shortcuts", actions)).toBe(true);
+    expect(actions.showShortcuts).toHaveBeenCalledTimes(1);
   });
 
   test("unknown events are ignored for forward compatibility", () => {
