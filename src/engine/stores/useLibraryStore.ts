@@ -243,6 +243,13 @@ export interface LibraryState {
 
 // Load generation and query debounce are per-app (not per-store-instance).
 let libraryLoadGeneration = 0;
+// Request tickets for paged loads. A filter reload resets `loadingNextPage`,
+// so a continuation request that was already in flight when that happened
+// could finish later and clear the flag a newer request had just set — which
+// lets the same cursor be fetched twice. A response may only touch shared
+// paging state while it is still the newest request of its kind.
+let nextPageRequestId = 0;
+let nextHiddenRequestId = 0;
 let queryReloadTimer: ReturnType<typeof setTimeout> | null = null;
 // Debounce for free-text camera/lens filters so typing doesn't reload the
 // library on every keystroke. State updates stay immediate; only the IPC
@@ -647,6 +654,12 @@ export const useLibraryStore = create<LibraryState>()(
       // here, continuation pages via loadMoreHiddenItems.
       loadHiddenItems: async () => {
         const generation = libraryLoadGeneration;
+        const requestId = ++nextHiddenRequestId;
+        const isCurrent = () =>
+          generation === libraryLoadGeneration && requestId === nextHiddenRequestId;
+        const releaseIfOwner = () => {
+          if (requestId === nextHiddenRequestId) set({ hiddenLoading: false });
+        };
         const isTauri =
           typeof window !== "undefined" &&
           ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
@@ -659,7 +672,10 @@ export const useLibraryStore = create<LibraryState>()(
           const pageResult = await tauri.library.getHiddenItems({
             limit: HIDDEN_PAGE_SIZE,
           });
-          if (generation !== libraryLoadGeneration) return;
+          if (!isCurrent()) {
+            releaseIfOwner();
+            return;
+          }
           const page = normalizePageResult(pageResult);
           set({
             hiddenItems: page.items,
@@ -669,7 +685,10 @@ export const useLibraryStore = create<LibraryState>()(
             hiddenLoading: false,
           });
         } catch (e) {
-          if (generation !== libraryLoadGeneration) return;
+          if (!isCurrent()) {
+            releaseIfOwner();
+            return;
+          }
           if (import.meta.env.DEV) console.error("loadHiddenItems failed:", e);
           set({
             hiddenItems: [],
@@ -687,14 +706,16 @@ export const useLibraryStore = create<LibraryState>()(
         const cursor = state.hiddenCursor;
         if (!cursor) return;
         const generation = libraryLoadGeneration;
+        const requestId = ++nextHiddenRequestId;
         set({ hiddenLoading: true });
         try {
           const pageResult = await tauri.library.getHiddenItems({
             limit: HIDDEN_PAGE_SIZE,
             cursor,
           });
-          if (generation !== libraryLoadGeneration) {
-            set({ hiddenLoading: false });
+          if (generation !== libraryLoadGeneration || requestId !== nextHiddenRequestId) {
+            // A newer hidden request owns the list and the loading flag.
+            if (requestId === nextHiddenRequestId) set({ hiddenLoading: false });
             return;
           }
           const page = normalizePageResult(pageResult);
@@ -710,11 +731,8 @@ export const useLibraryStore = create<LibraryState>()(
             };
           });
         } catch (error) {
-          if (generation !== libraryLoadGeneration) {
-            set({ hiddenLoading: false });
-            return;
-          }
-          set({ hiddenLoading: false });
+          if (requestId === nextHiddenRequestId) set({ hiddenLoading: false });
+          if (generation !== libraryLoadGeneration || requestId !== nextHiddenRequestId) return;
           get().showErrorNotice(error, "Failed to load more hidden items");
         }
       },
@@ -727,6 +745,7 @@ export const useLibraryStore = create<LibraryState>()(
         if (state.busy || state.loadingNextPage || !state.hasMore || !state.nextCursor) return;
         const cursor = state.nextCursor;
         const generation = libraryLoadGeneration;
+        const requestId = ++nextPageRequestId;
         // Fetch continuation pages quietly. Marking the whole library busy here
         // would disable controls and show a misleading cancellable scan toast
         // every time the user reaches the bottom of the grid.
@@ -737,11 +756,12 @@ export const useLibraryStore = create<LibraryState>()(
             limit: state.pageSize,
             cursor,
           });
-          if (generation !== libraryLoadGeneration) {
+          if (generation !== libraryLoadGeneration || requestId !== nextPageRequestId) {
             // A filter/sort reload superseded this continuation request. Do
             // not leave the quiet paging guard stuck on if the old request
-            // happens to finish after the replacement load.
-            set({ loadingNextPage: false });
+            // happens to finish after the replacement load, and do not clear
+            // it when a newer page request now owns it.
+            if (requestId === nextPageRequestId) set({ loadingNextPage: false });
             return;
           }
           const page = normalizePageResult(pageResult);
@@ -759,11 +779,8 @@ export const useLibraryStore = create<LibraryState>()(
           });
           get().refreshDerived();
         } catch (error) {
-          if (generation !== libraryLoadGeneration) {
-            set({ loadingNextPage: false });
-            return;
-          }
-          set({ loadingNextPage: false });
+          if (requestId === nextPageRequestId) set({ loadingNextPage: false });
+          if (generation !== libraryLoadGeneration || requestId !== nextPageRequestId) return;
           get().showErrorNotice(error, "Failed to load more items");
         }
       },

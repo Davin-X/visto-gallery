@@ -9,17 +9,21 @@ use std::sync::Arc;
 use tauri::{Emitter, State, Window};
 
 #[tauri::command]
-pub async fn cancel_find_duplicates() -> Result<(), CommandError> {
-    super::DUPLICATE_CANCEL.store(true, Ordering::SeqCst);
+pub async fn cancel_find_duplicates(state: State<'_, crate::AppState>) -> Result<(), CommandError> {
+    state.duplicate_cancel.cancel_all();
     Ok(())
 }
 
 #[tauri::command]
 pub async fn find_duplicates(
     catalog: State<'_, crate::Catalog>,
+    state: State<'_, crate::AppState>,
     window: Window,
 ) -> Result<Vec<DuplicateGroup>, CommandError> {
-    super::DUPLICATE_CANCEL.store(false, Ordering::SeqCst);
+    // This scan's own flag: another duplicate scan cannot clear it, and a
+    // Cancel only reaches the scans that were running when it arrived.
+    let cancel = state.duplicate_cancel.start();
+    let cancel_flag = cancel.flag();
     let db = super::get_db(&catalog)?;
 
     // Load the catalog (hidden items included — a duplicate doesn't stop being
@@ -60,7 +64,7 @@ pub async fn find_duplicates(
     let mut quick_prefixes: HashMap<usize, Vec<u8>> = HashMap::new();
     const FINGERPRINT_BATCH: usize = 50;
     for chunk in candidates.chunks(FINGERPRINT_BATCH) {
-        if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
+        if cancel.is_cancelled() {
             break;
         }
         // Process batch in blocking pool to avoid blocking executor
@@ -133,7 +137,7 @@ pub async fn find_duplicates(
     let mut last_emit = std::time::Instant::now();
 
     for &index in &full_hash_candidates {
-        if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
+        if cancel.is_cancelled() {
             break;
         }
         let path = items[index].path.clone();
@@ -145,6 +149,7 @@ pub async fn find_duplicates(
         let shared_bytes = bytes_completed.clone();
         let prefix = prefixes.get(&index).cloned();
 
+        let hash_flag = cancel_flag.clone();
         let hash = tokio::task::spawn_blocking(move || {
             hash_file_content(
                 path,
@@ -156,13 +161,14 @@ pub async fn find_duplicates(
                 window_clone,
                 prefix,
                 shared_bytes,
+                hash_flag,
             )
         })
         .await
         .ok()
         .flatten();
 
-        if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
+        if cancel.is_cancelled() {
             break;
         }
         processed += 1;
@@ -269,6 +275,7 @@ fn hash_file_content(
     window: Window,
     prefix: Option<Vec<u8>>,
     shared_bytes: Arc<AtomicU64>,
+    cancel: Arc<std::sync::atomic::AtomicBool>,
 ) -> Option<String> {
     let mut file = match std::fs::File::open(&path) {
         Ok(f) => f,
@@ -291,7 +298,7 @@ fn hash_file_content(
     let mut last_reported_at = std::time::Instant::now();
 
     loop {
-        if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
+        if cancel.load(Ordering::SeqCst) {
             return None;
         }
         let n = match file.read(&mut buf) {
@@ -330,7 +337,7 @@ fn hash_file_content(
         }
     }
 
-    if super::DUPLICATE_CANCEL.load(Ordering::SeqCst) {
+    if cancel.load(Ordering::SeqCst) {
         return None;
     }
 

@@ -55,6 +55,10 @@ pub(crate) struct AppState {
     pub(crate) grants: commands::GrantedPaths,
     /// Per-operation cancel flags and per-root locks for scans and imports.
     pub(crate) scan_jobs: commands::ScanJobs,
+    /// Per-invocation cancel flags for long operations that are not scans.
+    pub(crate) trash_cancel: commands::CancelGroup,
+    pub(crate) batch_cancel: commands::CancelGroup,
+    pub(crate) duplicate_cancel: commands::CancelGroup,
 }
 
 impl Default for AppState {
@@ -63,6 +67,9 @@ impl Default for AppState {
             watchers: Mutex::new(HashMap::new()),
             grants: commands::GrantedPaths::default(),
             scan_jobs: commands::ScanJobs::default(),
+            trash_cancel: commands::CancelGroup::default(),
+            batch_cancel: commands::CancelGroup::default(),
+            duplicate_cancel: commands::CancelGroup::default(),
         }
     }
 }

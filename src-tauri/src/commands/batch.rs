@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
-pub async fn cancel_batch_export() -> Result<(), CommandError> {
-    super::BATCH_CANCEL.store(true, Ordering::SeqCst);
+pub async fn cancel_batch_export(state: State<'_, crate::AppState>) -> Result<(), CommandError> {
+    state.batch_cancel.cancel_all();
     Ok(())
 }
 
@@ -859,6 +859,70 @@ mod batch_export_tests {
     }
 
     #[test]
+    fn cancel_stops_an_export_between_items_and_only_for_that_run() {
+        let folder = temp_dir("cancel");
+        let mut items = Vec::new();
+        for (index, name) in ["a", "b", "c"].iter().enumerate() {
+            let source = folder.join(format!("{name}.png"));
+            image::RgbaImage::from_pixel(20, 10, image::Rgba([90, 30, 40, 255]))
+                .save(&source)
+                .expect("write source image");
+            items.push(BatchExportItem {
+                id: format!("item-{index}"),
+                source_path: source.to_string_lossy().to_string(),
+                index: index as u32,
+                kind: Some(crate::media_kind::MediaKind::Photo),
+                date: Some(1_710_000_000_000),
+            });
+        }
+        let request = test_request(items, &folder, "jpeg");
+
+        // Cancel arrives while the first item is being reported.
+        let cancelled_flag = std::sync::atomic::AtomicBool::new(false);
+        let mut seen = Vec::new();
+        let (outputs, failed, cancelled) = run_batch_export(
+            &request.items,
+            &request,
+            &folder,
+            85,
+            &cancelled_flag,
+            |processed, label| {
+                seen.push((processed, label.to_string()));
+                if processed == 1 {
+                    cancelled_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+            },
+        );
+
+        assert!(cancelled, "the run must report that it stopped early");
+        assert_eq!(seen, vec![(1, "a.png".to_string())]);
+        assert_eq!(outputs.len(), 1, "items after the cancel are not exported");
+        assert!(failed.is_empty());
+        assert!(folder.join("a_001.jpg").exists());
+        assert!(
+            !folder.join("b_002.jpg").exists(),
+            "the cancelled run must not write the second item"
+        );
+
+        // A second export owns its own flag and is unaffected by the cancel.
+        let fresh_flag = std::sync::atomic::AtomicBool::new(false);
+        let (outputs, failed, cancelled) = run_batch_export(
+            &request.items,
+            &request,
+            &folder,
+            85,
+            &fresh_flag,
+            |_, _| {},
+        );
+
+        assert!(!cancelled);
+        assert!(failed.is_empty());
+        assert_eq!(outputs.len(), 3, "every item is exported");
+
+        std::fs::remove_dir_all(&folder).ok();
+    }
+
+    #[test]
     fn copies_untouched_source_format() {
         let folder = temp_dir("copy");
         let source = folder.join("clip.mp4");
@@ -1043,14 +1107,58 @@ fn resolve_batch_items(
     (kept, rejected)
 }
 
+/// Run the export loop with the caller's cancel flag and progress sink.
+///
+/// Kept out of the command body so a test can prove that Cancel stops a run
+/// between items without needing a Tauri app handle.
+fn run_batch_export(
+    items: &[BatchExportItem],
+    request: &BatchExportRequest,
+    folder: &Path,
+    quality: u8,
+    cancel: &std::sync::atomic::AtomicBool,
+    mut progress: impl FnMut(usize, &str),
+) -> (Vec<String>, Vec<BatchExportError>, bool) {
+    let mut outputs: Vec<String> = Vec::new();
+    let mut failed: Vec<BatchExportError> = Vec::new();
+    let mut used_names: HashSet<String> = HashSet::new();
+
+    for (position, item) in items.iter().enumerate() {
+        if cancel.load(Ordering::SeqCst) {
+            return (outputs, failed, true);
+        }
+
+        let label = Path::new(&item.source_path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(&item.source_path)
+            .to_string();
+
+        match export_batch_item(item, request, folder, quality, &mut used_names) {
+            Ok(path) => outputs.push(path.to_string_lossy().to_string()),
+            Err(error) => failed.push(BatchExportError {
+                item_id: item.id.clone(),
+                code: error.code,
+                error: error.message,
+            }),
+        }
+
+        progress(position + 1, &label);
+    }
+
+    (outputs, failed, false)
+}
+
 #[tauri::command]
 pub async fn batch_export(
     app: tauri::AppHandle,
     mut request: BatchExportRequest,
     catalog: State<'_, crate::Catalog>,
+    state: State<'_, crate::AppState>,
 ) -> Result<BatchExportResult, CommandError> {
-    // A new run always starts un-cancelled.
-    super::BATCH_CANCEL.store(false, Ordering::SeqCst);
+    // This run's own flag: a new export cannot clear another export's Cancel.
+    let cancel = state.batch_cancel.start();
+    let cancel_flag = cancel.flag();
 
     if request.items.is_empty() {
         return Err(CommandError::invalid(
@@ -1085,7 +1193,8 @@ pub async fn batch_export(
         .map(|row| (row.get("id"), row.get("path")))
         .collect();
 
-    let (items, failed) = resolve_batch_items(std::mem::take(&mut request.items), &catalog_paths);
+    let (items, mut failed) =
+        resolve_batch_items(std::mem::take(&mut request.items), &catalog_paths);
     request.items = items;
 
     let total = request.items.len() as u32;
@@ -1100,42 +1209,25 @@ pub async fn batch_export(
 
     // Decoding and encoding are CPU/disk bound; keep them off the async runtime.
     tauri::async_runtime::spawn_blocking(move || {
-        let mut outputs: Vec<String> = Vec::new();
-        let mut failed = failed;
-        let mut used_names: HashSet<String> = HashSet::new();
         let quality = (request.quality * 100.0).round().clamp(1.0, 100.0) as u8;
-        let mut cancelled = false;
-
-        for (position, item) in request.items.iter().enumerate() {
-            if super::BATCH_CANCEL.load(Ordering::SeqCst) {
-                cancelled = true;
-                break;
-            }
-
-            let label = Path::new(&item.source_path)
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or(&item.source_path)
-                .to_string();
-
-            match export_batch_item(item, &request, &folder, quality, &mut used_names) {
-                Ok(path) => outputs.push(path.to_string_lossy().to_string()),
-                Err(error) => failed.push(BatchExportError {
-                    item_id: item.id.clone(),
-                    code: error.code,
-                    error: error.message,
-                }),
-            }
-
-            let _ = app.emit(
-                "batch-progress",
-                BatchExportProgress {
-                    current: position as u32 + 1,
-                    total,
-                    current_file: label,
-                },
-            );
-        }
+        let (outputs, export_failed, cancelled) = run_batch_export(
+            &request.items,
+            &request,
+            &folder,
+            quality,
+            &cancel_flag,
+            |processed, label| {
+                let _ = app.emit(
+                    "batch-progress",
+                    BatchExportProgress {
+                        current: processed as u32,
+                        total,
+                        current_file: label.to_string(),
+                    },
+                );
+            },
+        );
+        failed.extend(export_failed);
 
         let processed = (outputs.len() + failed.len()) as u32;
         let _ = app.emit(

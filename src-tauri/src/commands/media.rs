@@ -232,11 +232,13 @@ impl TrashSink for OsTrash {
 /// Files are trashed in batches via one AppleScript `tell Finder delete`
 /// call per batch on macOS — Finder's native Trash supports "Put Back" and a
 /// single invocation per batch means one sound per batch instead of one per
-/// file. `TRASH_CANCEL` is checked between batches so Cancel is responsive.
+/// file. The run's own cancel token is checked between batches, so Cancel is
+/// responsive without touching other trash operations.
 async fn execute_trash<P>(
     db: &sqlx::SqlitePool,
     targets: Vec<(String, String)>,
     sink: Arc<dyn TrashSink>,
+    cancel: &super::CancelToken<'_>,
     progress: P,
 ) -> Result<TrashResult, CommandError>
 where
@@ -254,7 +256,7 @@ where
     const TRASH_BATCH: usize = 50;
 
     for chunk in targets.chunks(TRASH_BATCH) {
-        if super::TRASH_CANCEL.load(Ordering::SeqCst) {
+        if cancel.is_cancelled() {
             for (id, _) in chunk {
                 failed.push(TrashError {
                     id: id.clone(),
@@ -284,7 +286,7 @@ where
                 // Batch failed: try each file individually so partial
                 // successes still count and failures are reported per-id.
                 for (id, path) in chunk {
-                    if super::TRASH_CANCEL.load(Ordering::SeqCst) {
+                    if cancel.is_cancelled() {
                         failed.push(TrashError {
                             id: id.clone(),
                             code: ErrorCode::Cancelled,
@@ -396,9 +398,11 @@ async fn remove_trashed_rows(
 pub async fn move_to_trash(
     ids: Vec<String>,
     catalog: State<'_, crate::Catalog>,
+    state: State<'_, crate::AppState>,
     window: Window,
 ) -> Result<TrashResult, CommandError> {
-    super::TRASH_CANCEL.store(false, Ordering::SeqCst);
+    // Per-invocation flag: a second trash run cannot clear this one's Cancel.
+    let cancel = state.trash_cancel.start();
 
     let db = super::get_db(&catalog)?;
     let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
@@ -427,6 +431,7 @@ pub async fn move_to_trash(
         &db,
         targets,
         Arc::new(OsTrash::new()),
+        &cancel,
         |processed, total, current| {
             let mut payload = json!({
                 "phase": "trashing",
@@ -2397,6 +2402,8 @@ mod trash_flow_tests {
 
         let fake = Arc::new(FakeTrash::default());
         let sink: Arc<dyn TrashSink> = fake.clone();
+        let group = super::super::CancelGroup::default();
+        let cancel = group.start();
         let outcome = execute_trash(
             &db,
             vec![
@@ -2404,6 +2411,7 @@ mod trash_flow_tests {
                 ("b".to_string(), b.to_string_lossy().into_owned()),
             ],
             sink,
+            &cancel,
             |_, _, _| {},
         )
         .await
@@ -2442,6 +2450,8 @@ mod trash_flow_tests {
             moved: Mutex::new(Vec::new()),
         });
         let sink: Arc<dyn TrashSink> = fake.clone();
+        let group = super::super::CancelGroup::default();
+        let cancel = group.start();
         let outcome = execute_trash(
             &db,
             vec![
@@ -2449,6 +2459,7 @@ mod trash_flow_tests {
                 ("bad".to_string(), bad.to_string_lossy().into_owned()),
             ],
             sink,
+            &cancel,
             |_, _, _| {},
         )
         .await
@@ -2485,7 +2496,9 @@ mod trash_flow_tests {
         }
 
         let sink: Arc<dyn TrashSink> = Arc::new(PanickingTrash);
-        let outcome = execute_trash(&db, targets, sink, |_, _, _| {})
+        let group = super::super::CancelGroup::default();
+        let cancel = group.start();
+        let outcome = execute_trash(&db, targets, sink, &cancel, |_, _, _| {})
             .await
             .expect("trash targets");
 
@@ -2512,10 +2525,13 @@ mod trash_flow_tests {
             .expect("drop edit_backups");
 
         let sink: Arc<dyn TrashSink> = Arc::new(FakeTrash::default());
+        let group = super::super::CancelGroup::default();
+        let cancel = group.start();
         let outcome = execute_trash(
             &db,
             vec![("a".to_string(), a.to_string_lossy().into_owned())],
             sink,
+            &cancel,
             |_, _, _| {},
         )
         .await
@@ -2527,6 +2543,76 @@ mod trash_flow_tests {
             warning.contains("could not"),
             "warning should explain the failure: {warning}"
         );
+    }
+
+    /// Cancel must stop a trash run between batches — and only that run.
+    #[tokio::test]
+    async fn cancelling_a_trash_run_stops_between_batches_and_spares_other_runs() {
+        let db = test_db().await;
+        let dir = temp_dir("cancel");
+        let group = Arc::new(super::super::CancelGroup::default());
+
+        // 51 targets cross the 50-file batch boundary exactly once.
+        let mut targets = Vec::new();
+        for index in 0..51 {
+            let id = format!("item-{index:02}");
+            let path = dir.join(format!("{id}.jpg"));
+            write_file(&path);
+            insert_item(&db, &id, &path).await;
+            targets.push((id, path.to_string_lossy().into_owned()));
+        }
+
+        let fake = Arc::new(FakeTrash::default());
+        let sink: Arc<dyn TrashSink> = fake.clone();
+        let cancel = group.start();
+        // `execute_trash`'s progress callback is `Fn`, so count with an atomic.
+        let batches = std::sync::atomic::AtomicUsize::new(0);
+        let outcome = execute_trash(&db, targets.clone(), sink, &cancel, |_, _, current| {
+            // The final summary call passes no current file; only count batches.
+            if current.is_some() {
+                batches.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                // Cancel after the first batch has been handed to Finder.
+                group.cancel_all();
+            }
+        })
+        .await
+        .expect("trash targets");
+
+        assert_eq!(
+            batches.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "the cancel is seen before the second batch"
+        );
+        assert_eq!(outcome.trashed.len(), 50);
+        assert_eq!(
+            fake.moved().len(),
+            50,
+            "the cancelled batch must never reach the trash backend"
+        );
+        assert_eq!(outcome.failed.len(), 1);
+        assert_eq!(outcome.failed[0].id, "item-50");
+        assert_eq!(outcome.failed[0].code, crate::errors::ErrorCode::Cancelled);
+
+        // A run that starts after the cancel owns a fresh flag and completes.
+        let after = group.start();
+        assert!(!after.is_cancelled());
+        let extra = dir.join("after.jpg");
+        write_file(&extra);
+        insert_item(&db, "after", &extra).await;
+        let second_fake = Arc::new(FakeTrash::default());
+        let outcome = execute_trash(
+            &db,
+            vec![("after".to_string(), extra.to_string_lossy().into_owned())],
+            second_fake.clone(),
+            &after,
+            |_, _, _| {},
+        )
+        .await
+        .expect("second trash run");
+
+        assert_eq!(outcome.trashed, vec!["after".to_string()]);
+        assert_eq!(second_fake.moved().len(), 1);
+        assert!(outcome.failed.is_empty());
     }
 
     /// The fallback decision depends on this classifier: only a refused
