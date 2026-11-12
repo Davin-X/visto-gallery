@@ -1165,7 +1165,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                     type="button"
                     onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
                     disabled={props.busy || props.items.length === 0}
-                    title="Play the current view as a slideshow (Space)"
+                    title="Play the current view as a slideshow"
                     aria-label="Play slideshow"
                   >
                     <PlayIcon size={14} />
@@ -1177,11 +1177,11 @@ function LibraryScreen(props: LibraryScreenProps) {
                   <button
                     className="toolbar-button"
                     type="button"
-                    aria-label="Create album"
+                    aria-label="New album"
                     onClick={() => props.onCreateAlbum?.()}
-                    title="Create album (⌘N)"
+                    title="New album"
                   >
-                    <PlusIcon size={14} /> Album
+                    <PlusIcon size={14} /> New album
                   </button>
                 )}
                 <span className="toolbar-divider" aria-hidden="true" />

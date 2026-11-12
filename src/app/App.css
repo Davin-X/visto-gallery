@@ -700,21 +700,21 @@ body.is-resizing .photo-inspector {
   align-items: center;
   flex: 0 0 auto;
   flex-wrap: nowrap;
-  gap: 8px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-3);
   box-shadow: none;
 }
 
 .library-header .toolbar-actions .toolbar-button {
-  height: 32px;
-  min-height: 32px;
+  height: 28px;
+  min-height: 28px;
   padding: 0 10px;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: 8px;
-  background: var(--surface-3);
+  background: transparent;
   color: var(--text);
   font-size: 12px;
   font-weight: 500;
@@ -722,7 +722,7 @@ body.is-resizing .photo-inspector {
 
 .library-header .toolbar-actions .toolbar-button:hover {
   background: var(--surface-2);
-  border-color: var(--line-strong);
+  border-color: transparent;
   color: var(--ink);
 }
 

@@ -73,6 +73,59 @@ function AlbumsScreen(props: AlbumsScreenProps) {
         </div>
       </div>
 
+      {albums.length === 0 && (props.smartAlbums?.length ?? 0) === 0 ? (
+        <div className="empty-state albums-empty">
+          <span>
+            <AlbumsIcon size={30} />
+          </span>
+          <b>No albums yet</b>
+          <p>Create an album, then select photos in Library and choose Add to album.</p>
+          <button className="primary-button" type="button" onClick={() => props.onCreateAlbum?.()}>
+            <PlusIcon size={14} /> Create album
+          </button>
+        </div>
+      ) : (
+        <div className="albums-grid">
+          {albums.map((album: any) => (
+            <button
+              key={album.id}
+              type="button"
+              className="album-card"
+              onClick={() => props.onOpenAlbum(album.id)}
+              onContextMenu={(e) => props.onAlbumContextMenu?.(album, e)}
+              title={`Open ${album.name}`}
+            >
+              <span className={`album-cover ${album.photos.length ? "" : "is-empty"}`}>
+                {album.photos.length ? (
+                  <AlbumPhotoStack
+                    photos={album.photos}
+                    assetUrl={props.assetUrl}
+                    albumItems={album.albumItems}
+                  />
+                ) : (
+                  <span className="album-cover-placeholder">
+                    <AlbumsIcon size={30} />
+                    {album.count === 0 && <small>Empty</small>}
+                  </span>
+                )}
+              </span>
+              <span className="album-card-meta">
+                <span className="album-card-name">
+                  <i className={`album-dot ${album.color}`} />
+                  {/* Names often differ only at the end ("Trip 2023", "Trip
+                      2024"), so keep the end visible when space runs out. */}
+                  <MiddleTruncate text={album.name} tailLength={6} />
+                </span>
+                <span className="album-card-count">
+                  {album.count > 0
+                    ? `${album.count.toLocaleString()} ${album.count === 1 ? "item" : "items"}`
+                    : "Empty"}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       {(props.smartAlbums?.length ?? 0) > 0 && (
         <section className="smart-albums-section" aria-label="Smart Albums">
           <div className="smart-albums-heading">
@@ -127,60 +180,6 @@ function AlbumsScreen(props: AlbumsScreenProps) {
             })}
           </div>
         </section>
-      )}
-
-      {albums.length === 0 && (props.smartAlbums?.length ?? 0) === 0 ? (
-        <div className="empty-state albums-empty">
-          <span>
-            <AlbumsIcon size={30} />
-          </span>
-          <b>No albums yet</b>
-          <p>Create an album, then select photos in Library and choose Add to album.</p>
-          <button className="primary-button" type="button" onClick={() => props.onCreateAlbum?.()}>
-            <PlusIcon size={14} /> Create album
-          </button>
-        </div>
-      ) : (
-        <div className="albums-grid">
-          {albums.map((album: any) => (
-            <button
-              key={album.id}
-              type="button"
-              className="album-card"
-              onClick={() => props.onOpenAlbum(album.id)}
-              onContextMenu={(e) => props.onAlbumContextMenu?.(album, e)}
-              title={`Open ${album.name}`}
-            >
-              <span className={`album-cover ${album.photos.length ? "" : "is-empty"}`}>
-                {album.photos.length ? (
-                  <AlbumPhotoStack
-                    photos={album.photos}
-                    assetUrl={props.assetUrl}
-                    albumItems={album.albumItems}
-                  />
-                ) : (
-                  <span className="album-cover-placeholder">
-                    <AlbumsIcon size={30} />
-                    {album.count === 0 && <small>Empty</small>}
-                  </span>
-                )}
-              </span>
-              <span className="album-card-meta">
-                <span className="album-card-name">
-                  <i className={`album-dot ${album.color}`} />
-                  {/* Names often differ only at the end ("Trip 2023", "Trip
-                      2024"), so keep the end visible when space runs out. */}
-                  <MiddleTruncate text={album.name} tailLength={6} />
-                </span>
-                <span className="album-card-count">
-                  {album.count > 0
-                    ? `${album.count.toLocaleString()} ${album.count === 1 ? "item" : "items"}`
-                    : "Empty"}
-                </span>
-              </span>
-            </button>
-          ))}
-        </div>
       )}
     </div>
   );
