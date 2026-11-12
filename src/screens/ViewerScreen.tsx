@@ -929,6 +929,7 @@ function ViewerScreen(props: ViewerScreenProps) {
                 onClick={() => setHelpOpen((value) => !value)}
               >
                 <InfoIcon size={15} />
+                <span className="viewer-bar-label">Keys</span>
               </button>
               {helpOpen && (
                 <div
