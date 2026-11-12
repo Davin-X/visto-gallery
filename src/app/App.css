@@ -4927,47 +4927,6 @@ body.is-resizing .photo-inspector {
   font-variant-numeric: tabular-nums;
 }
 
-/* "+ New album" card at end of grid */
-.album-card-add {
-  border-style: dashed;
-  border-color: var(--line);
-  background:
-    radial-gradient(
-      circle at 50% 50%,
-      color-mix(in srgb, var(--blue) 6%, transparent),
-      transparent 60%
-    ),
-    var(--surface);
-}
-.album-card-add:hover {
-  border-color: var(--blue);
-  background:
-    radial-gradient(
-      circle at 50% 50%,
-      color-mix(in srgb, var(--blue) 12%, transparent),
-      transparent 60%
-    ),
-    var(--surface);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(20, 30, 45, 0.09);
-}
-.album-cover-add {
-  position: relative;
-  display: grid;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  place-items: center;
-  overflow: hidden;
-  color: var(--accent-text);
-}
-.album-card-add .album-card-meta {
-  justify-content: center;
-}
-.album-card-add .album-card-name {
-  color: var(--accent-text);
-  font-weight: 600;
-}
-
 .albums-empty {
   margin-top: 24px;
 }

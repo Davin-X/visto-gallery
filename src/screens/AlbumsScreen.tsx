@@ -66,6 +66,11 @@ function AlbumsScreen(props: AlbumsScreenProps) {
             album to see its photos.
           </p>
         </div>
+        <div className="header-actions">
+          <button className="primary-button" type="button" onClick={() => props.onCreateAlbum?.()}>
+            <PlusIcon size={14} /> Create album
+          </button>
+        </div>
       </div>
 
       {(props.smartAlbums?.length ?? 0) > 0 && (
@@ -175,19 +180,6 @@ function AlbumsScreen(props: AlbumsScreenProps) {
               </span>
             </button>
           ))}
-          <button
-            type="button"
-            className="album-card album-card-add"
-            onClick={() => props.onCreateAlbum?.()}
-            aria-label="Create new album"
-          >
-            <span className="album-cover-add">
-              <PlusIcon size={28} />
-            </span>
-            <span className="album-card-meta">
-              <span className="album-card-name">New album</span>
-            </span>
-          </button>
         </div>
       )}
     </div>
