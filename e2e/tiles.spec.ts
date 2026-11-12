@@ -1,0 +1,156 @@
+import { expect, test } from "@playwright/test";
+
+// Finding #15: a tile used to be one <button> containing the video
+// play-in-background <button>. Invalid HTML, and React logged a
+// validateDOMNesting warning in dev. The tile is now an article with a
+// transparent open overlay and sibling play control.
+test("library tiles keep open and play as sibling buttons", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  // Wide enough that the inspector's compact-width header padding (<=1299px)
+  // does not shift the details header; this test is about the row box.
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await page.goto("/harness.html?benchmark=40&videos=8", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".gallery-tile");
+
+  // No interactive element may be nested inside another in any layout.
+  for (const view of ["Grid view", "Details view", "Timeline view", "Grid view"]) {
+    await page.getByRole("button", { name: view, exact: true }).click();
+    await page.waitForSelector(".gallery-tile");
+    expect(
+      await page.evaluate(() => document.querySelectorAll("button button").length),
+      `${view} must not nest buttons`,
+    ).toBe(0);
+  }
+
+  const videoTile = page
+    .locator(".gallery-tile")
+    .filter({ has: page.locator(".tile-play-background") })
+    .first();
+  await expect(videoTile).toBeVisible();
+  await expect(videoTile.locator(".tile-open-button")).toHaveCount(1);
+  await expect(videoTile.locator(".tile-play-background")).toHaveCount(1);
+
+  // The overlay covers the whole tile, while the play control sits above it.
+  const hit = await videoTile.evaluate((tile) => {
+    const open = tile.querySelector<HTMLElement>(".tile-open-button")!;
+    const play = tile.querySelector<HTMLElement>(".tile-play-background")!;
+    const tileBox = tile.getBoundingClientRect();
+    const openBox = open.getBoundingClientRect();
+    const playBox = play.getBoundingClientRect();
+    // The tile has a 1px border, which `inset: 0` sits inside.
+    const contentWidth = tile.clientWidth;
+    const contentHeight = tile.clientHeight;
+    const hitAt = (x: number, y: number) => {
+      const element = document.elementFromPoint(x, y);
+      if (!element) return "none";
+      if (element.closest(".tile-play-background")) return "play";
+      if (element.closest(".tile-open-button")) return "open";
+      return "other";
+    };
+    return {
+      openCoversTile:
+        Math.abs(openBox.width - contentWidth) <= 1 &&
+        Math.abs(openBox.height - contentHeight) <= 1,
+      playHit: hitAt(playBox.x + playBox.width / 2, playBox.y + playBox.height / 2),
+      bodyHit: hitAt(tileBox.x + tileBox.width * 0.6, tileBox.y + tileBox.height * 0.8),
+    };
+  });
+  expect(hit.openCoversTile).toBe(true);
+  expect(hit.playHit).toBe("play");
+  expect(hit.bodyHit).toBe("open");
+
+  // The selection checkbox sits above the open overlay: clicking it selects
+  // the tile instead of opening it.
+  const checkTarget = await videoTile.evaluate((tile) => {
+    const box = tile.querySelector<HTMLElement>(".tile-select-check")!.getBoundingClientRect();
+    const element = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+    return element?.tagName ?? "none";
+  });
+  expect(checkTarget).toBe("INPUT");
+  await videoTile.locator(".tile-select-check input").click();
+  await expect(videoTile).toHaveClass(/selected/);
+  await expect(page.locator(".viewer-screen")).toHaveCount(0);
+  await videoTile.locator(".tile-select-check input").click();
+
+  // Playing in the background must not fall through to the open action.
+  await videoTile.locator(".tile-play-background").click();
+  await expect(page.locator(".viewer-screen")).toHaveCount(0);
+
+  // A photo tile still opens the viewer from its overlay.
+  const photoTile = page
+    .locator(".gallery-tile")
+    .filter({ hasNot: page.locator(".tile-play-background") })
+    .first();
+  await photoTile.locator(".tile-open-button").dblclick();
+  await expect(page.locator(".viewer-screen")).toBeVisible();
+
+  expect(pageErrors, `page errors: ${pageErrors.join("; ")}`).toEqual([]);
+});
+
+test("details rows stay aligned with their header after the row box change", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await page.goto("/harness.html?benchmark=40&videos=8", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".gallery-tile");
+  await page.getByRole("button", { name: "Details view", exact: true }).click();
+  await page.waitForSelector(".gallery-grid.layout-details .gallery-tile");
+
+  const layout = await page.evaluate(() => {
+    const labels = ["Name", "Captured", "Kind", "Size"];
+    // The sort button sits inside a .details-col with 12px side padding, so a
+    // header's button starts 12px right of its grid track. The row cells are
+    // grid items with the same padding, so compare track edges, not text.
+    const headers = labels.map((label) => {
+      const header = Array.from(
+        document.querySelectorAll<HTMLElement>(".details-sort-header"),
+      ).find((element) => element.textContent?.trim().startsWith(label));
+      const cell = header?.closest<HTMLElement>(".details-col");
+      return cell ? cell.getBoundingClientRect().left : null;
+    });
+    const row = document.querySelector<HTMLElement>(".gallery-grid.layout-details .gallery-tile")!;
+    const open = row.querySelector<HTMLElement>(".tile-open-button")!;
+    const cells = [
+      row.querySelector<HTMLElement>(".tile-caption b"),
+      row.querySelector<HTMLElement>(".tile-date"),
+      row.querySelector<HTMLElement>(".tile-kind"),
+      row.querySelector<HTMLElement>(".tile-size"),
+    ].map((element) => (element ? element.getBoundingClientRect().left : null));
+    const rowBox = row.getBoundingClientRect();
+    const openBox = open.getBoundingClientRect();
+    return {
+      headers,
+      cells,
+      overlayCoversRow:
+        Math.abs(openBox.width - rowBox.width) <= 1.5 &&
+        Math.abs(openBox.height - rowBox.height) <= 1.5,
+    };
+  });
+
+  const detailsCheck = await page.evaluate(() => {
+    const row = document.querySelector<HTMLElement>(".gallery-grid.layout-details .gallery-tile")!;
+    const box = row.querySelector<HTMLElement>(".tile-select-check")!.getBoundingClientRect();
+    const element = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+    return element?.tagName ?? "none";
+  });
+  expect(detailsCheck).toBe("INPUT");
+  await page
+    .locator(".gallery-grid.layout-details .gallery-tile")
+    .first()
+    .locator(".tile-select-check input")
+    .click();
+  await expect(page.locator(".gallery-grid.layout-details .gallery-tile").first()).toHaveClass(
+    /selected/,
+  );
+  await expect(page.locator(".viewer-screen")).toHaveCount(0);
+
+  layout.headers.forEach((left, index) => {
+    expect(left, "header cells exist").not.toBeNull();
+    expect(layout.cells[index], "row cells exist").not.toBeNull();
+    expect(
+      Math.abs((left as number) - (layout.cells[index] as number)),
+      "row cell stays under its header column",
+    ).toBeLessThan(1.5);
+  });
+  expect(layout.overlayCoversRow).toBe(true);
+});

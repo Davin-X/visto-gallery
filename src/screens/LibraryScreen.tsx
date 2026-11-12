@@ -1548,369 +1548,22 @@ function LibraryScreen(props: LibraryScreenProps) {
                         type="button"
                         className="tile-open-button"
                         data-item-id={item.id}
+                        aria-label={`Open ${tileAlt(item)}`}
                         onClick={(e) => {
                           e.currentTarget.focus();
                           handleTileClick(item, e);
                         }}
                         onDoubleClick={() => handleTileDoubleClick(item)}
                         {...holdHandlers(item.id)}
-                      >
-                        <span className="tile-image">
-                          {item.kind === "video" ? (
-                            canPlayVideoInApp(item.path, item.name) ? (
-                              <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} />
-                            ) : (
-                              // Decoding a frame needs a playable container;
-                              // fall back to the cached QuickLook thumbnail so
-                              // MKV/AVI tiles never request the whole file.
-                              <CachedThumbnail
-                                itemId={item.id}
-                                name={tileAlt(item)}
-                                size={thumbnailPixels}
-                              />
-                            )
-                          ) : item.kind === "photo" ? (
-                            <CachedThumbnail
-                              itemId={item.id}
-                              name={tileAlt(item)}
-                              size={thumbnailPixels}
-                              style={draftImageStyle(draftTransforms, item.id)}
-                              fallbackSrc={assetUrl(item.path)}
-                            />
-                          ) : (
-                            <CachedThumbnail
-                              itemId={item.id}
-
-                              name={tileAlt(item)}
-
-                              size={thumbnailPixels}
-
-                              style={draftImageStyle(draftTransforms, item.id)}
-                            />
-                          )}
-                          {item.kind === "video" && props.onPlayBackground && (
-                            <button
-                              type="button"
-                              className="tile-play-background"
-
-                              aria-label={
-                                playingId === item.id && isPlaying
-                                  ? `Pause ${tileAlt(item)}`
-                                  : `Play ${tileAlt(item)} in background`
-                              }
-
-                              title={
-                                playingId === item.id && isPlaying ? "Pause" : "Play in background"
-                              }
-
-                              onClick={(event) => {
-                                event.stopPropagation();
-
-                                toggleBackground(item);
-                              }}
-
-                              onDoubleClick={(event) => event.stopPropagation()}
-
-                              aria-pressed={playingId === item.id && isPlaying}
-                            >
-                              {playingId === item.id && isPlaying ? (
-                                <PauseIcon size={16} />
-                              ) : (
-                                <PlayIcon size={16} />
-                              )}
-                            </button>
-                          )}
-                          {item.kind === "video" && (
-                            <span className="video-label">
-                              <PlayIcon size={10} />
-                            </span>
-                          )}
-                          {item.kind === "raw" && (
-                            <span className="format-label">
-                              <KindBadge kind={item.kind} />
-                            </span>
-                          )}
-                          {item.favorite && !masked(item) ? (
-                            <span className="tile-favorite" aria-label="Favorite">
-                              <HeartIcon size={10} filled />
-                            </span>
-                          ) : null}
-                          {item.colorLabel && !masked(item) ? (
-                            <span
-                              className={`tile-color-label tile-color-${item.colorLabel}`}
-                              aria-label={`Color label: ${item.colorLabel}`}
-                              title={`Color: ${item.colorLabel}`}
-                            >
-                              <span className="color-dot" />
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
-                          <b>
-                            {masked(item) ? (
-                              "Hidden item"
-                            ) : (
-                              <MiddleTruncate
-                                text={displayFileName(item.name, item.extension, showExtensions)}
-                              />
-                            )}
-                          </b>
-                          <small className="tile-date">{formatItemDate(item)}</small>
-                          <small className="tile-kind">
-                            <KindDot kind={item.kind} />
-                            {item.kind === "video"
-                              ? "Video"
-                              : item.kind === "raw"
-                                ? "RAW"
-                                : "Photo"}
-                          </small>
-                          <small className="tile-size">{formatBytesSimple(item.size)}</small>
-                        </span>
-                      </button>
-                    </article>
-                  ))}
-                  {props.items.length === 0 && emptyView()}
-                </div>
-              );
-            }
-            if (props.layout === "timeline") {
-              return (
-                <div className={`gallery-grid layout-timeline thumb-${thumbnailSize}`}>
-                  {timelineGroups.length === 0
-                    ? emptyView()
-                    : visibleTimelineGroups.map(({ key, label, items, count, visibleItems }) => {
-                        const allSelected =
-                          items.length > 0 &&
-                          items.every((item: any) => selectedIdSet.has(item.id));
-                        return (
-                          <React.Fragment key={key}>
-                            <div className="timeline-group">
-                              <div className="timeline-date-marker" aria-hidden="true">
-                                <span />
-                              </div>
-                              <h3>{label}</h3>
-                              <span className="timeline-count">
-                                {count} {count === 1 ? "item" : "items"}
-                              </span>
-                              <button
-                                type="button"
-                                className="timeline-select-group"
-                                aria-pressed={allSelected}
-                                onClick={() => toggleTimelineGroup(items)}
-                                title={`Select or deselect all ${label} items`}
-                              >
-                                <span className="timeline-select-box">
-                                  {allSelected ? <CheckIcon size={11} /> : null}
-                                </span>
-                                {allSelected ? "Selected" : "Select all"}
-                              </button>
-                            </div>
-                            {visibleItems.map((item: any) => (
-                              <article
-                                key={item.id}
-                                className={tileClass(item)}
-                                onContextMenu={(e: any) => {
-                                  concealItem(item.id);
-                                  props.onContextMenu(itemContextMenu(item), e);
-                                }}
-                              >
-                                <div className="tile-select-check">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedIdSet.has(item.id)}
-                                    onChange={() => props.onToggleSelect(item.id)}
-                                    title={
-                                      selectedIdSet.has(item.id)
-                                        ? "Remove from selection"
-                                        : "Add to selection"
-                                    }
-                                    onClick={(e: any) => e.stopPropagation()}
-                                  />
-                                  <CheckIcon size={12} />
-                                </div>
-                                <button
-                                  type="button"
-                                  className="tile-open-button"
-                                  data-item-id={item.id}
-                                  onClick={(e) => {
-                                    e.currentTarget.focus();
-                                    handleTileClick(item, e);
-                                  }}
-                                  onDoubleClick={() => handleTileDoubleClick(item)}
-                                  {...holdHandlers(item.id)}
-                                >
-                                  <span className="tile-image">
-                                    {item.kind === "video" ? (
-                                      canPlayVideoInApp(item.path, item.name) ? (
-                                        <VideoThumb
-                                          src={assetUrl(item.path)}
-                                          name={tileAlt(item)}
-                                        />
-                                      ) : (
-                                        <CachedThumbnail
-                                          itemId={item.id}
-                                          name={tileAlt(item)}
-                                          size={thumbnailPixels}
-                                        />
-                                      )
-                                    ) : item.kind === "photo" ? (
-                                      <CachedThumbnail
-                                        itemId={item.id}
-                                        name={tileAlt(item)}
-                                        size={thumbnailPixels}
-                                        style={draftImageStyle(draftTransforms, item.id)}
-                                        fallbackSrc={assetUrl(item.path)}
-                                      />
-                                    ) : (
-                                      <CachedThumbnail
-                                        itemId={item.id}
-
-                                        name={tileAlt(item)}
-
-                                        size={thumbnailPixels}
-
-                                        style={draftImageStyle(draftTransforms, item.id)}
-                                      />
-                                    )}
-                                    {item.kind === "video" && props.onPlayBackground && (
-                                      <button
-                                        type="button"
-                                        className="tile-play-background"
-
-                                        aria-label={
-                                          playingId === item.id && isPlaying
-                                            ? `Pause ${tileAlt(item)}`
-                                            : `Play ${tileAlt(item)} in background`
-                                        }
-
-                                        title={
-                                          playingId === item.id && isPlaying
-                                            ? "Pause"
-                                            : "Play in background"
-                                        }
-
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-
-                                          toggleBackground(item);
-                                        }}
-
-                                        onDoubleClick={(event) => event.stopPropagation()}
-
-                                        aria-pressed={playingId === item.id && isPlaying}
-                                      >
-                                        {playingId === item.id && isPlaying ? (
-                                          <PauseIcon size={16} />
-                                        ) : (
-                                          <PlayIcon size={16} />
-                                        )}
-                                      </button>
-                                    )}
-                                    {item.kind === "video" && (
-                                      <span className="video-label">
-                                        <PlayIcon size={10} />
-                                      </span>
-                                    )}
-                                    {item.kind === "raw" && (
-                                      <span className="format-label">
-                                        <KindBadge kind={item.kind} />
-                                      </span>
-                                    )}
-                                    {item.favorite && !masked(item) ? (
-                                      <span className="tile-favorite" aria-label="Favorite">
-                                        <HeartIcon size={10} filled />
-                                      </span>
-                                    ) : null}
-                                    {item.colorLabel && !masked(item) ? (
-                                      <span
-                                        className={`tile-color-label tile-color-${item.colorLabel}`}
-                                        aria-label={`Color label: ${item.colorLabel}`}
-                                        title={`Color: ${item.colorLabel}`}
-                                      >
-                                        <span className="color-dot" />
-                                      </span>
-                                    ) : null}
-                                  </span>
-                                  <span
-                                    className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
-                                  >
-                                    <b>
-                                      <MiddleTruncate
-                                        text={displayFileName(
-                                          item.name,
-                                          item.extension,
-                                          showExtensions,
-                                        )}
-                                      />
-                                    </b>
-                                    <small className="tile-date">{formatItemDate(item)}</small>
-                                    <small className="tile-kind">
-                                      <KindDot kind={item.kind} />
-                                      {item.kind === "video"
-                                        ? "Video"
-                                        : item.kind === "raw"
-                                          ? "RAW"
-                                          : "Photo"}
-                                    </small>
-                                    <small className="tile-size">
-                                      {formatBytesSimple(item.size)}
-                                    </small>
-                                  </span>
-                                </button>
-                              </article>
-                            ))}
-                          </React.Fragment>
-                        );
-                      })}
-                </div>
-              );
-            }
-            return (
-              <div className={`gallery-grid layout-${props.layout} thumb-${thumbnailSize}`}>
-                {virtualGrid.topSpacer > 0 && (
-                  <div
-                    className="grid-virtual-spacer"
-                    aria-hidden="true"
-                    style={{ height: virtualGrid.topSpacer }}
-                  />
-                )}
-                {virtualGrid.items.map((item: any) => (
-                  <article
-                    key={item.id}
-                    className={tileClass(item)}
-                    onContextMenu={(e: any) => {
-                      concealItem(item.id);
-                      props.onContextMenu(itemContextMenu(item), e);
-                    }}
-                  >
-                    <div className="tile-select-check">
-                      <input
-                        type="checkbox"
-                        checked={selectedIdSet.has(item.id)}
-                        onChange={() => props.onToggleSelect(item.id)}
-                        title={
-                          selectedIdSet.has(item.id) ? "Remove from selection" : "Add to selection"
-                        }
-                        onClick={(e: any) => e.stopPropagation()}
                       />
-                      <CheckIcon size={12} />
-                    </div>
-                    <button
-                      type="button"
-                      className="tile-open-button"
-                      data-item-id={item.id}
-                      onClick={(e) => {
-                        e.currentTarget.focus();
-                        handleTileClick(item, e);
-                      }}
-                      onDoubleClick={() => handleTileDoubleClick(item)}
-                      {...holdHandlers(item.id)}
-                    >
                       <span className="tile-image">
                         {item.kind === "video" ? (
                           canPlayVideoInApp(item.path, item.name) ? (
                             <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} />
                           ) : (
+                            // Decoding a frame needs a playable container;
+                            // fall back to the cached QuickLook thumbnail so
+                            // MKV/AVI tiles never request the whole file.
                             <CachedThumbnail
                               itemId={item.id}
                               name={tileAlt(item)}
@@ -1992,29 +1645,369 @@ function LibraryScreen(props: LibraryScreenProps) {
                             <span className="color-dot" />
                           </span>
                         ) : null}
-                        {item.rating != null && item.rating > 0 && !masked(item) ? (
-                          <span className="tile-rating" aria-label={`Rating: ${item.rating} stars`}>
-                            {Array.from({ length: 5 }).map((_, i) => (
-                              <span key={i} className={`star ${i < item.rating ? "filled" : ""}`}>
-                                {"\u2605"}
-                              </span>
-                            ))}
-                          </span>
-                        ) : null}
                       </span>
                       <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
                         <b>
-                          <MiddleTruncate
-                            text={displayFileName(item.name, item.extension, showExtensions)}
-                          />
+                          {masked(item) ? (
+                            "Hidden item"
+                          ) : (
+                            <MiddleTruncate
+                              text={displayFileName(item.name, item.extension, showExtensions)}
+                            />
+                          )}
                         </b>
                         <small className="tile-date">{formatItemDate(item)}</small>
                         <small className="tile-kind">
+                          <KindDot kind={item.kind} />
                           {item.kind === "video" ? "Video" : item.kind === "raw" ? "RAW" : "Photo"}
                         </small>
                         <small className="tile-size">{formatBytesSimple(item.size)}</small>
                       </span>
-                    </button>
+                    </article>
+                  ))}
+                  {props.items.length === 0 && emptyView()}
+                </div>
+              );
+            }
+            if (props.layout === "timeline") {
+              return (
+                <div className={`gallery-grid layout-timeline thumb-${thumbnailSize}`}>
+                  {timelineGroups.length === 0
+                    ? emptyView()
+                    : visibleTimelineGroups.map(({ key, label, items, count, visibleItems }) => {
+                        const allSelected =
+                          items.length > 0 &&
+                          items.every((item: any) => selectedIdSet.has(item.id));
+                        return (
+                          <React.Fragment key={key}>
+                            <div className="timeline-group">
+                              <div className="timeline-date-marker" aria-hidden="true">
+                                <span />
+                              </div>
+                              <h3>{label}</h3>
+                              <span className="timeline-count">
+                                {count} {count === 1 ? "item" : "items"}
+                              </span>
+                              <button
+                                type="button"
+                                className="timeline-select-group"
+                                aria-pressed={allSelected}
+                                onClick={() => toggleTimelineGroup(items)}
+                                title={`Select or deselect all ${label} items`}
+                              >
+                                <span className="timeline-select-box">
+                                  {allSelected ? <CheckIcon size={11} /> : null}
+                                </span>
+                                {allSelected ? "Selected" : "Select all"}
+                              </button>
+                            </div>
+                            {visibleItems.map((item: any) => (
+                              <article
+                                key={item.id}
+                                className={tileClass(item)}
+                                onContextMenu={(e: any) => {
+                                  concealItem(item.id);
+                                  props.onContextMenu(itemContextMenu(item), e);
+                                }}
+                              >
+                                <div className="tile-select-check">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedIdSet.has(item.id)}
+                                    onChange={() => props.onToggleSelect(item.id)}
+                                    title={
+                                      selectedIdSet.has(item.id)
+                                        ? "Remove from selection"
+                                        : "Add to selection"
+                                    }
+                                    onClick={(e: any) => e.stopPropagation()}
+                                  />
+                                  <CheckIcon size={12} />
+                                </div>
+                                <button
+                                  type="button"
+                                  className="tile-open-button"
+                                  data-item-id={item.id}
+                                  aria-label={`Open ${tileAlt(item)}`}
+                                  onClick={(e) => {
+                                    e.currentTarget.focus();
+                                    handleTileClick(item, e);
+                                  }}
+                                  onDoubleClick={() => handleTileDoubleClick(item)}
+                                  {...holdHandlers(item.id)}
+                                />
+                                <span className="tile-image">
+                                  {item.kind === "video" ? (
+                                    canPlayVideoInApp(item.path, item.name) ? (
+                                      <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} />
+                                    ) : (
+                                      <CachedThumbnail
+                                        itemId={item.id}
+                                        name={tileAlt(item)}
+                                        size={thumbnailPixels}
+                                      />
+                                    )
+                                  ) : item.kind === "photo" ? (
+                                    <CachedThumbnail
+                                      itemId={item.id}
+                                      name={tileAlt(item)}
+                                      size={thumbnailPixels}
+                                      style={draftImageStyle(draftTransforms, item.id)}
+                                      fallbackSrc={assetUrl(item.path)}
+                                    />
+                                  ) : (
+                                    <CachedThumbnail
+                                      itemId={item.id}
+
+                                      name={tileAlt(item)}
+
+                                      size={thumbnailPixels}
+
+                                      style={draftImageStyle(draftTransforms, item.id)}
+                                    />
+                                  )}
+                                  {item.kind === "video" && props.onPlayBackground && (
+                                    <button
+                                      type="button"
+                                      className="tile-play-background"
+
+                                      aria-label={
+                                        playingId === item.id && isPlaying
+                                          ? `Pause ${tileAlt(item)}`
+                                          : `Play ${tileAlt(item)} in background`
+                                      }
+
+                                      title={
+                                        playingId === item.id && isPlaying
+                                          ? "Pause"
+                                          : "Play in background"
+                                      }
+
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+
+                                        toggleBackground(item);
+                                      }}
+
+                                      onDoubleClick={(event) => event.stopPropagation()}
+
+                                      aria-pressed={playingId === item.id && isPlaying}
+                                    >
+                                      {playingId === item.id && isPlaying ? (
+                                        <PauseIcon size={16} />
+                                      ) : (
+                                        <PlayIcon size={16} />
+                                      )}
+                                    </button>
+                                  )}
+                                  {item.kind === "video" && (
+                                    <span className="video-label">
+                                      <PlayIcon size={10} />
+                                    </span>
+                                  )}
+                                  {item.kind === "raw" && (
+                                    <span className="format-label">
+                                      <KindBadge kind={item.kind} />
+                                    </span>
+                                  )}
+                                  {item.favorite && !masked(item) ? (
+                                    <span className="tile-favorite" aria-label="Favorite">
+                                      <HeartIcon size={10} filled />
+                                    </span>
+                                  ) : null}
+                                  {item.colorLabel && !masked(item) ? (
+                                    <span
+                                      className={`tile-color-label tile-color-${item.colorLabel}`}
+                                      aria-label={`Color label: ${item.colorLabel}`}
+                                      title={`Color: ${item.colorLabel}`}
+                                    >
+                                      <span className="color-dot" />
+                                    </span>
+                                  ) : null}
+                                </span>
+                                <span
+                                  className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
+                                >
+                                  <b>
+                                    <MiddleTruncate
+                                      text={displayFileName(
+                                        item.name,
+                                        item.extension,
+                                        showExtensions,
+                                      )}
+                                    />
+                                  </b>
+                                  <small className="tile-date">{formatItemDate(item)}</small>
+                                  <small className="tile-kind">
+                                    <KindDot kind={item.kind} />
+                                    {item.kind === "video"
+                                      ? "Video"
+                                      : item.kind === "raw"
+                                        ? "RAW"
+                                        : "Photo"}
+                                  </small>
+                                  <small className="tile-size">
+                                    {formatBytesSimple(item.size)}
+                                  </small>
+                                </span>
+                              </article>
+                            ))}
+                          </React.Fragment>
+                        );
+                      })}
+                </div>
+              );
+            }
+            return (
+              <div className={`gallery-grid layout-${props.layout} thumb-${thumbnailSize}`}>
+                {virtualGrid.topSpacer > 0 && (
+                  <div
+                    className="grid-virtual-spacer"
+                    aria-hidden="true"
+                    style={{ height: virtualGrid.topSpacer }}
+                  />
+                )}
+                {virtualGrid.items.map((item: any) => (
+                  <article
+                    key={item.id}
+                    className={tileClass(item)}
+                    onContextMenu={(e: any) => {
+                      concealItem(item.id);
+                      props.onContextMenu(itemContextMenu(item), e);
+                    }}
+                  >
+                    <div className="tile-select-check">
+                      <input
+                        type="checkbox"
+                        checked={selectedIdSet.has(item.id)}
+                        onChange={() => props.onToggleSelect(item.id)}
+                        title={
+                          selectedIdSet.has(item.id) ? "Remove from selection" : "Add to selection"
+                        }
+                        onClick={(e: any) => e.stopPropagation()}
+                      />
+                      <CheckIcon size={12} />
+                    </div>
+                    <button
+                      type="button"
+                      className="tile-open-button"
+                      data-item-id={item.id}
+                      aria-label={`Open ${tileAlt(item)}`}
+                      onClick={(e) => {
+                        e.currentTarget.focus();
+                        handleTileClick(item, e);
+                      }}
+                      onDoubleClick={() => handleTileDoubleClick(item)}
+                      {...holdHandlers(item.id)}
+                    />
+                    <span className="tile-image">
+                      {item.kind === "video" ? (
+                        canPlayVideoInApp(item.path, item.name) ? (
+                          <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} />
+                        ) : (
+                          <CachedThumbnail
+                            itemId={item.id}
+                            name={tileAlt(item)}
+                            size={thumbnailPixels}
+                          />
+                        )
+                      ) : item.kind === "photo" ? (
+                        <CachedThumbnail
+                          itemId={item.id}
+                          name={tileAlt(item)}
+                          size={thumbnailPixels}
+                          style={draftImageStyle(draftTransforms, item.id)}
+                          fallbackSrc={assetUrl(item.path)}
+                        />
+                      ) : (
+                        <CachedThumbnail
+                          itemId={item.id}
+
+                          name={tileAlt(item)}
+
+                          size={thumbnailPixels}
+
+                          style={draftImageStyle(draftTransforms, item.id)}
+                        />
+                      )}
+                      {item.kind === "video" && props.onPlayBackground && (
+                        <button
+                          type="button"
+                          className="tile-play-background"
+
+                          aria-label={
+                            playingId === item.id && isPlaying
+                              ? `Pause ${tileAlt(item)}`
+                              : `Play ${tileAlt(item)} in background`
+                          }
+
+                          title={
+                            playingId === item.id && isPlaying ? "Pause" : "Play in background"
+                          }
+
+                          onClick={(event) => {
+                            event.stopPropagation();
+
+                            toggleBackground(item);
+                          }}
+
+                          onDoubleClick={(event) => event.stopPropagation()}
+
+                          aria-pressed={playingId === item.id && isPlaying}
+                        >
+                          {playingId === item.id && isPlaying ? (
+                            <PauseIcon size={16} />
+                          ) : (
+                            <PlayIcon size={16} />
+                          )}
+                        </button>
+                      )}
+                      {item.kind === "video" && (
+                        <span className="video-label">
+                          <PlayIcon size={10} />
+                        </span>
+                      )}
+                      {item.kind === "raw" && (
+                        <span className="format-label">
+                          <KindBadge kind={item.kind} />
+                        </span>
+                      )}
+                      {item.favorite && !masked(item) ? (
+                        <span className="tile-favorite" aria-label="Favorite">
+                          <HeartIcon size={10} filled />
+                        </span>
+                      ) : null}
+                      {item.colorLabel && !masked(item) ? (
+                        <span
+                          className={`tile-color-label tile-color-${item.colorLabel}`}
+                          aria-label={`Color label: ${item.colorLabel}`}
+                          title={`Color: ${item.colorLabel}`}
+                        >
+                          <span className="color-dot" />
+                        </span>
+                      ) : null}
+                      {item.rating != null && item.rating > 0 && !masked(item) ? (
+                        <span className="tile-rating" aria-label={`Rating: ${item.rating} stars`}>
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <span key={i} className={`star ${i < item.rating ? "filled" : ""}`}>
+                              {"\u2605"}
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
+                      <b>
+                        <MiddleTruncate
+                          text={displayFileName(item.name, item.extension, showExtensions)}
+                        />
+                      </b>
+                      <small className="tile-date">{formatItemDate(item)}</small>
+                      <small className="tile-kind">
+                        {item.kind === "video" ? "Video" : item.kind === "raw" ? "RAW" : "Photo"}
+                      </small>
+                      <small className="tile-size">{formatBytesSimple(item.size)}</small>
+                    </span>
                   </article>
                 ))}
                 {virtualGrid.bottomSpacer > 0 && (

@@ -1274,12 +1274,6 @@ body.is-resizing .photo-inspector {
   aspect-ratio: 4 / 3;
 }
 
-/* Image-first tiles: the caption becomes a hover/focus overlay instead of
-   adding a text strip under every thumbnail. */
-.gallery-grid.layout-columns .tile-open-button {
-  position: relative;
-}
-
 .gallery-grid.layout-columns .tile-caption {
   position: absolute;
   right: 2px;
@@ -1389,12 +1383,17 @@ body.is-resizing .photo-inspector {
   opacity: 0.6;
 }
 
+/* The row keeps its own grid (same tracks as the container) so the absolute
+   open-button overlay has a per-row box to cover. `display: contents` would
+   make the overlay cover the whole table. */
 .gallery-grid.layout-details .gallery-tile {
-  display: contents;
-}
-
-.gallery-grid.layout-details .tile-open-button {
-  display: contents;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns:
+    34px 58px minmax(180px, 1fr) minmax(132px, 180px)
+    92px 96px;
+  column-gap: 12px;
+  align-items: stretch;
 }
 
 .gallery-grid.layout-details .tile-image {
@@ -1785,13 +1784,16 @@ body.is-resizing .photo-inspector {
   backdrop-filter: blur(6px);
 }
 
+/* The tile's click target is a transparent overlay button: the image, badges
+   and caption sit under it, while the play control is a real sibling button so
+   no interactive element is nested inside another. */
 .tile-open-button {
-  display: block;
-  width: 100%;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   padding: 0;
-  border: none;
+  border: 0;
   background: transparent;
-  text-align: left;
   cursor: pointer;
 }
 
@@ -7882,8 +7884,6 @@ body.is-resizing .photo-inspector {
   background: var(--surface);
 }
 
-.gallery-grid.layout-details .gallery-tile,
-.gallery-grid.layout-details .tile-open-button,
 .gallery-grid.layout-details .tile-caption {
   display: contents;
 }
@@ -7896,7 +7896,7 @@ body.is-resizing .photo-inspector {
   align-self: center;
   width: 17px;
   height: 17px;
-  z-index: 1;
+  z-index: 3;
   opacity: 1;
   transform: none;
   padding: 0;
@@ -8012,7 +8012,7 @@ body.is-resizing .photo-inspector {
   object-fit: cover;
 }
 
-.gallery-grid.layout-details .tile-open-button:focus-visible .tile-caption b {
+.gallery-grid.layout-details .gallery-tile:has(> .tile-open-button:focus-visible) .tile-caption b {
   outline: 2px solid var(--accent);
   outline-offset: -3px;
   border-radius: 4px;
