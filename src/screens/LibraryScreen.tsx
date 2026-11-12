@@ -1039,10 +1039,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                 </button>
                 <div className={`album-detail-cover${activeAlbumPhotos.length ? "" : " is-empty"}`}>
                   {activeAlbumPhotos.length ? (
-                    <AlbumPhotoStack
-                      photos={activeAlbumPhotos}
-                      albumItems={activeAlbumItems}
-                    />
+                    <AlbumPhotoStack photos={activeAlbumPhotos} albumItems={activeAlbumItems} />
                   ) : (
                     <AlbumsIcon size={22} />
                   )}

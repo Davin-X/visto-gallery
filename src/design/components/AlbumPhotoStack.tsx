@@ -23,13 +23,7 @@ function albumStackPose(count: number, index: number) {
   return poses[index] || poses[0];
 }
 
-function AlbumPhotoStack({
-  photos,
-  albumItems = [],
-}: {
-  photos: any[];
-  albumItems?: any[];
-}) {
+function AlbumPhotoStack({ photos, albumItems = [] }: { photos: any[]; albumItems?: any[] }) {
   const draftTransforms = useDraftTransforms();
   return (
     <span className="album-stack">
