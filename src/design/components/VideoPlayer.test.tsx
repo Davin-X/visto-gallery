@@ -1,5 +1,6 @@
 import { fireEvent, render } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { usePlaybackStore } from "../../engine/stores/usePlaybackStore";
 import VideoPlayer from "./VideoPlayer";
 
 // The player never reaches Tauri for a plain in-app MP4, but this test should
@@ -87,6 +88,44 @@ describe("video player keyboard control", () => {
     expect(onNext).not.toHaveBeenCalled();
     expect(onToggleFavorite).not.toHaveBeenCalled();
     input.remove();
+  });
+
+  it("keeps a non-zero duration when the next queue item resolves to the same src", () => {
+    usePlaybackStore.setState({ itemId: null, name: "", playing: false, time: 0, duration: 0 });
+
+    // Both items point at one file, which is the case the switch used to break:
+    // the element never reloads metadata, so nothing reports a duration after
+    // the reset.
+    const element = (itemId: string) => (
+      <VideoPlayer
+        itemId={itemId}
+        src="/same-clip.mp4"
+        path="/same-clip.mp4"
+        name={`${itemId}.mp4`}
+        width={1920}
+        height={1080}
+        onPrevious={vi.fn()}
+        onNext={vi.fn().mockResolvedValue(true)}
+        onToggleFavorite={vi.fn()}
+      />
+    );
+
+    const { container, rerender } = render(element("video-a"));
+    const video = container.querySelector("video")!;
+    Object.defineProperty(video, "duration", { configurable: true, value: 4 });
+    fireEvent(video, new Event("loadedmetadata"));
+
+    expect(usePlaybackStore.getState().duration).toBe(4);
+
+    rerender(element("video-b"));
+
+    expect(usePlaybackStore.getState().itemId).toBe("video-b");
+    // The position is the new item's; the duration belongs to the element.
+    expect(usePlaybackStore.getState().time).toBe(0);
+    expect(usePlaybackStore.getState().duration).toBe(4);
+
+    const readout = container.querySelectorAll(".video-time");
+    expect(readout[readout.length - 1].textContent).toBe("0:04");
   });
 
   it("does not intercept keys while the background host is inert", () => {
