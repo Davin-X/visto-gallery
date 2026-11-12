@@ -553,8 +553,16 @@ export function DownloadIcon({ size = 16, className = "", strokeWidth = 1.8 }: I
 export function ChartIcon({ size = 18, className = "", strokeWidth = 1.8 }: IconProps) {
   return (
     <Svg size={size} className={className} strokeWidth={strokeWidth}>
-      <path d="M3 20h18" />
-      <path d="M7 20v-5.5M12 20V9M17 20v-8.5" />
+      {/* A donut in three slices. The panel behind this button splits the
+          library by kind, so a chart of parts reads at a glance; a single arc
+          just looked like a loading spinner and three bars said nothing about
+          composition. Butt caps keep the gaps crisp at rail size. */}
+      {/* A pie with one filled slice: the panel behind this button splits the
+          library by kind. The slice is filled rather than stroked because a
+          thin ring of segments turns to mush at rail size, and three equal
+          segments read as a loading spinner. */}
+      <circle cx="12" cy="12" r="7.5" strokeWidth={1.6} opacity="0.32" />
+      <path d="M12 12V4.5A7.5 7.5 0 0 1 15.75 18.5Z" fill="currentColor" stroke="none" />
     </Svg>
   );
 }
