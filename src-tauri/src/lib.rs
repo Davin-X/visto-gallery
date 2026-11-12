@@ -192,6 +192,7 @@ pub fn run() {
             set_color_label,
             update_item_tags,
             move_to_trash,
+            restore_trashed_items,
             reveal_in_finder,
             open_file,
             open_with_player,

@@ -35,6 +35,8 @@ import type {
   EditRecipe,
   EditPreset,
   TrashResult,
+  TrashRestoreItem,
+  TrashRestoreResult,
   UpdateCheckResult,
   LibraryStats,
   ExternalPlayer,
@@ -104,6 +106,11 @@ export const tauri = {
       invoke("update_item_tags", { itemId, tags }),
 
     moveToTrash: (ids: string[]): Promise<TrashResult> => invoke("move_to_trash", { ids }),
+
+    /** Pull the given files out of the Trash and put them back where they
+     *  were. Returns the paths actually moved; the caller re-imports them. */
+    restoreTrashedItems: (items: TrashRestoreItem[]): Promise<TrashRestoreResult> =>
+      invoke("restore_trashed_items", { items }),
 
     cancelMoveToTrash: (): Promise<void> => invoke("cancel_move_to_trash"),
 

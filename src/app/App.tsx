@@ -40,6 +40,7 @@ import { AppScreenRouter } from "./AppScreenRouter";
 import type { Screen } from "./screen";
 
 import type { MediaItem } from "../engine/types/media";
+import type { DeleteRequest } from "../engine/types/deleteRequest";
 import type {
   LibraryFolder,
   LibraryFilterDTO,
@@ -96,7 +97,8 @@ function App() {
 
   const [albumPendingDelete, setAlbumPendingDelete] = useState<any | null>(null);
   const [itemPendingDeleteCount, setItemPendingDeleteCount] = useState<number>(0);
-  const itemPendingDeleteRef = useRef<string[] | null>(null);
+  const [itemPendingDeleteSummary, setItemPendingDeleteSummary] = useState<string | null>(null);
+  const itemPendingDeleteRef = useRef<DeleteRequest | null>(null);
   const watchedRootsRef = useRef<Set<string>>(new Set());
   const autoImportControllerRef = useRef<ReturnType<typeof createAutoImportController> | null>(
     null,
@@ -1057,9 +1059,12 @@ function App() {
     }
   }, [screen, library.activeAlbum]);
 
-  const showNotice = useCallback((text: string, code?: ErrorCode) => {
-    useLibraryStore.getState().showNotice(text, code);
-  }, []);
+  const showNotice = useCallback(
+    (text: string, code?: ErrorCode, action?: { label: string; run: () => void }) => {
+      useLibraryStore.getState().showNotice(text, code, action);
+    },
+    [],
+  );
 
   const showErrorNotice = useCallback((error: unknown, prefix?: string) => {
     useLibraryStore.getState().showErrorNotice(error, prefix);
@@ -1603,12 +1608,45 @@ function App() {
     if (screen === "Video") setScreen(viewerOrigin || "Library");
   };
 
+  // Put trashed duplicates back where they were and re-import them so the
+  // catalog matches disk. Best effort — entries that cannot be found in the
+  // Trash are reported rather than silently skipped.
+  const restoreTrashedItems = useCallback(
+    async (items: MediaItem[]) => {
+      try {
+        const result = await tauri.items.restoreTrashedItems(
+          items.map((item) => ({ path: item.path, name: item.name, size: item.size })),
+        );
+        const restored = result?.restored ?? [];
+        if (restored.length === 0) {
+          showNotice(
+            "Could not find those items in the Trash (they may have been purged).",
+            "internal",
+          );
+          return;
+        }
+        const importResult = await tauri.library.importFiles(restored);
+        await library.loadLibrary();
+        refreshLibraryStats();
+        const failures = result?.failed?.length ?? 0;
+        showNotice(
+          `Restored ${importResult.items.length.toLocaleString()} file(s) from the Trash${failures ? ` — ${failures} could not be found` : ""}.`,
+        );
+      } catch (error) {
+        showErrorNotice(error, "Could not restore from the Trash");
+      }
+    },
+    [library, refreshLibraryStats, showErrorNotice],
+  );
+
   const confirmDeleteItem = () => {
     if (itemPendingDeleteCount === 0 || !itemPendingDeleteRef.current) return;
-    const ids = itemPendingDeleteRef.current;
+    const request = itemPendingDeleteRef.current;
+    const ids = request.ids;
     // Close dialog immediately
     setItemPendingDeleteCount(0);
     itemPendingDeleteRef.current = null;
+    setItemPendingDeleteSummary(null);
     // Run delete in background
     void (async () => {
       try {
@@ -1643,9 +1681,20 @@ function App() {
           // the number people care about after a duplicate cleanup.
           const reclaimed =
             result.bytes > 0 ? ` — ${formatBytesSimple(result.bytes)} reclaimed` : "";
-          showNotice(
-            `Moved ${moved.toLocaleString()} item${moved === 1 ? "" : "s"} to Trash${reclaimed}.${suffix}${warning}`,
-          );
+          const message = `Moved ${moved.toLocaleString()} item${
+            moved === 1 ? "" : "s"
+          } to Trash${reclaimed}.${suffix}${warning}`;
+          // Duplicate cleanup passes the full items so the notice can offer an
+          // undo; everything else keeps the plain confirmation.
+          if (request.undoItems?.length) {
+            const undoItems = request.undoItems;
+            showNotice(message, undefined, {
+              label: "Undo",
+              run: () => void restoreTrashedItems(undoItems),
+            });
+          } else {
+            showNotice(message);
+          }
           if (result.failures.length > 0) console.warn("Trash refusals", result.failures);
         }
       } catch (error) {
@@ -2448,6 +2497,19 @@ function App() {
             >
               <span aria-hidden="true">{library.noticeCode ? "!" : "✓"}</span>
               {library.notice}
+              {library.noticeAction ? (
+                <button
+                  type="button"
+                  className="toast-action"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    library.noticeAction?.run();
+                    library.showNotice("");
+                  }}
+                >
+                  {library.noticeAction.label}
+                </button>
+              ) : null}
             </div>
           )}
 
@@ -2468,6 +2530,7 @@ function App() {
             setAlbumPendingDelete={setAlbumPendingDelete}
             setDeletingAlbum={setDeletingAlbum}
             itemPendingDeleteCount={itemPendingDeleteCount}
+            itemPendingDeleteSummary={itemPendingDeleteSummary}
             setItemPendingDeleteCount={setItemPendingDeleteCount}
             albumRemovePending={albumRemovePending}
             setAlbumRemovePending={setAlbumRemovePending}
@@ -2557,6 +2620,7 @@ function App() {
         searchInputRef={searchInputRef}
         itemPendingDeleteRef={itemPendingDeleteRef}
         setItemPendingDeleteCount={setItemPendingDeleteCount}
+        setItemPendingDeleteSummary={setItemPendingDeleteSummary}
         setFolderPendingRemove={setFolderPendingRemove}
         setRemoveAllSourcesDialogOpen={setRemoveAllSourcesDialogOpen}
         rescanSources={rescanSources}

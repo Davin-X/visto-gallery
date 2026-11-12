@@ -14,6 +14,16 @@ export interface PanOffset {
   y: number;
 }
 
+/** Rows to render when the "differences only" filter is on: everything that
+ *  actually differs, or a notice row when the pair is fully identical. */
+export function selectVisibleRows<Row extends { differs: boolean }>(
+  rows: readonly Row[],
+  differencesOnly: boolean,
+): readonly Row[] {
+  if (!differencesOnly) return rows;
+  return rows.filter((row) => row.differs);
+}
+
 /** Header summary for the number of metadata fields that differ. */
 export function describeDifferences(differences: number): string {
   if (differences === 0) return "Identical metadata";
@@ -111,6 +121,7 @@ export function CompareOverlay({
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [pan, setPan] = useState<PanOffset>({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
+  const [differencesOnly, setDifferencesOnly] = useState(true);
   const dragRef = useRef<{
     startX: number;
     startY: number;
@@ -122,6 +133,11 @@ export function CompareOverlay({
   const copyIndex = copies.findIndex((item) => item.id === copy?.id);
   const rows = useMemo(() => (copy ? compareRows(keeper, copy) : []), [keeper, copy]);
   const differences = differenceCount(rows);
+  const equalRows = rows.length - differences;
+  const visibleRows = useMemo(
+    () => selectVisibleRows(rows, differencesOnly),
+    [rows, differencesOnly],
+  );
 
   useFocusTrap(true, dialogRef);
 
@@ -397,6 +413,24 @@ export function CompareOverlay({
         </div>
 
         <div className="compare-table-wrap">
+          <div className="compare-table-toolbar">
+            <button
+              type="button"
+              className={`compare-filter-toggle${differencesOnly ? " is-active" : ""}`}
+              aria-pressed={differencesOnly}
+              onClick={() => setDifferencesOnly((value) => !value)}
+              title="Show only the fields that differ, or every field"
+            >
+              {differencesOnly
+                ? `Differences only (${differences})`
+                : `All fields (${rows.length})`}
+            </button>
+            {differencesOnly && equalRows > 0 && (
+              <p className="compare-table-note">
+                {equalRows} identical {equalRows === 1 ? "field" : "fields"} hidden
+              </p>
+            )}
+          </div>
           <table className="compare-table">
             <caption className="visually-hidden">
               Metadata differences between keeper and copy
@@ -409,13 +443,20 @@ export function CompareOverlay({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.label} className={row.differs ? "is-diff" : undefined}>
-                  <th scope="row">{row.label}</th>
-                  <td>{row.keeper}</td>
-                  <td>{row.copy}</td>
+              {visibleRows.length === 0 ? (
+                <tr>
+                  <th scope="row">Differences</th>
+                  <td colSpan={2}>None — the files match field for field.</td>
                 </tr>
-              ))}
+              ) : (
+                visibleRows.map((row) => (
+                  <tr key={row.label} className={row.differs ? "is-diff" : undefined}>
+                    <th scope="row">{row.label}</th>
+                    <td>{row.keeper}</td>
+                    <td>{row.copy}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
