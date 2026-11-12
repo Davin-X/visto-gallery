@@ -850,3 +850,112 @@ test("toggleSelectAll deselects everything when the full match set is selected",
   useLibraryStore.getState().toggleSelectAll();
   expect(useLibraryStore.getState().selectedIds).toEqual([]);
 });
+
+type PageResult = {
+  items: MediaItem[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  totalCount: number | null;
+};
+
+function deferredPage() {
+  let resolve!: (value: PageResult) => void;
+  const promise = new Promise<PageResult>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
+test("a superseded continuation page cannot clear loadingNextPage for the newer request", async () => {
+  (window as any).__TAURI_INTERNALS__ = {};
+  const stale = deferredPage();
+  const firstPage = deferredPage();
+  const fresh = deferredPage();
+  vi.mocked(tauri.library.getItems)
+    .mockReturnValueOnce(stale.promise)
+    .mockReturnValueOnce(firstPage.promise)
+    .mockReturnValueOnce(fresh.promise);
+
+  const a = makeItem("a", "a.jpg");
+  const staleB = makeItem("stale-b", "stale-b.jpg");
+  const c = makeItem("c", "c.jpg");
+
+  useLibraryStore.setState({
+    items: [a],
+    page: 0,
+    hasMore: true,
+    nextCursor: "page-2",
+    loadingNextPage: false,
+  });
+
+  // Request 1 reads cursor page-2 and stays in flight.
+  const staleRequest = useLibraryStore.getState().loadNextPage();
+  expect(useLibraryStore.getState().loadingNextPage).toBe(true);
+
+  // A filter reload supersedes it; `loadItemsPage` resets the paging state.
+  const reload = useLibraryStore.getState().loadItemsPage();
+  firstPage.resolve({ items: [a], hasMore: true, nextCursor: "page-2", totalCount: 11 });
+  await reload;
+  expect(useLibraryStore.getState().loadingNextPage).toBe(false);
+
+  // Request 2 starts on the reloaded list.
+  const freshRequest = useLibraryStore.getState().loadNextPage();
+  expect(useLibraryStore.getState().loadingNextPage).toBe(true);
+
+  // The superseded request finishing late must not clear request 2's guard nor
+  // append its page to the reloaded list.
+  stale.resolve({ items: [staleB], hasMore: true, nextCursor: "page-3", totalCount: 11 });
+  await staleRequest;
+  expect(useLibraryStore.getState().loadingNextPage).toBe(true);
+  expect(useLibraryStore.getState().items.map((item) => item.id)).toEqual(["a"]);
+
+  fresh.resolve({ items: [c], hasMore: false, nextCursor: null, totalCount: 11 });
+  await freshRequest;
+  expect(useLibraryStore.getState().loadingNextPage).toBe(false);
+  expect(useLibraryStore.getState().items.map((item) => item.id)).toEqual(["a", "c"]);
+  delete (window as any).__TAURI_INTERNALS__;
+});
+
+test("a stale hidden-page request cannot clear hiddenLoading for a newer refetch", async () => {
+  (window as any).__TAURI_INTERNALS__ = {};
+  const stale = deferredPage();
+  const refetch = deferredPage();
+  vi.mocked(tauri.library.getHiddenItems)
+    .mockReturnValueOnce(stale.promise)
+    .mockReturnValueOnce(refetch.promise);
+
+  const hiddenA = makeItem("hidden-a", "hidden-a.jpg");
+  hiddenA.hidden = true;
+  const hiddenB = makeItem("hidden-b", "hidden-b.jpg");
+  hiddenB.hidden = true;
+
+  useLibraryStore.setState({
+    hiddenItems: [hiddenA],
+    hiddenCount: 2,
+    hiddenCursor: "hidden-2",
+    hiddenHasMore: true,
+    hiddenLoading: false,
+  });
+
+  const staleRequest = useLibraryStore.getState().loadMoreHiddenItems();
+  expect(useLibraryStore.getState().hiddenLoading).toBe(true);
+
+  // Opening the Hidden view refetches from the first page while the older
+  // continuation request is still in flight.
+  const refetchRequest = useLibraryStore.getState().loadHiddenItems();
+  expect(useLibraryStore.getState().hiddenLoading).toBe(true);
+
+  stale.resolve({ items: [hiddenB], hasMore: false, nextCursor: null, totalCount: 2 });
+  await staleRequest;
+  expect(useLibraryStore.getState().hiddenLoading).toBe(true);
+  expect(useLibraryStore.getState().hiddenItems.map((item) => item.id)).toEqual(["hidden-a"]);
+
+  refetch.resolve({ items: [hiddenA, hiddenB], hasMore: false, nextCursor: null, totalCount: 2 });
+  await refetchRequest;
+  expect(useLibraryStore.getState().hiddenLoading).toBe(false);
+  expect(useLibraryStore.getState().hiddenItems.map((item) => item.id)).toEqual([
+    "hidden-a",
+    "hidden-b",
+  ]);
+  delete (window as any).__TAURI_INTERNALS__;
+});
