@@ -11,6 +11,7 @@ import {
 } from "../../engine/stores";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useKeyboard } from "../../engine/hooks/useKeyboard";
+import { TypedConfirmDialog } from "./TypedConfirmDialog";
 import { tauri } from "../../engine/commands/tauri";
 import { save, open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { BackupInfo, LibraryFolder } from "../../engine/types/commands";
@@ -21,7 +22,7 @@ import { PrivacyPanel } from "./settings/PrivacyPanel";
 import { AdvancedPanel } from "./settings/AdvancedPanel";
 import { GearIcon, EyeIcon, FolderIcon, ShieldIcon, CpuIcon } from "./icons";
 
-type SettingsTab = "general" | "viewing" | "library" | "privacy" | "advanced";
+export type SettingsTab = "general" | "viewing" | "library" | "privacy" | "advanced";
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: "general", label: "General", icon: <GearIcon size={15} /> },
@@ -37,8 +38,11 @@ export function SettingsScreen(props: {
   onRescan?: () => void;
   onRescanFolder?: (folder: LibraryFolder) => void;
   onRemoveAllSources?: () => void;
+  /** Which tab to open on. Set when the screen is opened from the Sources
+   *  shortcut; remounting is enough, so the shard only seeds the initial tab. */
+  initialTab?: SettingsTab;
 }) {
-  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  const [activeTab, setActiveTab] = useState<SettingsTab>(props.initialTab ?? "general");
   const sidebarWidth = useSidebarWidth();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -53,31 +57,21 @@ export function SettingsScreen(props: {
   } | null>(null);
   const [suggestedOldRoot, setSuggestedOldRoot] = useState<string | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const resetDialogRef = useRef<HTMLDivElement | null>(null);
-  const deleteDialogRef = useRef<HTMLDivElement | null>(null);
   const restoreDialogRef = useRef<HTMLDivElement | null>(null);
-  useFocusTrap(showResetConfirm, resetDialogRef);
-  useFocusTrap(showDeleteConfirm, deleteDialogRef);
   useFocusTrap(!!pendingRestore, restoreDialogRef);
 
-  // Escape cancels whichever confirm dialog is open (restore stays pinned
-  // while a restore is in flight, matching its backdrop guard).
+  // Restore stays pinned while a restore is in flight (its backdrop guards
+  // the same), matching its backdrop guard.
   useKeyboard([
     useCallback(
       (e: KeyboardEvent) => {
         if (e.key !== "Escape") return;
-        if (showResetConfirm) {
-          e.preventDefault();
-          setShowResetConfirm(false);
-        } else if (showDeleteConfirm) {
-          e.preventDefault();
-          setShowDeleteConfirm(false);
-        } else if (pendingRestore && !restoring) {
+        if (pendingRestore && !restoring) {
           e.preventDefault();
           setPendingRestore(null);
         }
       },
-      [showResetConfirm, showDeleteConfirm, pendingRestore, restoring],
+      [pendingRestore, restoring],
     ),
   ]);
 
@@ -438,39 +432,17 @@ export function SettingsScreen(props: {
 
       {/* Confirmation Dialogs */}
       {showResetConfirm && (
-        <div className="dialog-backdrop" onClick={() => setShowResetConfirm(false)}>
-          <div
-            ref={resetDialogRef}
-            className="album-dialog confirm-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="settings-reset-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="dialog-heading">
-              <div>
-                <p className="eyebrow">RESET</p>
-                <h2 id="settings-reset-title">Reset All Settings?</h2>
-              </div>
-            </div>
-            <p className="dialog-body">
-              This will restore all preferences to their defaults. Your library, albums, and tags
-              will not be affected.
-            </p>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() => setShowResetConfirm(false)}
-              >
-                Cancel
-              </button>
-              <button type="button" className="danger-button" onClick={handleResetSettings}>
-                Reset
-              </button>
-            </div>
-          </div>
-        </div>
+        <TypedConfirmDialog
+          open
+          eyebrow="RESET"
+          title="Reset all settings?"
+          description="Restores every preference to its default. Your library, albums and tags are not affected."
+          requiredPhrase="RESET"
+          confirmLabel="Reset"
+          onClose={() => setShowResetConfirm(false)}
+          onConfirm={handleResetSettings}
+          titleId="settings-reset-title"
+        />
       )}
       {pendingRestore && (
         <div
@@ -523,39 +495,22 @@ export function SettingsScreen(props: {
         </div>
       )}
       {showDeleteConfirm && (
-        <div className="dialog-backdrop" onClick={() => setShowDeleteConfirm(false)}>
-          <div
-            ref={deleteDialogRef}
-            className="album-dialog delete-album-dialog confirm-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="settings-delete-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="dialog-heading">
-              <div>
-                <p className="eyebrow">DELETE</p>
-                <h2 id="settings-delete-title">Delete Library Database?</h2>
-              </div>
-            </div>
-            <p className="dialog-body">
+        <TypedConfirmDialog
+          open
+          eyebrow="DELETE"
+          title="Delete Library Database?"
+          description={
+            <>
               This removes the catalog, albums, tags, and all metadata.{" "}
               <b>Original files on disk are not affected.</b> You can re-import folders to rebuild.
-            </p>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() => setShowDeleteConfirm(false)}
-              >
-                Cancel
-              </button>
-              <button type="button" className="danger-button" onClick={handleDeleteLibrary}>
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+          requiredPhrase="DELETE"
+          confirmLabel="Delete"
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={handleDeleteLibrary}
+          titleId="settings-delete-title"
+        />
       )}
     </div>
   );

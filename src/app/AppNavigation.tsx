@@ -3,9 +3,6 @@ import { createPortal } from "react-dom";
 import { NowPlaying } from "../design/components/NowPlaying";
 import {
   GearIcon,
-  SunIcon,
-  MoonIcon,
-  MonitorIcon,
   LibraryIcon,
   AlbumsIcon,
   DuplicatesIcon,
@@ -26,22 +23,9 @@ import {
   ChevronsLeftIcon,
   ChevronsRightIcon,
 } from "../design/components/icons";
-import { ACCENT_PALETTE } from "../engine/stores";
-import type { Appearance } from "../engine/types/generated/ipc";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { LibraryFolder, LibraryStats } from "../engine/types/commands";
 import type { Screen } from "./screen";
-
-/** The top-bar button cycles light → dark → system → light. */
-export function cycleAppearance(appearance: Appearance): Appearance {
-  return appearance === "light" ? "dark" : appearance === "dark" ? "system" : "light";
-}
-
-const APPEARANCE_LABEL: Record<Appearance, string> = {
-  light: "Light",
-  dark: "Dark",
-  system: "System",
-};
 
 const NAV_ITEMS: Array<{
   label: string;
@@ -63,13 +47,8 @@ interface AppTopBarProps {
   progressPhase: string | null;
   sidebarOpen: boolean;
   showInspector: boolean;
-  dark: boolean;
-  accentColor: string;
   onToggleSidebar: () => void;
   onToggleInspector: () => void;
-  onToggleAppearance: () => void;
-  appearance: Appearance;
-  onCycleAccent: () => void;
   onOpenSettings: () => void;
   onMouseDown: (e: React.MouseEvent) => void;
   onDoubleClick: (e: React.MouseEvent) => void;
@@ -89,13 +68,8 @@ export function AppTopBar({
   progressPhase,
   sidebarOpen,
   showInspector,
-  dark,
-  appearance,
-  accentColor,
   onToggleSidebar,
   onToggleInspector,
-  onToggleAppearance,
-  onCycleAccent,
   onOpenSettings,
   onMouseDown,
   onDoubleClick,
@@ -107,7 +81,6 @@ export function AppTopBar({
   onNowPlayingNext,
 }: AppTopBarProps) {
   const inspectorAvailable = screen === "Library" || screen === "Hidden";
-  const appearanceNextLabel = APPEARANCE_LABEL[cycleAppearance(appearance)];
 
   return (
     <header className="topbar" onMouseDown={onMouseDown} onDoubleClick={onDoubleClick}>
@@ -185,41 +158,6 @@ export function AppTopBar({
           <button
             className="icon-button"
             type="button"
-            aria-label={`Appearance: ${APPEARANCE_LABEL[appearance]}. Switch to ${appearanceNextLabel}`}
-            title={`Appearance: ${APPEARANCE_LABEL[appearance]} — switch to ${appearanceNextLabel}`}
-            onClick={onToggleAppearance}
-          >
-            {appearance === "light" ? (
-              <SunIcon size={18} />
-            ) : appearance === "dark" ? (
-              <MoonIcon size={18} />
-            ) : (
-              <MonitorIcon size={18} />
-            )}
-          </button>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Accent color"
-            title="Cycle accent color"
-            onClick={onCycleAccent}
-          >
-            <span
-              style={{
-                width: 14,
-                height: 14,
-                borderRadius: "50%",
-                background: (ACCENT_PALETTE.find((c) => c.id === accentColor) || ACCENT_PALETTE[0])[
-                  dark ? "dark" : "light"
-                ],
-                display: "inline-block",
-                border: "1px solid rgba(0,0,0,0.2)",
-              }}
-            />
-          </button>
-          <button
-            className="icon-button"
-            type="button"
             aria-label="Settings"
             title="Settings"
             onClick={onOpenSettings}
@@ -235,7 +173,6 @@ export function AppTopBar({
 interface AppSidebarProps {
   screen: Screen;
   folders: LibraryFolder[];
-  sourcesSheetOpen: boolean;
   stats: LibraryStats;
   updateAvailable: boolean;
   updateVersion: string | null;
@@ -252,7 +189,6 @@ interface AppSidebarProps {
 export function AppSidebar({
   screen,
   folders,
-  sourcesSheetOpen,
   stats,
   updateAvailable,
   updateVersion,
@@ -491,11 +427,9 @@ export function AppSidebar({
         <div className="sidebar-section sources-entry-section">
           <button
             type="button"
-            className={`sources-entry${sourcesSheetOpen ? " open" : ""}`}
+            className="sources-entry"
             onClick={onOpenSources}
-            title="Manage library sources"
-            aria-haspopup="dialog"
-            aria-expanded={sourcesSheetOpen}
+            title="Manage sources (opens Settings)"
           >
             <span className="sources-entry-icon">
               <FolderIcon size={16} />

@@ -34,7 +34,7 @@ import { errorCode } from "../engine/types/errors";
 import { describeError } from "./utils/describeError";
 import { startConfiguredSlideshow } from "./utils/startConfiguredSlideshow";
 import { AppDialogs } from "./AppDialogs";
-import { AppSidebar, AppTopBar, cycleAppearance } from "./AppNavigation";
+import { AppSidebar, AppTopBar } from "./AppNavigation";
 import { AppShell } from "./AppShell";
 import { AppScreenRouter } from "./AppScreenRouter";
 import type { Screen } from "./screen";
@@ -113,7 +113,6 @@ function App() {
   // the sidebar can never drop a chunk of the library.
   const [folderPendingRemove, setFolderPendingRemove] = useState<LibraryFolder | null>(null);
   const [removingFolder, setRemovingFolder] = useState(false);
-  const [sourcesSheetOpen, setSourcesSheetOpen] = useState(false);
   const [removeAllSourcesDialogOpen, setRemoveAllSourcesDialogOpen] = useState(false);
   const [removingAllSources, setRemovingAllSources] = useState(false);
 
@@ -642,7 +641,6 @@ function App() {
     albumPendingDelete,
     itemPendingDeleteCount,
     folderPendingRemove,
-    sourcesSheetOpen,
   });
   liveRef.current = {
     library,
@@ -656,7 +654,6 @@ function App() {
     albumPendingDelete,
     itemPendingDeleteCount,
     folderPendingRemove,
-    sourcesSheetOpen,
   };
 
   // Handlers are declared further down; stable listeners reach them through a ref.
@@ -698,7 +695,6 @@ function App() {
       albumPendingDelete,
       itemPendingDeleteCount,
       folderPendingRemove,
-      sourcesSheetOpen,
     } = liveRef.current;
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
@@ -722,7 +718,6 @@ function App() {
       albumPendingDelete ||
       itemPendingDeleteCount > 0 ||
       folderPendingRemove ||
-      sourcesSheetOpen ||
       updateDialogOpenRef.current ||
       shortcutsCheatSheetOpen
     )
@@ -2213,7 +2208,15 @@ function App() {
     navigateViewer,
     navigateVideo: navigateVideoQueue,
     openViewer: (id: string) => openViewer(id),
-    showSettings: () => openScreen("Settings"),
+    showSettings: () => openSettings(),
+  };
+
+  // Tabs the settings screen knows how to open to. The sources shortcut in
+  // the sidebar lands on the Library tab; the gear opens the general tab.
+  const [settingsInitialTab, setSettingsInitialTab] = useState<"library" | undefined>(undefined);
+  const openSettings = (tab?: "library") => {
+    setSettingsInitialTab(tab);
+    setScreen("Settings");
   };
 
   const activeAlbumName = library.activeAlbum
@@ -2235,8 +2238,6 @@ function App() {
           progressPhase={library.progress?.phase ?? null}
           sidebarOpen={library.sidebarOpen}
           showInspector={library.showInspector}
-          dark={dark}
-          accentColor={accentColor}
           nowPlaying={
             playbackItem && playbackItemId && screen !== "Video"
               ? {
@@ -2268,14 +2269,7 @@ function App() {
           }}
           onToggleSidebar={() => library.toggleSidebar()}
           onToggleInspector={() => library.toggleInspector()}
-          appearance={appearance}
-          onToggleAppearance={() => settings.update("appearance", cycleAppearance(appearance))}
-          onCycleAccent={() => {
-            const index = ACCENT_PALETTE.findIndex((c) => c.id === accentColor);
-            const next = ACCENT_PALETTE[(index + 1) % ACCENT_PALETTE.length].id;
-            settings.update("accentColor", next as any);
-          }}
-          onOpenSettings={() => openScreen("Settings")}
+          onOpenSettings={() => openSettings()}
           onMouseDown={beginTopbarDrag}
           onDoubleClick={handleTopbarDoubleClick}
         />
@@ -2284,13 +2278,12 @@ function App() {
         <AppSidebar
           screen={screen}
           folders={library.folders}
-          sourcesSheetOpen={sourcesSheetOpen}
           stats={libraryStats}
           updateAvailable={Boolean(updateInfo?.available)}
           updateVersion={updateInfo?.latestVersion ?? null}
           appVersion={appVersion}
           onOpenScreen={openScreen}
-          onOpenSources={() => setSourcesSheetOpen(true)}
+          onOpenSources={() => openSettings("library")}
           onOpenUpdate={() => setUpdateDialogOpen(true)}
           sidebarCollapsed={library.sidebarCollapsed}
           onToggleCollapse={library.toggleSidebarCollapsed}
@@ -2542,8 +2535,6 @@ function App() {
             setAlbumPickerItemIds={setAlbumPickerItemIds}
             setAlbumPickerSearch={setAlbumSearch}
             setAddingToAlbumId={setAddingToAlbumId}
-            sourcesSheetOpen={sourcesSheetOpen}
-            setSourcesSheetOpen={setSourcesSheetOpen}
             removeAllSourcesDialogOpen={removeAllSourcesDialogOpen}
             setRemoveAllSourcesDialogOpen={setRemoveAllSourcesDialogOpen}
             removingAllSources={removingAllSources}
@@ -2559,7 +2550,6 @@ function App() {
             updateInfo={updateInfo}
             updateChecking={updateChecking}
             library={library}
-            setScreen={(screen: string) => setScreen(screen as Screen)}
             submitAlbum={submitAlbum}
             closeAlbumDialog={closeAlbumDialog}
             addPickedItemsToAlbum={addPickedItemsToAlbum}
@@ -2569,9 +2559,6 @@ function App() {
             confirmRemoveFromAlbum={confirmRemoveFromAlbum}
             confirmRemoveFolder={confirmRemoveFolder}
             removeAllSources={removeAllSources}
-            rescanSources={rescanSources}
-            rescanSource={rescanSource}
-            importFolder={importFolder}
             checkForUpdates={checkForUpdates}
             albumDialogRef={albumDialogRef}
             updateDialogRef={updateDialogRef}
