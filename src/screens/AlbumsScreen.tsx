@@ -26,6 +26,32 @@ function formatAlbumCount(itemCount: unknown): string {
   return `${count.toLocaleString()} ${count === 1 ? "item" : "items"}`;
 }
 
+/**
+ * The meta row both an album card and a smart-album tile end in: accent slot,
+ * name (cut in the middle so similar names stay distinguishable) and count,
+ * right-aligned. Sharing it is what stops the two from drifting into different
+ * layouts again — they already had once.
+ */
+function AlbumMeta({
+  color,
+  name,
+  count,
+}: {
+  /** A stored album's accent. Smart albums have none: they are a saved filter,
+   *  not an object with an identity, so the slot shows an empty ring. */
+  color?: string;
+  name: string;
+  count: string;
+}) {
+  return (
+    <span className="album-meta">
+      <i className={color ? `album-dot ${color}` : "album-dot album-dot-ring"} aria-hidden="true" />
+      <MiddleTruncate className="album-meta-name" text={name} tailLength={6} />
+      <span className="album-meta-count">{count}</span>
+    </span>
+  );
+}
+
 function AlbumsScreen(props: AlbumsScreenProps) {
   const overviews = useLibraryStore((s) => s.albumOverviews);
 
@@ -138,14 +164,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                       <span className="smart-album-tile-cover-empty">{badge}</span>
                     )}
                   </span>
-                  <MiddleTruncate
-                    className="smart-album-tile-name"
-                    text={album.name}
-                    tailLength={6}
-                  />
-                  <span className="smart-album-tile-count">
-                    {formatAlbumCount(album.itemCount)}
-                  </span>
+                  <AlbumMeta name={album.name} count={formatAlbumCount(album.itemCount)} />
                 </button>
               );
             })}
@@ -189,19 +208,11 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   </span>
                 )}
               </span>
-              <span className="album-card-meta">
-                <span className="album-card-name">
-                  <i className={`album-dot ${album.color}`} />
-                  {/* Names often differ only at the end ("Trip 2023", "Trip
-                      2024"), so keep the end visible when space runs out. */}
-                  <MiddleTruncate text={album.name} tailLength={6} />
-                </span>
-                <span className="album-card-count">
-                  {album.count > 0
-                    ? `${album.count.toLocaleString()} ${album.count === 1 ? "item" : "items"}`
-                    : "Empty"}
-                </span>
-              </span>
+              <AlbumMeta
+                color={album.color}
+                name={album.name}
+                count={formatAlbumCount(album.count)}
+              />
             </button>
           ))}
         </div>
