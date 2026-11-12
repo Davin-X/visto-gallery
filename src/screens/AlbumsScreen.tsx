@@ -55,6 +55,14 @@ function AlbumsScreen(props: AlbumsScreenProps) {
     });
   }, [props.albums, overviews]);
 
+  // The film strip shows one row; "View all" expands it into the full
+  // multi-row grid. Shown only when there is something to expand into.
+  const [smartAlbumsExpanded, setSmartAlbumsExpanded] = React.useState(false);
+  const canExpandSmartAlbums = (props.smartAlbums?.length ?? 0) > 4;
+  const toggleSmartAlbumsExpanded = React.useCallback(() => {
+    setSmartAlbumsExpanded((value) => !value);
+  }, []);
+
   return (
     <div className="feature-page albums-page">
       <div className="page-heading">
@@ -74,15 +82,31 @@ function AlbumsScreen(props: AlbumsScreenProps) {
       </div>
 
       {(props.smartAlbums?.length ?? 0) > 0 && (
-        <section className="smart-albums-section" aria-label="Smart Albums">
-          <div className="smart-albums-heading">
-            <div className="page-heading--section">
-              <p className="eyebrow">SAVED FILTERS</p>
+        <section
+          className={`smart-albums-section${smartAlbumsExpanded ? " is-expanded" : ""}`}
+          aria-label="Smart Albums"
+        >
+          <div className="smart-albums-headrow">
+            <div className="smart-albums-heading-left">
+              <span className="eyebrow">SAVED FILTERS</span>
               <h2>Smart Albums</h2>
+              <span className="smart-albums-count">
+                {props.smartAlbums!.length.toLocaleString()}
+              </span>
+              <span className="smart-albums-toggle-desc">Updates automatically</span>
             </div>
-            <span className="section-desc">Updates automatically as your library changes.</span>
+            {canExpandSmartAlbums && (
+              <button
+                type="button"
+                className="smart-albums-viewall"
+                onClick={toggleSmartAlbumsExpanded}
+                aria-pressed={smartAlbumsExpanded}
+              >
+                {smartAlbumsExpanded ? "Show less" : "View all"}
+              </button>
+            )}
           </div>
-          <div className="smart-albums-list">
+          <div id="smart-albums-list" className="smart-albums-list">
             {props.smartAlbums!.map((album) => {
               const filter = album.filter;
               let badge = "📷";
