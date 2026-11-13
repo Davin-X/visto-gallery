@@ -364,7 +364,7 @@ async fn restore_backup_into_catalog(db: &SqlitePool, path: &str) -> Result<(), 
         copy_table(
             &mut tx,
             "albums",
-            &["id", "name", "color_index", "created_at", "updated_at"],
+            &["id", "name", "color_index", "created_at", "updated_at", "position"],
         )
         .await?;
         copy_table(
@@ -622,7 +622,7 @@ mod tests {
             .execute(&db)
             .await
             .unwrap();
-        sqlx::query("CREATE TABLE albums (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, color_index INTEGER DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)")
+        sqlx::query("CREATE TABLE albums (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, color_index INTEGER DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, position INTEGER NOT NULL DEFAULT 0)")
             .execute(&db)
             .await
             .unwrap();
@@ -921,6 +921,50 @@ mod tests {
         assert!(files.iter().all(|f| !f.exists()), "{files:?}");
         assert!(source.exists(), "the user's backup is never touched");
         let _ = std::fs::remove_file(&source);
+    }
+
+    #[tokio::test]
+    async fn restored_albums_keep_the_custom_order() {
+        let (db, catalog_path) = catalog_db().await;
+        // Custom order differs from creation order.
+        sqlx::query("INSERT INTO albums (id, name, created_at, updated_at, position) VALUES ('al-a', 'Alpha', 1, 1, 2)")
+            .execute(&db)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO albums (id, name, created_at, updated_at, position) VALUES ('al-b', 'Beta', 2, 2, 1)")
+            .execute(&db)
+            .await
+            .unwrap();
+
+        let backup_path = temp_backup("album-order");
+        snapshot_to(&db, &backup_path).await.unwrap();
+        annotate_snapshot(backup_path.to_str().unwrap()).await.unwrap();
+
+        // Scramble the live order, then restore the snapshot. The custom
+        // order must come back, not Alpha-then-Beta.
+        sqlx::query("UPDATE albums SET position = 2 WHERE id = 'al-b'")
+            .execute(&db)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE albums SET position = 1 WHERE id = 'al-a'")
+            .execute(&db)
+            .await
+            .unwrap();
+
+        restore_backup_into_catalog(&db, backup_path.to_str().unwrap())
+            .await
+            .unwrap();
+
+        let names: Vec<String> =
+            sqlx::query_scalar("SELECT name FROM albums ORDER BY position ASC")
+                .fetch_all(&db)
+                .await
+                .unwrap();
+        assert_eq!(names, vec!["Beta".to_string(), "Alpha".to_string()]);
+
+        db.close().await;
+        let _ = std::fs::remove_file(backup_path);
+        let _ = std::fs::remove_file(catalog_path);
     }
 
     #[test]

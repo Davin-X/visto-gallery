@@ -1,6 +1,9 @@
 import React from "react";
 import {
   AlbumsIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  DragIcon,
   PencilIcon,
   PlusIcon,
   SlideshowIcon,
@@ -97,6 +100,41 @@ function AlbumsScreen(props: AlbumsScreenProps) {
       };
     });
   }, [props.albums, overviews]);
+
+  // Albums are reorderable, so the list order is user data, not an accident of
+  // the query. `albumOrderIds` is the current order, used by the drag and by
+  // the Move up / Move down buttons.
+  const reorderAlbums = useLibraryStore((s) => s.reorderAlbums);
+  const [dragId, setDragId] = React.useState<string | null>(null);
+  const [dropTarget, setDropTarget] = React.useState<{ id: string; before: boolean } | null>(null);
+  // Cards render from a memo that preserves props order, so this is just the
+  // current on-screen order.
+  const albumOrderIds = albums.map((album: any) => album.id as string);
+
+  const moveAlbum = (albumId: string, delta: number) => {
+    const current = (props.albums || []).map((album: any) => album.id as string);
+    const from = current.indexOf(albumId);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= current.length) return;
+    const next = [...current];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    void reorderAlbums(next);
+  };
+
+  const reorderAlbum = (sourceId: string, targetId: string, before: boolean) => {
+    const next = [...albumOrderIds];
+    const from = next.indexOf(sourceId);
+    if (from < 0) return;
+    next.splice(from, 1);
+    let to = next.indexOf(targetId);
+    if (to < 0) return;
+    if (!before) to += 1;
+    next.splice(to, 0, sourceId);
+    setDragId(null);
+    setDropTarget(null);
+    void reorderAlbums(next);
+  };
 
   // The film strip shows one row; "View all" expands it into the full
   // multi-row grid. Shown only when there is something to expand into.
@@ -293,8 +331,69 @@ function AlbumsScreen(props: AlbumsScreenProps) {
         </div>
       ) : (
         <div className="albums-grid">
-          {albums.map((album: any) => (
-            <div className="album-card-wrap" key={album.id}>
+          {albums.map((album: any, index: number) => (
+            <div
+              className={`album-card-wrap${dragId === album.id ? " is-dragging" : ""}${
+                dropTarget && dropTarget.id === album.id
+                  ? dropTarget.before
+                    ? " is-drop-before"
+                    : " is-drop-after"
+                  : ""
+              }`}
+              key={album.id}
+              onDragOver={(event) => {
+                if (!dragId || dragId === album.id) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                const rect = event.currentTarget.getBoundingClientRect();
+                const before = event.clientX < rect.left + rect.width / 2;
+                setDropTarget((current) =>
+                  current && current.id === album.id && current.before === before
+                    ? current
+                    : { id: album.id, before },
+                );
+              }}
+              onDragLeave={() =>
+                setDropTarget((current) => (current?.id === album.id ? null : current))
+              }
+              onDrop={(event) => {
+                event.preventDefault();
+                if (!dragId || dragId === album.id) {
+                  setDragId(null);
+                  setDropTarget(null);
+                  return;
+                }
+                const rect = event.currentTarget.getBoundingClientRect();
+                reorderAlbum(dragId, album.id, event.clientX < rect.left + rect.width / 2);
+              }}
+            >
+              <button
+                type="button"
+                className="album-card-reorder"
+                title="Drag to reorder"
+                aria-label={`Drag to reorder ${album.name}`}
+                draggable
+                onDragStart={(event) => {
+                  setDragId(album.id);
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", album.id);
+                  const card = event.currentTarget.closest(".album-card-wrap");
+                  const rect = card?.getBoundingClientRect();
+                  if (card && rect) {
+                    event.dataTransfer.setDragImage(
+                      card as HTMLElement,
+                      Math.min(40, rect.width / 2),
+                      Math.min(24, rect.height / 2),
+                    );
+                  }
+                }}
+                onDragEnd={() => {
+                  setDragId(null);
+                  setDropTarget(null);
+                }}
+              >
+                <DragIcon size={13} />
+              </button>
               <button
                 type="button"
                 className="album-card"
@@ -338,6 +437,26 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   onClick={() => props.onAddItemsToAlbum?.(album.id)}
                 >
                   <PlusIcon size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="album-card-action"
+                  title="Move earlier"
+                  aria-label={`Move ${album.name} earlier`}
+                  disabled={index === 0}
+                  onClick={() => moveAlbum(album.id, -1)}
+                >
+                  <ChevronUpIcon size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="album-card-action"
+                  title="Move later"
+                  aria-label={`Move ${album.name} later`}
+                  disabled={index === albums.length - 1}
+                  onClick={() => moveAlbum(album.id, 1)}
+                >
+                  <ChevronDownIcon size={14} />
                 </button>
                 <button
                   type="button"

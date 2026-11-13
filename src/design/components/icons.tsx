@@ -602,6 +602,14 @@ export function ChevronDownIcon({ size = 14, className = "", strokeWidth = 2 }: 
   );
 }
 
+export function ChevronUpIcon({ size = 14, className = "", strokeWidth = 2 }: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <path d="M18 15l-6-6-6 6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 export function ChevronLeftIcon({ size = 14, className = "", strokeWidth = 2 }: IconProps) {
   return (
     <Svg size={size} className={className} strokeWidth={strokeWidth}>

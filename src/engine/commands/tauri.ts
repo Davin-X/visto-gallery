@@ -153,6 +153,10 @@ export const tauri = {
     rename: (albumId: string, name: string): Promise<void> =>
       invoke("rename_album", { albumId, name }),
 
+    // Takes the complete ordered id list so the stored result is always a
+    // full permutation.
+    reorder: (albumIds: string[]): Promise<void> => invoke("reorder_albums", { albumIds }),
+
     addItems: (albumId: string, itemIds: string[]): Promise<void> =>
       invoke("add_to_album", { albumId, itemIds }),
 

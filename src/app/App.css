@@ -5070,6 +5070,22 @@ body.is-resizing .photo-inspector {
   margin-top: 18px;
 }
 
+/* Seven buttons share the row on a regular album card (slideshow, add, two
+   move buttons, rename, delete), so the whole row gets a denser density
+   rather than letting it run off the card. */
+.albums-grid .album-card-actions {
+  top: 8px;
+  right: 8px;
+  gap: 3px;
+  max-width: calc(100% - 16px);
+}
+
+.albums-grid .album-card-action,
+.albums-grid .album-card-reorder {
+  width: 24px;
+  height: 24px;
+}
+
 .album-card {
   display: flex;
   min-width: 0;
@@ -5234,6 +5250,92 @@ body.is-resizing .photo-inspector {
   position: relative;
   display: flex;
   min-width: 0;
+}
+
+/* Drag handle sits in the top-left corner so the hover action row keeps the
+   top-right; same reveal rules so it stays out of the way until it is
+   wanted. */
+.album-card-reorder {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--muted);
+  cursor: grab;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.12s ease,
+    visibility 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.album-card-reorder:active {
+  cursor: grabbing;
+}
+
+.album-card-wrap:hover .album-card-reorder,
+.album-card-wrap:focus-within .album-card-reorder {
+  opacity: 1;
+  visibility: visible;
+}
+
+.album-card-reorder:hover {
+  border-color: color-mix(in srgb, var(--blue) 45%, var(--line));
+  color: var(--text);
+}
+
+.album-card-reorder:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+/* The three states of a drag: the dragged card recedes and the target shows
+   which row edge the drop will land on. */
+.album-card-wrap.is-dragging {
+  opacity: 0.55;
+}
+
+.album-card-wrap.is-drop-before::after,
+.album-card-wrap.is-drop-after::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  z-index: 5;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--blue);
+}
+
+.album-card-wrap.is-drop-before::after {
+  left: -7px;
+}
+
+.album-card-wrap.is-drop-after::after {
+  right: -7px;
+}
+
+.album-card-action:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.album-card-action:disabled:hover {
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: inherit;
 }
 
 .album-card-wrap > .album-card {

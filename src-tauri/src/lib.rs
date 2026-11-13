@@ -204,6 +204,7 @@ pub fn run() {
             create_album,
             delete_album,
             rename_album,
+            reorder_albums,
             add_to_album,
             remove_from_album,
             // Smart Albums
