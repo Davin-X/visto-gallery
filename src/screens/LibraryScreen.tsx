@@ -2533,7 +2533,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                           title="Show this file in Finder"
                         >
                           <FolderIcon size={14} />
-                          <span>Reveal in Finder</span>
+                          <span>Show in Finder</span>
                         </button>
                         <button
                           type="button"

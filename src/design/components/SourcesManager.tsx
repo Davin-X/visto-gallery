@@ -65,7 +65,7 @@ export function SourcesManager(props: {
         disabled: viewing || missing,
         onClick: () => filterTo(folder),
       },
-      { label: "Reveal in Finder", disabled: missing, onClick: () => reveal(folder) },
+      { label: "Show in Finder", disabled: missing, onClick: () => reveal(folder) },
       {
         label: "Rescan this source",
         disabled: !onRescanFolder || missing,
@@ -227,7 +227,7 @@ export function SourcesManager(props: {
                             aria-label={
                               missing
                                 ? `Missing folder: ${folder.path}`
-                                : `Reveal ${folder.path} in Finder`
+                                : `Show ${folder.path} in Finder`
                             }
                             onClick={() => {
                               if (!missing) reveal(folder);

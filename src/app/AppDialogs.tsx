@@ -647,17 +647,15 @@ function DeleteItemDialog({
         aria-labelledby="delete-item-title"
       >
         <DialogHeader
-          eyebrow="PHOTO"
-          title="Delete Item?"
+          eyebrow="LIBRARY"
+          title="Move to Trash?"
           titleId="delete-item-title"
           onClose={onClose}
         />
         <p className="delete-album-copy">
-          Are you sure you want to delete{" "}
-          <b>
-            {count} item{count === 1 ? "" : "s"}
-          </b>
-          ? They will be moved to Trash.
+          Move <b>{count === 1 ? "1 item" : `${count.toLocaleString()} items`}</b> to the Trash?{" "}
+          {count === 1 ? "It stays" : "They stay"} there until you empty it, so you can put{" "}
+          {count === 1 ? "it" : "them"} back from Finder.
         </p>
         {summary ? <p className="delete-album-summary">{summary}</p> : null}
         <div className="dialog-actions">
@@ -665,7 +663,7 @@ function DeleteItemDialog({
             Cancel
           </button>
           <button type="button" className="danger-button" onClick={onConfirm}>
-            Delete
+            Move to Trash
           </button>
         </div>
       </div>
