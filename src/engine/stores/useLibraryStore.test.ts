@@ -20,6 +20,7 @@ vi.mock("../commands/tauri", () => ({
       rename: vi.fn().mockResolvedValue(undefined),
       reorder: vi.fn().mockResolvedValue(undefined),
       addItems: vi.fn().mockResolvedValue(undefined),
+      removeItems: vi.fn().mockResolvedValue(undefined),
       getOverviews: vi.fn().mockResolvedValue([]),
       get: vi.fn().mockResolvedValue([]),
       getTags: vi.fn().mockResolvedValue([]),
@@ -270,12 +271,91 @@ test("deleteAlbum removes album but keeps items", async () => {
   expect(state.activeAlbum).toBeNull();
 });
 
-test("renameAlbum updates album name", async () => {
+test("renameAlbum updates album name and its updated date", async () => {
   useLibraryStore.setState({
-    albums: [{ id: "album-1", name: "Trip", itemCount: 0 } as any],
+    albums: [{ id: "album-1", name: "Trip", itemCount: 0, updatedAt: 1 } as any],
   });
   await useLibraryStore.getState().renameAlbum("album-1", "Vacation");
   expect(useLibraryStore.getState().albums[0].name).toBe("Vacation");
+  expect(useLibraryStore.getState().albums[0].updatedAt).toBeGreaterThan(1);
+});
+
+test("addToAlbum stamps the updated date on both derived lists", async () => {
+  useLibraryStore.setState({
+    items: [makeItem("a", "photo.jpg")],
+    albums: [{ id: "album-1", name: "Trip", itemCount: 0, updatedAt: 1 } as any],
+    albumOverviews: [{ id: "album-1", name: "Trip", itemCount: 0, updatedAt: 1 } as any],
+  });
+
+  await useLibraryStore.getState().addToAlbum("album-1", ["a"]);
+
+  const state = useLibraryStore.getState();
+  expect(state.albums[0].updatedAt).toBeGreaterThan(1);
+  expect(state.albumOverviews[0].updatedAt).toBeGreaterThan(1);
+});
+
+test("addToAlbum leaves the updated date alone when every item is already a member", async () => {
+  const a = makeItem("a", "photo.jpg");
+  a.albumIds = ["album-1"];
+  useLibraryStore.setState({
+    items: [a],
+    albums: [{ id: "album-1", name: "Trip", itemCount: 1, updatedAt: 1 } as any],
+    albumOverviews: [{ id: "album-1", name: "Trip", itemCount: 1, updatedAt: 1 } as any],
+  });
+
+  await useLibraryStore.getState().addToAlbum("album-1", ["a"]);
+
+  const state = useLibraryStore.getState();
+  expect(state.albums[0].updatedAt).toBe(1);
+  expect(state.albumOverviews[0].updatedAt).toBe(1);
+});
+
+test("removeFromAlbum stamps the updated date on both derived lists", async () => {
+  const a = makeItem("a", "photo.jpg");
+  a.albumIds = ["album-1"];
+  useLibraryStore.setState({
+    items: [a],
+    albums: [{ id: "album-1", name: "Trip", itemCount: 1, updatedAt: 1 } as any],
+    albumOverviews: [{ id: "album-1", name: "Trip", itemCount: 1, updatedAt: 1 } as any],
+  });
+
+  await useLibraryStore.getState().removeFromAlbum("album-1", ["a"]);
+
+  const state = useLibraryStore.getState();
+  expect(state.albums[0].updatedAt).toBeGreaterThan(1);
+  expect(state.albumOverviews[0].updatedAt).toBeGreaterThan(1);
+});
+
+test("removeFromAlbum stamps the updated date when only hidden members are removed", async () => {
+  const a = makeItem("a", "photo.jpg");
+  a.albumIds = ["album-1"];
+  a.hidden = true;
+  useLibraryStore.setState({
+    items: [a],
+    albums: [{ id: "album-1", name: "Trip", itemCount: 0, updatedAt: 1 } as any],
+    albumOverviews: [{ id: "album-1", name: "Trip", itemCount: 0, updatedAt: 1 } as any],
+  });
+
+  await useLibraryStore.getState().removeFromAlbum("album-1", ["a"]);
+
+  const state = useLibraryStore.getState();
+  expect(state.albums[0].itemCount).toBe(0);
+  expect(state.albums[0].updatedAt).toBeGreaterThan(1);
+  expect(state.albumOverviews[0].updatedAt).toBeGreaterThan(1);
+});
+
+test("removeFromAlbum leaves the updated date alone when nothing was a member", async () => {
+  useLibraryStore.setState({
+    items: [makeItem("a", "photo.jpg")],
+    albums: [{ id: "album-1", name: "Trip", itemCount: 0, updatedAt: 1 } as any],
+    albumOverviews: [{ id: "album-1", name: "Trip", itemCount: 0, updatedAt: 1 } as any],
+  });
+
+  await useLibraryStore.getState().removeFromAlbum("album-1", ["a"]);
+
+  const state = useLibraryStore.getState();
+  expect(state.albums[0].updatedAt).toBe(1);
+  expect(state.albumOverviews[0].updatedAt).toBe(1);
 });
 
 test("loadLibrary applies date filters to the backend query and uses album overviews", async () => {

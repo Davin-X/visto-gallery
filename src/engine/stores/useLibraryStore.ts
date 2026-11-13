@@ -1523,9 +1523,14 @@ export const useLibraryStore = create<LibraryState>()(
 
       renameAlbum: async (albumId, name) => {
         await tauri.albums.rename(albumId, name);
+        // The backend bumps updated_at on rename; mirror it so the card's date
+        // (and the updated sort) is right without reloading the catalog.
+        const updatedAt = Date.now();
         set((s) => ({
-          albums: s.albums.map((a) => (a.id === albumId ? { ...a, name } : a)),
-          albumOverviews: s.albumOverviews.map((a) => (a.id === albumId ? { ...a, name } : a)),
+          albums: s.albums.map((a) => (a.id === albumId ? { ...a, name, updatedAt } : a)),
+          albumOverviews: s.albumOverviews.map((a) =>
+            a.id === albumId ? { ...a, name, updatedAt } : a,
+          ),
         }));
       },
 
@@ -1573,6 +1578,9 @@ export const useLibraryStore = create<LibraryState>()(
         });
 
         await tauri.albums.addItems(albumId, itemIds);
+        // Only a real membership change touches updated_at in the backend, so
+        // re-adding existing members must not move the card's date.
+        const updatedAt = newlyLinked.length ? Date.now() : undefined;
         set((s) => ({
           items: s.items.map((item) =>
             itemIds.includes(item.id)
@@ -1587,6 +1595,7 @@ export const useLibraryStore = create<LibraryState>()(
               ? {
                   ...album,
                   itemCount: (album.itemCount || 0) + newlyAdded.length,
+                  ...(updatedAt ? { updatedAt } : {}),
                 }
               : album,
           ),
@@ -1595,6 +1604,7 @@ export const useLibraryStore = create<LibraryState>()(
               ? {
                   ...album,
                   itemCount: (album.itemCount || 0) + newlyAdded.length,
+                  ...(updatedAt ? { updatedAt } : {}),
                 }
               : album,
           ),
@@ -1612,12 +1622,20 @@ export const useLibraryStore = create<LibraryState>()(
         if (!itemIds.length) return;
 
         const current = get();
-        const removedIds = itemIds.filter((id) => {
+        const unlinked = itemIds.filter((id) => {
           const item = current.items.find((i) => i.id === id);
-          return item && !item.hidden && item.albumIds?.includes(albumId);
+          return item && item.albumIds?.includes(albumId);
+        });
+        const removedIds = unlinked.filter((id) => {
+          const item = current.items.find((i) => i.id === id);
+          return item && !item.hidden;
         });
 
         await tauri.albums.removeItems(albumId, itemIds);
+        // The backend bumps updated_at when any membership row goes, hidden
+        // members included, so key the date off every unlinked item, not the
+        // visible-only count.
+        const updatedAt = unlinked.length ? Date.now() : undefined;
         set((s) => ({
           items: s.items.map((item) =>
             itemIds.includes(item.id)
@@ -1632,6 +1650,7 @@ export const useLibraryStore = create<LibraryState>()(
               ? {
                   ...album,
                   itemCount: Math.max(0, (album.itemCount || 0) - removedIds.length),
+                  ...(updatedAt ? { updatedAt } : {}),
                 }
               : album,
           ),
@@ -1640,6 +1659,7 @@ export const useLibraryStore = create<LibraryState>()(
               ? {
                   ...album,
                   itemCount: Math.max(0, (album.itemCount || 0) - removedIds.length),
+                  ...(updatedAt ? { updatedAt } : {}),
                 }
               : album,
           ),
