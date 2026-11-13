@@ -942,11 +942,7 @@ function LibraryScreen(props: LibraryScreenProps) {
       library.sortBy === sortBy && library.sortOrder === "asc" ? "desc" : "asc",
     );
   };
-  const detailsHeader = (
-    label: string,
-    sortBy?: typeof library.sortBy,
-    columnClass?: string,
-  ) => (
+  const detailsHeader = (label: string, sortBy?: typeof library.sortBy, columnClass?: string) => (
     <div
       className={`details-col list-view-head-cell${columnClass ? ` ${columnClass}` : ""}`}
       role="columnheader"
