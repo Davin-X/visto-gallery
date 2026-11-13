@@ -1064,6 +1064,30 @@ describe("showNotice", () => {
     useLibraryStore.getState().showNotice("second");
     expect(useLibraryStore.getState().noticeAction).toBeNull();
   });
+
+  it("keeps a later notice when an earlier notice's timer fires", () => {
+    vi.useFakeTimers();
+    try {
+      useLibraryStore.getState().showNotice("Importing 3 file(s)…");
+      vi.advanceTimersByTime(1000);
+      useLibraryStore.getState().showNotice("Moved 3 items to Trash.", undefined, {
+        label: "Undo",
+        run: () => {},
+      });
+
+      // The first notice's 3.6 s timer fires here; the Undo toast must stay.
+      vi.advanceTimersByTime(3000);
+      expect(useLibraryStore.getState().notice).toBe("Moved 3 items to Trash.");
+      expect(useLibraryStore.getState().noticeAction?.label).toBe("Undo");
+
+      // Its own 10 s dwell still clears it.
+      vi.advanceTimersByTime(7000);
+      expect(useLibraryStore.getState().notice).toBe("");
+      expect(useLibraryStore.getState().noticeAction).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("hidden view server-side filtering", () => {

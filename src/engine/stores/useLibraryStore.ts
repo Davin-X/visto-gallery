@@ -300,6 +300,9 @@ let libraryLoadGeneration = 0;
 // paging state while it is still the newest request of its kind.
 let nextPageRequestId = 0;
 let nextHiddenRequestId = 0;
+// Each notice gets an id so its dismiss timer clears only that notice, never
+// a newer one shown in the meantime (such as an Undo toast).
+let latestNoticeId = 0;
 let hiddenQueryReloadTimer: ReturnType<typeof setTimeout> | null = null;
 let queryReloadTimer: ReturnType<typeof setTimeout> | null = null;
 // Debounce for free-text camera/lens filters so typing doesn't reload the
@@ -1901,12 +1904,16 @@ export const useLibraryStore = create<LibraryState>()(
       setProgress: (progress) => set({ progress }),
       showNotice: (text, code = null, action) => {
         const noticeAction = text ? (action ?? null) : null;
+        const noticeId = ++latestNoticeId;
         set({ notice: text, noticeCode: code ?? null, noticeAction });
         if (text) {
           // A notice carrying an action lingers longer: it must stay reachable
           // long enough for the user to notice the toast and undo.
           const dwell = code ? 8000 : noticeAction ? 10000 : 3600;
-          setTimeout(() => set({ notice: "", noticeCode: null, noticeAction: null }), dwell);
+          setTimeout(() => {
+            if (noticeId !== latestNoticeId) return;
+            set({ notice: "", noticeCode: null, noticeAction: null });
+          }, dwell);
         }
       },
 
