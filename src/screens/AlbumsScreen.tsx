@@ -499,7 +499,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
               </button>
             </div>
             <div
-              className="list-view-head-cell list-view-head-cell--numeric"
+              className="list-view-head-cell list-view-head-cell--numeric albums-col-size"
               {...sortProps("itemSize")}
             >
               <button
@@ -513,7 +513,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 </span>
               </button>
             </div>
-            <div className="list-view-head-cell" {...sortProps("updatedAt")}>
+            <div className="list-view-head-cell albums-col-updated" {...sortProps("updatedAt")}>
               <button
                 type="button"
                 className="details-sort-header"
@@ -602,12 +602,15 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   {Number(album.count).toLocaleString()} {album.count === 1 ? "item" : "items"}
                 </span>
                 <span
-                  className="list-view-cell list-view-cell--numeric list-view-cell--size"
+                  className="list-view-cell list-view-cell--numeric albums-cell-size"
                   role="gridcell"
                 >
                   {formatBytesSimple(Number((album as any).itemSize ?? 0))}
                 </span>
-                <span className="list-view-cell list-view-cell--muted" role="gridcell">
+                <span
+                  className="list-view-cell list-view-cell--muted albums-cell-updated"
+                  role="gridcell"
+                >
                   {album.updatedAt ? formatFileDate(album.updatedAt) : "—"}
                 </span>
                 <div

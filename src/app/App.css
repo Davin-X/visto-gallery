@@ -8422,7 +8422,6 @@ body.is-dragging-albums * {
   border-radius: 10px;
   background: var(--surface);
   overflow: hidden;
-  container-type: inline-size;
 }
 
 .list-view-header {
@@ -8431,7 +8430,6 @@ body.is-dragging-albums * {
      header must match it or the two columns drift vertically apart. */
   min-width: 400px;
   max-width: 1240px;
-  container-type: inline-size;
   top: 0;
   z-index: 12;
   display: grid;
@@ -8477,38 +8475,56 @@ body.is-dragging-albums * {
 }
 
 /* ===== Narrow-width column compaction =====
-   Instead of sideways scrolling below the old 650/814px floors, drop
-   least-important columns (and their grid tracks) once the container is
-   cramped. Name column always stays. Breakpoints set at the floor where the
-   name column would otherwise collapse (814px albums / 650px library). */
+   Instead of sideways scrolling below the old 650/814px floors, collapse the
+   least-important columns once the container is cramped. The track count never
+   changes: dropped columns keep a 0px track and their header/body cells keep
+   their place but are hidden, so the sticky header and every row stay on one
+   template and cannot drift out of alignment. Name never collapses.
 
-/* Albums list: hide Updated column at <=820px, then Size at <=670px. */
+   The query container is .albums-list-view / .library-grid-container, so the
+   rules must target their descendants — an element cannot query itself. */
+
+/* Albums list: retire Updated at <=820px, then Size at <=670px. */
 @container (max-width: 820px) {
-  .albums-list-view {
-    --list-columns: 34px 72px minmax(0, 1fr) minmax(0, 92px) minmax(0, 104px) 168px;
+  .albums-list-view > .list-view,
+  .albums-list-view > .list-view-header {
+    --list-columns: 34px 72px minmax(0, 1fr) minmax(0, 92px) minmax(0, 104px) 0px 168px;
+  }
+  .albums-list-view .albums-col-updated,
+  .albums-list-view .albums-cell-updated {
+    visibility: hidden;
   }
 }
 @container (max-width: 670px) {
-  .albums-list-view {
-    --list-columns: 34px 72px minmax(0, 1fr) minmax(0, 92px) 168px;
+  .albums-list-view > .list-view,
+  .albums-list-view > .list-view-header {
+    --list-columns: 34px 72px minmax(0, 1fr) minmax(0, 92px) 0px 0px 168px;
+  }
+  .albums-list-view .albums-col-size,
+  .albums-list-view .albums-cell-size {
+    visibility: hidden;
   }
 }
 
-/* Library details: hide Kind column at <=660px, then Size at <=530px. */
+/* Library details: retire Kind at <=660px, then Size at <=530px. */
 @container (max-width: 660px) {
-  .library-grid-container:has(> .list-view-header) {
-    --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px) 96px;
+  .library-grid-container > .list-view-header,
+  .library-grid-container > .list-view {
+    --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px) 0px minmax(0, 96px);
   }
-  .list-view {
-    --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px) 96px;
+  .library-grid-container .details-col-kind,
+  .library-grid-container .tile-kind {
+    visibility: hidden;
   }
 }
 @container (max-width: 530px) {
-  .library-grid-container:has(> .list-view-header) {
-    --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px);
+  .library-grid-container > .list-view-header,
+  .library-grid-container > .list-view {
+    --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px) 0px 0px;
   }
-  .list-view {
-    --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px);
+  .library-grid-container .details-col-size,
+  .library-grid-container .tile-size {
+    visibility: hidden;
   }
 }
 

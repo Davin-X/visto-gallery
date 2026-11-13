@@ -942,9 +942,13 @@ function LibraryScreen(props: LibraryScreenProps) {
       library.sortBy === sortBy && library.sortOrder === "asc" ? "desc" : "asc",
     );
   };
-  const detailsHeader = (label: string, sortBy?: typeof library.sortBy) => (
+  const detailsHeader = (
+    label: string,
+    sortBy?: typeof library.sortBy,
+    columnClass?: string,
+  ) => (
     <div
-      className="details-col list-view-head-cell"
+      className={`details-col list-view-head-cell${columnClass ? ` ${columnClass}` : ""}`}
       role="columnheader"
       aria-sort={
         sortBy
@@ -1622,8 +1626,8 @@ function LibraryScreen(props: LibraryScreenProps) {
               </div>
               {detailsHeader("Name", "name")}
               {detailsHeader("Captured", "capturedAt")}
-              {detailsHeader("Kind", "kind")}
-              {detailsHeader("Size", "size")}
+              {detailsHeader("Kind", "kind", "details-col-kind")}
+              {detailsHeader("Size", "size", "details-col-size")}
             </div>
           )}
           {(() => {
