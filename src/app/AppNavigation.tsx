@@ -3,6 +3,9 @@ import { createPortal } from "react-dom";
 import { NowPlaying } from "../design/components/NowPlaying";
 import {
   GearIcon,
+  SunIcon,
+  MoonIcon,
+  MonitorIcon,
   LibraryIcon,
   AlbumsIcon,
   DuplicatesIcon,
@@ -23,9 +26,22 @@ import {
   ChevronsLeftIcon,
   ChevronsRightIcon,
 } from "../design/components/icons";
+import { ACCENT_PALETTE } from "../engine/stores";
+import type { Appearance } from "../engine/types/generated/ipc";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { LibraryFolder, LibraryStats } from "../engine/types/commands";
 import type { Screen } from "./screen";
+
+/** The top-bar button cycles light → dark → system → light. */
+export function cycleAppearance(appearance: Appearance): Appearance {
+  return appearance === "light" ? "dark" : appearance === "dark" ? "system" : "light";
+}
+
+const APPEARANCE_LABEL: Record<Appearance, string> = {
+  light: "Light",
+  dark: "Dark",
+  system: "System",
+};
 
 const NAV_ITEMS: Array<{
   label: string;
@@ -47,8 +63,13 @@ interface AppTopBarProps {
   progressPhase: string | null;
   sidebarOpen: boolean;
   showInspector: boolean;
+  dark: boolean;
+  accentColor: string;
   onToggleSidebar: () => void;
   onToggleInspector: () => void;
+  onToggleAppearance: () => void;
+  appearance: Appearance;
+  onCycleAccent: () => void;
   onOpenSettings: () => void;
   onMouseDown: (e: React.MouseEvent) => void;
   onDoubleClick: (e: React.MouseEvent) => void;
@@ -68,8 +89,13 @@ export function AppTopBar({
   progressPhase,
   sidebarOpen,
   showInspector,
+  dark,
+  appearance,
+  accentColor,
   onToggleSidebar,
   onToggleInspector,
+  onToggleAppearance,
+  onCycleAccent,
   onOpenSettings,
   onMouseDown,
   onDoubleClick,
@@ -81,6 +107,7 @@ export function AppTopBar({
   onNowPlayingNext,
 }: AppTopBarProps) {
   const inspectorAvailable = screen === "Library" || screen === "Hidden";
+  const appearanceNextLabel = APPEARANCE_LABEL[cycleAppearance(appearance)];
 
   return (
     <header className="topbar" onMouseDown={onMouseDown} onDoubleClick={onDoubleClick}>
@@ -130,7 +157,7 @@ export function AppTopBar({
             title={sidebarOpen ? "Hide sidebar (⌘\\)" : "Show sidebar (⌘\\)"}
             onClick={onToggleSidebar}
           >
-            <PanelLeftIcon size={18} />
+            <PanelLeftIcon size={16} />
           </button>
           <button
             className="icon-button"
@@ -153,7 +180,42 @@ export function AppTopBar({
             }
             onClick={onToggleInspector}
           >
-            <PanelRightIcon size={18} />
+            <PanelRightIcon size={16} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label={`Appearance: ${APPEARANCE_LABEL[appearance]}. Switch to ${appearanceNextLabel}`}
+            title={`Appearance: ${APPEARANCE_LABEL[appearance]} — switch to ${appearanceNextLabel}`}
+            onClick={onToggleAppearance}
+          >
+            {appearance === "light" ? (
+              <SunIcon size={16} />
+            ) : appearance === "dark" ? (
+              <MoonIcon size={16} />
+            ) : (
+              <MonitorIcon size={16} />
+            )}
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Accent color"
+            title="Cycle accent color"
+            onClick={onCycleAccent}
+          >
+            <span
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: "50%",
+                background: (ACCENT_PALETTE.find((c) => c.id === accentColor) || ACCENT_PALETTE[0])[
+                  dark ? "dark" : "light"
+                ],
+                display: "inline-block",
+                border: "1px solid rgba(0,0,0,0.2)",
+              }}
+            />
           </button>
           <button
             className="icon-button"
@@ -162,7 +224,7 @@ export function AppTopBar({
             title="Settings"
             onClick={onOpenSettings}
           >
-            <GearIcon size={18} />
+            <GearIcon size={16} />
           </button>
         </div>
       </div>
