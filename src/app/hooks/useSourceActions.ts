@@ -19,6 +19,9 @@ interface UseSourceActionsOptions {
  * source folders, rescanning one or all sources, removing sources, and
  * importing straight into an album (picker or a Finder drop on an open album).
  */
+// Rescans never call `cancelScan()` first. That once cleared a single global
+// cancel flag; with per-job flags it would cancel every running scan,
+// including auto-import and the once-per-launch cleanup scan.
 export function useSourceActions({
   screen,
   showNotice,
@@ -137,7 +140,6 @@ export function useSourceActions({
     const library = useLibraryStore.getState();
     try {
       library.setBusy(true);
-      await tauri.library.cancelScan();
       library.setProgress({
         phase: "scanning",
         processed: 0,
@@ -169,8 +171,6 @@ export function useSourceActions({
     const library = useLibraryStore.getState();
     try {
       library.setBusy(true);
-      // Ensure any previous cancel is cleared before starting new scan
-      await tauri.library.cancelScan();
       await library.loadFolders();
       const folders = useLibraryStore.getState().folders;
       let cancelled = false;

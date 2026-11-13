@@ -447,13 +447,7 @@ function App() {
     pushScreen(next, screen);
   };
 
-  // Tabs the settings screen knows how to open to. The sources shortcut in
-  // the sidebar lands on the Library tab; the gear opens the general tab.
-  const [settingsInitialTab, setSettingsInitialTab] = useState<"library" | undefined>(undefined);
-  const openSettings = (tab?: "library") => {
-    setSettingsInitialTab(tab);
-    setScreen("Settings");
-  };
+  const openSettings = () => setScreen("Settings");
 
   // ── Keyboard and native menu ─────────────────────────────────────────────
   const searchInputRef = useRef<HTMLInputElement | null>(null);
