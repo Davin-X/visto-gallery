@@ -57,7 +57,7 @@ export function buildItemContextMenu(item: MediaItem, actions: ItemMenuActions):
 
   // Say up front when the menu acts on more than the item under the pointer.
   if (targets.length > 1) {
-    menu.push({ label: `${targets.length.toLocaleString()} items selected`, disabled: true });
+    menu.push({ label: `${targets.length.toLocaleString()} items selected`, heading: true });
     menu.push({ divider: true });
   }
 

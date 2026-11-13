@@ -142,17 +142,24 @@
   background-color: var(--i-tint);
 }
 
-/* Context menus behave like macOS: accent highlight, except destructive rows. */
-.app-frame .context-menu-item:not(.danger):hover,
-.app-frame .context-menu-item:not(.danger):focus-visible {
-  background: var(--blue-soft);
-  color: var(--accent-text);
+/* Context menus behave like macOS: the highlighted row fills with the accent
+   colour and its text turns white; a destructive row fills red instead. */
+.app-frame .context-menu-item:not(.danger):not(.disabled):hover,
+.app-frame .context-menu-item:not(.danger):not(.disabled):focus-visible,
+.app-frame .context-menu-submenu.open > .context-menu-item {
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 
-.app-frame .context-menu-item.danger:hover,
-.app-frame .context-menu-item.danger:focus-visible {
-  background: var(--danger-tint);
-  color: var(--danger);
+.app-frame .context-menu-item.danger:not(.disabled):hover,
+.app-frame .context-menu-item.danger:not(.disabled):focus-visible {
+  background: var(--danger);
+  color: #fff;
+}
+
+.app-frame .context-menu-item:is(:hover, :focus-visible) .context-menu-submenu-indicator,
+.app-frame .context-menu-submenu.open > .context-menu-item .context-menu-submenu-indicator {
+  color: inherit;
 }
 
 /* --------------------------------------------------------------------------
@@ -235,7 +242,6 @@
     .edit-tabs button,
     .layout-switcher button,
     .filmstrip button,
-    .context-menu-item,
     .settings-tab
   ):active:not(:disabled) {
   transform: scale(0.975);

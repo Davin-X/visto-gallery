@@ -11,6 +11,8 @@ export interface ContextMenuItem {
   danger?: boolean;
   submenu?: ContextMenuItem[];
   divider?: boolean;
+  /** A non-interactive caption, such as "3 items selected". */
+  heading?: boolean;
 }
 
 interface ContextMenuProps {
@@ -99,10 +101,21 @@ function ContextMenuContent({
   }, [cancelClose]);
   useEffect(() => cancelClose, [cancelClose]);
 
+  // Reserve the icon column on every row when any row uses it, so labels
+  // line up instead of jumping between rows with and without an icon.
+  const hasIconColumn = (items || []).some((item) => item.icon || item.submenu);
+  const iconSlot = (item: ContextMenuItem) =>
+    hasIconColumn || item.icon ? (
+      <span className="context-menu-icon" aria-hidden="true">
+        {item.icon || ""}
+      </span>
+    ) : null;
+
   return (
     <div
       ref={menuRef}
       className="context-menu"
+      aria-label="Actions"
       role="menu"
       tabIndex={-1}
       onKeyDown={(e) => {
@@ -147,6 +160,14 @@ function ContextMenuContent({
           return <div key={index} className="context-menu-separator" role="separator" />;
         }
 
+        if (item.heading) {
+          return (
+            <div key={index} className="context-menu-heading" role="presentation">
+              {item.label}
+            </div>
+          );
+        }
+
         if (item.submenu) {
           return (
             <div
@@ -176,7 +197,7 @@ function ContextMenuContent({
                   }
                 }}
               >
-                <span className="context-menu-icon">{item.icon || ""}</span>
+                {iconSlot(item)}
                 <span>{item.label}</span>
                 {item.shortcut && <span className="context-menu-shortcut">{item.shortcut}</span>}
                 <span className="context-menu-submenu-indicator" aria-hidden="true">
@@ -206,7 +227,7 @@ function ContextMenuContent({
             disabled={item.disabled}
             onClick={() => handleItemClick(item)}
           >
-            {item.icon && <span className="context-menu-icon">{item.icon}</span>}
+            {iconSlot(item)}
             <span>{item.label}</span>
             {item.shortcut && <span className="context-menu-shortcut">{item.shortcut}</span>}
           </button>

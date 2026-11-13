@@ -24,7 +24,7 @@ describe("buildItemContextMenu", () => {
       onRequestDelete,
     });
 
-    expect(menu[0]).toMatchObject({ label: "2 items selected", disabled: true });
+    expect(menu[0]).toMatchObject({ label: "2 items selected", heading: true });
     find(menu, "Unfavorite")?.onClick?.();
     expect(onSetFavorite).toHaveBeenCalledWith(["a", "b"], false);
     find(menu, "Hide")?.onClick?.();
