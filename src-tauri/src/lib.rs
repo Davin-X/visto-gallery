@@ -209,6 +209,7 @@ pub fn run() {
             // Smart Albums
             get_smart_albums,
             create_smart_album,
+            update_smart_album,
             rename_smart_album,
             delete_smart_album,
             get_smart_album_items,

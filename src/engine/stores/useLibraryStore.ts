@@ -27,6 +27,14 @@ import { errorCode } from "../types/errors";
 import { tauri } from "../commands/tauri";
 import { formatBytes } from "../commands/tauri";
 
+/** Mirror the server's `ORDER BY name COLLATE NOCASE` so a newly created or
+ *  renamed album lands where a reload would put it. */
+function sortSmartAlbums(albums: SmartAlbum[]): SmartAlbum[] {
+  return [...albums].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+  );
+}
+
 function mergeDuplicateGroups(
   previous: DuplicateGroup[],
   current: DuplicateGroup[],
@@ -226,6 +234,8 @@ export interface LibraryState {
   // Actions - Smart Albums
   loadSmartAlbums: () => Promise<void>;
   createSmartAlbum: (name: string) => Promise<void>;
+  createSmartAlbumFrom: (name: string, filter: SmartAlbumFilter) => Promise<boolean>;
+  updateSmartAlbum: (albumId: string, name: string, filter: SmartAlbumFilter) => Promise<boolean>;
   renameSmartAlbum: (albumId: string, name: string) => Promise<void>;
   deleteSmartAlbum: (albumId: string) => Promise<void>;
   openSmartAlbum: (albumId: string) => Promise<void>;
@@ -1659,12 +1669,40 @@ export const useLibraryStore = create<LibraryState>()(
           sortBy: state.sortBy,
           sortOrder: state.sortOrder,
         };
+        await get().createSmartAlbumFrom(trimmed, filter);
+      },
+
+      // Creating from the Albums screen starts from an explicit definition
+      // rather than whatever the Library happens to be filtered to.
+      createSmartAlbumFrom: async (name, filter) => {
+        const trimmed = name.trim();
+        if (!trimmed) return false;
         try {
           const album = await tauri.smartAlbums.create(trimmed, filter);
-          set((s) => ({ smartAlbums: [...s.smartAlbums, album] }));
+          set((s) => ({ smartAlbums: sortSmartAlbums([...s.smartAlbums, album]) }));
           get().showNotice(`Saved Smart Album "${album.name}".`);
+          return true;
         } catch (error) {
           get().showErrorNotice(error, "Could not save Smart Album");
+          return false;
+        }
+      },
+
+      updateSmartAlbum: async (albumId, name, filter) => {
+        const trimmed = name.trim();
+        if (!trimmed) return false;
+        try {
+          const album = await tauri.smartAlbums.update(albumId, trimmed, filter);
+          set((s) => ({
+            smartAlbums: sortSmartAlbums(
+              s.smartAlbums.map((entry) => (entry.id === albumId ? album : entry)),
+            ),
+          }));
+          get().showNotice(`Updated Smart Album "${album.name}".`);
+          return true;
+        } catch (error) {
+          get().showErrorNotice(error, "Could not update Smart Album");
+          return false;
         }
       },
 
@@ -1674,8 +1712,10 @@ export const useLibraryStore = create<LibraryState>()(
         try {
           await tauri.smartAlbums.rename(albumId, trimmed);
           set((s) => ({
-            smartAlbums: s.smartAlbums.map((album) =>
-              album.id === albumId ? { ...album, name: trimmed } : album,
+            smartAlbums: sortSmartAlbums(
+              s.smartAlbums.map((album) =>
+                album.id === albumId ? { ...album, name: trimmed } : album,
+              ),
             ),
           }));
         } catch (error) {

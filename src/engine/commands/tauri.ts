@@ -166,6 +166,9 @@ export const tauri = {
     create: (name: string, filter: SmartAlbumFilter): Promise<SmartAlbum> =>
       invoke("create_smart_album", { name, filter }),
 
+    update: (albumId: string, name: string, filter: SmartAlbumFilter): Promise<SmartAlbum> =>
+      invoke("update_smart_album", { albumId, name, filter }),
+
     rename: (albumId: string, name: string): Promise<void> =>
       invoke("rename_smart_album", { albumId, name }),
 
