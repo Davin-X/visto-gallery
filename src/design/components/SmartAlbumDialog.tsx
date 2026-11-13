@@ -147,6 +147,7 @@ export function SmartAlbumDialog({
           <label htmlFor="smart-album-name">Name</label>
           <input
             id="smart-album-name"
+            data-autofocus
             value={name}
             onChange={(e) => {
               setName(e.target.value);

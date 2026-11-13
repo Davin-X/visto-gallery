@@ -21,7 +21,15 @@ export function useFocusTrap(active: boolean, containerRef: RefObject<HTMLElemen
         (el) => !el.hasAttribute("disabled"),
       );
 
+    // A dialog can name the control that should start focused (the field
+    // the user came to fill in) with `data-autofocus`; otherwise the first
+    // focusable control wins, which is usually the header's Close button.
     const focusFirst = () => {
+      const preferred = container.querySelector<HTMLElement>("[data-autofocus]:not([disabled])");
+      if (preferred) {
+        preferred.focus();
+        return;
+      }
       const focusable = getFocusable();
       if (focusable.length) focusable[0].focus();
       else container.focus();

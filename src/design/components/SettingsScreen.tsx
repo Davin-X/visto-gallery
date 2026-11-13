@@ -126,7 +126,7 @@ export function SettingsScreen(props: {
     try {
       await tauri.library.deleteDatabase();
       await loadLibrary();
-      showNotice("Library database deleted. Original files were left untouched.");
+      showNotice("Library reset. Your files on disk were not touched.");
     } catch (e) {
       showErrorNotice(e, "Could not delete the library database");
     } finally {
@@ -497,16 +497,17 @@ export function SettingsScreen(props: {
       {showDeleteConfirm && (
         <TypedConfirmDialog
           open
-          eyebrow="DELETE"
-          title="Delete Library Database?"
+          eyebrow="RESET"
+          title="Reset Library?"
           description={
             <>
-              This removes the catalog, albums, tags, and all metadata.{" "}
-              <b>Original files on disk are not affected.</b> You can re-import folders to rebuild.
+              This removes every item, album, tag and rating from VistoGallery.{" "}
+              <b>Your files on disk are not touched.</b> Add your folders again to rebuild the
+              library.
             </>
           }
-          requiredPhrase="DELETE"
-          confirmLabel="Delete"
+          requiredPhrase="RESET"
+          confirmLabel="Reset Library"
           onClose={() => setShowDeleteConfirm(false)}
           onConfirm={handleDeleteLibrary}
           titleId="settings-delete-title"

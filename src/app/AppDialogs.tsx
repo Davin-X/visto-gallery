@@ -545,13 +545,14 @@ function AlbumPickerDialog({
   );
 }
 
-function DeleteAlbumDialog({
+export function DeleteAlbumDialog({
   open,
   album,
   deleting,
   onClose,
   onConfirm,
   dialogRef,
+  smart = false,
 }: {
   open: boolean;
   album: AlbumPickerTarget | null;
@@ -559,6 +560,8 @@ function DeleteAlbumDialog({
   onClose: () => void;
   onConfirm: () => Promise<void>;
   dialogRef: RefObject<HTMLDivElement | null>;
+  /** A Smart Album is a saved filter: deleting it never touches photos. */
+  smart?: boolean;
 }) {
   useFocusTrap(open, dialogRef);
   useEscape(onClose, open && !deleting);
@@ -581,8 +584,8 @@ function DeleteAlbumDialog({
         aria-describedby="delete-album-description"
       >
         <DialogHeader
-          eyebrow="ALBUM"
-          title="Delete Album?"
+          eyebrow={smart ? "SMART ALBUM" : "ALBUM"}
+          title={smart ? "Delete Smart Album?" : "Delete Album?"}
           titleId="delete-album-title"
           onClose={onClose}
           disabled={deleting}
@@ -595,12 +598,17 @@ function DeleteAlbumDialog({
             <AlbumsIcon size={19} />
           </span>
           <p>
-            <b>Your photos are safe.</b> This only removes the album and its grouping.{" "}
-            {album.itemCount
-              ? `${album.itemCount.toLocaleString()} item${
-                  album.itemCount === 1 ? "" : "s"
-                } will remain in your library.`
-              : "The items remain in your library."}
+            <b>Your photos are safe.</b>{" "}
+            {smart
+              ? "This only removes the saved filter; no photos are changed."
+              : "This only removes the album and its grouping. "}
+            {smart
+              ? null
+              : album.itemCount
+                ? `${album.itemCount.toLocaleString()} item${
+                    album.itemCount === 1 ? "" : "s"
+                  } will remain in your library.`
+                : "The items remain in your library."}
           </p>
         </div>
         <div className="dialog-actions">
@@ -608,7 +616,7 @@ function DeleteAlbumDialog({
             Cancel
           </button>
           <button type="button" className="danger-button" onClick={onConfirm} disabled={deleting}>
-            {deleting ? "Deleting…" : "Delete Album"}
+            {deleting ? "Deleting…" : smart ? "Delete Smart Album" : "Delete Album"}
           </button>
         </div>
       </div>
@@ -616,9 +624,28 @@ function DeleteAlbumDialog({
   );
 }
 
+/**
+ * What the Move to Trash dialog calls the items: the name for one, up to
+ * three names, or two names and "N more". Falls back to the count when the
+ * items aren't loaded.
+ */
+export function describeTrashTargets(count: number, names: string[]): string {
+  const known = names.filter(Boolean);
+  if (known.length === 0 || known.length < Math.min(count, 2)) {
+    return count === 1 ? "1 item" : `${count.toLocaleString()} items`;
+  }
+  const quoted = known.map((name) => `“${name}”`);
+  if (count === 1) return quoted[0];
+  if (count <= 3 && known.length === count) {
+    return `${quoted.slice(0, -1).join(", ")} and ${quoted[quoted.length - 1]}`;
+  }
+  return `${quoted.slice(0, 2).join(", ")} and ${(count - 2).toLocaleString()} more`;
+}
+
 function DeleteItemDialog({
   open,
   count,
+  names = [],
   summary,
   onClose,
   onConfirm,
@@ -626,6 +653,8 @@ function DeleteItemDialog({
 }: {
   open: boolean;
   count: number;
+  /** Names of the items going to the Trash, when known. */
+  names?: string[];
   /** Optional breakdown shown under the count, e.g. "2 groups · 412 MB". */
   summary?: string | null;
   onClose: () => void;
@@ -653,7 +682,7 @@ function DeleteItemDialog({
           onClose={onClose}
         />
         <p className="delete-album-copy">
-          Move <b>{count === 1 ? "1 item" : `${count.toLocaleString()} items`}</b> to the Trash?{" "}
+          Move <b>{describeTrashTargets(count, names)}</b> to the Trash?{" "}
           {count === 1 ? "It stays" : "They stay"} there until you empty it, so you can put{" "}
           {count === 1 ? "it" : "them"} back from Finder.
         </p>
@@ -780,11 +809,11 @@ function SourcesSheet({
         <div className="dialog-actions">
           <button
             type="button"
-            className="danger-button"
+            className="quiet-button sources-remove-all"
             disabled={library.busy || library.folders.length === 0}
             onClick={onRequestRemoveAll}
           >
-            Remove all sources
+            Remove All Sources…
           </button>
           <div style={{ flex: 1 }} />
           <button type="button" className="quiet-button" onClick={onClose}>
@@ -814,7 +843,7 @@ function RemoveAllSourcesDialog({
     <TypedConfirmDialog
       open={open}
       eyebrow="LIBRARY"
-      title="Remove all sources?"
+      title="Remove All Sources?"
       description={
         <>
           Unlinks all{" "}
@@ -979,6 +1008,23 @@ export function AppDialogs(props: AppDialogsProps) {
     itemPendingDeleteRef.current = null;
   };
 
+  // Name what is about to go to the Trash. The request carries ids (and the
+  // full items for a duplicate cleanup); look the rest up in what is loaded.
+  let pendingDeleteNames: string[] = [];
+  if (itemPendingDeleteCount > 0 && itemPendingDeleteRef.current) {
+    const request = itemPendingDeleteRef.current;
+    const byId = new Map<string, string>();
+    for (const item of [
+      ...(request.undoItems ?? []),
+      ...props.library.items,
+      ...props.library.hiddenItems,
+      ...props.library.duplicates.flatMap((group) => group.items),
+    ]) {
+      if (!byId.has(item.id)) byId.set(item.id, item.name);
+    }
+    pendingDeleteNames = request.ids.slice(0, 3).map((id) => byId.get(id) ?? "");
+  }
+
   return (
     <>
       <UpdateDialog
@@ -1038,6 +1084,7 @@ export function AppDialogs(props: AppDialogsProps) {
       <DeleteItemDialog
         open={itemPendingDeleteCount > 0}
         count={itemPendingDeleteCount}
+        names={pendingDeleteNames}
         summary={itemPendingDeleteSummary}
         onClose={closeItemDialog}
         onConfirm={confirmDeleteItem}

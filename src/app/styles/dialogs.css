@@ -1,4 +1,13 @@
 /* ===== Album dialog ===== */
+/* Every dialog uses one of these widths: small for confirms and names,
+   medium for pickers, large for forms, sheet for Sources. */
+:root {
+  --dialog-sm: 420px;
+  --dialog-md: 480px;
+  --dialog-lg: 520px;
+  --dialog-sheet: 780px;
+}
+
 /* The dialog renders inside .app-frame so it inherits the same surface and
    dark-mode tokens as the rest of the UI (a portal to body would lose them). */
 .dialog-backdrop {
@@ -15,7 +24,7 @@
 }
 
 .album-dialog {
-  width: min(420px, 100%);
+  width: min(var(--dialog-sm), 100%);
   max-height: min(720px, calc(100vh - 64px));
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -33,7 +42,7 @@
 .album-dialog.sources-sheet {
   display: flex;
   flex-direction: column;
-  width: min(780px, 100%);
+  width: min(var(--dialog-sheet), 100%);
   max-height: min(84vh, 720px);
   overflow: hidden;
 }
@@ -156,7 +165,7 @@
 /* Smart Albums are filter rules, so the dialog is a little wider than the
    album-name dialogs to keep the date range on one line. */
 .smart-album-dialog {
-  width: min(520px, 100%);
+  width: min(var(--dialog-lg), 100%);
 }
 
 .smart-album-dialog .filter-section {
@@ -169,6 +178,17 @@
 
 .smart-album-dialog .dialog-actions {
   margin-top: 18px;
+  /* The editor is taller than the 680 px minimum window, so it scrolls; keep
+     Create and Cancel pinned to the bottom edge instead of below the fold.
+     The negative margins reach across the dialog's 20 px padding. */
+  position: sticky;
+  bottom: -20px;
+  z-index: 1;
+  margin-inline: -20px;
+  margin-bottom: -20px;
+  padding: 12px 20px 20px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
 }
 
 .smart-album-dialog .filter-chip-row {
@@ -214,7 +234,7 @@
 }
 
 .shortcuts-cheat-sheet {
-  width: min(520px, 92vw);
+  width: min(var(--dialog-lg), 92vw);
   max-height: 90vh;
   overflow-y: auto;
 }
@@ -266,7 +286,7 @@
 }
 
 .confirm-dialog {
-  width: min(460px, 100%);
+  width: min(var(--dialog-sm), 100%);
 }
 
 .confirm-dialog .dialog-body {
@@ -278,7 +298,7 @@
 
 /* Searchable album picker. */
 .album-picker-dialog {
-  width: min(480px, 100%);
+  width: min(var(--dialog-md), 100%);
 }
 
 .album-picker-subtitle {
@@ -436,7 +456,7 @@
 
 /* Safe album deletion keeps the photos in the library. */
 .delete-album-dialog {
-  width: min(460px, 100%);
+  width: min(var(--dialog-sm), 100%);
 }
 
 .delete-album-copy {
@@ -529,3 +549,9 @@
   }
 }
 
+
+/* Removing every source is rare and destructive: a quiet text action at the
+   footer's edge, not a filled red button competing with Done. */
+.sources-remove-all:not(:disabled) {
+  color: var(--danger);
+}

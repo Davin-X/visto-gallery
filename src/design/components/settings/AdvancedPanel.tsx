@@ -241,9 +241,9 @@ export function AdvancedPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Delete Library Database</b>
+            <b>Reset Library</b>
             <span className="settings-row-desc">
-              Removes catalog, albums, tags. Original files unaffected.
+              Removes every item, album and tag from VistoGallery. Your files stay on disk.
             </span>
           </div>
           <div className="settings-row-control">
@@ -253,7 +253,7 @@ export function AdvancedPanel(props: {
               onClick={() => props.setShowDeleteConfirm(true)}
               disabled={props.deleting}
             >
-              {props.deleting ? "Deleting…" : "Delete Library Database…"}
+              {props.deleting ? "Resetting…" : "Reset Library…"}
             </button>
           </div>
         </div>

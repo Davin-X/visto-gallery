@@ -878,12 +878,16 @@
   position: fixed;
   z-index: 1000;
   width: fit-content;
-  min-width: 180px;
+  min-width: 200px;
   max-width: 280px;
-  padding: 6px;
+  padding: 5px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--surface);
+  /* Nearly opaque so text behind never competes with the menu; the blur adds
+     the frosted edge of a native menu without hurting legibility. */
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
   box-shadow:
     0 2px 4px rgba(0, 0, 0, 0.08),
     0 8px 24px rgba(0, 0, 0, 0.12),
@@ -896,13 +900,15 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 7px 12px;
+  /* Native menu density: about 24 px rows, regular weight. */
+  min-height: 24px;
+  padding: 3px 10px;
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   background: transparent;
   color: var(--ink);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   text-align: left;
   cursor: pointer;
   transition:
@@ -1011,10 +1017,18 @@
   white-space: nowrap;
 }
 
+.context-menu-heading {
+  padding: 4px 10px 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  user-select: none;
+}
+
 .context-menu-separator {
   height: 1px;
   background: var(--line);
-  margin: 4px 6px;
+  margin: 5px 10px;
   border-radius: 0.5px;
 }
 
@@ -1354,13 +1368,6 @@
 
 .sources-table tbody tr:hover .sources-row-view {
   color: var(--accent-text);
-}
-
-.sources-row-remove {
-  height: 24px;
-  padding: 0 8px;
-  font-size: 10.5px;
-  font-weight: 600;
 }
 
 .sources-filter {

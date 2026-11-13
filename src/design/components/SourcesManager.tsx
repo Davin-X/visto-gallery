@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { formatBytes, tauri } from "../../engine/commands/tauri";
 import { useLibraryStore } from "../../engine/stores";
 import type { LibraryFolder } from "../../engine/types/commands";
@@ -49,6 +50,48 @@ export function SourcesManager(props: {
     void tauri.items.revealInFinder(folder.path).catch((error: unknown) => {
       if (import.meta.env.DEV) console.error("reveal_in_finder failed:", error);
     });
+  };
+
+  // A missing source usually just moved (a renamed folder, a drive mounted
+  // under a new name). Locate… points it at the new place with the same root
+  // mapping Settings offers, so every item keeps its albums, tags and edits.
+  const [locating, setLocating] = useState<string | null>(null);
+  const locate = async (folder: LibraryFolder) => {
+    if (locating) return;
+    const library = useLibraryStore.getState();
+    let picked: string | string[] | null;
+    try {
+      picked = await openDialog({
+        directory: true,
+        multiple: false,
+        title: `Locate “${folder.name}”`,
+      });
+    } catch (error) {
+      library.showErrorNotice(error, "Could not open the folder picker");
+      return;
+    }
+    if (!picked || Array.isArray(picked)) return;
+    setLocating(folder.path);
+    try {
+      const preview = await tauri.rootMap.preview(folder.path, picked);
+      if (preview.conflictingPaths.length > 0) {
+        library.showNotice(
+          `“${folder.name}” was not moved: ${preview.conflictingPaths.length.toLocaleString()} file(s) there are already in the library. Nothing was changed.`,
+          "invalidInput",
+        );
+        return;
+      }
+      const result = await tauri.rootMap.apply(folder.path, picked);
+      await library.loadFolders();
+      await library.loadLibrary();
+      library.showNotice(
+        `Found “${folder.name}”. ${result.updatedItemCount.toLocaleString()} item${result.updatedItemCount === 1 ? "" : "s"} reconnected; your files were not changed.`,
+      );
+    } catch (error) {
+      library.showErrorNotice(error, `Could not locate “${folder.name}”`);
+    } finally {
+      setLocating(null);
+    }
   };
 
   const filterTo = (folder: LibraryFolder) => {
@@ -130,12 +173,12 @@ export function SourcesManager(props: {
           )}
           {onRemoveAllSources && folders.length > 0 && (
             <button
-              className="danger-button"
+              className="quiet-button sources-remove-all"
               type="button"
               onClick={() => onRemoveAllSources()}
               disabled={libraryBusy}
             >
-              Remove all sources
+              Remove All Sources…
             </button>
           )}
         </div>
@@ -243,14 +286,15 @@ export function SourcesManager(props: {
                     <td className="sources-num">{formatBytes(folder.totalSize)}</td>
                     <td className="sources-actions">
                       <div className="sources-row-actions">
-                        {missing && onRemoveFolder ? (
+                        {missing ? (
                           <button
                             type="button"
-                            className="sources-row-remove danger-button"
-                            title={`Remove missing source ${folder.name}`}
-                            onClick={() => onRemoveFolder(folder)}
+                            className="sources-row-view"
+                            title={`Point ${folder.name} at its new location`}
+                            disabled={locating !== null}
+                            onClick={() => void locate(folder)}
                           >
-                            Remove
+                            {locating === folder.path ? "Locating…" : "Locate…"}
                           </button>
                         ) : !viewing ? (
                           <button

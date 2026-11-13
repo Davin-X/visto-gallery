@@ -65,3 +65,19 @@ test("focus trap wraps Tab and Shift+Tab inside the dialog and returns focus to 
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(trigger).toHaveFocus();
 });
+
+function AutofocusDemo() {
+  const ref = useRef<HTMLDivElement>(null);
+  useFocusTrap(true, ref);
+  return (
+    <div ref={ref} role="dialog" tabIndex={-1}>
+      <button type="button">Close</button>
+      <input aria-label="Name" data-autofocus />
+    </div>
+  );
+}
+
+test("focus trap starts on the control marked data-autofocus", async () => {
+  render(<AutofocusDemo />);
+  await waitFor(() => expect(screen.getByLabelText("Name")).toHaveFocus());
+});
