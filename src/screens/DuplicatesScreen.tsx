@@ -470,13 +470,15 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               <span className="duplicate-stack-count">{view.ordered.length}</span>
             </span>
             <span className="duplicate-group-copy">
-              <span className="duplicate-group-title">{view.ordered.length} identical copies</span>
+              <span
+                className="duplicate-group-title"
+                title={group.sha256 ? `Content fingerprint (SHA-256): ${group.sha256}` : undefined}
+              >
+                {view.ordered.length} identical copies
+              </span>
               <span className="duplicate-group-sub">
                 {formatBytesSimple(group.size)} each · <b>{formatBytesSimple(view.reclaimable)}</b>{" "}
                 reclaimable
-              </span>
-              <span className="duplicate-group-hash" title={group.sha256}>
-                SHA-256 {(group.sha256 || "").slice(0, 16)}
               </span>
             </span>
             <span className={`duplicate-group-chevron${expanded ? " is-open" : ""}`}>
@@ -539,7 +541,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
         <p className="page-subtitle">
           {hasGroups
             ? `${groups.length.toLocaleString()} ${groups.length === 1 ? "group" : "groups"} · ${libraryTotals.copies.toLocaleString()} extra ${libraryTotals.copies === 1 ? "copy" : "copies"} · ${formatBytesSimple(libraryTotals.bytes)} reclaimable`
-            : "Find byte-identical files by SHA-256 content hash and reclaim disk space."}
+            : "Find exact copies of the same file and free up the space they take."}
         </p>
       </div>
       <div className="duplicate-heading-actions">
@@ -722,9 +724,9 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
             {isTrashing
               ? "The selected copies are being moved to Finder Trash. You can use Put Back in Finder if needed."
               : isDuplicateScan
-                ? "Comparing files by content hash. Large libraries can take a moment."
+                ? "Comparing files byte for byte. Large libraries can take a moment."
                 : !hasGroups && !scanned
-                  ? "Scan compares every file in your library by content (SHA-256). Nothing is moved until you choose which copies to remove."
+                  ? "The scan compares the contents of every file in your library. Nothing is moved until you choose which copies to remove."
                   : hasGroups
                     ? otherKinds.length > 0
                       ? `Found ${otherKindsLabel} instead. Use the media tabs above to switch.`

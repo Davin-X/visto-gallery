@@ -1387,9 +1387,6 @@ kbd {
    `span` and `button` inside the header used to outrank those class rules,
    which turned the summary into a nested card and greyed out the copy-count
    badge. Do not reintroduce them here. */
-.duplicate-group-hash {
-  font-family: ui-monospace, Menlo, monospace;
-}
 
 .duplicate-grid {
   display: grid;
