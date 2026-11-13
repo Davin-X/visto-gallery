@@ -56,7 +56,7 @@ export function buildItemContextMenu(item: MediaItem, actions: ItemMenuActions):
 
   menu.push(
     { label: "Open in default app", onClick: () => tauri.items.openFile(item.path) },
-    { label: "Open in Finder", onClick: () => tauri.items.revealInFinder(item.path) },
+    { label: "Show in Finder", onClick: () => tauri.items.revealInFinder(item.path) },
     {
       label: "Copy tags to Finder",
       disabled: !(item.tags || []).length,
@@ -139,8 +139,10 @@ export function buildItemContextMenu(item: MediaItem, actions: ItemMenuActions):
     });
   }
   if (actions.onRequestDelete) {
+    // The destructive action sits apart from the toggles above it.
+    menu.push({ divider: true });
     menu.push({
-      label: "Delete",
+      label: "Move to Trash…",
       danger: true,
       onClick: () => actions.onRequestDelete?.(ids),
     });

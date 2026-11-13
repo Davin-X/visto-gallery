@@ -390,8 +390,8 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
             <button
               type="button"
               className="duplicate-tile-tool"
-              title="Reveal in Finder"
-              aria-label={`Reveal ${item.name} in Finder`}
+              title="Show in Finder"
+              aria-label={`Show ${item.name} in Finder`}
               onClick={() => revealItem(item.path)}
             >
               <FolderIcon size={13} />

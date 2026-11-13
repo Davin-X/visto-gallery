@@ -915,7 +915,7 @@ function VideoPlayer({
             Open in default app
           </button>
           <button type="button" onClick={() => path && void tauri.items.revealInFinder(path)}>
-            Reveal in Finder
+            Show in Finder
           </button>
         </div>
         {isFormatFailure && !player && (
