@@ -1523,9 +1523,14 @@ export const useLibraryStore = create<LibraryState>()(
 
       renameAlbum: async (albumId, name) => {
         await tauri.albums.rename(albumId, name);
+        // The backend bumps updated_at on rename; mirror it so the card's date
+        // (and the updated sort) is right without reloading the catalog.
+        const updatedAt = Date.now();
         set((s) => ({
-          albums: s.albums.map((a) => (a.id === albumId ? { ...a, name } : a)),
-          albumOverviews: s.albumOverviews.map((a) => (a.id === albumId ? { ...a, name } : a)),
+          albums: s.albums.map((a) => (a.id === albumId ? { ...a, name, updatedAt } : a)),
+          albumOverviews: s.albumOverviews.map((a) =>
+            a.id === albumId ? { ...a, name, updatedAt } : a,
+          ),
         }));
       },
 
@@ -1573,6 +1578,9 @@ export const useLibraryStore = create<LibraryState>()(
         });
 
         await tauri.albums.addItems(albumId, itemIds);
+        // Only a real membership change touches updated_at in the backend, so
+        // re-adding existing members must not move the card's date.
+        const updatedAt = newlyLinked.length ? Date.now() : undefined;
         set((s) => ({
           items: s.items.map((item) =>
             itemIds.includes(item.id)
@@ -1587,6 +1595,7 @@ export const useLibraryStore = create<LibraryState>()(
               ? {
                   ...album,
                   itemCount: (album.itemCount || 0) + newlyAdded.length,
+                  ...(updatedAt ? { updatedAt } : {}),
                 }
               : album,
           ),
@@ -1595,6 +1604,7 @@ export const useLibraryStore = create<LibraryState>()(
               ? {
                   ...album,
                   itemCount: (album.itemCount || 0) + newlyAdded.length,
+                  ...(updatedAt ? { updatedAt } : {}),
                 }
               : album,
           ),
@@ -1618,6 +1628,7 @@ export const useLibraryStore = create<LibraryState>()(
         });
 
         await tauri.albums.removeItems(albumId, itemIds);
+        const updatedAt = removedIds.length ? Date.now() : undefined;
         set((s) => ({
           items: s.items.map((item) =>
             itemIds.includes(item.id)
@@ -1632,6 +1643,7 @@ export const useLibraryStore = create<LibraryState>()(
               ? {
                   ...album,
                   itemCount: Math.max(0, (album.itemCount || 0) - removedIds.length),
+                  ...(updatedAt ? { updatedAt } : {}),
                 }
               : album,
           ),
@@ -1640,6 +1652,7 @@ export const useLibraryStore = create<LibraryState>()(
               ? {
                   ...album,
                   itemCount: Math.max(0, (album.itemCount || 0) - removedIds.length),
+                  ...(updatedAt ? { updatedAt } : {}),
                 }
               : album,
           ),
