@@ -127,6 +127,18 @@ export function calculateVirtualGridWindow(
   };
 }
 
+/** The folder holding `path` ("/a/b/c.jpg" → "/a/b"). */
+function parentFolder(path: string) {
+  const index = path.lastIndexOf("/");
+  return index > 0 ? path.slice(0, index) : path;
+}
+
+/** Just the folder's own name, for a compact Location value. */
+function folderName(path: string) {
+  const folder = parentFolder(path);
+  return folder.slice(folder.lastIndexOf("/") + 1) || folder;
+}
+
 interface LibraryScreenProps {
   activeAlbum: string | null;
   albumDragOver?: boolean;
@@ -2193,7 +2205,8 @@ function LibraryScreen(props: LibraryScreenProps) {
                       </h2>
                       {props.selectedIds.length > 1 && (
                         <span className="inspector-selection-note">
-                          {props.selectedIds.length} selected · inspection independent
+                          {props.selectedIds.length.toLocaleString()} selected · details for this
+                          one
                         </span>
                       )}
                     </div>
@@ -2490,9 +2503,18 @@ function LibraryScreen(props: LibraryScreenProps) {
                             Number.isFinite(sel.longitude) && (
                               <div className="info-row">
                                 <span className="info-label">GPS</span>
-                                <span className="info-value">
+                                <button
+                                  type="button"
+                                  className="info-value info-link"
+                                  title="Open in Maps"
+                                  onClick={() =>
+                                    void tauri.app.openExternal(
+                                      `https://maps.apple.com/?ll=${sel.latitude},${sel.longitude}`,
+                                    )
+                                  }
+                                >
                                   {sel.latitude.toFixed(4)}, {sel.longitude.toFixed(4)}
-                                </span>
+                                </button>
                               </div>
                             )}
                           {sel.capturedAt && (
@@ -2503,6 +2525,17 @@ function LibraryScreen(props: LibraryScreenProps) {
                               </span>
                             </div>
                           )}
+                          <div className="info-row">
+                            <span className="info-label">Location</span>
+                            <button
+                              type="button"
+                              className="info-value info-link"
+                              title={`${parentFolder(sel.path)} — Show in Finder`}
+                              onClick={() => void tauri.items.revealInFinder(sel.path)}
+                            >
+                              {folderName(sel.path)}
+                            </button>
+                          </div>
                           <div className="info-row">
                             <span className="info-label">Modified</span>
                             <span className="info-value">{formatFileDateTime(sel.modifiedAt)}</span>
@@ -2570,6 +2603,8 @@ function LibraryScreen(props: LibraryScreenProps) {
                             {tag}
                             <button
                               type="button"
+                              aria-label={`Remove tag ${tag}`}
+                              title={`Remove tag “${tag}”`}
                               onClick={() =>
                                 props.onUpdateTags(
                                   props.inspectedId as string,
@@ -2590,7 +2625,11 @@ function LibraryScreen(props: LibraryScreenProps) {
                           if (e.key === "Enter" && e.currentTarget.value.trim()) {
                             const newTag = e.currentTarget.value.trim();
                             const currentTags = sel.tags || [];
-                            if (!currentTags.includes(newTag)) {
+                            // "Beach" and "beach" are the same tag.
+                            const known = currentTags.some(
+                              (tag) => tag.toLowerCase() === newTag.toLowerCase(),
+                            );
+                            if (!known) {
                               props.onUpdateTags(props.inspectedId as string, [
                                 ...currentTags,
                                 newTag,
