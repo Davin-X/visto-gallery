@@ -1,22 +1,28 @@
 node_modules/
 dist/
-*.log
 .DS_Store
+*.log
+
 # Local-only test fixtures, not part of the app
 sample-library/
-node_modules/
-dist/
+
+# Local sample media used for manual testing (downloaded fixtures)
+test-media/
+
 src-tauri/target/
 
 # Bundled ffmpeg/ffprobe sidecars, built by scripts/build-ffmpeg.sh
 src-tauri/binaries/
 # ffmpeg source download when VISTO_FFMPEG_WORK points into the repo (CI does)
 .ffmpeg-work/
-*.log
+
+# Playwright run output
+test-results/
+playwright-report/
+
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.DS_Store
 *.swp
 *~
 .env
@@ -25,7 +31,6 @@ yarn-error.log*
 *.key
 *.pem
 .idea
-
 
 # Local-only review notes (not part of the app)
 untracked/
@@ -37,5 +42,3 @@ untracked/
 .clinerules
 
 .kilo
-# Local sample media used for manual testing (downloaded fixtures)
-test-media/

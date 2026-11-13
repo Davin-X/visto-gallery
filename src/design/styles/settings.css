@@ -1455,6 +1455,37 @@
   color: var(--faint);
 }
 
+.sources-sheet .sources-manager {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.sources-sheet .sources-filter {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.sources-sheet .sources-table-viewport {
+  flex: 1 1 auto;
+  overflow: auto;
+  max-height: none;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+}
+
+.sources-sheet .sources-table {
+  border: 0;
+  border-radius: 0;
+}
+
+.sources-sheet .sources-note {
+  flex: 0 0 auto;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 8px 8px;
+  background: var(--surface-2);
+}
+
 .sources-sr-only {
   position: absolute;
   width: 1px;
