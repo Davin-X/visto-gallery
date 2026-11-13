@@ -1,0 +1,252 @@
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  /* Notices must remain visible over the Sources and Settings dialogs that
+     often trigger them. */
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 380px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  font-size: 13px;
+  animation: slideIn 0.2s ease;
+  cursor: pointer;
+}
+
+.toast span {
+  color: var(--green);
+  font-size: 16px;
+}
+
+.toast-action {
+  padding: 5px 12px;
+  margin-left: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.toast-action:hover {
+  background: var(--surface-3);
+  border-color: var(--text);
+}
+
+.toast-warning {
+  border-color: color-mix(in srgb, var(--orange) 45%, var(--line));
+}
+
+.toast-warning span {
+  color: var(--orange);
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Busy Indicator */
+.busy-indicator {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transform: translateX(-50%);
+  padding: 10px 16px;
+  min-width: 280px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  font-size: 12px;
+  transition: none;
+}
+.busy-indicator.hidden {
+  display: none;
+}
+
+.busy-indicator-hashing {
+  width: min(390px, calc(100vw - 32px));
+  align-items: flex-start;
+  border-radius: 12px;
+}
+
+.busy-indicator-progress-copy {
+  display: grid;
+  flex: 1;
+  gap: 5px;
+  min-width: 0;
+}
+
+.busy-indicator-progress-copy b {
+  font-weight: 650;
+}
+
+.busy-indicator-progress-copy small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.busy-indicator-progress-track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+.busy-indicator-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-text);
+  width: 0%;
+}
+
+.busy-indicator-current-file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.busy-indicator-cancel {
+  flex: 0 0 auto;
+  align-self: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  padding: 6px 9px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.busy-indicator-cancel:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.busy-indicator-cancel:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent-text);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Native Limit Note */
+.native-limit-note {
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+}
+
+/* Empty State */
+.empty-state {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  min-height: 200px;
+  padding: 32px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.empty-state > span {
+  font-size: 32px;
+}
+
+.empty-state b {
+  display: block;
+  margin-top: 12px;
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.empty-state p {
+  margin: 8px 0 16px;
+  font-size: 13px;
+}
+
+.empty-state button {
+  border: none;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* When an empty state offers two real choices, the buttons need their normal
+   chrome back: the rule above strips borders for its single text action. */
+.empty-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.empty-state .empty-state-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.empty-state .empty-state-actions .secondary-button {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.empty-state .empty-state-actions .secondary-button:hover {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+

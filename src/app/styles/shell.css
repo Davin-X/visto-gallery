@@ -1,0 +1,383 @@
+/* Native app mode - fill the window completely.
+   Use 100% (not 100vh) so the chain html→body→#root resizes continuously
+   during macOS live window drags instead of relying on stale vh units. */
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.app-frame {
+  position: fixed;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  max-height: 100% !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  /* overflow: hidden; */
+  display: flex;
+  flex-direction: column;
+  color-scheme: light;
+}
+
+.app-frame.dark {
+  color-scheme: dark;
+}
+
+body {
+  padding: 0 !important;
+  margin: 0 !important;
+  background: var(--surface);
+}
+
+/* Type floor: bare <small> uses the UA "smaller" size; keep it legible. */
+.app-frame small {
+  font-size: 12px;
+}
+
+/* Batch preview empty state */
+.batch-preview-empty {
+  display: grid;
+  gap: 4px;
+  padding: 18px 4px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.batch-preview-empty b {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.batch-preview-empty small {
+  font-size: 12px;
+}
+
+/* Remove the panel look from global.css */
+.visually-hidden {
+  display: block;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.app-body {
+  display: grid;
+  grid-template-columns: var(--sidebar-width, 220px) minmax(0, 1fr);
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  z-index: 40;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  touch-action: none;
+  cursor: col-resize;
+  outline: none;
+}
+
+/* The handle itself is invisible; a hairline appears on hover/focus and while
+   dragging so the panels keep their clean edge the rest of the time. */
+.resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  border-radius: 1px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background-color 120ms ease;
+  pointer-events: none;
+}
+
+.resizer:hover::after,
+.resizer:focus-visible::after,
+.resizer.is-resizing::after {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.resizer-left {
+  left: calc(var(--sidebar-width, 240px) - 5px);
+}
+
+.resizer-right {
+  right: calc(var(--inspector-width, 300px) - 5px);
+}
+
+body.is-resizing,
+body.is-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* Suppress panel transitions for the duration of a drag so the edge tracks
+   the pointer instead of easing behind it. */
+body.is-resizing .app-body,
+body.is-resizing .photo-inspector {
+  transition: none !important;
+}
+
+@media (max-width: 700px) {
+  .app-frame .app-body {
+    grid-template-columns: 1fr !important;
+  }
+  .app-frame .sidebar {
+    position: fixed !important;
+    left: -260px !important;
+    top: 56px !important;
+    bottom: 0 !important;
+    width: 260px !important;
+    z-index: 100 !important;
+    border-right: 1px solid var(--line) !important;
+    border-bottom: none !important;
+    border-radius: 0 !important;
+    overflow-y: auto !important;
+  }
+  .app-frame .app-body.sidebar-open .sidebar {
+    left: 0 !important;
+  }
+  /* Off-canvas drawer: show the full sidebar (label + nav + stats). */
+  .app-frame .sidebar-label,
+  .app-frame .sidebar-header,
+  .app-frame .sidebar-footer,
+  .app-frame .sidebar-section,
+  .app-frame .album-nav,
+  .app-frame .storage-widget {
+    display: block !important;
+  }
+  .app-frame .sidebar-header {
+    padding: 20px 14px 15px !important;
+    border-bottom: 1px solid var(--line) !important;
+  }
+  .app-frame .nav-item > span:not(.nav-icon) {
+    display: inline !important;
+  }
+  .app-frame .nav-icon {
+    display: flex !important;
+  }
+  .app-frame .nav-badge {
+    display: inline-flex !important;
+  }
+  .app-frame .nav-item {
+    padding: 10px 12px !important;
+  }
+  .app-frame .primary-nav {
+    justify-content: flex-start !important;
+    gap: 4px !important;
+    margin-top: 12px !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .viewer-video-controls button {
+    padding: 4px;
+  }
+  .viewer-video-controls .video-time {
+    font-size: 11px;
+  }
+  .viewer-overlay-bottom {
+    gap: 4px;
+    padding: 6px 10px;
+  }
+  .viewer-overlay-bottom button {
+    padding: 4px 6px;
+    font-size: 12px;
+  }
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border-right: 1px solid var(--line);
+  background: var(--sidebar);
+  /* Children own their own spacing (header owns the 20px top baseline),
+     so the container adds none - otherwise global.css's 25px stacks up. */
+  padding: 0;
+  /* The nav + sources + library stats can be taller than a short window.
+     Scroll the inner .sidebar-scroll instead of the whole sidebar so the
+     footer stays pinned at the bottom. */
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.sidebar-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sidebar-header {
+  flex: 0 0 auto;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sidebar-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.sidebar-back-button:hover {
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+
+.sidebar-back-button:active {
+  transform: scale(0.99);
+}
+
+.sidebar-back-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.sidebar-back-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.sidebar-back-button:hover .sidebar-back-icon {
+  color: var(--text);
+}
+
+.sidebar-back-button.is-collapsed {
+  justify-content: center;
+  padding: 8px;
+}
+
+.sidebar-footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 14px 15px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.sidebar-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.sidebar-version {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar-version-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A quiet, always-visible signal that a newer release exists. */
+.update-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.update-badge:hover {
+  text-decoration: underline;
+}
+
+.update-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.update-dialog {
+  width: min(520px, 100%);
+}
+
+.update-notes {
+  max-height: 180px;
+  overflow: auto;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.main-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  /* Without this the pane refuses to shrink below the toolbar's min-content
+     width and the whole app overflows on narrow windows. */
+  min-width: 0;
+  overflow: hidden;
+  background: var(--surface);
+}
+

@@ -1,0 +1,255 @@
+/* Topbar — custom window chrome (macOS overlay traffic lights). Sleek, quiet,
+   and balanced: a translucent bar that frames the content without competing. */
+.topbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 10px;
+  height: 40px;
+  padding: 0 12px 0 14px;
+  border-bottom: 1px solid transparent;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  backdrop-filter: blur(32px) saturate(1.2);
+  -webkit-backdrop-filter: blur(32px) saturate(1.2);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Reserve room for the overlaid macOS traffic lights and keep the bar a
+   drag region for the window. */
+.app-frame .topbar {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  padding-left: 90px;
+}
+
+/* Balanced 1fr / auto / 1fr keeps the center title truly centered even when
+   the Now Playing chip appears or changes width. */
+.topbar-brand {
+  grid-column: 1;
+  justify-self: start;
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.topbar-context {
+  grid-column: 2;
+}
+
+.topbar-trailing {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+}
+
+.topbar-trailing .now-playing {
+  justify-self: auto;
+  flex: 0 0 auto;
+}
+
+.topbar-trailing .topbar-actions {
+  flex: 0 0 auto;
+}
+
+.topbar-actions {
+  grid-column: 3;
+  justify-self: end;
+}
+
+.app-frame .topbar-brand {
+  display: block;
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.brand-wordmark {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.brand-wordmark--muted {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.brand-mark {
+  display: block;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.18));
+}
+
+.topbar-context {
+  justify-self: center;
+  display: inline-flex;
+  min-width: 0;
+  max-width: min(42vw, 480px);
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.topbar-context:empty {
+  display: none;
+}
+
+.topbar-context > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-context .muted {
+  color: var(--faint);
+  font-weight: 500;
+}
+
+.topbar-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 8px;
+  margin-left: 2px;
+  border-left: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.topbar-busy::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.topbar-actions {
+  display: inline-flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-2) 38%, transparent);
+}
+
+/* Titlebar controls: quiet by default, clear on hover/active — like native
+   window chrome. Kept separate from .icon-button used elsewhere in the app. */
+.topbar-actions .icon-button {
+  display: grid;
+  /* Five controls share one 40px-tall bar; 26px keeps the cluster from
+     crowding the window title without shrinking the icons into noise. */
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.topbar-actions .icon-button:hover {
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+.topbar-actions .icon-button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.topbar-actions .icon-button:active {
+  transform: scale(0.94);
+}
+
+.topbar-actions .icon-button svg {
+  display: block;
+}
+
+.icon-button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.icon-button:hover {
+  border-color: var(--blue);
+  color: var(--accent-text);
+  background: var(--surface-2);
+}
+
+.icon-button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.icon-button:active {
+  transform: scale(0.94);
+}
+
+.icon-button svg {
+  display: block;
+}
+

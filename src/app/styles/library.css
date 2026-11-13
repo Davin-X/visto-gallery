@@ -1,0 +1,1492 @@
+/* Library Layout */
+.library-layout {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.library-center {
+  position: relative;
+  display: flex;
+  container: library-pane / inline-size;
+  padding: 0;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
+  min-width: 0;
+  height: 100%;
+}
+
+/* ==========================================================================
+   Library header
+   Three calm bands: identity, tools, filters. A contextual selection bar
+   appears under the filters only while items are selected.
+   ========================================================================== */
+
+.library-header {
+  flex: 0 0 auto;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--surface-2) 40%, var(--surface));
+  /* Same page frame as the feature screens so the library heading lines up
+     with Albums, Batch, Duplicates, Edit and Settings. */
+  padding: var(--page-top) var(--page-gutter) 0;
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.library-header .brand-glyph {
+  display: grid;
+  align-items: center;
+  justify-content: flex-start;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: linear-gradient(145deg, var(--blue), var(--accent));
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+.library-header .brand-name {
+  font-family: "Manrope", sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+/* Row 1: Heading on left, primary actions on right */
+.library-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 0 0 14px;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.header-left .eyebrow {
+  margin: 0 0 var(--space-1);
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+}
+
+.header-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-top: var(--space-1);
+}
+
+.header-left h1 {
+  margin: 0;
+  font-size: var(--heading-1-size);
+  font-weight: var(--heading-1-weight);
+  letter-spacing: var(--heading-1-letter-spacing);
+  color: var(--ink);
+  line-height: var(--heading-1-line-height);
+}
+
+.header-left .page-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Page-level actions are the same size on every screen (the toolbar row
+   below them uses the compact 32px tier). */
+.header-actions .primary-button,
+.header-actions .quiet-button {
+  height: var(--control-height);
+  min-height: var(--control-height);
+  border-radius: var(--control-radius);
+  font-size: var(--control-font-size);
+  font-weight: var(--control-font-weight);
+}
+
+.header-actions .primary-button {
+  padding: 0 14px;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.header-actions .primary-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--blue) 88%, var(--ink));
+}
+
+.header-actions .quiet-button {
+  padding: 0 12px;
+}
+
+/* Source select dropdown styling */
+@media (max-width: 1000px) {
+  .library-header-row {
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .header-actions .btn-label {
+    display: none;
+  }
+  .header-actions .primary-button,
+  .header-actions .quiet-button {
+    padding: 0 10px;
+  }
+}
+
+@media (max-width: 640px) {
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .header-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .header-actions .source-select {
+    flex: 0 0 auto;
+    max-width: 160px;
+  }
+
+  .header-actions .primary-button,
+  .header-actions .quiet-button {
+    flex: 0 0 auto;
+    justify-content: center;
+    padding: 0 10px;
+  }
+}
+
+@media (max-width: 760px) {
+  .library-header .collection-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .library-header .search-field {
+    order: 1;
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .toolbar-right {
+    order: 2;
+    flex: 1 1 100%;
+    min-width: 0;
+    justify-content: flex-start;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .toolbar-right::-webkit-scrollbar {
+    display: none;
+  }
+
+  .filter-cluster {
+    flex: 1 1 100%;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .filter-cluster::-webkit-scrollbar {
+    display: none;
+  }
+
+  .library-header .toolbar-actions {
+    flex: 0 0 auto;
+  }
+
+  .selection-cluster {
+    flex: 0 0 auto;
+    margin-left: 0;
+  }
+}
+
+@media (min-width: 700px) {
+  .source-select-label {
+    display: inline;
+  }
+}
+
+/* Row 2: Search + toolbar + filters combined into one dense row */
+
+.library-header .collection-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-2);
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.library-header .search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 160px;
+  max-width: 448px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-3) 90%, transparent);
+  font-size: 12px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.library-header .search-field input {
+  font-size: 12px;
+}
+
+.library-header .search-field:focus-within {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px var(--blue-soft);
+}
+
+.library-header .toolbar-button {
+  height: 32px;
+  padding: 0 10px;
+}
+
+.library-header .layout-switcher {
+  height: 32px;
+  padding: 2px;
+  margin-left: 0;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Toolbar actions cluster (Create Album + Layout) */
+.library-header .toolbar-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-3);
+  box-shadow: none;
+}
+
+.library-header .toolbar-actions .toolbar-button {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.library-header .toolbar-actions .toolbar-button:hover {
+  background: var(--surface-2);
+  border-color: transparent;
+  color: var(--ink);
+}
+
+.library-header .toolbar-actions .toolbar-button:active {
+  background: var(--surface-3);
+}
+
+.library-header .toolbar-actions .toolbar-button:disabled {
+  opacity: 0.5;
+}
+
+.library-header .toolbar-actions .slideshow-action {
+  color: var(--muted);
+}
+
+.library-header .toolbar-actions .slideshow-action:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.library-header .toolbar-actions .slideshow-action svg {
+  flex: 0 0 auto;
+}
+
+.library-header .toolbar-actions .view-controls {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.library-header .toolbar-divider {
+  width: 1px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin: 0 3px;
+  background: var(--line-strong);
+}
+
+/* Layout switcher: compact icon-only pills that match select-all style */
+.library-header .toolbar-actions .layout-switcher {
+  height: 32px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-3);
+  display: flex;
+  gap: 2px;
+}
+
+.library-header .toolbar-actions .layout-switcher button {
+  width: 28px;
+  height: 26px;
+  min-width: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.16s ease;
+}
+
+.library-header .toolbar-actions .layout-switcher button:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.library-header .toolbar-actions .layout-switcher button.selected {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* Filter cluster — now inline with toolbar */
+.filter-cluster {
+  display: flex;
+  align-items: center;
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: 100%;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-top: var(--space-1);
+  border-top: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+  background: transparent;
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.filter-cluster::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-cluster .smart-label {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  padding-right: var(--space-1);
+  white-space: nowrap;
+}
+
+.library-header .quick-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  border-radius: 999px;
+  transition:
+    background 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: 1px solid var(--line);
+  background: var(--surface-3);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.library-header .quick-filter:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.library-header .quick-filter.active {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.library-header .quick-filter .filter-count {
+  margin-left: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink);
+}
+
+.library-header .quick-filter-rating {
+  color: #f5a524;
+  font-size: 13px;
+  letter-spacing: 1px;
+  padding: 0 8px;
+  min-width: 32px;
+  justify-content: center;
+}
+
+.sort-hint {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.sort-hint strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Selection cluster — Select all button */
+.selection-cluster {
+  flex: 0 0 auto;
+  margin-left: 8px;
+}
+
+.selection-cluster .quick-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.selection-cluster .quick-filter:hover {
+  background: var(--surface-3);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.selection-cluster .quick-filter.active {
+  background: var(--blue-soft);
+  border-color: transparent;
+  color: var(--ink);
+}
+
+.selection-cluster .quick-filter .select-all-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  color: currentColor;
+  flex-shrink: 0;
+}
+
+.selection-cluster .quick-filter .filter-count {
+  display: none; /* not used for select all */
+}
+
+.smart-filter-row {
+  display: none; /* removed — now inline in toolbar */
+}
+
+/* Keep SHOW visible while the pills scroll underneath it. */
+.smart-filter-row .filter-cluster .smart-label {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex: 0 0 auto;
+  margin-right: var(--space-1);
+  padding-right: var(--space-1);
+  background: var(--surface-2);
+}
+
+.smart-filter-row .filter-cluster .quick-filter {
+  flex: 0 0 auto;
+  border-color: transparent;
+  background: transparent;
+}
+
+.smart-filter-row .filter-cluster .quick-filter:hover {
+  background: var(--surface-3);
+}
+
+.smart-filter-row .filter-cluster .quick-filter.active {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  color: var(--accent-text);
+}
+
+.filter-count {
+  color: var(--faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A type with nothing in the current view stays clickable but steps back,
+   so the chips that lead somewhere stand out. */
+.quick-filter.is-empty:not(.active) {
+  opacity: 0.5;
+}
+
+.quick-filter.is-empty:not(.active):hover,
+.quick-filter.is-empty:not(.active):focus-visible {
+  opacity: 0.85;
+}
+
+.quick-filter.active .filter-count {
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--accent-contrast);
+}
+
+/* Select all stays pinned to the right end of the filter row. */
+.smart-filter-row .selection-cluster {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+
+.smart-filter-row .select-all-toggle {
+  border-color: var(--line);
+}
+
+/* Contextual selection bar: batch actions get their own band so the filter
+   row never has to compete with them for space. */
+.selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  max-width: none;
+  margin: 10px 0 0;
+  padding: 8px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-3) 92%, transparent);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: selection-bar-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes selection-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.selection-bar-left,
+.selection-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.selection-bar-count {
+  color: var(--accent-contrast);
+  background: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding: 2px 10px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.selection-bar-size {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.selection-bar-kinds {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.selection-bar-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 14px;
+  margin: 0 4px;
+  background: var(--line);
+}
+
+.selection-bar-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.selection-bar-clear {
+  border-color: var(--red, #c0392b);
+  background: transparent;
+  color: var(--red, #c0392b);
+}
+
+.selection-bar-clear:hover {
+  background: color-mix(in srgb, var(--red, #c0392b) 12%, transparent);
+  border-color: var(--red, #c0392b);
+  color: var(--red, #c0392b);
+}
+
+.selection-bar-clear:focus-visible {
+  outline: 2px solid var(--red, #c0392b);
+  outline-offset: 2px;
+}
+
+.selection-bar-action-danger {
+  border-color: var(--red, #c0392b);
+  background: var(--red, #c0392b);
+  color: #fff;
+}
+
+.selection-bar-action-danger:hover {
+  filter: brightness(1.05);
+}
+
+.selection-bar-action:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.selection-bar-action:active {
+  background: var(--surface-3);
+}
+
+.library-grid-container {
+  flex: 1 1 0;
+  overflow-y: auto;
+  padding: var(--space-3) var(--page-gutter) var(--space-6);
+  min-height: 0;
+  box-sizing: border-box;
+  container-type: inline-size;
+}
+
+/* Progressive rendering footer: only shown while more tiles are waiting. */
+.grid-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 8px;
+}
+
+/* Gallery Grid
+   `auto-fill` + `minmax` lets the column count follow the window instead of
+   being pinned to a fixed 3/4/2 at every width. Each layout mode only differs
+   by the smallest comfortable tile width. */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  align-content: start;
+}
+
+/* Keeps the native scroll track accurate while the grid mounts only a small
+   row window around the viewport. It intentionally occupies every column. */
+.grid-virtual-spacer {
+  grid-column: 1 / -1;
+  min-height: 0;
+  pointer-events: none;
+}
+
+/* Placeholders shown while the first page of a view loads. The tile footprint
+   matches a grid card; the details layout gets a row-shaped variant. Shimmer
+   runs at a low contrast so a slow first paint reads as loading, not as a
+   broken render. */
+.library-skeleton-tile,
+.library-skeleton-row {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+}
+
+.library-skeleton-tile {
+  display: block;
+  min-height: 218px;
+  border-radius: 16px;
+}
+
+.library-skeleton-row {
+  display: block;
+  grid-column: 1 / -1;
+  min-height: 52px;
+  border-radius: 10px;
+}
+
+.library-skeleton-tile::after,
+.library-skeleton-row::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in srgb, var(--surface-2) 75%, transparent) 50%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  animation: library-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes library-skeleton-shimmer {
+  from {
+    background-position: 140% 0;
+  }
+  to {
+    background-position: -40% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-skeleton-tile::after,
+  .library-skeleton-row::after {
+    animation: none;
+  }
+}
+
+.gallery-grid.thumb-small {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+.gallery-grid.thumb-large {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.library-layout.with-inspector
+  .gallery-grid.thumb-small:not(.layout-overview):not(.layout-columns):not(.layout-details):not(
+    .layout-timeline
+  ) {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+.library-layout.with-inspector
+  .gallery-grid.thumb-large:not(.layout-overview):not(.layout-columns):not(.layout-details):not(
+    .layout-timeline
+  ) {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.library-layout.with-inspector
+  .gallery-grid.thumb-medium:not(.layout-overview):not(.layout-columns):not(.layout-details):not(
+    .layout-timeline
+  ) {
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+}
+/* Fallback for unknown thumbnail sizes */
+.library-layout.with-inspector
+  .gallery-grid:not(.layout-overview):not(.layout-columns):not(.layout-details):not(
+    .layout-timeline
+  ):not(.thumb-small):not(.thumb-medium):not(.thumb-large) {
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+}
+
+.gallery-grid.layout-overview {
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+/* Columns: true masonry via CSS columns — items flow top-to-bottom, left-to-right.
+   Only `column-width` is set so the column count follows the window instead of
+   being pinned to 4 columns at every size. */
+.gallery-grid.layout-columns {
+  display: block;
+  column-gap: 10px;
+  column-width: 168px;
+}
+
+/* The empty state is a block inside a CSS multi-column container, so without
+   this it gets fragmented into one piece per column. */
+.gallery-grid.layout-columns .empty-state {
+  column-span: all;
+  break-inside: avoid;
+}
+
+/* Fallback for webviews that do not fragment column-span as expected. */
+.gallery-grid.layout-columns:has(> .empty-state) {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.gallery-grid.layout-columns .gallery-tile {
+  display: inline-block;
+  width: 100%;
+  break-inside: avoid;
+  margin-bottom: 10px;
+}
+
+/* Masonry tiles keep each image's own proportions. The uniform 4:3 crop made
+   this view read as a slightly narrower grid instead of a distinct browsing
+   mode. */
+.gallery-grid.layout-columns .tile-image {
+  height: auto;
+  aspect-ratio: auto;
+}
+
+.gallery-grid.layout-columns .tile-image img,
+.gallery-grid.layout-columns .tile-image video {
+  height: auto;
+  aspect-ratio: auto;
+}
+
+.gallery-grid.layout-columns .raw-tile {
+  height: auto;
+  aspect-ratio: 4 / 3;
+}
+
+.gallery-grid.layout-columns .tile-caption {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  left: 2px;
+  z-index: 1;
+  padding: 24px 9px 8px;
+  border-radius: 0 0 5px 5px;
+  background: linear-gradient(to bottom, transparent, rgba(10, 14, 18, 0.72));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+
+.gallery-grid.layout-columns .gallery-tile:hover .tile-caption,
+.gallery-grid.layout-columns .gallery-tile:focus-within .tile-caption {
+  opacity: 1;
+}
+
+.gallery-grid.layout-columns .tile-caption b {
+  color: #fff;
+}
+
+.gallery-grid.layout-columns .tile-caption small {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+/* Keep the video/RAW badges clear of the caption overlay. */
+.gallery-grid.layout-columns .video-label,
+.gallery-grid.layout-columns .format-label {
+  top: 6px;
+  right: auto;
+  bottom: auto;
+  left: 6px;
+}
+
+/* Timeline: grouped by month with section headers. Requires JS grouping. */
+.gallery-grid.layout-timeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 16px;
+}
+
+.gallery-grid.layout-timeline .timeline-group {
+  grid-column: 1 / -1;
+}
+
+.gallery-grid.layout-timeline .timeline-group h3 {
+  margin: 8px 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.gallery-grid.layout-timeline .tile-image {
+  height: auto;
+  aspect-ratio: 4 / 3;
+}
+
+.gallery-grid.layout-timeline .gallery-tile {
+  min-width: 0;
+}
+
+.gallery-tile {
+  position: relative;
+  min-width: 0;
+}
+
+.gallery-grid.layout-grid .gallery-tile,
+.gallery-grid.layout-overview .gallery-tile,
+.gallery-grid.layout-timeline .gallery-tile {
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  transition:
+    border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    background 0.2s ease,
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.gallery-grid.layout-grid .gallery-tile:hover,
+.gallery-grid.layout-overview .gallery-tile:hover,
+.gallery-grid.layout-timeline .gallery-tile:hover {
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--surface-3) 70%, var(--surface-2));
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+}
+
+.gallery-grid.layout-grid .gallery-tile.selected,
+.gallery-grid.layout-overview .gallery-tile.selected,
+.gallery-grid.layout-timeline .gallery-tile.selected {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent),
+    0 14px 30px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.gallery-grid.layout-grid .gallery-tile.selected .tile-image,
+.gallery-grid.layout-overview .gallery-tile.selected .tile-image,
+.gallery-grid.layout-timeline .gallery-tile.selected .tile-image {
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.gallery-tile .tile-image img,
+.gallery-tile .tile-image video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.gallery-tile:hover .tile-image img,
+.gallery-tile:hover .tile-image video {
+  transform: scale(1.05);
+}
+.tile-image {
+  position: relative;
+  display: block;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: 0;
+  background: var(--surface);
+}
+
+.gallery-grid.layout-grid .tile-image {
+  aspect-ratio: 1 / 1;
+  border-radius: 0;
+}
+
+.gallery-grid.layout-grid .tile-image::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 42%;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--surface-3) 90%, transparent),
+    transparent
+  );
+  pointer-events: none;
+  opacity: 0.45;
+}
+
+.gallery-grid.layout-overview .tile-image {
+  height: auto;
+  aspect-ratio: 16 / 10;
+}
+
+.tile-image img,
+.tile-image video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Grid tiles already reserve their ratio, so the shared placeholder fills the
+   box while the cached JPEG loads. */
+.tile-image .cached-thumb-placeholder {
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+/* Masonry columns have no fixed tile ratio yet; use the common 4:3 box until
+   the real photo arrives so lazy placeholders still have an observable area. */
+.gallery-grid.layout-columns .tile-image .cached-thumb-placeholder {
+  height: auto;
+  aspect-ratio: 4 / 3;
+}
+
+/* The details preview is tiny; a shimmer on every row is just noise. */
+.gallery-grid.layout-details .tile-image .cached-thumb-placeholder.is-loading {
+  animation: none;
+  background-image: none;
+}
+
+.gallery-tile:hover .tile-image img {
+  transform: scale(1.05);
+}
+
+.gallery-tile:hover {
+  background: var(--surface-2);
+}
+
+.gallery-tile {
+  transition:
+    background 0.12s ease,
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.2s ease;
+}
+
+.gallery-tile.selected .tile-image {
+  border: 2px solid var(--blue);
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 1px var(--blue),
+    0 6px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* Inspection focus ring: uses the user accent color and stays visually
+   distinct from the blue multi-selection border. */
+.gallery-tile.inspected {
+  border-color: var(--accent, var(--blue));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, var(--blue)) 45%, transparent);
+}
+
+.gallery-tile.inspected.selected {
+  border-color: var(--blue);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent, var(--blue)) 60%, transparent),
+    0 0 0 1px var(--blue);
+}
+
+.tile-select-check {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 4;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: transparent;
+  opacity: 0;
+  transform: scale(0.95);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.gallery-tile:hover .tile-select-check,
+.gallery-tile.selected .tile-select-check,
+.gallery-tile.inspected .tile-select-check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.gallery-tile.selected .tile-select-check {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.tile-select-check input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 0;
+}
+
+.tile-select-check svg {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.tile-select-check input:checked + svg {
+  opacity: 1 !important;
+  color: var(--accent-contrast);
+  stroke: var(--accent-contrast);
+}
+
+.tile-favorite {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: color-mix(in srgb, #f43f5e 92%, transparent);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+}
+
+/* The tile's click target is a transparent overlay button: the image, badges
+   and caption sit under it, while the play control is a real sibling button so
+   no interactive element is nested inside another. */
+.tile-open-button {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tile-caption {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 4px 0;
+  min-width: 0;
+}
+
+.tile-caption b {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tile-caption small {
+  font-size: 12px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* Hidden gallery: media stays veiled until the viewer is deliberately held or
+   confirmed. This is shoulder-surfing deterrence, not file encryption. */
+.gallery-tile.hidden-obscured .tile-image img,
+.gallery-tile.hidden-obscured .tile-image video,
+.gallery-tile.hidden-obscured .tile-image .cached-thumb-placeholder,
+.inspector-image.hidden-obscured img,
+.inspector-image.hidden-obscured video {
+  filter: blur(18px) saturate(0.55) brightness(0.82);
+}
+
+.gallery-tile.hidden-obscured .tile-image::after,
+.inspector-image.hidden-obscured::after {
+  content: "Hold to show";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 18, 23, 0.3);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.gallery-grid.layout-details .gallery-tile.hidden-obscured .tile-image::after {
+  content: "Hold";
+  padding: 2px;
+  font-size: 8px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.gallery-tile.hidden-obscured .tile-caption > * {
+  visibility: hidden;
+}
+
+/* Details rows use the caption's children as grid cells. Keep a real name-cell
+   label visible for veiled items because the caption wrapper has no box here. */
+.gallery-grid.layout-details .gallery-tile.hidden-obscured .tile-caption b {
+  visibility: visible;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.gallery-grid.layout-details .gallery-tile.hidden-obscured .tile-caption::after {
+  content: none;
+}
+
+.gallery-tile.hidden-obscured .tile-caption::after {
+  content: "Hidden item · hold to reveal";
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-image.hidden-obscured > span {
+  display: none;
+}
+
+/* Grid-style layouts: the caption is always exactly two lines — the file name
+   on the first, date + size on the second. A variable caption height is what
+   made rows look ragged, because every tile ended at a different height. */
+.gallery-grid.layout-grid .tile-caption,
+.gallery-grid.layout-overview .tile-caption,
+.gallery-grid.layout-columns .tile-caption,
+.gallery-grid.layout-timeline .tile-caption {
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.gallery-grid.layout-grid .tile-caption,
+.gallery-grid.layout-overview .tile-caption,
+.gallery-grid.layout-timeline .tile-caption {
+  padding: 10px 12px 12px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+
+.gallery-grid.layout-grid .tile-caption .tile-size,
+.gallery-grid.layout-overview .tile-caption .tile-size,
+.gallery-grid.layout-timeline .tile-caption .tile-size {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.gallery-grid.layout-grid .gallery-tile.selected .tile-caption b,
+.gallery-grid.layout-overview .gallery-tile.selected .tile-caption b,
+.gallery-grid.layout-timeline .gallery-tile.selected .tile-caption b {
+  color: var(--accent-text);
+}
+
+.gallery-grid.layout-grid .tile-caption b,
+.gallery-grid.layout-overview .tile-caption b,
+.gallery-grid.layout-columns .tile-caption b,
+.gallery-grid.layout-timeline .tile-caption b {
+  flex: 1 0 100%;
+}
+
+/* Kind is already communicated by the badge over the thumbnail, so it is
+   dropped from the caption outside the details table (which has its own
+   dedicated Kind column). */
+.gallery-grid.layout-grid .tile-caption .tile-kind,
+.gallery-grid.layout-overview .tile-caption .tile-kind,
+.gallery-grid.layout-columns .tile-caption .tile-kind,
+.gallery-grid.layout-timeline .tile-caption .tile-kind {
+  display: none;
+}
+
+.video-label {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Play in background, revealed on hover/focus: videos start the session
+   without leaving the grid. */
+.tile-play-background {
+  position: absolute;
+  top: auto;
+  right: auto;
+  bottom: 10px;
+  left: 8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0 0 0 2px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.9);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+
+.gallery-tile:hover .tile-play-background,
+.gallery-tile:focus-within .tile-play-background,
+.tile-play-background:focus-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.tile-play-background:hover {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--accent) 65%, rgba(0, 0, 0, 0.7));
+}
+
+.gallery-grid.layout-details .video-label {
+  display: none;
+}
+
+.format-label {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--blue);
+  color: var(--accent-contrast);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.gallery-grid.layout-details .format-label {
+  display: none;
+}
+
+.raw-tile {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 6px;
+  height: 100%;
+  background: linear-gradient(135deg, var(--surface-3), var(--surface-2));
+  color: var(--muted);
+}
+
+.raw-tile b {
+  color: var(--text);
+  font-size: 14px;
+  letter-spacing: 0.05em;
+}
+

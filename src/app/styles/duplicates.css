@@ -1,0 +1,1356 @@
+/* ===== Duplicate finder ===== */
+
+.duplicates-page {
+  /* Use the same page padding as all other feature screens; no padding-top
+     override or flex gap that breaks the spacing system. */
+}
+
+.duplicates-page > .page-heading {
+  margin-bottom: var(--space-6);
+}
+
+.duplicate-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Overview metrics ---------------------------------------------------- */
+
+.duplicate-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.duplicate-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.duplicate-stat-value {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.duplicate-stat-label {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.duplicate-stat.is-savings .duplicate-stat-value {
+  color: var(--green);
+}
+
+.duplicate-stat.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.duplicate-stat.is-selected .duplicate-stat-value {
+  color: var(--accent-text);
+}
+
+/* Toolbar ------------------------------------------------------------- */
+
+.duplicate-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+/* Kind filter: same 32px segmented box and 26px segments as the Library
+   layout/size switchers, so the row has one height instead of 46/32. */
+.duplicate-filter-tabs {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 32px;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-3);
+}
+
+.duplicate-filter-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.duplicate-filter-tabs button:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.duplicate-filter-tabs button.is-active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.duplicate-filter-tabs button.is-empty {
+  color: var(--faint);
+}
+
+.duplicate-filter-tabs button.is-empty .duplicate-filter-count {
+  opacity: 0.55;
+}
+
+.duplicate-filter-count {
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.duplicate-filter-tabs button.is-active .duplicate-filter-count {
+  border-color: transparent;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  color: inherit;
+}
+
+.duplicate-toolbar-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The whole row sits on the same compact 32px tier as the Library toolbar:
+   one box height, 26px segments inside it, 12px labels. The shared
+   .sort-control (40px), .layout-switcher (38px) and .quiet-button (36px)
+   otherwise leave the row ragged. These overrides carry the .app-frame prefix
+   to beat the later `.app-frame :is(...)` rules without !important. */
+.app-frame .duplicate-toolbar .sort-control,
+.app-frame .duplicate-toolbar .layout-switcher,
+.app-frame .duplicate-toolbar .quiet-button {
+  box-sizing: border-box;
+  height: 32px;
+  min-height: 32px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.app-frame .duplicate-toolbar .sort-control {
+  gap: 4px;
+  padding: 3px;
+  margin-left: 0;
+  border-color: var(--line-strong);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-2) 84%, transparent);
+}
+
+.app-frame .duplicate-toolbar .sort-control select {
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.app-frame .duplicate-toolbar .layout-switcher {
+  align-items: center;
+  padding: 2px;
+}
+
+.app-frame .duplicate-toolbar .layout-switcher button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  min-height: 26px;
+  align-self: center;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.app-frame .duplicate-toolbar .quiet-button {
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: var(--control-font-weight);
+}
+
+.duplicate-keeper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  padding: 2px 2px 2px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface-3);
+}
+
+.duplicate-keeper-label {
+  padding-right: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.duplicate-keeper button {
+  min-height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.duplicate-keeper button:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.duplicate-keeper button.is-active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* Selection bar ------------------------------------------------------- */
+
+.duplicate-selection-bar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 4px 12px rgba(12, 18, 26, 0.06);
+  backdrop-filter: blur(10px);
+}
+
+.duplicate-selection-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.duplicate-selection-copy b {
+  color: var(--ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.duplicate-selection-savings {
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.duplicate-selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.duplicates-page .duplicate-selection-bar :is(.quiet-button, .danger-button) {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Group cards --------------------------------------------------------- */
+
+.duplicate-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.duplicate-group {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.duplicate-group-head {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 72px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface) 65%, var(--surface-2)),
+    var(--surface-2)
+  );
+}
+
+.duplicate-group-summary {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+  padding: 2px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.duplicate-group-summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.duplicate-group-summary:hover .duplicate-group-title {
+  color: var(--accent-text);
+}
+
+.duplicate-group-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.duplicate-group-title {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  transition: color 140ms ease;
+}
+
+.duplicate-group-sub {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+.duplicate-group-sub b {
+  color: var(--green);
+  font-size: inherit;
+  font-weight: 650;
+}
+
+.duplicate-group-hash {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--surface-3);
+  color: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.duplicate-group-chevron {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  margin-left: auto;
+  color: var(--faint);
+  transition: transform 180ms ease;
+}
+
+.duplicate-group-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.duplicate-group-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.duplicates-page .duplicate-group-actions .quiet-button,
+.duplicates-page .duplicate-heading-actions :is(.quiet-button, .primary-button) {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.duplicate-group-note {
+  color: var(--orange);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+/* Stacked copy preview: fanned sheets read as a pile of the same file. */
+
+.duplicate-stack {
+  position: relative;
+  flex: 0 0 auto;
+  width: 76px;
+  height: 54px;
+  /* Room for the fan's rotation and the count badge, so neither is clipped
+     by the group card's overflow. */
+  margin: 0 8px 4px 0;
+}
+
+.duplicate-stack-sheet {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 7px;
+  transition: transform 180ms ease;
+}
+
+/* Blank plates behind the keeper's thumbnail. */
+/* The copies behind the keeper show their own thumbnail, dimmed by a surface
+   veil so the fan reads as depth instead of a doubled image. */
+.duplicate-stack-sheet.is-back {
+  border: 1px solid var(--line-strong);
+  background: var(--surface-3);
+  box-shadow: 0 1px 2px rgba(12, 18, 26, 0.12);
+}
+
+.duplicate-stack-sheet.is-back::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--surface) 30%, transparent);
+}
+
+.duplicate-stack-sheet.is-back-near {
+  z-index: 1;
+  transform: translate(-9px, 3px) rotate(-7deg) scale(0.96);
+}
+
+.duplicate-stack-sheet.is-back-far {
+  z-index: 2;
+  transform: translate(-17px, 6px) rotate(-13deg) scale(0.92);
+}
+
+.duplicate-stack-sheet.is-back-far::after {
+  background: color-mix(in srgb, var(--surface) 48%, transparent);
+}
+
+.duplicate-stack-sheet.is-front {
+  z-index: 3;
+  border: 1px solid var(--line);
+  background: var(--surface-3);
+  box-shadow: 0 2px 7px rgba(12, 18, 26, 0.16);
+}
+
+.duplicate-stack-sheet img,
+.duplicate-stack-sheet > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.duplicate-stack-raw {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--surface-3), var(--surface-2));
+}
+
+.duplicate-stack-raw .kind-badge {
+  padding: 1px 5px;
+  font-size: 9px;
+}
+
+.duplicate-group-summary:hover .duplicate-stack-sheet.is-back-near {
+  transform: translate(-13px, 3px) rotate(-10deg) scale(0.96);
+}
+
+.duplicate-group-summary:hover .duplicate-stack-sheet.is-back-far {
+  transform: translate(-23px, 7px) rotate(-17deg) scale(0.92);
+}
+
+.duplicate-stack-count {
+  position: absolute;
+  right: -9px;
+  bottom: -7px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border: 2px solid var(--surface-2);
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-family: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+}
+
+/* Copy tiles ---------------------------------------------------------- */
+
+.duplicate-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+  padding: 12px;
+}
+
+.duplicate-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
+}
+
+.duplicate-tile-frame {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-3);
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.duplicate-tile:hover .duplicate-tile-frame {
+  border-color: var(--line-strong);
+  box-shadow: 0 6px 16px rgba(12, 18, 26, 0.12);
+  transform: translateY(-1px);
+}
+
+.duplicate-tile.is-selected .duplicate-tile-frame {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.duplicate-tile.is-keeper .duplicate-tile-frame {
+  border-color: var(--accent);
+}
+
+.duplicate-tile-select {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: var(--surface-3);
+  cursor: pointer;
+}
+
+.duplicate-tile-select img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.duplicate-tile-select .cached-thumb-placeholder {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.duplicate-tile-raw {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.duplicate-tile-check {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  /* Overlay chrome lives on top of photos, so it is built from theme tokens
+     instead of a fixed dark scrim: it inverts with the theme and the checked
+     state follows --accent-contrast. */
+  border: 1.5px solid color-mix(in srgb, var(--surface) 88%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ink) 34%, transparent);
+  color: var(--surface);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--ink) 22%, transparent);
+  pointer-events: none;
+}
+
+.duplicate-tile-check.is-on {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.duplicate-tile-role {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 50%, transparent);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 20%, transparent);
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+.duplicate-tile-role.is-keeper {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  backdrop-filter: none;
+}
+
+.duplicate-tile-kind {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.duplicate-tile-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 0 2px;
+}
+
+.duplicate-tile-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.duplicate-tile-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.duplicate-tile-flag {
+  display: none;
+}
+
+/* Tools live over the photo instead of stealing width from the file name. */
+.duplicate-tile-tools {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  z-index: 4;
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.duplicate-tile:hover .duplicate-tile-tools,
+.duplicate-tile:focus-within .duplicate-tile-tools {
+  opacity: 1;
+  transform: none;
+}
+
+.duplicate-tile-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 50%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--ink);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 20%, transparent);
+  line-height: 0;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.duplicate-tile-tool > svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.duplicate-tile-tool:hover {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.duplicate-tile-meta {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.duplicate-tile-path {
+  overflow: hidden;
+  color: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.duplicate-tile-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  aspect-ratio: 4 / 3;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.duplicate-tile-more small {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.duplicate-tile-more:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+/* List density -------------------------------------------------------- */
+
+.duplicate-tiles.is-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 10px;
+}
+
+.duplicate-tiles.is-list .duplicate-tile {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.duplicate-tiles.is-list .duplicate-tile:hover {
+  background: var(--surface);
+}
+
+.duplicate-tiles.is-list .duplicate-tile-frame {
+  flex: 0 0 auto;
+  width: 56px;
+  border-radius: 8px;
+}
+
+.duplicate-tiles.is-list .duplicate-tile-select {
+  aspect-ratio: 1 / 1;
+}
+
+.duplicate-tiles.is-list .duplicate-tile-role {
+  display: none;
+}
+
+.duplicate-tiles.is-list .duplicate-tile-check {
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+}
+
+.duplicate-tiles.is-list .duplicate-tile-kind {
+  bottom: 3px;
+  left: 3px;
+}
+
+.duplicate-tiles.is-list .duplicate-tile-caption {
+  flex: 1 1 auto;
+}
+
+.duplicate-tiles.is-list .duplicate-tile-flag {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.duplicate-tiles.is-list .duplicate-tile.is-keeper .duplicate-tile-flag {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.duplicate-tiles.is-list .duplicate-tile-more {
+  min-height: 56px;
+  flex-direction: row;
+  gap: 6px;
+  aspect-ratio: auto;
+}
+
+/* Empty state --------------------------------------------------------- */
+
+.duplicate-empty {
+  display: grid;
+  place-items: center;
+  padding: 48px 24px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 16px;
+  background: var(--surface-2);
+  text-align: center;
+}
+
+.duplicate-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--accent-text);
+}
+
+.duplicate-empty.is-compact {
+  padding: 36px 24px;
+}
+
+.duplicate-empty.is-compact .duplicate-empty-icon {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 12px;
+}
+
+.duplicate-empty h2 {
+  margin: 0 0 6px;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.duplicate-empty p {
+  max-width: 430px;
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.duplicate-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0 6px;
+}
+
+@media (max-width: 980px) {
+  .duplicate-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .duplicate-toolbar {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .duplicate-tiles {
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 8px;
+    padding: 10px;
+  }
+  .duplicate-group-head {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .duplicate-group-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .duplicate-stack {
+    width: 46px;
+    height: 46px;
+  }
+  .duplicate-selection-copy {
+    flex-wrap: wrap;
+  }
+}
+
+/* Compare overlay ------------------------------------------------------ */
+
+.compare-backdrop {
+  z-index: var(--z-compare);
+}
+
+.compare-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(1120px, 100%);
+  max-height: min(92vh, 900px);
+  overflow: hidden;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+  animation: dialog-pop 0.15s ease;
+}
+
+.compare-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.compare-head h2 {
+  margin: 3px 0 0;
+  color: var(--ink);
+  font-family: "Manrope", sans-serif;
+  font-size: 19px;
+  letter-spacing: -0.03em;
+}
+
+.compare-head-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.compare-diff-count {
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--orange) 40%, var(--line));
+  border-radius: 999px;
+  background: var(--orange-soft);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.compare-diff-count.is-clean {
+  border-color: color-mix(in srgb, var(--green) 40%, var(--line));
+  background: color-mix(in srgb, var(--green) 14%, var(--surface));
+  color: var(--ink);
+}
+
+.compare-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.compare-copy-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.compare-copy-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.compare-copy-tab {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.compare-copy-tab.is-active {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.compare-arrow {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.compare-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.compare-zoom {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.compare-zoom input[type="range"] {
+  width: 120px;
+  accent-color: var(--accent);
+}
+
+.compare-zoom-button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.compare-zoom-value {
+  min-width: 40px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.compare-reset {
+  padding: 3px 9px;
+  font-size: 11px;
+}
+
+.compare-stage {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+  touch-action: none;
+}
+
+.compare-stage.is-zoomed {
+  cursor: grab;
+}
+
+.compare-stage.is-dragging {
+  cursor: grabbing;
+}
+
+.compare-pane {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+}
+
+.compare-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: clamp(200px, 34vh, 380px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-3);
+}
+
+.compare-image {
+  /* Absolute so the image's intrinsic size can't stretch the fixed-height
+     grid row and then get clipped by the frame. */
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform-origin: center center;
+  transition: transform 60ms linear;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.compare-stage.is-dragging .compare-image {
+  transition: none;
+}
+
+.compare-raw {
+  display: grid;
+  gap: 8px;
+  place-items: center;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.compare-caption {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.compare-role {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.compare-role.is-keeper {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.compare-name {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 650;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.compare-meta {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-table-wrap {
+  /* Takes whatever height the stage leaves, then scrolls internally instead of
+     pushing the dialog past its max height. */
+  flex: 1 1 auto;
+  min-height: 96px;
+  margin-top: 12px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.compare-table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 0;
+}
+
+.compare-filter-toggle {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.compare-filter-toggle:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.compare-filter-toggle.is-active {
+  border-color: color-mix(in srgb, var(--orange) 45%, var(--line));
+  background: var(--orange-soft);
+  color: var(--ink);
+}
+
+.compare-table-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.compare-table thead th {
+  position: sticky;
+  top: 0;
+  padding: 7px 12px;
+  background: var(--surface-2);
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.compare-table tbody th,
+.compare-table tbody td {
+  padding: 6px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--text);
+  text-align: left;
+  vertical-align: top;
+}
+
+.compare-table tbody th {
+  width: 110px;
+  color: var(--faint);
+  font-weight: 600;
+}
+
+.compare-table tbody td {
+  overflow-wrap: anywhere;
+}
+
+.compare-table tbody tr.is-diff {
+  background: color-mix(in srgb, var(--orange) 8%, transparent);
+}
+
+.compare-table tbody tr.is-diff td {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+@media (max-width: 760px) {
+  .compare-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .compare-toolbar {
+    flex-wrap: wrap;
+  }
+}
+

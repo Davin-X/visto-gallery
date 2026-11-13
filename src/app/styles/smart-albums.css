@@ -1,0 +1,358 @@
+/* Smart Albums overview */
+/* The tiles are the cards here, so the group carries no chrome of its own. A
+   bordered, filled box holding bordered, filled tiles was one frame too many,
+   and it made the twelve real albums below look like loose thumbnails. The
+   heading row and the strip's top rule do the grouping. */
+.smart-albums-section {
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+/* The strip scrolls horizontally with its scrollbar hidden, so without this
+   fade there is no cue that more albums sit past the right edge. It masks the
+   scroller itself rather than overlaying the section: as an overlay anchored
+   to the section it also sat on top of the head row, dimming the end of the
+   View all control. Masking needs no surface colour to match, either. */
+.smart-albums-section.has-more .smart-albums-list {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 64px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 64px), transparent);
+}
+
+.smart-albums-headrow {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  gap: 4px;
+}
+
+/* The head row's controls travel together on the right, so the heading keeps
+   its left alignment and "View all" is no longer the only thing that can own
+   the free space. */
+.smart-albums-headactions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.smart-albums-headactions .smart-albums-viewall {
+  margin-left: 0;
+}
+
+.smart-albums-new {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.smart-albums-new:hover {
+  border-color: color-mix(in srgb, var(--blue) 45%, var(--line));
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.smart-albums-new svg {
+  color: var(--muted);
+}
+
+.smart-albums-new:hover svg {
+  color: var(--accent-text);
+}
+
+/* Shown when no Smart Album exists yet: the create control stays in the head
+   row, and this line says what the feature is for. */
+.smart-albums-empty {
+  margin: 10px 0 0;
+  padding: 12px 14px;
+  border: 1px dashed color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Heading, count and the automatic-update note read as one line, in that order.
+   The note used to be thrown to the far right by margin-left:auto, which glued
+   it to View all and separated it from the heading it describes. */
+.smart-albums-heading-left {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.smart-albums-heading-left h2,
+.smart-albums-heading h2 {
+  margin: 0;
+  color: var(--ink) !important;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.smart-albums-toggle-desc {
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.smart-albums-count {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.smart-albums-section.is-expanded .smart-albums-list {
+  flex-wrap: wrap;
+  overflow-x: visible;
+  overflow-y: visible;
+}
+
+.smart-albums-section.is-expanded .smart-album-tile {
+  flex: 0 0 auto;
+}
+
+.smart-albums-viewall {
+  flex: 0 0 auto;
+  /* The action owns the free space now. */
+  margin-left: auto;
+  border: 0;
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.smart-albums-viewall:hover {
+  background: var(--surface-3);
+}
+
+.smart-albums-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.smart-albums-heading h2 {
+  margin: 3px 0 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.smart-albums-list {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Vertical room for the shared card shadow, which overflow would clip. */
+  padding: 10px 4px 12px;
+  margin-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.smart-albums-list::-webkit-scrollbar {
+  display: none;
+}
+
+/* A native scroll container scrolls with the arrow keys once it has focus, so
+   the strip is reachable without a mouse even though its scrollbar is hidden.
+   Tiles stay buttons, so each one is still a Tab stop. */
+.smart-albums-list:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+.smart-album-item {
+  display: flex;
+  flex: 0 0 auto;
+  position: relative;
+}
+
+/* Same affordance as a regular album card: the tile itself opens, the row
+   behind it edits or deletes. Revealed on hover and on keyboard focus. */
+.smart-album-actions {
+  top: 6px;
+  right: 6px;
+  gap: 3px;
+}
+
+.smart-album-item:hover .smart-album-actions,
+.smart-album-item:focus-within .smart-album-actions {
+  opacity: 1;
+  visibility: visible;
+}
+
+.smart-album-actions .album-card-action {
+  width: 24px;
+  height: 24px;
+}
+
+.smart-album-tile {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 172px;
+  min-height: 96px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.smart-album-tile:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
+.smart-album-tile-badge {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.smart-album-tile-cover {
+  position: relative;
+  width: 100%;
+  height: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  margin-bottom: 4px;
+}
+
+.smart-album-tile-cover .album-stack-photo img,
+.smart-album-tile-cover .album-stack-photo video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.smart-album-tile-cover-empty {
+  width: 100%;
+  height: 72px;
+  border-radius: 10px;
+  border: 1px dashed var(--line-strong);
+  background: color-mix(in srgb, var(--surface-2) 65%, transparent);
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
+}
+
+.smart-album-count {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Date range + saved-filter controls inside the filter popover */
+.filter-date-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.filter-date-range label {
+  display: grid;
+  gap: 4px;
+  color: var(--faint);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.filter-date-range input,
+.filter-smart-album-row input {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.filter-date-range input:focus-visible,
+.filter-smart-album-row input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
+.filter-smart-album-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.filter-smart-album-row input {
+  flex: 1 1 auto;
+}
+
+.filter-refreshing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.filter-refreshing-spinner {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: filter-refresh-spin 0.7s linear infinite;
+}
+
+@keyframes filter-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+

@@ -1,0 +1,414 @@
+/* Shared shell finish across Library, Albums, Viewer, Edit, Batch and Settings. */
+.skip-to-content {
+  position: fixed;
+  z-index: 1000;
+  top: 8px;
+  left: 8px;
+  padding: 9px 12px;
+  transform: translateY(-150%);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
+  transition: transform 0.15s ease;
+}
+
+.skip-to-content:focus {
+  transform: translateY(0);
+}
+
+.app-frame :is(button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.app-frame :is(button, input, select) {
+  touch-action: manipulation;
+}
+
+.nav-item {
+  min-height: 38px;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.nav-item.active {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.photo-inspector {
+  background: var(--surface-2);
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 900px) {
+  .library-layout.with-inspector .photo-inspector {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 30;
+    display: flex;
+    width: min(320px, calc(100vw - 64px));
+    max-width: 100%;
+    flex: 0 0 auto;
+    border-left: 1px solid var(--line-strong);
+    box-shadow: -18px 0 40px color-mix(in srgb, var(--ink) 16%, transparent);
+  }
+}
+
+@media (max-width: 700px) {
+  .library-layout.with-inspector .photo-inspector {
+    width: min(420px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+  }
+}
+
+.inspector-top > div {
+  min-width: 0;
+}
+
+.inspector-top h2 {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.feature-page,
+.viewer-screen,
+.edit-page {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.main-content > :is(.feature-page, .viewer-screen, .edit-page, .settings-page) {
+  overscroll-behavior: contain;
+}
+
+/* Keep selected Details rows unmistakable after the alternating-row styles. */
+.gallery-grid.layout-details .gallery-tile.selected .tile-select-check {
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+}
+
+.gallery-grid.layout-details .tile-select-check input:checked + svg {
+  display: block !important;
+  opacity: 1 !important;
+  color: var(--accent-contrast) !important;
+  stroke: var(--accent-contrast) !important;
+}
+
+/* Unified library panel rhythm: the inspector and collection header share a
+   top baseline, while all inspector content uses one consistent inset. */
+.library-layout.with-inspector .photo-inspector {
+  padding: 16px 18px 24px;
+  border-left-color: var(--line);
+}
+
+.photo-inspector > .inspector-top,
+.photo-inspector > .inspector-image,
+.photo-inspector > .inspector-actions,
+.photo-inspector > .inspector-section,
+.photo-inspector > .inspector-tags {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.photo-inspector .inspector-top {
+  margin-bottom: 14px;
+}
+.photo-inspector .inspector-top h2 {
+  margin: 5px 0 0;
+  font-size: 14px;
+  line-height: 1.35;
+}
+.photo-inspector .inspector-image {
+  height: auto;
+  aspect-ratio: 16 / 10;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-3);
+}
+.photo-inspector .inspector-image img,
+.photo-inspector .inspector-image video {
+  object-fit: contain;
+}
+.photo-inspector .inspector-image > span:not(.inspector-type-badge) {
+  right: 9px;
+  bottom: 9px;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  font-size: 11px;
+}
+.photo-inspector .inspector-type-badge {
+  left: 9px;
+  right: auto;
+  top: 9px;
+  bottom: auto;
+}
+.photo-inspector .inspector-actions {
+  gap: 7px;
+  margin: 10px 0 18px;
+}
+.photo-inspector .inspector-action {
+  min-width: 0;
+  min-height: 58px;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 4px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+.photo-inspector .inspector-action span {
+  font-size: 11px;
+}
+.photo-inspector .inspector-section {
+  padding-top: 15px;
+}
+
+/* File actions (Reveal / Open / Copy path) hold long labels, so they get
+   their own grid: three equal columns that wrap the label to a second line
+   instead of ellipsizing it like the icon-grid does. */
+.photo-inspector .inspector-file-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+.photo-inspector .inspector-file-actions button {
+  min-width: 0;
+  padding-inline: 4px;
+  overflow: hidden;
+}
+.photo-inspector .inspector-file-actions button span {
+  max-width: 100%;
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.photo-inspector .inspector-section-head {
+  margin-bottom: 9px;
+}
+.photo-inspector .info-card {
+  overflow: hidden;
+  border-radius: 9px;
+}
+.photo-inspector .info-row {
+  min-width: 0;
+  padding: 8px 11px;
+  gap: 10px;
+}
+.photo-inspector .info-label {
+  flex: 0 0 auto;
+}
+.photo-inspector .info-value {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.photo-inspector .inspector-tags {
+  margin-top: 16px;
+  padding-top: 15px;
+}
+.photo-inspector .tags-list {
+  min-height: 0;
+}
+.photo-inspector .app-tag {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.photo-inspector .tag-input {
+  box-sizing: border-box;
+  min-height: 36px;
+}
+
+/* Keep the Details view on the same grid gutter as the other modes. */
+/* The header is NOT inside .list-view (it's a sibling), so it cannot inherit
+   its --list-columns. Keep this declaration in lockstep with the default on
+   .list-view — any change must update both. */
+.library-grid-container:has(> .list-view-header) {
+  --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px) minmax(0, 110px) minmax(0, 96px);
+  /* No top padding (see the header's margin) so the sticky header pins flush
+     to the scrollport instead of leaving a strip of rows above it. */
+  padding-top: 0;
+  padding-right: var(--page-gutter);
+  padding-left: var(--page-gutter);
+}
+
+.library-grid-container > .list-view-header {
+  /* The table hangs from the toolbar: its bottom rule is the table's top
+     edge, so a second border would read as a floating strip. */
+  border-top: 0;
+  border-radius: 0;
+}
+
+.library-stats {
+  gap: 1px;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+.stat-row {
+  min-height: 34px;
+  padding: 6px 9px;
+  gap: 8px;
+}
+.stat-value {
+  white-space: nowrap;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.stat-size {
+  color: var(--faint);
+  font-weight: 450;
+}
+.stat-row.size {
+  border-top: 1px solid var(--line-strong);
+}
+
+.viewer-screen {
+  gap: 8px;
+}
+.viewer-screen > .viewer-heading {
+  flex: 0 0 auto;
+  align-items: flex-start;
+  margin-bottom: 0;
+}
+/* Same heading row as the video player: back button, file name, details. The
+   details wrap under the name instead of being clipped by the nowrap title. */
+.viewer-screen > .viewer-heading .video-player-title {
+  flex-wrap: wrap;
+  row-gap: 4px;
+  overflow: visible;
+}
+.viewer-screen > .viewer-heading .video-player-title h1 {
+  font-size: clamp(14px, 1.35vw, 17px);
+  max-width: min(52vw, 560px);
+}
+
+.viewer-stage {
+  min-height: 280px;
+  overflow: hidden;
+}
+.viewer-overlay-top {
+  z-index: 3;
+  align-items: center;
+  gap: 12px;
+}
+.viewer-overlay-bottom button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.viewer-overlay-bottom .viewer-divider {
+  flex: 0 0 auto;
+}
+.viewer-overlay-bottom > span:not(.viewer-divider) {
+  min-width: 38px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.viewer-arrow {
+  z-index: 4;
+}
+.filmstrip {
+  min-height: 62px;
+  margin-top: 12px;
+  padding: 8px 10px;
+  gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.filmstrip button {
+  flex: 0 0 58px;
+  height: 42px;
+  border-radius: 6px;
+}
+.filmstrip button:focus-visible,
+.filmstrip button:hover {
+  border-color: var(--accent);
+}
+
+/* End of the loaded page: the viewer pages the library, so the strip needs a
+   visible way to ask for the rest instead of just ending at item 250. */
+.filmstrip button.filmstrip-more {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 96px;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--surface-2) 90%, transparent);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 1;
+}
+.filmstrip button.filmstrip-more:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.filmstrip button.filmstrip-more:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+@media (max-width: 1100px) and (min-width: 901px) {
+  .library-layout.with-inspector .photo-inspector {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+}
+
+@media (max-width: 900px) {
+  .library-layout.with-inspector .photo-inspector {
+    flex: 0 0 auto;
+    width: min(320px, calc(100vw - 64px));
+    max-width: calc(100vw - 24px);
+    padding-top: 16px;
+  }
+  .viewer-screen {
+    padding: 20px;
+  }
+  .viewer-overlay-bottom {
+    bottom: 12px;
+  }
+}
+
+@media (max-width: 600px) {
+  .viewer-screen {
+    padding: 14px;
+  }
+  .viewer-overlay-bottom {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    max-width: none;
+    transform: none;
+    gap: 2px;
+    padding: 5px;
+  }
+  .viewer-overlay-bottom button {
+    min-height: 32px;
+    padding: 5px;
+  }
+  .viewer-arrow.left {
+    left: 8px;
+  }
+  .viewer-arrow.right {
+    right: 8px;
+  }
+}
+
+.main-content > .viewer-empty-state {
+  flex: 1 1 auto;
+  width: auto;
+  min-height: 0;
+  margin: 20px;
+  box-sizing: border-box;
+}
+

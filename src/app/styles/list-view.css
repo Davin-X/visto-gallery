@@ -1,0 +1,791 @@
+/* ===== Albums list view (Albums screen) ===== */
+.albums-view-switcher {
+  height: 32px;
+  padding: 3px;
+}
+
+.albums-view-switcher button {
+  width: 24px;
+  height: 26px;
+  border-radius: 6px;
+}
+
+.albums-list-view {
+  --list-columns: 34px 72px minmax(0, 1fr) minmax(0, 92px) minmax(0, 104px) minmax(0, 140px) 168px;
+  /* Fixed columns (610px) + six 12px gaps + 20px row padding + the 2px frame,
+     which leaves the name track 110px — the same floor the details table
+     keeps. Below this the page scrolls sideways instead of squeezing the
+     name to a few pixels. Header and body share it so they stay in lockstep. */
+  --albums-list-min-width: 400px;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+/* The body declares the library's default column template on itself, which
+   would otherwise shadow the album template inherited from the wrapper. */
+.albums-list-view > .list-view {
+  --list-columns: inherit;
+  min-width: var(--albums-list-min-width);
+}
+
+.albums-list-view > .list-view-header {
+  min-width: var(--albums-list-min-width);
+}
+
+.albums-col-grip {
+  padding: 0 2px;
+}
+
+.albums-col-cover {
+  padding: 0 2px;
+}
+
+.album-list-cover {
+  justify-self: center;
+  padding: 0;
+}
+
+/* Albums get a taller row and a fanned cover stack so this table is
+   distinguishable at a glance from the Library's item table. */
+.album-list-cover-fan {
+  position: relative;
+  width: 46px;
+  height: 40px;
+}
+
+.album-list-cover-fan-item {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-3);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.16);
+  transform-origin: 50% 100%;
+}
+
+.album-list-cover-fan-item img,
+.album-list-cover-fan-item .cached-thumb-placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.album-list-cover-fan-item:nth-child(1) {
+  z-index: 3;
+  transform: rotate(-2deg) translateX(1px);
+}
+
+.album-list-cover-fan-item:nth-child(2) {
+  z-index: 2;
+  transform: rotate(-9deg) translateX(-5px);
+}
+
+.album-list-cover-fan-item:nth-child(3) {
+  z-index: 1;
+  transform: rotate(8deg) translateX(8px);
+}
+
+.album-list-cover-placeholder {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 7px;
+  color: var(--muted);
+  background: var(--surface-2);
+}
+
+.album-list-name {
+  gap: 8px;
+  padding: 0 2px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.album-list-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Taller than the Library's 44px rows; the fanned cover needs the room.
+   Two classes so this beats the later .list-view-row min-height. */
+.list-view-row.album-list-row {
+  align-items: stretch;
+  min-height: 56px;
+}
+
+/* Reorder grip lives as its own column before the thumbnail (like the
+   selection column on the Library's details view), not glued to the action
+   cluster. */
+.albums-list-grip {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  justify-self: center;
+  width: 22px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--faint);
+  cursor: grab;
+  touch-action: none;
+  /* Sitting above the full-row open button; without this the overlay steals
+     the pointerdown and the grip cannot be gripped. */
+  position: relative;
+  z-index: 3;
+}
+
+.albums-list-grip:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.albums-list-grip:active {
+  cursor: grabbing;
+}
+
+.albums-list-grip:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+/* In the list row the actions sit in their own rightmost track, vertically
+   centred and always visible — nothing overlaps the Updated cell. */
+.album-list-actions {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 2px;
+  position: relative;
+  z-index: 3;
+  top: auto;
+  right: auto;
+  opacity: 1;
+  visibility: visible;
+  transition: none;
+}
+
+.album-list-actions .album-card-reorder {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+.album-list-actions .album-card-reorder:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.album-list-actions .album-card-reorder:active {
+  cursor: grabbing;
+}
+
+/* ===== Shared list view =====
+   One column template serves the sticky header and every row — set --list-columns
+   once per view and the two can never drift apart. */
+.list-view {
+  /* Must stay in lockstep with .library-grid-container:has(> .list-view-header). */
+  --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px) minmax(0, 110px) minmax(0, 96px);
+  --list-zebra: var(--surface-2);
+  /* Rows this wide look sparse; the columns carry enough content to fill
+     about this much space comfortably. */
+  max-width: 1240px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  /* The Library reuses .gallery-grid (16px gap) for the details layout; a
+     table needs contiguous rows or every row reads as a floating band. */
+  gap: 0;
+  min-width: 400px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.list-view-header {
+  position: sticky;
+  /* The rows' grid keeps a 400px minimum under cramped viewports; the sticky
+     header must match it or the two columns drift vertically apart. */
+  min-width: 400px;
+  max-width: 1240px;
+  top: 0;
+  z-index: 12;
+  display: grid;
+  column-gap: 12px;
+  grid-template-columns: var(--list-columns);
+  align-items: center;
+  min-height: 36px;
+  padding: 0 10px;
+  /* Header and body share one frame: the header is the table's top band, so
+     it carries the top/side borders and the rounded top corners instead of
+     sitting above the table's own rounded edge as a separate strip. */
+  border: 1px solid var(--line);
+  border-radius: 10px 10px 0 0;
+  background: var(--surface);
+}
+
+.list-view-header + .list-view {
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+}
+
+.list-view-head-cell--numeric {
+  justify-self: end;
+  text-align: right;
+}
+
+.list-view-head-cell {
+  min-width: 0;
+  /* The sort button carries the vertical padding; adding it here too made the
+     header 49px instead of the 36px rhythm the rows were tightened to. */
+  padding: 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.list-view-head-cell.details-preview-heading {
+  grid-column: 1 / 3;
+  padding-left: 2px;
+}
+
+/* ===== Narrow-width column compaction =====
+   Instead of sideways scrolling below the old 650/814px floors, collapse the
+   least-important columns once the container is cramped. The track count never
+   changes: dropped columns keep a 0px track and their header/body cells keep
+   their place but are hidden, so the sticky header and every row stay on one
+   template and cannot drift out of alignment. Name never collapses.
+
+   The query container is .albums-list-view / .library-grid-container, so the
+   rules must target their descendants — an element cannot query itself. */
+
+/* Albums list: retire Updated at <=820px, then Size at <=670px. */
+@container (max-width: 820px) {
+  .albums-list-view > .list-view,
+  .albums-list-view > .list-view-header {
+    --list-columns: 34px 72px minmax(0, 1fr) minmax(0, 92px) minmax(0, 104px) 0px 168px;
+  }
+  .albums-list-view .albums-col-updated,
+  .albums-list-view .albums-cell-updated {
+    visibility: hidden;
+  }
+}
+@container (max-width: 670px) {
+  .albums-list-view > .list-view,
+  .albums-list-view > .list-view-header {
+    --list-columns: 34px 72px minmax(0, 1fr) minmax(0, 92px) 0px 0px 168px;
+  }
+  .albums-list-view .albums-col-size,
+  .albums-list-view .albums-cell-size {
+    visibility: hidden;
+  }
+}
+
+/* Library details: retire Kind at <=660px, then Size at <=530px. */
+@container (max-width: 660px) {
+  .library-grid-container > .list-view-header,
+  .library-grid-container > .list-view {
+    --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px) 0px minmax(0, 96px);
+  }
+  .library-grid-container .details-col-kind,
+  .library-grid-container .tile-kind {
+    visibility: hidden;
+  }
+}
+@container (max-width: 530px) {
+  .library-grid-container > .list-view-header,
+  .library-grid-container > .list-view {
+    --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px) 0px 0px;
+  }
+  .library-grid-container .details-col-size,
+  .library-grid-container .tile-size {
+    visibility: hidden;
+  }
+}
+
+.details-sort-header {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  font-weight: inherit;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+}
+
+.details-sort-header:hover,
+.details-sort-header:focus-visible {
+  color: var(--accent-text);
+}
+
+.details-sort-header:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+.details-sort-header span {
+  color: var(--accent-text);
+  font-size: 12px;
+}
+
+.list-view-row {
+  position: relative;
+  display: grid;
+  column-gap: 12px;
+  grid-column: 1 / -1;
+  grid-template-columns: var(--list-columns);
+  align-items: stretch;
+  min-height: 44px;
+  padding: 0 10px;
+  background: var(--surface);
+}
+
+/* Dark surfaces compress small luminance steps, so the 55% mix that whispers
+   in light mode is almost invisible against #0b0d12. Stepping up a surface
+   level keeps the same tint weight while the alternation still reads. */
+.app-frame.dark .list-view {
+  --list-zebra: var(--surface-3);
+}
+
+/* Grouping comes from a whisper of fill on every other row, not from a rule
+   between rows: adjacent borders read as gaps at this density. */
+.list-view-row:nth-child(even) {
+  background: color-mix(in srgb, var(--list-zebra) 55%, transparent);
+}
+
+.list-view-row:hover {
+  background: var(--surface-3);
+}
+
+.list-view-row.selected {
+  background: var(--accent-soft);
+}
+
+.list-view-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding: 0 2px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.list-view-cell--muted {
+  color: var(--muted);
+}
+
+.list-view-cell--numeric {
+  justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+
+.list-view-cell--image {
+  justify-self: center;
+}
+
+.list-view .tile-select-check {
+  grid-column: 1;
+  position: static;
+  top: auto;
+  right: auto;
+  z-index: 2;
+  justify-self: center;
+  align-self: center;
+  width: 17px;
+  height: 17px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface);
+  color: transparent;
+  opacity: 1;
+  transform: none;
+  align-items: center;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  box-shadow: none;
+}
+
+.list-view .tile-select-check svg {
+  opacity: 0;
+}
+
+.list-view .tile-select-check:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.list-view .tile-select-check input:checked + svg {
+  display: block;
+  opacity: 1;
+  color: var(--accent-contrast);
+}
+
+/* Scoped with the parent list so it outranks the later `.gallery-tile
+   .tile-image` reset that zeroes the border and radius. Same chrome as the
+   Albums cover so both tables read identically. */
+.list-view .list-view-row .tile-image {
+  grid-column: 2;
+  align-self: center;
+  justify-self: center;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-3);
+  box-shadow: none;
+}
+
+/* A table row zooms on hover as a row, not as a thumbnail; and selection is
+   the row fill, never a ring around the 36px preview. */
+.list-view .gallery-tile:hover .tile-image img,
+.list-view .gallery-tile:hover .tile-image video {
+  transform: none;
+}
+
+/* Inspection gets a left accent bar instead of a ring, which would wrap the
+   row in card chrome again. The row fill stays with the zebra/selection rules. */
+.list-view-row.gallery-tile.inspected {
+  box-shadow: inset 2px 0 0 var(--accent, var(--blue));
+}
+
+.list-view .library-skeleton-row {
+  min-height: 44px;
+  border: 0;
+  border-radius: 0;
+}
+
+.list-view-row .tile-caption {
+  display: contents;
+}
+
+.list-view-row .tile-caption b {
+  grid-column: 3;
+  overflow: hidden;
+  align-items: center;
+  padding: 0 2px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+}
+
+/* Row metadata sits at the end of the name cell: the 36px preview is too
+   small to carry the grid's corner badges, and a separate column would cost
+   more width than the three states are worth. */
+.list-row-meta {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  padding-left: 12px;
+}
+
+.list-row-meta .list-row-color {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 20%, transparent);
+}
+
+.list-row-color--red {
+  background: #ef4444;
+}
+.list-row-color--yellow {
+  background: #eab308;
+}
+.list-row-color--green {
+  background: #22c55e;
+}
+.list-row-color--blue {
+  background: #3b82f6;
+}
+.list-row-color--purple {
+  background: #a855f7;
+}
+
+.list-row-meta .list-row-favorite {
+  display: grid;
+  place-items: center;
+  color: #f43f5e;
+}
+
+.list-row-meta .list-row-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.list-row-meta .list-row-rating .star {
+  color: #f0a92b;
+  font-size: 10px;
+}
+
+.list-view-row .tile-caption .tile-date,
+.list-view-row .tile-caption .tile-kind,
+.list-view-row .tile-caption .tile-size {
+  align-items: center;
+  display: flex;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.list-view-row .tile-caption .tile-date {
+  grid-column: 4;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.list-view-row .tile-caption .tile-kind {
+  grid-column: 5;
+  gap: 7px;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.list-view-row .tile-caption .tile-size {
+  grid-column: 6;
+  justify-content: flex-end;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Selection reads off the row, not per cell, so even and hover overrides stay
+   simple. */
+.list-view-row .tile-select-check {
+  border-color: var(--line-strong);
+}
+
+/* Timeline keeps its month divisions editorial and legible while letting the
+   thumbnail preference control the density of each date group. */
+.gallery-grid.layout-timeline.thumb-small {
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+}
+.gallery-grid.layout-timeline.thumb-medium {
+  grid-template-columns: repeat(auto-fill, minmax(224px, 1fr));
+}
+.gallery-grid.layout-timeline.thumb-large {
+  grid-template-columns: repeat(auto-fill, minmax(288px, 1fr));
+}
+
+.gallery-grid.layout-timeline .timeline-group {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.gallery-grid.layout-timeline .timeline-date-marker {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface-2);
+}
+
+.gallery-grid.layout-timeline .timeline-date-marker span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.gallery-grid.layout-timeline .timeline-group h3 {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.timeline-count {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-select-group {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.timeline-select-group:hover,
+.timeline-select-group:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.timeline-select-group[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.timeline-select-box {
+  display: grid;
+  width: 15px;
+  height: 15px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--accent-text);
+}
+
+.timeline-select-group[aria-pressed="true"] .timeline-select-box {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.gallery-grid.layout-timeline .tile-select-check {
+  width: 22px;
+  height: 22px;
+  opacity: 1;
+  transform: none;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(16, 20, 28, 0.68);
+  color: transparent;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(8px);
+}
+
+.gallery-grid.layout-timeline .tile-select-check input {
+  border-radius: inherit;
+}
+
+.gallery-grid.layout-timeline .gallery-tile.selected .tile-select-check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.gallery-grid.layout-timeline .gallery-tile {
+  align-self: start;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.gallery-grid.layout-timeline .gallery-tile:hover {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+.gallery-grid.layout-timeline .gallery-tile .tile-image {
+  aspect-ratio: 4 / 3;
+  border-radius: 0;
+}
+
+.gallery-grid.layout-timeline .tile-caption {
+  min-height: 78px;
+}
+
+@media (max-width: 720px) {
+  .library-grid-container:has(> .list-view-header) {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .gallery-grid.layout-timeline .timeline-group {
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+  }
+
+  .gallery-grid.layout-timeline .timeline-select-group {
+    grid-column: 2 / -1;
+    justify-self: start;
+  }
+}
+
+.gallery-tile .tile-image {
+  border: 0;
+  border-radius: 0;
+  transition: transform 0.25s ease;
+}
+.gallery-tile:hover .tile-image {
+  border-color: transparent;
+  box-shadow: none;
+}
+.gallery-tile .tile-caption {
+  transition: opacity 0.2s ease;
+}
+

@@ -1,0 +1,531 @@
+/* ===== Album dialog ===== */
+/* The dialog renders inside .app-frame so it inherits the same surface and
+   dark-mode tokens as the rest of the UI (a portal to body would lose them). */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 18, 23, 0.38);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  animation: dialog-fade 0.15s ease;
+}
+
+.album-dialog {
+  width: min(420px, 100%);
+  max-height: min(720px, calc(100vh - 64px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.24);
+  animation: dialog-pop 0.15s ease;
+}
+
+/* Sources needs room for names, paths and counts; the generic dialog width
+   would force every row into an ellipsis. */
+.album-dialog.sources-sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(780px, 100%);
+  max-height: min(84vh, 720px);
+  overflow: hidden;
+}
+
+.sources-sheet .sources-manager {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 16px;
+  overflow: hidden;
+}
+
+.sources-sheet .dialog-actions {
+  margin-top: 16px;
+}
+
+.dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dialog-heading .eyebrow {
+  margin: 0;
+}
+
+.dialog-heading h2 {
+  margin: 3px 0 0;
+  color: var(--ink);
+  font-family: "Manrope", sans-serif;
+  font-size: 20px;
+  letter-spacing: -0.03em;
+}
+
+.dialog-body {
+  margin: 18px 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.dialog-body b {
+  color: var(--ink);
+}
+
+.dialog-close {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1;
+}
+
+.dialog-close:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.dialog-field {
+  display: grid;
+  gap: 7px;
+  margin-top: 18px;
+}
+
+.dialog-field label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dialog-field input {
+  width: 100%;
+  height: 38px;
+  padding: 0 11px;
+  border: 1px solid var(--field-line, var(--line-strong));
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.dialog-field input:focus {
+  border-color: var(--blue);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--field-focus-inner, rgba(52, 116, 212, 0.22));
+}
+
+.dialog-field input:disabled {
+  opacity: 0.65;
+}
+
+.dialog-hint {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* A failed save keeps the dialog open with the typed definition intact, so the
+   error has somewhere to live. Toast notices are for actions that closed. */
+.dialog-error {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, #d6455f 34%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, #d6455f 8%, var(--surface));
+  color: #c23b54;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* Smart Albums are filter rules, so the dialog is a little wider than the
+   album-name dialogs to keep the date range on one line. */
+.smart-album-dialog {
+  width: min(520px, 100%);
+}
+
+.smart-album-dialog .filter-section {
+  margin-top: 16px;
+}
+
+.smart-album-dialog .filter-section:first-of-type {
+  margin-top: 18px;
+}
+
+.smart-album-dialog .dialog-actions {
+  margin-top: 18px;
+}
+
+.smart-album-dialog .filter-chip-row {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.smart-album-text {
+  width: 100%;
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.smart-album-text:focus-visible {
+  border-color: var(--blue);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--field-focus-inner, rgba(52, 116, 212, 0.22));
+}
+
+.smart-album-summary {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.dialog-actions .primary-button {
+  min-height: 34px;
+}
+
+.shortcuts-cheat-sheet {
+  width: min(520px, 92vw);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.shortcuts-cheat-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.shortcuts-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shortcuts-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.shortcuts-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
+}
+
+.shortcuts-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+  width: 120px;
+}
+
+.shortcuts-label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.confirm-dialog {
+  width: min(460px, 100%);
+}
+
+.confirm-dialog .dialog-body {
+  margin: 20px 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Searchable album picker. */
+.album-picker-dialog {
+  width: min(480px, 100%);
+}
+
+.album-picker-subtitle {
+  margin: 10px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.album-picker-search {
+  display: flex;
+  height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--field-line, var(--line-strong));
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.album-picker-search:focus-within {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--field-focus-inner, rgba(52, 116, 212, 0.22));
+}
+
+.album-picker-search input {
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.album-picker-search input::placeholder {
+  color: var(--faint);
+}
+
+.album-picker-search input:focus,
+.album-picker-search input:focus-visible {
+  outline: none;
+}
+
+.album-picker-search-clear {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.album-picker-search-clear:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.album-picker-list {
+  display: grid;
+  max-height: 270px;
+  gap: 3px;
+  margin-top: 10px;
+  padding: 2px;
+  overflow-y: auto;
+}
+
+.album-picker-row {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.album-picker-row:hover:not(:disabled),
+.album-picker-row:focus-visible:not(:disabled) {
+  border-color: var(--line);
+  background: var(--surface-3);
+}
+
+.album-picker-row:disabled {
+  opacity: 0.62;
+  cursor: default;
+}
+
+.album-picker-row .album-dot {
+  flex: 0 0 auto;
+}
+
+.album-picker-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-picker-count {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.album-picker-spinner {
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+}
+
+.album-picker-empty {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  padding: 26px 12px;
+  color: var(--faint);
+  text-align: center;
+}
+
+.album-picker-empty b {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.album-picker-empty p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.album-picker-dialog .dialog-actions {
+  margin-top: 16px;
+}
+
+/* Safe album deletion keeps the photos in the library. */
+.delete-album-dialog {
+  width: min(460px, 100%);
+}
+
+.delete-album-copy {
+  margin: 16px 0 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.delete-album-summary {
+  margin: 8px 0 0;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.delete-album-copy b {
+  color: var(--ink);
+}
+
+.delete-album-safety {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+
+.delete-album-safety > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--blue-soft);
+  color: var(--accent-text);
+}
+
+.delete-album-safety p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.delete-album-safety b {
+  color: var(--ink);
+}
+
+.delete-album-dialog .dialog-actions {
+  margin-top: 18px;
+}
+
+.delete-album-dialog .danger-button {
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+@keyframes dialog-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialog-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog-backdrop,
+  .album-dialog {
+    animation: none;
+  }
+}
+

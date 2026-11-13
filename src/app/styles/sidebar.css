@@ -1,0 +1,668 @@
+/* Sidebar */
+.app-body.sidebar-open {
+  grid-template-columns: var(--sidebar-width, 220px) minmax(0, 1fr);
+}
+
+.app-body.sidebar-closed {
+  /* Sidebar is display:none, so use a single full-width track for the main pane. */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-body {
+  transition: grid-template-columns 0.26s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Honor the "reduce motion" setting. */
+.app-frame.no-transitions,
+.app-frame.no-transitions *,
+.app-frame.no-transitions *::before,
+.app-frame.no-transitions *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+.app-body.sidebar-closed .sidebar {
+  display: none;
+}
+
+/* Inline expand/collapse toggle for the left sidebar. Sits in the sidebar's
+   WORKSPACE row: right of the label when expanded, and in the label's own
+   slot (left) when collapsed, so the nav list never moves vertically. */
+.sidebar-collapse-toggle {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    transform 0.12s ease;
+}
+
+.sidebar-collapse-toggle:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.sidebar-collapse-toggle:active {
+  transform: scale(0.9);
+}
+
+.sidebar-collapse-toggle:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.sidebar-collapse-toggle[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  background: var(--blue-soft);
+  color: var(--accent-text);
+}
+
+.sidebar-collapse-toggle[aria-pressed="true"]:hover {
+  background: var(--blue-soft);
+  border-color: color-mix(in srgb, var(--accent) 46%, transparent);
+}
+
+/* Icons ease their rail-mode scale in both directions during the toggle. */
+.nav-icon,
+.sources-entry-icon {
+  transition: transform 0.26s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Rail mode: the sidebar shrinks to icons instead of disappearing.
+   Scoped to open+collapsed so a hidden sidebar can't reserve its stripe
+   column and squeeze the main pane into the leftover blank track. */
+@media (min-width: 901px) {
+  .app-body.sidebar-open.sidebar-collapsed {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+  /* The LIBRARY stats popup is portaled to .app-frame (see AppNavigation.tsx)
+     so it escapes both .sidebar's and .sidebar-scroll's overflow clipping
+     and paints above .main-content. No overflow override is needed — the
+     sidebar keeps its normal scroll containment. */
+  /* WORKSPACE hides on collapse; the toggle takes its slot on the left at
+     the same height, so the nav list in the header never shifts. */
+  .app-body.sidebar-collapsed .sidebar-label-text {
+    display: none;
+  }
+  .app-body.sidebar-collapsed .sidebar-collapse-toggle {
+    margin-left: 0;
+  }
+  .app-body.sidebar-collapsed .sidebar-header {
+    padding: 14px 12px 10px;
+  }
+  .app-body.sidebar-collapsed .sidebar-back-button {
+    width: 40px;
+    min-width: 40px;
+    height: 36px;
+    margin: 8px auto 0;
+    padding: 0;
+    justify-content: center;
+    border-radius: 9px;
+  }
+  .app-body.sidebar-collapsed .sidebar-back-icon {
+    transform: scale(1.05);
+  }
+  .app-body.sidebar-collapsed .nav-item,
+  .app-body.sidebar-collapsed .sources-entry,
+  .app-body.sidebar-collapsed .sidebar-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    white-space: nowrap;
+  }
+  .app-body.sidebar-collapsed .nav-item > span:last-child {
+    display: none;
+  }
+  /* Same padding as expanded (9px 10px) and same 19px icon track, so the
+     glyph stays put while the pill animates to a 40px square. */
+  .app-body.sidebar-collapsed .nav-item {
+    width: 40px;
+    border-radius: 9px;
+  }
+  .app-body.sidebar-collapsed .nav-icon {
+    transform: scale(1.13); /* 18px glyph -> ~20px */
+  }
+  /* Sources entry: same anchored footprint, accent identity preserved. */
+  .app-body.sidebar-collapsed .sources-entry-section {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .app-body.sidebar-collapsed .sources-entry {
+    width: 40px;
+    border-radius: 9px;
+  }
+  .app-body.sidebar-collapsed .sources-entry-icon {
+    transform: scale(1.13);
+  }
+  .app-body.sidebar-collapsed .sources-entry-text,
+  .app-body.sidebar-collapsed .sources-entry-action {
+    display: none;
+  }
+  /* Library stats live behind a button in rail mode so the details stay
+     reachable without taking sidebar room. Hidden while expanded. */
+  .sidebar-stats-entry {
+    display: none;
+  }
+  .app-body.sidebar-collapsed .sidebar-section:not(.sources-entry-section) {
+    display: none;
+  }
+  .app-body.sidebar-collapsed .sidebar-stats-entry {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    position: relative;
+  }
+  /* Footprint only. How a rail item is painted belongs to the shared rail block
+     below, so the button cannot drift from the navigation again. */
+  .app-body.sidebar-collapsed .sidebar-stats-button {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  /* Portaled to .app-frame (see AppNavigation.tsx): fixed positioning with
+     top/left set inline from the button rect. An absolute popup inside the
+     rail would be clipped by .sidebar-scroll and paint under .main-content.
+     z-index 200 sits above the sticky library header (10) and back button
+     (40) but below dialog backdrops (300).
+     Styled as the Sources entry's open state (accent border + blue-soft
+     tint) so the button, popup and Sources share one accent identity. */
+  .sidebar-stats-popup {
+    position: fixed;
+    z-index: 200;
+    width: 230px;
+    padding: 12px;
+    border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--line));
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--blue-soft) 58%, var(--surface));
+    box-shadow:
+      0 12px 32px rgba(0, 0, 0, 0.22),
+      0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .sidebar-stats-popup .sidebar-section-label {
+    margin: 0 2px 8px;
+    color: var(--accent-text);
+  }
+  .sidebar-stats-popup .library-stats {
+    border-color: color-mix(in srgb, var(--accent) 20%, var(--line));
+    background: color-mix(in srgb, var(--accent) 20%, var(--line));
+  }
+  .sidebar-stats-popup .stat-row {
+    background: color-mix(in srgb, var(--blue-soft) 30%, var(--surface));
+  }
+  .sidebar-stats-popup .stat-row:hover {
+    background: color-mix(in srgb, var(--blue-soft) 52%, var(--surface));
+  }
+  .sidebar-stats-popup .stat-row.size {
+    border-top-color: color-mix(in srgb, var(--accent) 20%, var(--line));
+    background: color-mix(in srgb, var(--blue-soft) 52%, var(--surface));
+  }
+  .sidebar-stats-popup .stat-row.size .stat-value {
+    color: var(--accent-text);
+  }
+  /* One rail language. Every item is the same slot with a bare glyph; the box is
+     a response — hover, focus, or a state — not a permanent frame. Sources and
+     stats used to carry accent borders and tints while the navigation sat bare,
+     which made one control strip look like two kinds of control. */
+  .app-body.sidebar-collapsed .nav-item,
+  .app-body.sidebar-collapsed .sources-entry,
+  .app-body.sidebar-collapsed .sidebar-stats-button,
+  .app-body.sidebar-collapsed .sidebar-collapse-toggle,
+  .app-body.sidebar-collapsed .sidebar-back-button {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  /* Glyphs follow their item rather than carrying a colour of their own. */
+  .app-body.sidebar-collapsed .nav-icon,
+  .app-body.sidebar-collapsed .sources-entry-icon,
+  .app-body.sidebar-collapsed .sidebar-back-icon {
+    color: inherit;
+  }
+
+  .app-body.sidebar-collapsed .nav-item:hover,
+  .app-body.sidebar-collapsed .sources-entry:hover,
+  .app-body.sidebar-collapsed .sidebar-stats-button:hover,
+  .app-body.sidebar-collapsed .sidebar-collapse-toggle:hover,
+  .app-body.sidebar-collapsed .sidebar-back-button:hover {
+    border-color: var(--line);
+    background: var(--surface-3);
+    color: var(--text);
+  }
+
+  .app-body.sidebar-collapsed .nav-item:focus-visible,
+  .app-body.sidebar-collapsed .sources-entry:focus-visible,
+  .app-body.sidebar-collapsed .sidebar-stats-button:focus-visible,
+  .app-body.sidebar-collapsed .sidebar-collapse-toggle:focus-visible,
+  .app-body.sidebar-collapsed .sidebar-back-button:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+    border-color: var(--line);
+    background: var(--surface-3);
+    color: var(--text);
+  }
+
+  /* The current screen and an open panel stay obvious: those are states, and
+     they keep the accent the rail used to spend on decoration. */
+  .app-body.sidebar-collapsed .nav-item.active,
+  .app-body.sidebar-collapsed .sources-entry.open,
+  .app-body.sidebar-collapsed .sidebar-stats-button[aria-expanded="true"] {
+    border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+    background: var(--blue-soft);
+    color: var(--accent-text);
+  }
+
+  /* Footer: health dot and update dot only, both pinned to the left. The
+     version string fits the 64px rail in compact type, so keep it visible. */
+  .app-body.sidebar-collapsed .sidebar-footer {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 4px 14px;
+  }
+  .app-body.sidebar-collapsed .sidebar-health {
+    display: none;
+  }
+  .app-body.sidebar-collapsed .sidebar-version {
+    display: block;
+    font-size: 9px;
+    line-height: 1;
+    text-align: center;
+  }
+  .app-body.sidebar-collapsed .sidebar-version-group {
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .app-body.sidebar-collapsed .update-badge {
+    font-size: 0;
+    gap: 0;
+  }
+}
+
+.sidebar-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* Fixed row height in both states so the nav list below never shifts
+     up or down when WORKSPACE hides and the toggle takes its place. */
+  height: 26px;
+  min-height: 26px;
+  padding: 0 12px;
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.primary-nav {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.nav-item {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.nav-item:hover {
+  background: var(--surface-3);
+}
+
+.nav-item.active {
+  background: var(--blue-soft);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.nav-item.active .nav-icon {
+  color: var(--accent-text);
+}
+
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--blue-soft);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.sidebar-divider {
+  height: 1px;
+  margin: 0 14px;
+  background: var(--line);
+}
+
+.sidebar-section {
+  padding: 8px 14px 4px;
+}
+
+.sidebar-section-label {
+  margin-bottom: 8px;
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.library-stats {
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  transition: background 0.15s;
+}
+.stat-row:hover {
+  background: var(--surface-2);
+}
+.stat-row.hidden {
+  opacity: 0.6;
+}
+
+/* The stat rows used an 8px colour chip, which said nothing on its own and read
+   as an unloaded avatar. Each row now shows the glyph for what it counts: the
+   three stored kinds keep their hue, and the derived views — Animations,
+   Favorites, Uncategorized, Hidden — are neutral, because they are views of
+   those kinds rather than kinds. */
+.stat-row .stat-icon {
+  color: var(--muted);
+}
+
+.stat-row .stat-icon.is-photo {
+  color: var(--blue);
+}
+
+.stat-row .stat-icon.is-video {
+  color: var(--green);
+}
+
+.stat-row .stat-icon.is-raw {
+  color: var(--orange);
+}
+.stat-row.size {
+  margin-top: 0;
+  border-top: 1px solid var(--line);
+  /* The total row has no kind dot, so give the value its own auto track
+     instead of leaving an empty third column. */
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.stat-label {
+  color: var(--muted);
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stat-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 0;
+  /* Counts and sizes must never wrap or clip: let the label ellipsize
+     first, since the numbers are the point of the row. */
+  white-space: nowrap;
+}
+.stat-size {
+  color: var(--faint);
+  font-weight: 400;
+  font-size: 11px;
+  white-space: nowrap;
+  margin-left: 0.3em;
+}
+
+/* ===== Library sources entry (sidebar) ===== */
+/* One door, not a second list: the sidebar opens the Sources sheet, which owns
+   every add/remove action. */
+.sources-entry-section {
+  padding-bottom: 12px;
+}
+
+.sources-entry {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--blue-soft) 30%, var(--surface));
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.sources-entry:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  background: color-mix(in srgb, var(--blue-soft) 52%, var(--surface));
+}
+
+.sources-entry.open {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  background: color-mix(in srgb, var(--blue-soft) 58%, var(--surface));
+}
+
+.sources-entry-icon {
+  display: inline-flex;
+  color: var(--accent-text);
+}
+
+.sources-entry-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sources-entry-name {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.sources-entry-count {
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.sources-entry-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sources-entry-manage {
+  color: var(--faint);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sources-entry:hover .sources-entry-manage {
+  color: var(--accent-text);
+}
+
+.sources-entry-chevron {
+  color: var(--faint);
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* Source switcher in the library header, beside Open folder. It scopes the
+   grid and the SHOW counts without opening the Sources manager. */
+.source-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--faint);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.source-select:hover,
+.source-select:focus-within {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.source-select-label {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.source-select select {
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.source-select select:focus-visible {
+  outline: none;
+}
+
+.storage-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.storage-row span {
+  color: var(--muted);
+}
+
+.storage-row b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.privacy-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--text);
+}
+
+.privacy-note > span {
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.privacy-note div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.privacy-note b {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.privacy-note small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+

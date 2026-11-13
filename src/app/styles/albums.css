@@ -1,0 +1,716 @@
+/* Edit Page styles live in the editor section at the end of this file, where
+   the canvas/rail height contract is defined in one place. */
+
+/* Feature Page — every full screen outside the library shares this frame so
+   headings and content line up when switching screens. */
+.feature-page {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--page-top) var(--page-gutter) var(--space-8);
+}
+
+/* Albums overview: one card per album; the card is the entry point into the
+   album's photo grid on the Library screen. */
+.albums-page {
+  width: 100%;
+  max-width: 1120px;
+  /* A sticky header can never scroll above its scroll container's content
+     box, so the page's top inset lives on the heading instead of the
+     scroller's padding — otherwise rows peek through above the header. */
+  padding-top: 0;
+}
+
+/* Albums: the heading block is three lines tall, so the page action centres
+   against the whole block instead of hanging off the subtitle baseline. Scoped
+   rather than global: screens with a single-line heading keep the existing
+   bottom alignment, which is already right for them. */
+.albums-page > .page-heading {
+  align-items: center;
+  margin-top: var(--page-top);
+}
+
+.albums-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+/* Seven buttons share the row on a regular album card (slideshow, add, two
+   move buttons, rename, delete), so the whole row gets a denser density
+   rather than letting it run off the card. */
+.albums-grid .album-card-actions {
+  top: 8px;
+  right: 8px;
+  gap: 3px;
+  max-width: calc(100% - 16px);
+}
+
+.albums-grid .album-card-action,
+.albums-grid .album-card-reorder {
+  width: 24px;
+  height: 24px;
+}
+
+.album-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 0;
+  overflow: visible;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  /* --surface is also the page background, so it gave the card no fill at all:
+     the card was a hairline outline around art. --surface-2 is the card step. */
+  background: var(--surface-2);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+/* One hover for an album card and a smart-album tile alike: the border picks up
+   the accent and the card lifts on a shadow. No translate, so the shadow is
+   never clipped by the strip's horizontal scroll container. */
+.album-card:hover,
+.smart-album-tile:hover {
+  border-color: color-mix(in srgb, var(--blue) 38%, var(--line));
+  box-shadow: var(--card-hover-shadow);
+}
+
+.album-card:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.album-cover {
+  position: relative;
+  display: grid;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  place-items: center;
+  /* The card's top corners are rounded; the cover sits flush under the
+     border and must hand its top corners the same radius, or stack prints
+     square off the corner and paint over the border line. */
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 28% 18%,
+      color-mix(in srgb, var(--blue) 13%, transparent),
+      transparent 56%
+    ),
+    /* Ends below the card fill, so the print box still reads as a recess
+       against a --surface-2 card instead of dissolving into it. */
+    linear-gradient(
+        135deg,
+        var(--surface-3),
+        color-mix(in srgb, var(--surface-3) 62%, var(--surface-2))
+      );
+}
+
+.album-cover img,
+.album-cover video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* A few prints fanned out, rather than one flat cover image. */
+.album-stack {
+  position: absolute;
+  inset: 0;
+}
+
+.album-stack-photo {
+  position: absolute;
+  inset: 0;
+  width: 64%;
+  aspect-ratio: 4 / 3;
+  margin: auto;
+  overflow: hidden;
+  border: 3px solid var(--surface);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 6px 16px rgba(12, 18, 26, 0.18);
+  transform: translate(var(--x), var(--y)) rotate(var(--r));
+  transition: transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* Print layers stay composited instead of being re-rasterized on the hover
+     fan; a re-raster shows a blank frame for one tick (WebKit symptom — it
+     read as a white flash on hover). */
+  will-change: transform;
+}
+
+.album-stack-photo img,
+.album-stack-photo video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Hover opens the fan: the prints lift, turn a few degrees further and grow
+   slightly, so the stack reads as picked up rather than dragged apart. The
+   delays let the print on top move first and the ones behind follow. */
+.album-card:hover .album-stack-photo,
+.smart-album-tile:hover .album-stack-photo {
+  transform: translate(var(--hx), var(--hy)) rotate(var(--hr)) scale(1.04);
+}
+
+.album-card .album-stack-photo:nth-child(3),
+.smart-album-tile .album-stack-photo:nth-child(3) {
+  transition-delay: 20ms;
+}
+
+.album-card .album-stack-photo:nth-child(1),
+.smart-album-tile .album-stack-photo:nth-child(1) {
+  transition-delay: 40ms;
+}
+
+.album-cover.is-empty {
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      color-mix(in srgb, var(--blue) 10%, transparent),
+      transparent 58%
+    ),
+    linear-gradient(135deg, var(--surface-3), var(--surface-2));
+}
+
+.album-cover-placeholder {
+  display: grid;
+  place-items: center;
+  grid-auto-flow: row;
+  gap: 10px;
+  padding: 14px;
+  color: var(--muted);
+}
+
+.album-cover-placeholder .album-cover-placeholder-icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 16px;
+  color: var(--faint);
+  background: color-mix(in srgb, var(--surface-3) 55%, transparent);
+}
+
+/* One meta row for both an album card and a smart-album tile: accent slot,
+   name, count. Shared so the two cannot drift into different layouts. */
+.album-meta {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.album-card > .album-meta {
+  padding: 11px 12px 12px;
+}
+
+/* Cards are wrapped so the hover action row can sit over the cover without
+   nesting buttons inside the card's own <button>. */
+.album-card-wrap {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+/* Drag handle sits in the top-left corner so the hover action row keeps the
+   top-right; same reveal rules so it stays out of the way until it is
+   wanted. */
+.album-card-reorder {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--muted);
+  cursor: grab;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.12s ease,
+    visibility 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.album-card-reorder:active {
+  cursor: grabbing;
+}
+
+/* While a pointer-based drag is live, the whole page reads as the drag
+   container: grabbing everywhere and no text selection. */
+body.is-dragging-albums,
+body.is-dragging-albums * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+.album-card-wrap:hover .album-card-reorder,
+.album-card-wrap:focus-within .album-card-reorder {
+  opacity: 1;
+  visibility: visible;
+}
+
+.album-card-reorder:hover {
+  border-color: color-mix(in srgb, var(--blue) 45%, var(--line));
+  color: var(--text);
+}
+
+.album-card-reorder:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+/* The three states of a drag: the dragged card recedes and the target shows
+   which row edge the drop will land on. */
+.album-card-wrap.is-dragging {
+  opacity: 0.55;
+}
+
+.album-card-wrap.is-drop-before::after,
+.album-card-wrap.is-drop-after::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  z-index: 5;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--blue);
+}
+
+.album-card-wrap.is-drop-before::after {
+  left: -7px;
+}
+
+.album-card-wrap.is-drop-after::after {
+  right: -7px;
+}
+
+.album-card-action:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.album-card-action:disabled:hover {
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: inherit;
+}
+
+.album-card-wrap > .album-card {
+  width: 100%;
+}
+
+/* With a timestamp under the meta row, the meta's bottom padding would double
+   up and leave a gap between the name and the date. */
+.album-card:has(.album-updated) > .album-meta {
+  padding-bottom: 2px;
+}
+
+.album-updated {
+  display: block;
+  padding: 0 12px 12px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+/* Hidden until the card is hovered or something inside it takes focus. The
+   buttons stay out of the tab order until then via `visibility`, so keyboard
+   users do not tab through four invisible controls per card. */
+.album-card-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  /* The hover fan lifts the top print past this row; the stack assigns the
+     prints z-index 1–3, so the buttons sit at 4 to stay above the whole fan. */
+  z-index: 4;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.12s ease,
+    visibility 0.12s ease;
+}
+
+.album-card-wrap:hover .album-card-actions,
+.album-card-wrap:focus-within .album-card-actions {
+  opacity: 1;
+  visibility: visible;
+}
+
+.album-card-action {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--text);
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.album-card-action:hover {
+  border-color: color-mix(in srgb, var(--blue) 45%, var(--line));
+  background: var(--surface);
+}
+
+.album-card-action.is-danger:hover {
+  border-color: color-mix(in srgb, #d6455f 55%, var(--line));
+  background: color-mix(in srgb, #d6455f 12%, var(--surface));
+  color: #c23b54;
+}
+
+.album-card-action:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+/* When smart albums exist but no regular albums, the grid is not empty for the
+   page as a whole — a full-page empty state underneath the strip would read as
+   an error. A single inline hint fills the space instead. */
+.albums-empty-inline {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  color: var(--muted);
+}
+
+.albums-empty-inline p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.album-meta > .album-dot {
+  flex: 0 0 auto;
+}
+
+.album-meta-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-meta-count {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.albums-empty {
+  margin-top: 24px;
+}
+
+/* Album detail header: a quiet breadcrumb row, then the fanned covers, the
+   name and the album actions on one line — the same heading shape as every
+   other screen. */
+.page-heading.album-detail-top {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  padding: 0;
+  flex-wrap: nowrap;
+}
+.album-detail-head {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.page-heading.album-detail-top .album-detail-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.page-heading.album-detail-top .album-detail-copy .eyebrow {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+.page-heading.album-detail-top .album-detail-copy h1 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--heading-1-size);
+  font-weight: var(--heading-1-weight);
+  letter-spacing: var(--heading-1-letter-spacing);
+  line-height: var(--heading-1-line-height);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-heading.album-detail-top .album-detail-copy .page-subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+.page-heading.album-detail-top .album-detail-actions {
+  margin-left: auto;
+}
+
+/* Narrow centre pane (window below ~1300px, or the inspector open): let the
+   actions drop to their own row instead of squeezing the album name. */
+@media (max-width: 1299px) {
+  .album-detail-head {
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
+
+  .page-heading.album-detail-top .album-detail-copy {
+    flex: 1 1 180px;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-heading.album-detail-top .album-detail-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+.album-detail-lead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+/* Back button for the album detail view: compact chevron inline with the
+   cover, so the header needs no breadcrumb row above it. */
+.album-back-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.album-back-button:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.album-count-inline {
+  margin-left: 10px;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.album-detail-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.album-detail-cover {
+  position: relative;
+  display: grid;
+  width: 104px;
+  height: 76px;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background:
+    radial-gradient(
+      circle at 28% 18%,
+      color-mix(in srgb, var(--blue) 13%, transparent),
+      transparent 56%
+    ),
+    linear-gradient(135deg, var(--surface-3), var(--surface-2));
+  color: var(--faint);
+}
+
+.album-detail-cover.is-empty {
+  background: linear-gradient(135deg, var(--surface-3), var(--surface-2));
+}
+
+.album-detail-cover .album-stack-photo {
+  width: 62%;
+  border-width: 2px;
+  border-radius: 6px;
+  box-shadow: 0 4px 10px rgba(12, 18, 26, 0.16);
+}
+
+.album-detail-copy {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.album-detail-copy .eyebrow {
+  margin: 0 0 var(--space-1);
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+}
+
+.album-detail-copy h1 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--heading-1-size);
+  font-weight: var(--heading-1-weight);
+  letter-spacing: var(--heading-1-letter-spacing);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-detail-copy .page-subtitle {
+  margin-top: var(--space-1);
+}
+
+.album-detail-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: nowrap;
+}
+
+.album-detail-actions .play-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--control-height);
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.album-detail-actions .play-button:hover:not(:disabled) {
+  border-color: var(--blue);
+  background: var(--surface-2);
+}
+
+.album-detail-actions .play-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.album-detail-actions .primary-button {
+  height: var(--control-height);
+  padding: 0 14px;
+  border-radius: var(--control-radius);
+  font-size: var(--control-font-size);
+}
+
+.album-detail-actions .icon-button {
+  width: var(--control-height);
+  height: var(--control-height);
+  border-radius: var(--control-radius);
+}
+
+/* Empty albums become a real drop target instead of a dead end. */
+.app-frame .empty-state.album-empty-dropzone {
+  min-height: 340px;
+  border: 2px dashed color-mix(in srgb, var(--blue) 30%, var(--line-strong));
+  background:
+    radial-gradient(
+      circle at 50% 35%,
+      color-mix(in srgb, var(--blue) 8%, transparent),
+      transparent 55%
+    ),
+    var(--surface-2);
+}
+
+.album-empty-dropzone b {
+  margin-top: 9px;
+  font-size: 18px;
+}
+
+.album-empty-dropzone p {
+  max-width: 430px;
+  line-height: 1.5;
+}
+
+.album-empty-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.album-empty-dropzone .primary-button,
+.album-empty-dropzone .quiet-button {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+}
+
+.album-empty-dropzone.is-dragging {
+  border-color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 6%, var(--surface-2));
+}
+

@@ -1,0 +1,292 @@
+/* Responsive */
+@media (max-width: 1100px) {
+  .app-body {
+    /* Keep whatever width the Sidebar Width setting chose; the main pane can
+       spare the difference. */
+    grid-template-columns: var(--sidebar-width, 220px) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  /* Both side panels become overlays here, so edge dragging is disabled. */
+  .resizer {
+    display: none;
+  }
+  /* The sidebar becomes an overlay here, so the main pane takes the full
+     width. This needs to beat `.app-body.sidebar-open` (0,2,0), so the
+     sidebar modifier is included in the selector. */
+  .app-body,
+  .app-body.sidebar-open,
+  .app-body.sidebar-closed,
+  .app-body.sidebar-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 56px;
+    bottom: 0;
+    width: 260px;
+    z-index: 20;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+  }
+  .app-body.sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+  .app-body.sidebar-closed .sidebar {
+    transform: translateX(-100%);
+  }
+  .sidebar-collapse-toggle {
+    display: none;
+  }
+  .editor-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  /* Column counts are handled by auto-fill in the base rules, so there is
+     nothing to override here. */
+  .collection-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  /* `align-items: stretch` would otherwise make the field as tall as the
+     action cluster below it. */
+  .search-field {
+    width: 100%;
+    flex: 0 0 auto;
+    height: 36px;
+  }
+  .topbar-context {
+    display: none;
+  }
+  /* The action cluster fills the row on narrow screens and the buttons share
+     the width evenly instead of overflowing. */
+  .library-header .toolbar-actions {
+    margin-left: 0;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .library-header .toolbar-actions .toolbar-button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  /* When the filter row wraps, the selection cluster drops to its own line;
+     sit it left-aligned at natural width like the filter cluster above. */
+  .smart-filter-row .selection-cluster {
+    flex: 0 0 auto;
+    width: auto;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+}
+/* ==========================================================================
+   Library header - inspector open
+   With the inspector open the centre pane is roughly `window - 540px`, so a
+   960px window leaves only ~420px for the header. These rules keep the panel
+   calm at that size. They are scoped to the inspector layout: closing the
+   inspector gives the header its roomier treatment back.
+   ========================================================================== */
+
+@media (max-width: 1299px) {
+  .library-layout.with-inspector .library-center {
+    padding-left: var(--page-gutter);
+    padding-right: var(--page-gutter);
+  }
+
+  .library-layout.with-inspector .library-header {
+    padding: var(--space-4) var(--page-gutter) var(--space-3);
+  }
+
+  .library-layout.with-inspector .library-grid-container {
+    padding-left: var(--page-gutter);
+    padding-right: var(--page-gutter);
+  }
+
+  .library-layout.with-inspector .library-header .page-heading {
+    margin-bottom: 10px;
+    column-gap: 12px;
+    row-gap: 8px;
+  }
+
+  .library-layout.with-inspector .library-header .page-heading h1 {
+    font-size: 24px;
+  }
+
+  .library-layout.with-inspector .library-header .page-subtitle {
+    margin-top: 4px;
+    font-size: 12px;
+  }
+
+  .library-layout.with-inspector .library-header .import-actions {
+    gap: 6px;
+  }
+
+  .library-layout.with-inspector .library-header .import-actions .primary-button,
+  .library-layout.with-inspector .library-header .import-actions .quiet-button {
+    height: 32px;
+    min-height: 32px;
+    padding: 0 11px;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+
+  .library-layout.with-inspector .library-header .collection-toolbar {
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  /* In a narrow center pane, give the collection controls their own row and
+     allow the control groups to wrap. Keeping Album first prevents it from
+     being pushed underneath the clipped left edge of the toolbar. */
+  .library-layout.with-inspector .library-header .toolbar-right {
+    flex: 1 1 100%;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .library-layout.with-inspector .library-header .toolbar-actions {
+    flex: 1 1 300px;
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    row-gap: 6px;
+  }
+
+  .library-layout.with-inspector .library-header .toolbar-actions > .toolbar-button,
+  .library-layout.with-inspector .library-header .toolbar-actions > .view-controls,
+  .library-layout.with-inspector .library-header .toolbar-actions > .sort-control {
+    flex: 0 0 auto;
+  }
+
+  .library-layout.with-inspector .library-header .toolbar-divider {
+    display: none;
+  }
+
+  .library-layout.with-inspector .library-header .selection-cluster {
+    margin-left: 0;
+  }
+
+  .library-layout.with-inspector .library-header .search-field {
+    max-width: none;
+    height: 34px;
+    padding: 0 10px;
+  }
+
+  .library-layout.with-inspector .library-header .toolbar-actions .toolbar-button {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .library-layout.with-inspector .library-header .toolbar-actions .layout-switcher {
+    height: 28px;
+    padding: 1px;
+  }
+
+  .library-layout.with-inspector .library-header .toolbar-actions .layout-switcher button {
+    width: 24px;
+    height: 24px;
+  }
+
+  .library-layout.with-inspector .library-header .quick-filter {
+    height: 26px;
+    min-height: 26px;
+    padding: 0 8px;
+  }
+
+  .library-layout.with-inspector .library-header .smart-filter-row {
+    padding-bottom: 10px;
+  }
+
+  .library-layout.with-inspector .library-header .selection-bar {
+    margin-bottom: 10px;
+    padding: 4px 5px 4px 10px;
+  }
+}
+
+/* Keep thumbnail-size glyphs centered within the compact segmented control. */
+/* Thumbnail-size control matches the layout switcher exactly (height, button
+   size, radius and selected treatment) so the toolbar reads as one row. */
+.app-frame .library-header .toolbar-actions .zoom-control {
+  box-sizing: border-box;
+  align-items: center;
+  height: 32px;
+  min-height: 0;
+  margin-left: 0;
+  padding: 2px;
+  gap: 2px;
+  border-radius: 8px;
+}
+
+.app-frame .library-header .toolbar-actions .zoom-control button {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 26px;
+  min-width: 28px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+@container library-pane (max-width: 420px) {
+  .app-frame .library-header .toolbar-actions .zoom-control {
+    height: 28px;
+    padding: 1px;
+  }
+
+  .app-frame .library-header .toolbar-actions .zoom-control button {
+    flex-basis: 23px;
+    width: 23px;
+    height: 24px;
+    min-width: 23px;
+  }
+}
+
+@media (max-width: 1299px) {
+  .app-frame .library-layout.with-inspector .library-header .toolbar-actions .zoom-control {
+    min-height: 0;
+  }
+
+  .app-frame .library-layout.with-inspector .library-header .toolbar-actions .zoom-control button {
+    flex-basis: 22px;
+    width: 22px;
+    height: 23px;
+    min-width: 22px;
+    min-height: 0;
+  }
+}
+
+/* Tight centre pane: the import actions become icon buttons so the title and
+   subtitle keep their line. */
+@media (max-width: 1019px) {
+  .library-layout.with-inspector .library-header .import-actions .btn-label {
+    display: none;
+  }
+
+  .library-layout.with-inspector .library-header .import-actions .primary-button,
+  .library-layout.with-inspector .library-header .import-actions .quiet-button {
+    width: 32px;
+    padding: 0;
+  }
+}
+
+/* When the filter rail has to scroll, fade its right edge so a clipped pill
+   reads as "more filters this way" instead of a broken control. The extra
+   padding keeps the final pill clear of the fade at the end of the scroll. */
+@media (max-width: 1229px) {
+  .library-layout.with-inspector .smart-filter-row .filter-cluster {
+    padding-right: 32px;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+  }
+}
+
