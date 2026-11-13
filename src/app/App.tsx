@@ -70,7 +70,19 @@ function App() {
   const screen = useNavigationStore((s) => s.screen);
   const canGoBack = useNavigationStore((s) => s.history.length > 0);
   const goBack = useNavigationStore((s) => s.goBack);
-  const pushScreen = useNavigationStore((s) => s.pushScreen);
+
+  // A mouse's back and forward buttons (3 and 4) walk the same history.
+  useEffect(() => {
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button !== 3 && e.button !== 4) return;
+      e.preventDefault();
+      const navigation = useNavigationStore.getState();
+      if (e.button === 3) navigation.goBack();
+      else navigation.goForward();
+    };
+    window.addEventListener("mouseup", onMouseUp);
+    return () => window.removeEventListener("mouseup", onMouseUp);
+  }, []);
 
   const library = useLibraryStore();
   const viewer = useViewerStore();
@@ -444,7 +456,7 @@ function App() {
       await edit.saveDraft();
       await edit.close();
     }
-    pushScreen(next, screen);
+    setScreen(next);
   };
 
   const openSettings = () => setScreen("Settings");
@@ -547,7 +559,9 @@ function App() {
       }
       sidebar={
         <AppSidebar
-          screen={screen}
+          // An open album belongs to Albums, even though its grid is drawn by
+          // the Library screen.
+          screen={screen === "Library" && library.activeAlbum ? "Albums" : screen}
           folders={library.folders}
           sourcesSheetOpen={sourcesSheetOpen}
           stats={libraryStats}

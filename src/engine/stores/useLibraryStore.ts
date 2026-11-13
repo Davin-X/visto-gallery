@@ -303,6 +303,27 @@ let nextHiddenRequestId = 0;
 // Each notice gets an id so its dismiss timer clears only that notice, never
 // a newer one shown in the meantime (such as an Undo toast).
 let latestNoticeId = 0;
+
+// The icons-only sidebar is a per-Mac view preference, so it lives in local
+// storage and survives relaunches. Storage can be missing or blocked; the
+// sidebar then simply starts expanded.
+const SIDEBAR_COLLAPSED_KEY = "visto:sidebarCollapsed";
+
+function readSidebarCollapsed(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeSidebarCollapsed(collapsed: boolean) {
+  try {
+    globalThis.localStorage?.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+  } catch {
+    // Not remembered this time; the toggle itself still works.
+  }
+}
 let hiddenQueryReloadTimer: ReturnType<typeof setTimeout> | null = null;
 let queryReloadTimer: ReturnType<typeof setTimeout> | null = null;
 // Debounce for free-text camera/lens filters so typing doesn't reload the
@@ -540,7 +561,7 @@ export const useLibraryStore = create<LibraryState>()(
       sortOrder: "desc",
       showInspector: true,
       sidebarOpen: true,
-      sidebarCollapsed: false,
+      sidebarCollapsed: readSidebarCollapsed(),
       activeAlbum: null,
       activeSmartAlbum: null,
       activeSource: null,
@@ -1149,7 +1170,12 @@ export const useLibraryStore = create<LibraryState>()(
       getCurrentLibraryFilter: () => currentLibraryFilter(get()),
       toggleInspector: () => set((s) => ({ showInspector: !s.showInspector })),
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
-      toggleSidebarCollapsed: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      toggleSidebarCollapsed: () =>
+        set((s) => {
+          const sidebarCollapsed = !s.sidebarCollapsed;
+          writeSidebarCollapsed(sidebarCollapsed);
+          return { sidebarCollapsed };
+        }),
 
       setActiveAlbum: (albumId) => {
         set({

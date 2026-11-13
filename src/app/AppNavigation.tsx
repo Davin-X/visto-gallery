@@ -456,7 +456,7 @@ export function AppSidebar({
               className={`sidebar-back-button${sidebarCollapsed ? " is-collapsed" : ""}`}
               onClick={onGoBack}
               aria-label="Go back"
-              title="Go back"
+              title="Go back (⌘[)"
             >
               <span className="sidebar-back-icon">
                 <ChevronLeftIcon size={16} strokeWidth={2} />

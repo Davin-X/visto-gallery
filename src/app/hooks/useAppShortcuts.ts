@@ -3,7 +3,7 @@ import { useKeyboard } from "../../engine/hooks/useKeyboard";
 import { useLibraryStore, useSlideshowStore, useViewerStore } from "../../engine/stores";
 import type { Screen } from "../screen";
 import { isExportShortcut } from "../shortcuts";
-import { setScreen } from "../useNavigationStore";
+import { setScreen, useNavigationStore } from "../useNavigationStore";
 
 export interface AppShortcutContext {
   screen: Screen;
@@ -58,6 +58,14 @@ function handleAppShortcut(e: KeyboardEvent, context: AppShortcutContext) {
   // and Escape) instead of the global shortcut map.
   if (modalOpen) return;
 
+  // ⌘[ / ⌘] walk Back and Forward, as in Finder and Safari.
+  if (mod && (e.key === "[" || e.key === "]") && !isEditableTarget(e.target as HTMLElement)) {
+    e.preventDefault();
+    const navigation = useNavigationStore.getState();
+    if (e.key === "[") navigation.goBack();
+    else navigation.goForward();
+    return;
+  }
   if (mod && key === "o") {
     e.preventDefault();
     context.importFolder();

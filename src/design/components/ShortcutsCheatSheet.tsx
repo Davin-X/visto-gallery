@@ -11,6 +11,7 @@ export function ShortcutsCheatSheet({ open, onClose }: { open: boolean; onClose:
       group: "Navigation",
       items: [
         { key: "⌘/Ctrl + \\", label: "Toggle sidebar" },
+        { key: "⌘/Ctrl + [ / ]", label: "Back / forward" },
         { key: "⌘/Ctrl + Alt + I", label: "Toggle inspector" },
         { key: "⌘/Ctrl + ,", label: "Open settings" },
         { key: "⌘/Ctrl + F", label: "Focus search" },

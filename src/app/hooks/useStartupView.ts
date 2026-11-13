@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLibraryStore, useSettingsStore } from "../../engine/stores";
 import type { Screen } from "../screen";
-import { setScreen } from "../useNavigationStore";
+import { useNavigationStore } from "../useNavigationStore";
 
 /**
  * Honor the startup_view setting once settings are hydrated (open to the
@@ -19,6 +19,8 @@ export function useStartupView(screen: Screen, settingsHydrated: boolean) {
   useEffect(() => {
     if (!settingsHydrated || didRunStartup.current) return;
     didRunStartup.current = true;
+    // Launch is not a step Back should return to.
+    const { replaceScreen } = useNavigationStore.getState();
     if (startupView === "last" && openLastFolder && lastScreen === "Albums" && lastFolder) {
       const library = useLibraryStore.getState();
       library.setActiveAlbum(lastFolder);
@@ -27,15 +29,15 @@ export function useStartupView(screen: Screen, settingsHydrated: boolean) {
       library.loadAlbumItems(lastFolder).catch(() => {
         // The album grid itself still loads through the active-album filter.
       });
-      setScreen("Library");
+      replaceScreen("Library");
       return;
     }
     if (startupView === "last" && lastScreen) {
-      setScreen(lastScreen);
+      replaceScreen(lastScreen);
       return;
     }
     // Default: Library.
-    setScreen("Library");
+    replaceScreen("Library");
   }, [settingsHydrated, startupView, openLastFolder, lastScreen, lastFolder]);
 
   useEffect(() => {
