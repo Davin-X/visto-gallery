@@ -161,6 +161,15 @@ export function EditIcon({ size = 18, className = "", strokeWidth = 1.8 }: IconP
   );
 }
 
+export function PencilIcon({ size = 14, className = "", strokeWidth = 1.8 }: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <path d="M4.2 19.8h3.9L19.4 8.5a2.2 2.2 0 0 0-3.1-3.1L4.9 16.7z" />
+      <path d="M13.9 6.9l3.2 3.2" />
+    </Svg>
+  );
+}
+
 export function BatchIcon({ size = 18, className = "", strokeWidth = 1.8 }: IconProps) {
   return (
     <Svg size={size} className={className} strokeWidth={strokeWidth}>

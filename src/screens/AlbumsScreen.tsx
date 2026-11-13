@@ -1,8 +1,15 @@
 import React from "react";
-import { AlbumsIcon, PlusIcon } from "../design/components/icons";
+import {
+  AlbumsIcon,
+  PencilIcon,
+  PlusIcon,
+  SlideshowIcon,
+  TrashIcon,
+} from "../design/components/icons";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
+import { formatFileDate } from "../engine/utils/mediaDate";
 import type { Album, MediaItem } from "../engine/types/media";
 import type { SmartAlbum } from "../engine/types/commands";
 
@@ -16,6 +23,11 @@ interface AlbumsScreenProps {
   onOpenAlbum: (albumId: string) => void;
   onOpenSmartAlbum?: (albumId: string) => void;
   onSmartAlbumContextMenu?: (album: SmartAlbum, e: React.MouseEvent) => void;
+  /** Same actions as the card's right-click menu, reachable without one. */
+  onPlayAlbum?: (albumId: string) => void;
+  onRenameAlbum?: (album: any) => void;
+  onAddItemsToAlbum?: (albumId: string) => void;
+  onDeleteAlbum?: (album: any) => void;
 }
 
 /** Counts in smart-album overviews can arrive undefined; treat anything
@@ -213,30 +225,84 @@ function AlbumsScreen(props: AlbumsScreenProps) {
       ) : (
         <div className="albums-grid">
           {albums.map((album: any) => (
-            <button
-              key={album.id}
-              type="button"
-              className="album-card"
-              onClick={() => props.onOpenAlbum(album.id)}
-              onContextMenu={(e) => props.onAlbumContextMenu?.(album, e)}
-              title={`Open ${album.name}`}
-            >
-              <span className={`album-cover ${album.photos.length ? "" : "is-empty"}`}>
-                {album.photos.length ? (
-                  <AlbumPhotoStack photos={album.photos} albumItems={album.albumItems} />
-                ) : (
-                  <span className="album-cover-placeholder">
-                    <AlbumsIcon size={30} />
-                  </span>
-                )}
-              </span>
-              <AlbumMeta
-                color={album.color}
-                name={album.name}
-                count={formatAlbumCount(album.count)}
-              />
-            </button>
+            <div className="album-card-wrap" key={album.id}>
+              <button
+                type="button"
+                className="album-card"
+                onClick={() => props.onOpenAlbum(album.id)}
+                onContextMenu={(e) => props.onAlbumContextMenu?.(album, e)}
+                title={`Open ${album.name}`}
+              >
+                <span className={`album-cover ${album.photos.length ? "" : "is-empty"}`}>
+                  {album.photos.length ? (
+                    <AlbumPhotoStack photos={album.photos} albumItems={album.albumItems} />
+                  ) : (
+                    <span className="album-cover-placeholder">
+                      <AlbumsIcon size={30} />
+                    </span>
+                  )}
+                </span>
+                <AlbumMeta
+                  color={album.color}
+                  name={album.name}
+                  count={formatAlbumCount(album.count)}
+                />
+                {album.updatedAt ? (
+                  <span className="album-updated">Updated {formatFileDate(album.updatedAt)}</span>
+                ) : null}
+              </button>
+              <div className="album-card-actions" role="group" aria-label={`${album.name} actions`}>
+                <button
+                  type="button"
+                  className="album-card-action"
+                  title="Play slideshow"
+                  aria-label={`Play slideshow of ${album.name}`}
+                  onClick={() => props.onPlayAlbum?.(album.id)}
+                >
+                  <SlideshowIcon size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="album-card-action"
+                  title="Add items"
+                  aria-label={`Add items to ${album.name}`}
+                  onClick={() => props.onAddItemsToAlbum?.(album.id)}
+                >
+                  <PlusIcon size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="album-card-action"
+                  title="Rename album"
+                  aria-label={`Rename ${album.name}`}
+                  onClick={() => props.onRenameAlbum?.(album)}
+                >
+                  <PencilIcon size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="album-card-action is-danger"
+                  title="Delete album"
+                  aria-label={`Delete ${album.name}`}
+                  onClick={() => props.onDeleteAlbum?.(album)}
+                >
+                  <TrashIcon size={14} />
+                </button>
+              </div>
+            </div>
           ))}
+          {albums.length === 0 && (
+            <div className="albums-empty-inline">
+              <p>No albums yet. Create one, then add photos from Library.</p>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => props.onCreateAlbum?.()}
+              >
+                <PlusIcon size={13} /> Create album
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

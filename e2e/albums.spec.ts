@@ -27,3 +27,23 @@ test("smart albums strip is visible, collapsible and expandable", async ({ page 
   );
   expect(wrapped).toBe("wrap");
 });
+
+// Card affordances: the updated date is visible without a right-click, and the
+// action row only exists while the card is hovered or focused.
+test("album cards show the updated date and reveal actions on hover", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await page.goto("/harness.html?benchmark=40", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".gallery-tile");
+  await page.getByRole("button", { name: "Albums", exact: true }).click();
+
+  const card = page.locator(".album-card-wrap").first();
+  await expect(card.locator(".album-updated")).toContainText("Updated");
+  await expect(card.locator(".album-card-actions")).toBeHidden();
+
+  await card.hover();
+  const actions = card.locator(".album-card-actions");
+  await expect(actions).toBeVisible();
+  await expect(card.getByRole("button", { name: /Play slideshow of/ })).toBeVisible();
+  await expect(card.getByRole("button", { name: /Rename / })).toBeVisible();
+  await expect(card.getByRole("button", { name: /Delete / })).toBeVisible();
+});

@@ -253,6 +253,7 @@ pub async fn add_to_album_db(
     }
     let mut tx = db.begin().await?;
     let now = super::now_ms();
+    let mut changed = false;
     for chunk in item_ids.chunks(400) {
         // Which of these are already members? One lookup per chunk, then a
         // multi-row insert of only the missing ones — with no UNIQUE index on
@@ -283,6 +284,16 @@ pub async fn add_to_album_db(
             row.push_bind(album_id).push_bind(id).push_bind(now);
         });
         insert.build().execute(&mut *tx).await?;
+        changed = true;
+    }
+    if changed {
+        // The card shows "updated" from this column; a membership change that
+        // leaves it untouched makes a fresh album look untouched for weeks.
+        sqlx::query("UPDATE albums SET updated_at = ? WHERE id = ?")
+            .bind(now)
+            .bind(album_id)
+            .execute(&mut *tx)
+            .await?;
     }
     tx.commit().await?;
     Ok(())
@@ -308,6 +319,8 @@ pub async fn remove_from_album_db(
         return Ok(());
     }
     let mut tx = db.begin().await?;
+    let now = super::now_ms();
+    let mut changed = false;
     for chunk in item_ids.chunks(400) {
         let mut qb = QueryBuilder::new("DELETE FROM album_items WHERE album_id = ");
         qb.push_bind(album_id);
@@ -319,7 +332,15 @@ pub async fn remove_from_album_db(
             }
         }
         qb.push(")");
-        qb.build().execute(&mut *tx).await?;
+        let result = qb.build().execute(&mut *tx).await?;
+        changed |= result.rows_affected() > 0;
+    }
+    if changed {
+        sqlx::query("UPDATE albums SET updated_at = ? WHERE id = ?")
+            .bind(now)
+            .bind(album_id)
+            .execute(&mut *tx)
+            .await?;
     }
     tx.commit().await?;
     Ok(())
@@ -356,6 +377,10 @@ mod tests {
             .execute(&db)
             .await
             .expect("create album items table");
+        sqlx::query("CREATE TABLE albums (id TEXT PRIMARY KEY, name TEXT NOT NULL, color_index INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0)")
+            .execute(&db)
+            .await
+            .expect("create albums table");
         db
     }
 
@@ -399,6 +424,52 @@ mod tests {
                 .await
                 .expect("count album memberships after remove");
         assert_eq!(count, 425);
+    }
+
+    #[tokio::test]
+    async fn membership_changes_bump_album_updated_at() {
+        let db = album_db().await;
+        sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at) VALUES ('m1', '/tmp/a.jpg', 'a.jpg', 'jpg', 'photo', 1, 1, 1, 1)")
+            .execute(&db)
+            .await
+            .expect("insert media row");
+        sqlx::query(
+            "INSERT INTO albums (id, name, created_at, updated_at) VALUES ('a1', 'Trip', 1, 1)",
+        )
+        .execute(&db)
+        .await
+        .expect("insert album row");
+
+        add_to_album_db(&db, "a1", &["m1".to_string()])
+            .await
+            .expect("add member");
+        let after_add: i64 = sqlx::query_scalar("SELECT updated_at FROM albums WHERE id = 'a1'")
+            .fetch_one(&db)
+            .await
+            .expect("read updated_at after add");
+        assert!(after_add > 1, "adding a member must touch updated_at");
+
+        // Re-adding the same member changes nothing, so the timestamp must not move.
+        add_to_album_db(&db, "a1", &["m1".to_string()])
+            .await
+            .expect("re-add is a no-op");
+        let after_readd: i64 = sqlx::query_scalar("SELECT updated_at FROM albums WHERE id = 'a1'")
+            .fetch_one(&db)
+            .await
+            .expect("read updated_at after re-add");
+        assert_eq!(after_readd, after_add);
+
+        remove_from_album_db(&db, "a1", &["m1".to_string()])
+            .await
+            .expect("remove member");
+        let after_remove: i64 = sqlx::query_scalar("SELECT updated_at FROM albums WHERE id = 'a1'")
+            .fetch_one(&db)
+            .await
+            .expect("read updated_at after remove");
+        assert!(
+            after_remove >= after_add,
+            "removing a member must leave updated_at at least as new"
+        );
     }
 
     #[tokio::test]

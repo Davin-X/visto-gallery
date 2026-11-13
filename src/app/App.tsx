@@ -1873,6 +1873,34 @@ function App() {
     };
   }, []);
 
+  // Opening an album card's slideshow must not require navigating into the
+  // album first, so the membership is fetched here and handed straight to the
+  // overlay. Same ordering as the Library slideshow: grid order.
+  const playAlbumSlideshow = useCallback(
+    async (albumId: string) => {
+      try {
+        const items = await tauri.albums.getItems(albumId);
+        if (!items.length) {
+          showNotice("This album has no photos or videos yet.");
+          return;
+        }
+        if (viewer.isOpen) {
+          viewer.close();
+          setScreen(viewerOrigin || "Albums");
+        }
+        document.querySelectorAll("video").forEach((v) => {
+          try {
+            v.pause();
+          } catch {}
+        });
+        startConfiguredSlideshow(items, null);
+      } catch (error) {
+        showErrorNotice(error, "Could not start the slideshow");
+      }
+    },
+    [showNotice, showErrorNotice, viewer, viewerOrigin],
+  );
+
   const openAlbumMenu = (album: any, e: React.MouseEvent) => {
     openContextMenu(
       [
@@ -2636,7 +2664,10 @@ function App() {
         queueHasMore={Boolean(videoQueuePagingRef.current?.hasMore)}
         onLoadMoreQueue={loadNextVideoPage}
         playSlideshow={playSlideshow}
+        playAlbumSlideshow={playAlbumSlideshow}
         openAlbumMenu={openAlbumMenu}
+        openRenameAlbumDialog={openRenameAlbumDialog}
+        setAlbumPendingDelete={setAlbumPendingDelete}
         openSmartAlbum={openSmartAlbum}
         openSmartAlbumMenu={openSmartAlbumMenu}
         setAlbumRemovePending={setAlbumRemovePending}
