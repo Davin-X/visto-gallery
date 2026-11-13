@@ -545,13 +545,14 @@ function AlbumPickerDialog({
   );
 }
 
-function DeleteAlbumDialog({
+export function DeleteAlbumDialog({
   open,
   album,
   deleting,
   onClose,
   onConfirm,
   dialogRef,
+  smart = false,
 }: {
   open: boolean;
   album: AlbumPickerTarget | null;
@@ -559,6 +560,8 @@ function DeleteAlbumDialog({
   onClose: () => void;
   onConfirm: () => Promise<void>;
   dialogRef: RefObject<HTMLDivElement | null>;
+  /** A Smart Album is a saved filter: deleting it never touches photos. */
+  smart?: boolean;
 }) {
   useFocusTrap(open, dialogRef);
   useEscape(onClose, open && !deleting);
@@ -581,8 +584,8 @@ function DeleteAlbumDialog({
         aria-describedby="delete-album-description"
       >
         <DialogHeader
-          eyebrow="ALBUM"
-          title="Delete Album?"
+          eyebrow={smart ? "SMART ALBUM" : "ALBUM"}
+          title={smart ? "Delete Smart Album?" : "Delete Album?"}
           titleId="delete-album-title"
           onClose={onClose}
           disabled={deleting}
@@ -595,12 +598,17 @@ function DeleteAlbumDialog({
             <AlbumsIcon size={19} />
           </span>
           <p>
-            <b>Your photos are safe.</b> This only removes the album and its grouping.{" "}
-            {album.itemCount
-              ? `${album.itemCount.toLocaleString()} item${
-                  album.itemCount === 1 ? "" : "s"
-                } will remain in your library.`
-              : "The items remain in your library."}
+            <b>Your photos are safe.</b>{" "}
+            {smart
+              ? "This only removes the saved filter; no photos are changed."
+              : "This only removes the album and its grouping. "}
+            {smart
+              ? null
+              : album.itemCount
+                ? `${album.itemCount.toLocaleString()} item${
+                    album.itemCount === 1 ? "" : "s"
+                  } will remain in your library.`
+                : "The items remain in your library."}
           </p>
         </div>
         <div className="dialog-actions">
@@ -608,7 +616,7 @@ function DeleteAlbumDialog({
             Cancel
           </button>
           <button type="button" className="danger-button" onClick={onConfirm} disabled={deleting}>
-            {deleting ? "Deleting…" : "Delete Album"}
+            {deleting ? "Deleting…" : smart ? "Delete Smart Album" : "Delete Album"}
           </button>
         </div>
       </div>

@@ -248,13 +248,28 @@ export function useAlbumDialogs({
       filter: album.filter,
     });
 
-  const confirmDeleteSmartAlbum = (album: SmartAlbum) => {
-    if (
-      window.confirm(
-        `Delete the Smart Album "${album.name}"? The saved filter is removed; photos are not changed.`,
-      )
-    ) {
-      void useLibraryStore.getState().deleteSmartAlbum(album.id);
+  // Deleting a Smart Album is confirmed in the app's own dialog, like every
+  // other destructive action (it used to use the browser's window.confirm).
+  const [smartAlbumPendingDelete, setSmartAlbumPendingDelete] = useState<SmartAlbum | null>(null);
+  const [deletingSmartAlbum, setDeletingSmartAlbum] = useState(false);
+  const deleteSmartAlbumDialogRef = useRef<HTMLDivElement | null>(null);
+
+  const confirmDeleteSmartAlbum = (album: SmartAlbum) => setSmartAlbumPendingDelete(album);
+
+  const closeDeleteSmartAlbum = () => {
+    if (!deletingSmartAlbum) setSmartAlbumPendingDelete(null);
+  };
+
+  const deletePendingSmartAlbum = async () => {
+    if (!smartAlbumPendingDelete || deletingSmartAlbum) return;
+    setDeletingSmartAlbum(true);
+    try {
+      await useLibraryStore.getState().deleteSmartAlbum(smartAlbumPendingDelete.id);
+      setSmartAlbumPendingDelete(null);
+    } catch (error) {
+      showErrorNotice(error, "Could not delete the Smart Album");
+    } finally {
+      setDeletingSmartAlbum(false);
     }
   };
 
@@ -343,6 +358,11 @@ export function useAlbumDialogs({
     openSmartAlbumCreate,
     openSmartAlbumEdit,
     confirmDeleteSmartAlbum,
+    smartAlbumPendingDelete,
+    deletingSmartAlbum,
+    deleteSmartAlbumDialogRef,
+    closeDeleteSmartAlbum,
+    deletePendingSmartAlbum,
     submitSmartAlbum,
   };
 }

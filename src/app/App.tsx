@@ -16,7 +16,7 @@ import {
 import { navigateToBatchExport } from "./exportFlow";
 import { copyTagsToFinder } from "../engine/utils/finderTags";
 import { startConfiguredSlideshow } from "./utils/startConfiguredSlideshow";
-import { AppDialogs } from "./AppDialogs";
+import { AppDialogs, DeleteAlbumDialog } from "./AppDialogs";
 import { AppSidebar, AppTopBar, cycleAppearance } from "./AppNavigation";
 import { AppShell } from "./AppShell";
 import { AppScreenRouter } from "./AppScreenRouter";
@@ -458,6 +458,7 @@ function App() {
       albums.albumDialogOpen ||
       albums.albumPickerOpen ||
       albums.albumPendingDelete ||
+      albums.smartAlbumPendingDelete ||
       deletion.itemPendingDeleteCount > 0 ||
       sources.folderPendingRemove ||
       sourcesSheetOpen ||
@@ -650,6 +651,16 @@ function App() {
               onClose={albums.closeSmartAlbumDialog}
             />
           )}
+
+          <DeleteAlbumDialog
+            smart
+            open={Boolean(albums.smartAlbumPendingDelete)}
+            album={albums.smartAlbumPendingDelete}
+            deleting={albums.deletingSmartAlbum}
+            onClose={albums.closeDeleteSmartAlbum}
+            onConfirm={albums.deletePendingSmartAlbum}
+            dialogRef={albums.deleteSmartAlbumDialogRef}
+          />
 
           {contextMenu && (
             <ContextMenu
