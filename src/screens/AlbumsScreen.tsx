@@ -117,9 +117,10 @@ function AlbumsScreen(props: AlbumsScreenProps) {
   // Cycles manual → asc → desc → manual. Never persisted; cards always use
   // the manual order.
   type AlbumsSortKey = "name" | "itemCount" | "itemSize" | "updatedAt";
-  const [albumsSort, setAlbumsSort] = React.useState<
-    { key: AlbumsSortKey; dir: "asc" | "desc" } | null
-  >(null);
+  const [albumsSort, setAlbumsSort] = React.useState<{
+    key: AlbumsSortKey;
+    dir: "asc" | "desc";
+  } | null>(null);
   const sortedAlbums = React.useMemo(() => {
     if (!albumsSort) return albums;
     const { key, dir } = albumsSort;
@@ -134,7 +135,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
       const av = read(a);
       const bv = read(b);
       if (typeof av === "string") return mult * av.localeCompare(bv as string);
-      return mult * (av as number - (bv as number));
+      return mult * ((av as number) - (bv as number));
     });
   }, [albums, albumsSort]);
   const cycleAlbumsSort = (key: AlbumsSortKey) =>
