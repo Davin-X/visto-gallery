@@ -91,9 +91,12 @@ export function useLibraryStats(showNotice: (text: string) => void) {
   }, []);
 
   // Warn when the library is very large and show_native_limit_warnings is on.
+  // Once per launch: the counts change after every import, rescan or delete,
+  // and repeating the warning each time is noise.
   const showNativeWarnings = useSettingsStore((s) => s.showNativeLimitWarnings);
+  const warnedLargeLibrary = useRef(false);
   useEffect(() => {
-    if (!showNativeWarnings) return;
+    if (!showNativeWarnings || warnedLargeLibrary.current) return;
     const total =
       libraryStats.photos +
       libraryStats.videos +
@@ -101,6 +104,7 @@ export function useLibraryStats(showNotice: (text: string) => void) {
       libraryStats.animations +
       libraryStats.uncategorized;
     if (total > LARGE_LIBRARY_ITEMS) {
+      warnedLargeLibrary.current = true;
       showNotice(
         `Large library (${total.toLocaleString()} items) — thumbnail generation and scrolling may be slower on this system.`,
       );
