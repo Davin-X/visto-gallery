@@ -1614,7 +1614,12 @@ function LibraryScreen(props: LibraryScreenProps) {
         >
           {props.layout === "details" && (
             <div className="details-header-sticky list-view-header" role="rowgroup">
-              <div className="details-col list-view-head-cell details-preview-heading" role="columnheader">Preview</div>
+              <div
+                className="details-col list-view-head-cell details-preview-heading"
+                role="columnheader"
+              >
+                Preview
+              </div>
               {detailsHeader("Name", "name")}
               {detailsHeader("Captured", "capturedAt")}
               {detailsHeader("Kind", "kind")}
@@ -1738,7 +1743,10 @@ function LibraryScreen(props: LibraryScreenProps) {
                           </span>
                         )}
                       </span>
-                      <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`} role="gridcell">
+                      <span
+                        className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
+                        role="gridcell"
+                      >
                         <b>
                           {masked(item) ? (
                             "Hidden item"

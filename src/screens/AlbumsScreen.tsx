@@ -461,8 +461,16 @@ function AlbumsScreen(props: AlbumsScreenProps) {
       ) : albumsView === "list" ? (
         <div className="albums-list-view" role="table">
           <div className="list-view-header" role="rowgroup">
-            <div className="list-view-head-cell albums-col-grip" aria-hidden="true" role="columnheader" />
-            <div className="list-view-head-cell albums-col-cover" aria-hidden="true" role="columnheader" />
+            <div
+              className="list-view-head-cell albums-col-grip"
+              aria-hidden="true"
+              role="columnheader"
+            />
+            <div
+              className="list-view-head-cell albums-col-cover"
+              aria-hidden="true"
+              role="columnheader"
+            />
             <div className="list-view-head-cell" {...sortProps("name")} role="columnheader">
               <button
                 type="button"
@@ -593,7 +601,10 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 <span className="list-view-cell list-view-cell--numeric" role="gridcell">
                   {Number(album.count).toLocaleString()} {album.count === 1 ? "item" : "items"}
                 </span>
-                <span className="list-view-cell list-view-cell--numeric list-view-cell--size" role="gridcell">
+                <span
+                  className="list-view-cell list-view-cell--numeric list-view-cell--size"
+                  role="gridcell"
+                >
                   {formatBytesSimple(Number((album as any).itemSize ?? 0))}
                 </span>
                 <span className="list-view-cell list-view-cell--muted" role="gridcell">
