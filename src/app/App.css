@@ -1153,6 +1153,7 @@ body.is-resizing .photo-inspector {
   padding: var(--space-3) var(--page-gutter) var(--space-6);
   min-height: 0;
   box-sizing: border-box;
+  container-type: inline-size;
 }
 
 /* Progressive rendering footer: only shown while more tiles are waiting. */
@@ -8216,8 +8217,9 @@ body.is-dragging-albums * {
      which leaves the name track 110px — the same floor the details table
      keeps. Below this the page scrolls sideways instead of squeezing the
      name to a few pixels. Header and body share it so they stay in lockstep. */
-  --albums-list-min-width: 814px;
+  --albums-list-min-width: 400px;
   min-width: 0;
+  container-type: inline-size;
 }
 
 /* The body declares the library's default column template on itself, which
@@ -8415,19 +8417,21 @@ body.is-dragging-albums * {
   /* The Library reuses .gallery-grid (16px gap) for the details layout; a
      table needs contiguous rows or every row reads as a floating band. */
   gap: 0;
-  min-width: 650px;
+  min-width: 400px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface);
   overflow: hidden;
+  container-type: inline-size;
 }
 
 .list-view-header {
   position: sticky;
-  /* The rows' grid keeps a 650px minimum under cramped viewports; the sticky
+  /* The rows' grid keeps a 400px minimum under cramped viewports; the sticky
      header must match it or the two columns drift vertically apart. */
-  min-width: 650px;
+  min-width: 400px;
   max-width: 1240px;
+  container-type: inline-size;
   top: 0;
   z-index: 12;
   display: grid;
@@ -8470,6 +8474,38 @@ body.is-dragging-albums * {
 .list-view-head-cell.details-preview-heading {
   grid-column: 1 / 3;
   padding-left: 2px;
+}
+
+/* ===== Narrow-width column compaction =====
+   Instead of sideways scrolling below the old 650/814px floors, drop the
+   least-important columns once the container is cramped. Name always stays. */
+
+/* Albums list: hide Updated at ≤700px, then Size at ≤560px. */
+@container (max-width: 700px) {
+  .albums-list-view .list-view-cell.list-view-cell--muted,
+  .albums-list-view .list-view-header > .list-view-head-cell:nth-child(6) {
+    display: none;
+  }
+}
+@container (max-width: 560px) {
+  .albums-list-view .list-view-cell.list-view-cell--size,
+  .albums-list-view .list-view-header > .list-view-head-cell:nth-child(5) {
+    display: none;
+  }
+}
+
+/* Library details: hide Kind at ≤560px, then Size at ≤440px. */
+@container (max-width: 560px) {
+  .library-grid-container .list-view-head-cell:nth-child(4),
+  .library-grid-container .list-view-row .tile-kind {
+    display: none;
+  }
+}
+@container (max-width: 440px) {
+  .library-grid-container .list-view-head-cell:nth-child(5),
+  .library-grid-container .list-view-row .tile-size {
+    display: none;
+  }
 }
 
 .details-sort-header {

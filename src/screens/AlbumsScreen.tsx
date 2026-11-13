@@ -591,7 +591,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 <span className="list-view-cell list-view-cell--numeric">
                   {Number(album.count).toLocaleString()} {album.count === 1 ? "item" : "items"}
                 </span>
-                <span className="list-view-cell list-view-cell--numeric">
+                <span className="list-view-cell list-view-cell--numeric list-view-cell--size">
                   {formatBytesSimple(Number((album as any).itemSize ?? 0))}
                 </span>
                 <span className="list-view-cell list-view-cell--muted">
