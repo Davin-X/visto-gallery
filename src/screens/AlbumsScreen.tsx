@@ -459,11 +459,11 @@ function AlbumsScreen(props: AlbumsScreenProps) {
           </div>
         </div>
       ) : albumsView === "list" ? (
-        <div className="albums-list-view">
-          <div className="list-view-header">
-            <div className="list-view-head-cell albums-col-grip" aria-hidden="true" />
-            <div className="list-view-head-cell albums-col-cover" aria-hidden="true" />
-            <div className="list-view-head-cell" {...sortProps("name")}>
+        <div className="albums-list-view" role="table">
+          <div className="list-view-header" role="rowgroup">
+            <div className="list-view-head-cell albums-col-grip" aria-hidden="true" role="columnheader" />
+            <div className="list-view-head-cell albums-col-cover" aria-hidden="true" role="columnheader" />
+            <div className="list-view-head-cell" {...sortProps("name")} role="columnheader">
               <button
                 type="button"
                 className="details-sort-header"
@@ -517,12 +517,12 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 </span>
               </button>
             </div>
-            <div className="list-view-head-cell albums-col-actions" aria-label="Actions" />
+            <div className="list-view-head-cell albums-col-actions" role="columnheader" />
           </div>
           {/* The header must be a sibling of the rows, not a child of the
               .list-view grid: a sticky grid item is clipped to its own track,
               which left the Albums header unable to stick like the Library's. */}
-          <div className="list-view">
+          <div className="list-view" role="rowgroup">
             {sortedAlbums.map((album: any, index: number) => (
               <div
                 className={`list-view-row album-list-row album-card-wrap${dragId === album.id ? " is-dragging" : ""}${
@@ -533,13 +533,14 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                     : ""
                 }`}
                 key={album.id}
-                role="listitem"
+                role="row"
                 data-album-id={album.id}
                 onContextMenu={(e) => props.onAlbumContextMenu?.(album, e)}
               >
                 <button
                   type="button"
                   className="tile-open-button"
+                  role="gridcell"
                   aria-label={`Open ${album.name}`}
                   onClick={() => props.onOpenAlbum(album.id)}
                   onContextMenu={(e) => props.onAlbumContextMenu?.(album, e)}
@@ -547,6 +548,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 <button
                   type="button"
                   className="albums-list-grip"
+                  role="gridcell"
                   title={
                     albumsSort
                       ? "Sorting pauses manual ordering — pick Manual order (↕) to drag"
@@ -563,7 +565,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 >
                   <DragIcon size={13} />
                 </button>
-                <span className="list-view-cell album-list-cover">
+                <span className="list-view-cell album-list-cover" role="gridcell">
                   {album.photos.length ? (
                     // A fanned stack instead of one print: the album rows should
                     // not read as a slimmer copy of the Library's item table.
@@ -580,7 +582,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                     </span>
                   )}
                 </span>
-                <span className="list-view-cell album-list-name">
+                <span className="list-view-cell album-list-name" role="gridcell">
                   <i className={`album-dot ${album.color}`} aria-hidden="true" />
                   <MiddleTruncate
                     className="album-list-name-text"
@@ -588,18 +590,18 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                     tailLength={6}
                   />
                 </span>
-                <span className="list-view-cell list-view-cell--numeric">
+                <span className="list-view-cell list-view-cell--numeric" role="gridcell">
                   {Number(album.count).toLocaleString()} {album.count === 1 ? "item" : "items"}
                 </span>
-                <span className="list-view-cell list-view-cell--numeric list-view-cell--size">
+                <span className="list-view-cell list-view-cell--numeric list-view-cell--size" role="gridcell">
                   {formatBytesSimple(Number((album as any).itemSize ?? 0))}
                 </span>
-                <span className="list-view-cell list-view-cell--muted">
+                <span className="list-view-cell list-view-cell--muted" role="gridcell">
                   {album.updatedAt ? formatFileDate(album.updatedAt) : "—"}
                 </span>
                 <div
                   className="album-card-actions album-list-actions"
-                  role="group"
+                  role="gridcell"
                   aria-label={`${album.name} actions`}
                 >
                   <button
