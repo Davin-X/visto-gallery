@@ -3395,10 +3395,10 @@ body.is-resizing .photo-inspector {
   display: inline-flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 1px;
-  padding: 3px;
+  gap: 2px;
+  padding: 2px;
   border: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
-  border-radius: 10px;
+  border-radius: 9px;
   background: color-mix(in srgb, var(--surface-2) 38%, transparent);
 }
 
@@ -3406,11 +3406,13 @@ body.is-resizing .photo-inspector {
    window chrome. Kept separate from .icon-button used elsewhere in the app. */
 .topbar-actions .icon-button {
   display: grid;
-  width: 30px;
-  height: 30px;
+  /* Five controls share one 40px-tall bar; 26px keeps the cluster from
+     crowding the window title without shrinking the icons into noise. */
+  width: 26px;
+  height: 26px;
   place-items: center;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 7px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
