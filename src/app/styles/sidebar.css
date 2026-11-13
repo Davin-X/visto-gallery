@@ -408,6 +408,16 @@
   opacity: 0.6;
 }
 
+/* Favorites and Hidden are views of the kinds, not part of the total: a gap
+   sets them apart from the rows that add up. */
+.stat-row.view-start {
+  margin-top: 8px;
+}
+
+.sidebar-stats-popup:focus {
+  outline: none;
+}
+
 /* The stat rows used an 8px colour chip, which said nothing on its own and read
    as an unloaded avatar. Each row now shows the glyph for what it counts: the
    three stored kinds keep their hue, and the derived views — Animations,
