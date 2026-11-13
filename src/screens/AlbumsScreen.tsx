@@ -421,6 +421,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
       ) : albumsView === "list" ? (
         <div className="list-view albums-list-view">
           <div className="list-view-header">
+            <div className="list-view-head-cell albums-col-grip" aria-hidden="true" />
             <div className="list-view-head-cell albums-col-cover" aria-hidden="true" />
             <div className="list-view-head-cell">Name</div>
             <div className="list-view-head-cell list-view-head-cell--numeric">Items</div>
@@ -449,6 +450,16 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 onClick={() => props.onOpenAlbum(album.id)}
                 onContextMenu={(e) => props.onAlbumContextMenu?.(album, e)}
               />
+              <button
+                type="button"
+                className="albums-list-grip"
+                title="Drag to reorder"
+                aria-label={`Drag to reorder ${album.name}`}
+                style={{ touchAction: "none" }}
+                onPointerDown={(event) => startAlbumDrag(album.id, event)}
+              >
+                <DragIcon size={13} />
+              </button>
               <span className="list-view-cell album-list-cover">
                 {album.photos.length ? (
                   <CachedThumbnail itemId={album.photos[0].id} name={album.name} size={64} />
@@ -476,16 +487,6 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 role="group"
                 aria-label={`${album.name} actions`}
               >
-                <button
-                  type="button"
-                  className="album-card-reorder"
-                  title="Drag to reorder"
-                  aria-label={`Drag to reorder ${album.name}`}
-                  style={{ touchAction: "none" }}
-                  onPointerDown={(event) => startAlbumDrag(album.id, event)}
-                >
-                  <DragIcon size={13} />
-                </button>
                 <button
                   type="button"
                   className="album-card-action"

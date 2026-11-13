@@ -8206,7 +8206,11 @@ body.is-dragging-albums * {
 }
 
 .albums-list-view.list-view {
-  --list-columns: 64px minmax(0, 1fr) minmax(0, 92px) minmax(0, 104px) minmax(0, 140px) auto;
+  --list-columns: 34px 64px minmax(0, 1fr) minmax(0, 92px) minmax(0, 104px) minmax(0, 140px) auto;
+}
+
+.albums-col-grip {
+  padding: 0 2px;
 }
 
 .albums-col-cover {
@@ -8255,6 +8259,39 @@ body.is-dragging-albums * {
 
 .album-list-row {
   align-items: stretch;
+}
+
+/* Reorder grip lives as its own column before the thumbnail (like the
+   selection column on the Library's details view), not glued to the action
+   cluster. */
+.albums-list-grip {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  justify-self: center;
+  width: 22px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--faint);
+  cursor: grab;
+  touch-action: none;
+}
+
+.albums-list-grip:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.albums-list-grip:active {
+  cursor: grabbing;
+}
+
+.albums-list-grip:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
 }
 
 /* In the list row the actions sit in their own rightmost track, vertically
