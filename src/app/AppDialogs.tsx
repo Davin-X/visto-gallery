@@ -809,11 +809,11 @@ function SourcesSheet({
         <div className="dialog-actions">
           <button
             type="button"
-            className="danger-button"
+            className="quiet-button sources-remove-all"
             disabled={library.busy || library.folders.length === 0}
             onClick={onRequestRemoveAll}
           >
-            Remove all sources
+            Remove All Sources…
           </button>
           <div style={{ flex: 1 }} />
           <button type="button" className="quiet-button" onClick={onClose}>
@@ -843,7 +843,7 @@ function RemoveAllSourcesDialog({
     <TypedConfirmDialog
       open={open}
       eyebrow="LIBRARY"
-      title="Remove all sources?"
+      title="Remove All Sources?"
       description={
         <>
           Unlinks all{" "}

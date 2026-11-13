@@ -549,3 +549,9 @@
   }
 }
 
+
+/* Removing every source is rare and destructive: a quiet text action at the
+   footer's edge, not a filled red button competing with Done. */
+.sources-remove-all:not(:disabled) {
+  color: var(--danger);
+}
