@@ -942,10 +942,10 @@ function LibraryScreen(props: LibraryScreenProps) {
       library.sortBy === sortBy && library.sortOrder === "asc" ? "desc" : "asc",
     );
   };
-  const detailsHeader = (label: string, sortBy?: typeof library.sortBy) => (
+  const detailsHeader = (label: string, sortBy?: typeof library.sortBy, columnClass?: string) => (
     <div
-      className="details-col list-view-head-cell"
-      role={sortBy ? "columnheader" : undefined}
+      className={`details-col list-view-head-cell${columnClass ? ` ${columnClass}` : ""}`}
+      role="columnheader"
       aria-sort={
         sortBy
           ? library.sortBy === sortBy
@@ -1610,25 +1610,32 @@ function LibraryScreen(props: LibraryScreenProps) {
           ref={scrollRef}
           onScroll={handleGridScroll}
           onKeyDown={handleGridKeyDown}
+          role={props.layout === "details" ? "table" : undefined}
         >
           {props.layout === "details" && (
-            <div className="details-header-sticky list-view-header">
-              <div className="details-col list-view-head-cell details-preview-heading">Preview</div>
+            <div className="details-header-sticky list-view-header" role="rowgroup">
+              <div
+                className="details-col list-view-head-cell details-preview-heading"
+                role="columnheader"
+              >
+                Preview
+              </div>
               {detailsHeader("Name", "name")}
               {detailsHeader("Captured", "capturedAt")}
-              {detailsHeader("Kind", "kind")}
-              {detailsHeader("Size", "size")}
+              {detailsHeader("Kind", "kind", "details-col-kind")}
+              {detailsHeader("Size", "size", "details-col-size")}
             </div>
           )}
           {(() => {
             if (props.layout === "details") {
               return (
-                <div className="gallery-grid layout-details list-view">
+                <div className="gallery-grid layout-details list-view" role="rowgroup">
                   {renderedItems.length === 0 && (awaitingFirstPage ? skeletonView() : emptyView())}
                   {renderedItems.map((item: any) => (
                     <article
                       key={item.id}
                       className={tileClass(item)}
+                      role="row"
                       onContextMenu={(e: any) => {
                         concealItem(item.id);
                         props.onContextMenu(itemContextMenu(item), e);
@@ -1660,7 +1667,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                         onDoubleClick={() => handleTileDoubleClick(item)}
                         {...holdHandlers(item.id)}
                       />
-                      <span className="tile-image">
+                      <span className="tile-image" role="gridcell">
                         {item.kind === "video" ? (
                           canPlayVideoInApp(item.path, item.name) ? (
                             <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} />
@@ -1736,7 +1743,10 @@ function LibraryScreen(props: LibraryScreenProps) {
                           </span>
                         )}
                       </span>
-                      <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
+                      <span
+                        className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
+                        role="gridcell"
+                      >
                         <b>
                           {masked(item) ? (
                             "Hidden item"
