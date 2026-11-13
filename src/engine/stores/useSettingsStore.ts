@@ -151,6 +151,7 @@ export const useAccentColor = () => useSettingsStore((s) => s.accentColor);
 export const useSidebarWidth = () => useSettingsStore((s) => s.sidebarWidth);
 export const useInspectorWidth = () => useSettingsStore((s) => s.inspectorWidth);
 export const useDefaultLayout = () => useSettingsStore((s) => s.defaultLayout);
+export const useAlbumsView = () => useSettingsStore((s) => s.albumsView);
 export const useThumbnailSize = () => useSettingsStore((s) => s.thumbnailSize);
 
 // Memoization cache for applyTheme: key = `${accent}|${isDark}`

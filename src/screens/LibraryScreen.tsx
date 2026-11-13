@@ -903,7 +903,7 @@ function LibraryScreen(props: LibraryScreenProps) {
     );
   };
   const detailsHeader = (label: string, sortBy?: typeof library.sortBy) => (
-    <div className="details-col">
+    <div className="details-col list-view-head-cell">
       {sortBy ? (
         <button type="button" className="details-sort-header" onClick={() => sortDetailsBy(sortBy)}>
           {label}
@@ -955,7 +955,11 @@ function LibraryScreen(props: LibraryScreenProps) {
   };
 
   const tileClass = (item: any) =>
-    `gallery-tile${props.inspectedId === item.id ? " inspected" : ""}${selectedIdSet.has(item.id) ? " selected" : ""}${item.favorite ? " is-favorite" : ""}${masked(item) ? " hidden-obscured" : ""}`;
+    `gallery-tile${props.layout === "details" ? " list-view-row" : ""}${
+      props.inspectedId === item.id ? " inspected" : ""
+    }${selectedIdSet.has(item.id) ? " selected" : ""}${item.favorite ? " is-favorite" : ""}${
+      masked(item) ? " hidden-obscured" : ""
+    }`;
 
   // Right-clicking a photo is the most direct place to manage its album
   // membership. The picker itself carries the album list and search. The menu
@@ -1556,8 +1560,8 @@ function LibraryScreen(props: LibraryScreenProps) {
           onKeyDown={handleGridKeyDown}
         >
           {props.layout === "details" && (
-            <div className="details-header-sticky">
-              <div className="details-col details-preview-heading">Preview</div>
+            <div className="details-header-sticky list-view-header">
+              <div className="details-col list-view-head-cell details-preview-heading">Preview</div>
               {detailsHeader("Name", "name")}
               {detailsHeader("Captured", "capturedAt")}
               {detailsHeader("Kind", "kind")}
@@ -1567,7 +1571,7 @@ function LibraryScreen(props: LibraryScreenProps) {
           {(() => {
             if (props.layout === "details") {
               return (
-                <div className="gallery-grid layout-details">
+                <div className="gallery-grid layout-details list-view">
                   {renderedItems.length === 0 && (awaitingFirstPage ? skeletonView() : emptyView())}
                   {renderedItems.map((item: any) => (
                     <article

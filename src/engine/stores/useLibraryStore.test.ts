@@ -288,6 +288,7 @@ test("loadLibrary applies date filters to the backend query and uses album overv
       updatedAt: 1,
       itemCount: 2,
       coverItems: [],
+      itemSize: 0,
     },
   ]);
   useLibraryStore.setState({
@@ -732,6 +733,7 @@ test("one failing catalog list does not blank the others", async () => {
       colorIndex: 0,
       itemCount: 3,
       coverItems: [],
+      itemSize: 0,
       createdAt: 1,
       updatedAt: 1,
     },
@@ -1068,6 +1070,7 @@ test("reorderAlbums reorders the two derived lists and persists the order", asyn
       updatedAt: 1,
       itemCount: 0,
       coverItems: [],
+      itemSize: 0,
     },
     {
       id: "two",
@@ -1077,6 +1080,7 @@ test("reorderAlbums reorders the two derived lists and persists the order", asyn
       updatedAt: 2,
       itemCount: 0,
       coverItems: [],
+      itemSize: 0,
     },
     {
       id: "three",
@@ -1086,6 +1090,7 @@ test("reorderAlbums reorders the two derived lists and persists the order", asyn
       updatedAt: 3,
       itemCount: 0,
       coverItems: [],
+      itemSize: 0,
     },
   ];
   useLibraryStore.setState({
@@ -1096,6 +1101,7 @@ test("reorderAlbums reorders the two derived lists and persists the order", asyn
       createdAt,
       updatedAt,
       itemCount,
+      itemSize: 0,
       itemIds: [],
     })),
     albumOverviews: overviews as any,
@@ -1123,6 +1129,7 @@ test("reorderAlbums reverts both derived lists when the backend rejects the orde
       updatedAt: 1,
       itemCount: 0,
       coverItems: [],
+      itemSize: 0,
     },
     {
       id: "two",
@@ -1132,6 +1139,7 @@ test("reorderAlbums reverts both derived lists when the backend rejects the orde
       updatedAt: 2,
       itemCount: 0,
       coverItems: [],
+      itemSize: 0,
     },
   ];
   useLibraryStore.setState({
@@ -1142,6 +1150,7 @@ test("reorderAlbums reverts both derived lists when the backend rejects the orde
       createdAt,
       updatedAt,
       itemCount,
+      itemSize: 0,
       itemIds: [],
     })),
     albumOverviews: overviews as any,

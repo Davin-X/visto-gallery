@@ -294,6 +294,10 @@ string_enum!(
     StartupView { Library => "library", Last => "last", Slideshow => "slideshow" } default Library
 );
 string_enum!(
+    /// How the Albums screen arranges albums.
+    AlbumsView { Cards => "cards", List => "list" } default Cards
+);
+string_enum!(
     /// Default library layout.
     DefaultLayout { Grid => "grid", Details => "details", Timeline => "timeline" } default Grid
 );
@@ -356,6 +360,7 @@ define_settings! {
     restore_window_state: bool = true,
     default_layout: DefaultLayout = DefaultLayout::Grid,
     thumbnail_size: ThumbnailSize = ThumbnailSize::Small,
+    albums_view: AlbumsView = AlbumsView::Cards,
     viewer_zoom_behavior: ViewerZoomBehavior = ViewerZoomBehavior::Fit,
     slideshow_interval: i32 = 5,
     slideshow_shuffle: bool = false,

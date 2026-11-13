@@ -117,6 +117,9 @@ async fn save_settings_into(
     if let Some(v) = patch.thumbnail_size {
         settings.thumbnail_size = v;
     }
+    if let Some(v) = patch.albums_view {
+        settings.albums_view = v;
+    }
     if let Some(v) = patch.viewer_zoom_behavior {
         settings.viewer_zoom_behavior = v;
     }
@@ -187,6 +190,7 @@ async fn save_settings_into(
         ),
         ("default_layout", settings.default_layout.to_string()),
         ("thumbnail_size", settings.thumbnail_size.to_string()),
+        ("albums_view", settings.albums_view.to_string()),
         (
             "viewer_zoom_behavior",
             settings.viewer_zoom_behavior.to_string(),

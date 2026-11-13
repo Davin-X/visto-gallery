@@ -664,6 +664,7 @@ export const useLibraryStore = create<LibraryState>()(
             name: album.name,
             colorIndex: album.colorIndex,
             itemCount: album.itemCount,
+            itemSize: album.itemSize,
             itemIds: [],
             createdAt: album.createdAt,
             updatedAt: album.updatedAt,
@@ -1450,7 +1451,11 @@ export const useLibraryStore = create<LibraryState>()(
           const item = get().items.find((i) => i.id === id);
           return item && !item.hidden;
         }).length;
-        const created = { ...album, itemIds: ids, itemCount: visibleCount };
+        const visibleSize = ids
+          .map((id) => get().items.find((i) => i.id === id))
+          .filter((item): item is MediaItem => !!item && !item.hidden)
+          .reduce((sum, item) => sum + (item.size || 0), 0);
+        const created = { ...album, itemIds: ids, itemCount: visibleCount, itemSize: visibleSize };
         const coverItems = ids
           .map((id) => get().items.find((item) => item.id === id))
           .filter(
@@ -1469,6 +1474,7 @@ export const useLibraryStore = create<LibraryState>()(
               createdAt: created.createdAt,
               updatedAt: created.updatedAt,
               itemCount: visibleCount,
+              itemSize: visibleSize,
               coverItems,
             },
           ],

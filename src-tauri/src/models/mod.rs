@@ -214,6 +214,7 @@ impl Album {
             created_at: now,
             updated_at: now,
             item_count: 0,
+            item_size: 0,
             item_ids: Vec::new(),
         }
     }

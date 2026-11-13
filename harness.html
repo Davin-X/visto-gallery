@@ -176,7 +176,8 @@
             colorIndex: index % 4,
             createdAt: now - index * 60_000,
             updatedAt: now - index * 60_000,
-            itemCount: Math.min(100, totalItems - index * 100),
+            itemCount: Math.max(0, Math.min(100, totalItems - index * 100)),
+            itemSize: Math.max(0, Math.min(100, totalItems - index * 100)) * 3 * 1024 * 1024,
             coverItems: items.slice(index * 4, index * 4 + 4),
           })).sort(
             (a, b) => (positions.get(a.id) ?? albumOrder.length) - (positions.get(b.id) ?? albumOrder.length),

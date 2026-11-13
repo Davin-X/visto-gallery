@@ -120,6 +120,7 @@ pub(crate) fn apply_setting(settings: &mut AppSettings, key: &str, value: &str) 
         "restore_window_state" => settings.restore_window_state = value.parse().unwrap_or(true),
         "default_layout" => settings.default_layout = value.parse().unwrap_or_default(),
         "thumbnail_size" => settings.thumbnail_size = value.parse().unwrap_or_default(),
+        "albums_view" => settings.albums_view = value.parse().unwrap_or_default(),
         "viewer_zoom_behavior" => settings.viewer_zoom_behavior = value.parse().unwrap_or_default(),
         "slideshow_interval" => settings.slideshow_interval = value.parse().unwrap_or(5),
         "slideshow_shuffle" => settings.slideshow_shuffle = value.parse().unwrap_or(false),

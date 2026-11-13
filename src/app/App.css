@@ -1362,218 +1362,6 @@ body.is-resizing .photo-inspector {
   left: 6px;
 }
 
-/* Details: compact list with metadata columns. */
-.gallery-grid.layout-details {
-  display: grid;
-  grid-template-columns: 64px 1fr 140px 100px 80px !important;
-  gap: 0;
-  align-items: center;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--surface);
-  border-top: none;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-}
-
-.gallery-grid.layout-details .details-header {
-  display: contents;
-}
-
-.details-header-sticky {
-  display: grid;
-  grid-template-columns: 64px 1fr 140px 100px 80px;
-  gap: 0;
-  align-items: center;
-  padding: 10px 24px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  background: var(--surface-2);
-  white-space: nowrap;
-  border-bottom: 1px solid var(--line);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.gallery-grid.layout-details .details-col {
-  padding: 10px 12px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  background: var(--surface-2);
-  white-space: nowrap;
-  border-bottom: 1px solid var(--line);
-}
-
-.gallery-grid.layout-details .details-col:nth-child(1) {
-  grid-column: 1;
-}
-.gallery-grid.layout-details .details-col:nth-child(2) {
-  grid-column: 2;
-}
-.gallery-grid.layout-details .details-col:nth-child(3) {
-  grid-column: 3;
-}
-.gallery-grid.layout-details .details-col:nth-child(4) {
-  grid-column: 4;
-}
-.gallery-grid.layout-details .details-col:nth-child(5) {
-  grid-column: 5;
-}
-
-.gallery-grid.layout-details .header-icon,
-.details-header-sticky .header-icon {
-  display: inline-flex;
-  color: var(--muted);
-  opacity: 0.6;
-}
-
-/* The row keeps its own grid (same tracks as the container) so the absolute
-   open-button overlay has a per-row box to cover. `display: contents` would
-   make the overlay cover the whole table. */
-.gallery-grid.layout-details .gallery-tile {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns:
-    34px 58px minmax(180px, 1fr) minmax(132px, 180px)
-    92px 96px;
-  column-gap: 12px;
-  align-items: stretch;
-}
-
-.gallery-grid.layout-details .tile-image {
-  width: 52px;
-  height: 52px;
-  border-radius: 6px;
-  flex-shrink: 0;
-  grid-column: 1;
-  justify-self: center;
-  transition: transform 0.15s ease;
-}
-
-.gallery-grid.layout-details .gallery-tile:hover .tile-image {
-  transform: scale(1.05);
-}
-
-.gallery-grid.layout-details .tile-caption {
-  display: contents;
-}
-
-.gallery-grid.layout-details .tile-caption b {
-  grid-column: 2;
-  padding: 10px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  border-top: 1px solid var(--line);
-}
-
-.gallery-grid.layout-details .tile-caption .tile-date {
-  grid-column: 3;
-  padding: 10px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text);
-  white-space: nowrap;
-  border-top: 1px solid var(--line);
-}
-
-.gallery-grid.layout-details .tile-caption .tile-kind {
-  grid-column: 4;
-  padding: 10px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text);
-  white-space: nowrap;
-  text-transform: capitalize;
-  border-top: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.gallery-grid.layout-details .kind-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-
-.gallery-grid.layout-details .kind-dot.photo {
-  background: var(--blue);
-}
-.gallery-grid.layout-details .kind-dot.video {
-  background: var(--green);
-}
-.gallery-grid.layout-details .kind-dot.raw {
-  background: var(--orange);
-}
-
-.gallery-grid.layout-details .tile-caption .tile-size {
-  grid-column: 5;
-  padding: 10px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text);
-  white-space: nowrap;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  border-top: 1px solid var(--line);
-}
-
-.gallery-grid.layout-details .gallery-tile:first-child .tile-caption b,
-.gallery-grid.layout-details .gallery-tile:first-child .tile-caption .tile-date,
-.gallery-grid.layout-details .gallery-tile:first-child .tile-caption .tile-kind,
-.gallery-grid.layout-details .gallery-tile:first-child .tile-caption .tile-size {
-  border-top: none;
-}
-
-.gallery-grid.layout-details .gallery-tile:nth-child(even) .tile-caption b,
-.gallery-grid.layout-details .gallery-tile:nth-child(even) .tile-caption .tile-date,
-.gallery-grid.layout-details .gallery-tile:nth-child(even) .tile-caption .tile-kind,
-.gallery-grid.layout-details .gallery-tile:nth-child(even) .tile-caption .tile-size,
-.gallery-grid.layout-details .gallery-tile:nth-child(even) .tile-select-check {
-  background: var(--surface-2);
-}
-
-.gallery-grid.layout-details .tile-select-check {
-  grid-column: 5;
-  justify-self: center;
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
-}
-
-.gallery-grid.layout-details .gallery-tile:first-child .tile-select-check {
-  border-top: none;
-}
-
-.gallery-grid.layout-details .gallery-tile:hover .tile-caption b,
-.gallery-grid.layout-details .gallery-tile:hover .tile-caption .tile-date,
-.gallery-grid.layout-details .gallery-tile:hover .tile-caption .tile-kind,
-.gallery-grid.layout-details .gallery-tile:hover .tile-caption .tile-size,
-.gallery-grid.layout-details .gallery-tile:hover .tile-select-check {
-  background: var(--blue-soft);
-}
-
-.gallery-grid.layout-details .gallery-tile.selected .tile-caption b,
-.gallery-grid.layout-details .gallery-tile.selected .tile-caption .tile-date,
-.gallery-grid.layout-details .gallery-tile.selected .tile-caption .tile-kind,
-.gallery-grid.layout-details .gallery-tile.selected .tile-caption .tile-size,
-.gallery-grid.layout-details .gallery-tile.selected .tile-select-check {
-  background: var(--blue-soft);
-  border-color: var(--blue);
-}
-
 /* Timeline: grouped by month with section headers. Requires JS grouping. */
 .gallery-grid.layout-timeline {
   display: grid;
@@ -8405,47 +8193,156 @@ body.is-dragging-albums * {
   }
 }
 
-/* Details view: a real six-track table, with the sticky headings inside the
-   same scroll region as the rows. The selection checkbox gets its own track
-   so it never overlaps file-size text. */
-.library-grid-container:has(> .details-header-sticky) {
-  padding: 0 var(--page-gutter) var(--space-6);
+/* ===== Albums list view (Albums screen) ===== */
+.albums-view-switcher {
+  height: 32px;
+  padding: 3px;
 }
 
-.details-header-sticky,
-.gallery-grid.layout-details {
-  grid-template-columns:
-    34px 58px minmax(180px, 1fr) minmax(132px, 180px)
-    92px 96px;
+.albums-view-switcher button {
+  width: 24px;
+  height: 26px;
+  border-radius: 6px;
 }
 
-.details-header-sticky {
+.albums-list-view.list-view {
+  --list-columns: 64px minmax(0, 1fr) minmax(0, 92px) minmax(0, 104px) minmax(0, 140px) auto;
+}
+
+.albums-col-cover {
+  padding: 0 2px;
+}
+
+.album-list-cover {
+  justify-self: center;
+  padding: 0;
+}
+
+.album-list-cover img {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  object-fit: cover;
+  background: var(--surface-3);
+}
+
+.album-list-cover-placeholder {
   display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 7px;
+  color: var(--muted);
+  background: var(--surface-2);
+}
+
+.album-list-name {
+  gap: 8px;
+  padding: 0 2px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.album-list-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-list-row {
+  align-items: stretch;
+}
+
+/* In the list row the actions sit in their own rightmost track, vertically
+   centred and always visible — nothing overlaps the Updated cell. */
+.album-list-actions {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 2px;
+  position: relative;
+  z-index: 3;
+  top: auto;
+  right: auto;
+  opacity: 1;
+  visibility: visible;
+  transition: none;
+}
+
+.album-list-actions .album-card-reorder {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+.album-list-actions .album-card-reorder:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.album-list-actions .album-card-reorder:active {
+  cursor: grabbing;
+}
+
+/* ===== Shared list view =====
+   One column template serves the sticky header and every row — set --list-columns
+   once per view and the two can never drift apart. */
+.list-view {
+  --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px) minmax(0, 110px) minmax(0, 96px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 650px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.list-view-header {
   position: sticky;
+  /* The rows' grid keeps a 650px minimum under cramped viewports; the sticky
+     header must match it or the two columns drift vertically apart. */
+  min-width: 650px;
   top: 0;
   z-index: 12;
+  display: grid;
+  column-gap: 12px;
+  grid-template-columns: var(--list-columns);
   align-items: center;
-  min-width: 650px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-bottom: 0;
-  border-radius: 10px 10px 0 0;
+  min-height: 40px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--line);
   background: var(--surface-2);
   box-shadow: 0 5px 14px color-mix(in srgb, var(--ink) 5%, transparent);
 }
 
-.details-header-sticky .details-col {
+.list-view-head-cell {
   min-width: 0;
-  padding: 0 12px;
+  padding: 12px 0;
   color: var(--muted);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.details-header-sticky .details-preview-heading {
+.list-view-head-cell.details-preview-heading {
   grid-column: 1 / 3;
-  padding-left: 17px;
+  padding-left: 2px;
 }
 
 .details-sort-header {
@@ -8456,10 +8353,13 @@ body.is-dragging-albums * {
   gap: 8px;
   padding: 12px 0;
   border: 0;
+  border-radius: 4px;
   background: transparent;
   color: inherit;
   font: inherit;
   letter-spacing: inherit;
+  font-weight: inherit;
+  text-transform: uppercase;
   text-align: left;
   cursor: pointer;
 }
@@ -8469,68 +8369,109 @@ body.is-dragging-albums * {
   color: var(--accent-text);
 }
 
+.details-sort-header:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
 .details-sort-header span {
   color: var(--accent-text);
   font-size: 12px;
 }
 
-.gallery-grid.layout-details {
+.list-view-row {
+  position: relative;
   display: grid;
-  min-width: 650px;
-  grid-template-columns:
-    34px 58px minmax(180px, 1fr) minmax(132px, 180px)
-    92px 96px !important;
-  gap: 0;
+  column-gap: 12px;
+  grid-column: 1 / -1;
+  grid-template-columns: var(--list-columns);
   align-items: stretch;
-  overflow: visible;
-  border: 1px solid var(--line);
-  border-radius: 0 0 10px 10px;
+  min-height: 62px;
+  padding: 0 10px;
+  border-top: 1px solid var(--line);
   background: var(--surface);
 }
 
-.gallery-grid.layout-details .tile-caption {
-  display: contents;
+.list-view-row:first-child {
+  border-top: 0;
 }
 
-.gallery-grid.layout-details .gallery-tile .tile-select-check {
-  position: relative;
-  inset: auto;
+.list-view-row:nth-child(even) {
+  background: var(--surface-2);
+}
+
+.list-view-row:hover {
+  background: var(--surface-3);
+}
+
+.list-view-row.selected {
+  background: var(--accent-soft);
+}
+
+.list-view-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding: 0 2px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.list-view-cell--muted {
+  color: var(--muted);
+}
+
+.list-view-cell--numeric {
+  justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+
+.list-view-cell--image {
+  justify-self: center;
+}
+
+.list-view .tile-select-check {
   grid-column: 1;
+  position: static;
+  top: auto;
+  right: auto;
+  z-index: 2;
   justify-self: center;
   align-self: center;
   width: 17px;
   height: 17px;
-  z-index: 3;
-  opacity: 1;
-  transform: none;
-  padding: 0;
   border: 1px solid var(--line-strong);
   border-radius: 4px;
   background: var(--surface);
   color: transparent;
+  opacity: 1;
+  transform: none;
+  align-items: center;
+  padding: 0;
+  display: flex;
+  justify-content: center;
   box-shadow: none;
 }
 
-.gallery-grid.layout-details .tile-select-check svg {
+.list-view .tile-select-check svg {
   opacity: 0;
 }
 
-.gallery-grid.layout-details .gallery-tile.selected .tile-select-check {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-contrast);
-}
-
-.gallery-grid.layout-details .gallery-tile.selected .tile-select-check svg {
-  opacity: 1;
-}
-
-.gallery-grid.layout-details .tile-select-check:has(input:focus-visible) {
+.list-view .tile-select-check:has(input:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.gallery-grid.layout-details .tile-image {
+.list-view .tile-select-check input:checked + svg {
+  display: block;
+  opacity: 1;
+  color: var(--accent-contrast);
+}
+
+.list-view-row .tile-image {
   grid-column: 2;
   align-self: center;
   justify-self: center;
@@ -8542,89 +8483,61 @@ body.is-dragging-albums * {
   background: var(--surface-3);
 }
 
-.gallery-grid.layout-details .tile-caption b,
-.gallery-grid.layout-details .tile-caption .tile-date,
-.gallery-grid.layout-details .tile-caption .tile-kind,
-.gallery-grid.layout-details .tile-caption .tile-size {
-  display: flex;
-  min-width: 0;
-  min-height: 62px;
-  align-items: center;
-  padding: 0 12px;
-  border: 0;
-  border-top: 1px solid var(--line);
-  color: var(--text);
-  font-size: 12px;
-  text-transform: none;
+.list-view-row .tile-caption {
+  display: contents;
 }
 
-.gallery-grid.layout-details .tile-caption b {
+.list-view-row .tile-caption b {
   grid-column: 3;
   overflow: hidden;
+  align-items: center;
+  padding: 0 2px;
+  color: var(--text);
+  font-size: 12px;
   font-weight: 550;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: flex;
 }
 
-.gallery-grid.layout-details .tile-caption .tile-date {
-  grid-column: 4;
+.list-view-row .tile-caption .tile-date,
+.list-view-row .tile-caption .tile-kind,
+.list-view-row .tile-caption .tile-size {
+  align-items: center;
+  display: flex;
+  padding: 0 2px;
   color: var(--muted);
-  white-space: nowrap;
+  font-size: 12px;
 }
 
-.gallery-grid.layout-details .tile-caption .tile-kind {
+.list-view-row .tile-caption .tile-date {
+  grid-column: 4;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.list-view-row .tile-caption .tile-kind {
   grid-column: 5;
   gap: 7px;
+  padding: 0 2px;
   color: var(--muted);
+  font-size: 12px;
 }
 
-.gallery-grid.layout-details .tile-caption .tile-size {
+.list-view-row .tile-caption .tile-size {
   grid-column: 6;
   justify-content: flex-end;
+  padding: 0 2px;
   color: var(--muted);
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
-.gallery-grid.layout-details .gallery-tile:first-of-type .tile-caption > * {
-  border-top: 0;
-}
-
-.gallery-grid.layout-details .gallery-tile:nth-of-type(even) .tile-caption > *,
-.gallery-grid.layout-details .gallery-tile:nth-of-type(even) .tile-select-check,
-.gallery-grid.layout-details .gallery-tile:nth-of-type(even) .tile-image {
-  background-color: color-mix(in srgb, var(--surface-2) 72%, transparent);
-}
-
-.gallery-grid.layout-details .gallery-tile:hover .tile-caption > *,
-.gallery-grid.layout-details .gallery-tile:hover .tile-select-check,
-.gallery-grid.layout-details .gallery-tile:hover .tile-image,
-.gallery-grid.layout-details .gallery-tile.inspected .tile-caption > * {
-  background-color: var(--surface-3);
-}
-
-.gallery-grid.layout-details .gallery-tile.selected .tile-caption > *,
-.gallery-grid.layout-details .gallery-tile.selected .tile-select-check,
-.gallery-grid.layout-details .gallery-tile.selected .tile-image {
-  background-color: var(--accent-soft);
-}
-
-.gallery-grid.layout-details .tile-image img,
-.gallery-grid.layout-details .tile-image video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.gallery-grid.layout-details .gallery-tile:has(> .tile-open-button:focus-visible) .tile-caption b {
-  outline: 2px solid var(--accent);
-  outline-offset: -3px;
-  border-radius: 4px;
-}
-
-.gallery-grid.layout-details .video-label,
-.gallery-grid.layout-details .format-label {
-  display: none;
+/* Selection reads off the row, not per cell, so even and hover overrides stay
+   simple. */
+.list-view-row .tile-select-check {
+  border-color: var(--line-strong);
 }
 
 /* Timeline keeps its month divisions editorial and legible while letting the
@@ -8783,14 +8696,9 @@ body.is-dragging-albums * {
 }
 
 @media (max-width: 720px) {
-  .library-grid-container:has(> .details-header-sticky) {
+  .library-grid-container:has(> .list-view-header) {
     padding-right: 16px;
     padding-left: 16px;
-  }
-
-  .details-header-sticky,
-  .gallery-grid.layout-details {
-    min-width: 650px;
   }
 
   .gallery-grid.layout-timeline .timeline-group {
@@ -9045,13 +8953,10 @@ body.is-dragging-albums * {
 }
 
 /* Keep the Details view on the same grid gutter as the other modes. */
-.library-grid-container:has(> .details-header-sticky) {
+.library-grid-container:has(> .list-view-header) {
+  --list-columns: 44px 68px minmax(0, 1fr) 140px 110px 96px;
   padding-right: var(--page-gutter);
   padding-left: var(--page-gutter);
-}
-.details-header-sticky,
-.gallery-grid.layout-details {
-  column-gap: 12px;
 }
 
 .library-stats {

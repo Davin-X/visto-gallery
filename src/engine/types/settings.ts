@@ -14,6 +14,7 @@ export const defaultSettings: AppSettings = {
   restoreWindowState: true,
   defaultLayout: "grid",
   thumbnailSize: "small",
+  albumsView: "cards",
   viewerZoomBehavior: "fit",
   slideshowInterval: 5,
   slideshowShuffle: false,
