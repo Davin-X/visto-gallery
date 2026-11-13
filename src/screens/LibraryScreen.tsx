@@ -195,6 +195,46 @@ interface LibraryScreenProps {
   showInspector: boolean;
 }
 
+/**
+ * Colour label, favourite and rating for a details row. The preview there is
+ * only 36px, so the grid's corner badges were clipped on it; the row states
+ * them inline at the end of the name cell instead.
+ */
+function ListRowMeta({ item }: { item: MediaItem }) {
+  const rating = Number(item.rating) || 0;
+  if (!item.favorite && !item.colorLabel && rating === 0) return null;
+  return (
+    <span className="list-row-meta">
+      {item.colorLabel ? (
+        <i
+          className={`list-row-color list-row-color--${item.colorLabel}`}
+          role="img"
+          aria-label={`Color label: ${item.colorLabel}`}
+          title={`Color label: ${item.colorLabel}`}
+        />
+      ) : null}
+      {item.favorite ? (
+        <span className="list-row-favorite" role="img" aria-label="Favorite" title="Favorite">
+          <HeartIcon size={11} filled />
+        </span>
+      ) : null}
+      {rating > 0 ? (
+        <span
+          className="list-row-rating"
+          role="img"
+          aria-label={`Rating: ${rating} of 5 stars`}
+          title={`Rating: ${rating} of 5 stars`}
+        >
+          <span className="star" aria-hidden="true">
+            {"\u2605"}
+          </span>
+          {rating}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function LibraryScreen(props: LibraryScreenProps) {
   const library = useLibraryStore();
   const playingId = usePlaybackStore((state) => state.itemId);
@@ -1683,29 +1723,18 @@ function LibraryScreen(props: LibraryScreenProps) {
                             <KindBadge kind={item.kind} />
                           </span>
                         )}
-                        {item.favorite && !masked(item) ? (
-                          <span className="tile-favorite" aria-label="Favorite">
-                            <HeartIcon size={10} filled />
-                          </span>
-                        ) : null}
-                        {item.colorLabel && !masked(item) ? (
-                          <span
-                            className={`tile-color-label tile-color-${item.colorLabel}`}
-                            aria-label={`Color label: ${item.colorLabel}`}
-                            title={`Color: ${item.colorLabel}`}
-                          >
-                            <span className="color-dot" />
-                          </span>
-                        ) : null}
                       </span>
                       <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
                         <b>
                           {masked(item) ? (
                             "Hidden item"
                           ) : (
-                            <MiddleTruncate
-                              text={displayFileName(item.name, item.extension, showExtensions)}
-                            />
+                            <>
+                              <MiddleTruncate
+                                text={displayFileName(item.name, item.extension, showExtensions)}
+                              />
+                              <ListRowMeta item={item} />
+                            </>
                           )}
                         </b>
                         <small className="tile-date">{formatItemDate(item)}</small>

@@ -451,7 +451,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
           </div>
         </div>
       ) : albumsView === "list" ? (
-        <div className="list-view albums-list-view">
+        <div className="albums-list-view">
           <div className="list-view-header">
             <div className="list-view-head-cell albums-col-grip" aria-hidden="true" />
             <div className="list-view-head-cell albums-col-cover" aria-hidden="true" />
@@ -509,132 +509,141 @@ function AlbumsScreen(props: AlbumsScreenProps) {
             </div>
             <div className="list-view-head-cell albums-col-actions" aria-label="Actions" />
           </div>
-          {sortedAlbums.map((album: any, index: number) => (
-            <div
-              className={`list-view-row album-list-row album-card-wrap${dragId === album.id ? " is-dragging" : ""}${
-                dropTarget && dropTarget.id === album.id
-                  ? dropTarget.before
-                    ? " is-drop-before"
-                    : " is-drop-after"
-                  : ""
-              }`}
-              key={album.id}
-              role="listitem"
-              data-album-id={album.id}
-              onContextMenu={(e) => props.onAlbumContextMenu?.(album, e)}
-            >
-              <button
-                type="button"
-                className="tile-open-button"
-                aria-label={`Open ${album.name}`}
-                onClick={() => props.onOpenAlbum(album.id)}
-                onContextMenu={(e) => props.onAlbumContextMenu?.(album, e)}
-              />
-              <button
-                type="button"
-                className="albums-list-grip"
-                title={
-                  albumsSort
-                    ? "Sorting pauses manual ordering — pick Manual order (↕) to drag"
-                    : "Drag to reorder"
-                }
-                aria-label={`Drag to reorder ${album.name}`}
-                style={{ touchAction: "none" }}
-                disabled={albumsSort !== null}
-                aria-disabled={albumsSort !== null}
-                onPointerDown={(event) => {
-                  if (albumsSort !== null) return;
-                  startAlbumDrag(album.id, event);
-                }}
-              >
-                <DragIcon size={13} />
-              </button>
-              <span className="list-view-cell album-list-cover">
-                {album.photos.length ? (
-                  <CachedThumbnail itemId={album.photos[0].id} name={album.name} size={64} />
-                ) : (
-                  <span className="album-list-cover-placeholder">
-                    <AlbumsIcon size={18} />
-                  </span>
-                )}
-              </span>
-              <span className="list-view-cell album-list-name">
-                <i className={`album-dot ${album.color}`} aria-hidden="true" />
-                <MiddleTruncate className="album-list-name-text" text={album.name} tailLength={6} />
-              </span>
-              <span className="list-view-cell list-view-cell--numeric">
-                {Number(album.count).toLocaleString()} {album.count === 1 ? "item" : "items"}
-              </span>
-              <span className="list-view-cell list-view-cell--numeric">
-                {formatBytesSimple(Number((album as any).itemSize ?? 0))}
-              </span>
-              <span className="list-view-cell list-view-cell--muted">
-                {album.updatedAt ? formatFileDate(album.updatedAt) : "—"}
-              </span>
+          {/* The header must be a sibling of the rows, not a child of the
+              .list-view grid: a sticky grid item is clipped to its own track,
+              which left the Albums header unable to stick like the Library's. */}
+          <div className="list-view">
+            {sortedAlbums.map((album: any, index: number) => (
               <div
-                className="album-card-actions album-list-actions"
-                role="group"
-                aria-label={`${album.name} actions`}
+                className={`list-view-row album-list-row album-card-wrap${dragId === album.id ? " is-dragging" : ""}${
+                  dropTarget && dropTarget.id === album.id
+                    ? dropTarget.before
+                      ? " is-drop-before"
+                      : " is-drop-after"
+                    : ""
+                }`}
+                key={album.id}
+                role="listitem"
+                data-album-id={album.id}
+                onContextMenu={(e) => props.onAlbumContextMenu?.(album, e)}
               >
                 <button
                   type="button"
-                  className="album-card-action"
-                  title="Play slideshow"
-                  aria-label={`Play slideshow of ${album.name}`}
-                  onClick={() => props.onPlayAlbum?.(album.id)}
-                >
-                  <SlideshowIcon size={14} />
-                </button>
+                  className="tile-open-button"
+                  aria-label={`Open ${album.name}`}
+                  onClick={() => props.onOpenAlbum(album.id)}
+                  onContextMenu={(e) => props.onAlbumContextMenu?.(album, e)}
+                />
                 <button
                   type="button"
-                  className="album-card-action"
-                  title="Add items"
-                  aria-label={`Add items to ${album.name}`}
-                  onClick={() => props.onAddItemsToAlbum?.(album.id)}
+                  className="albums-list-grip"
+                  title={
+                    albumsSort
+                      ? "Sorting pauses manual ordering — pick Manual order (↕) to drag"
+                      : "Drag to reorder"
+                  }
+                  aria-label={`Drag to reorder ${album.name}`}
+                  style={{ touchAction: "none" }}
+                  disabled={albumsSort !== null}
+                  aria-disabled={albumsSort !== null}
+                  onPointerDown={(event) => {
+                    if (albumsSort !== null) return;
+                    startAlbumDrag(album.id, event);
+                  }}
                 >
-                  <PlusIcon size={14} />
+                  <DragIcon size={13} />
                 </button>
-                <button
-                  type="button"
-                  className="album-card-action"
-                  title="Move earlier"
-                  aria-label={`Move ${album.name} earlier`}
-                  disabled={albumsSort !== null || index === 0}
-                  onClick={() => moveAlbum(album.id, -1)}
+                <span className="list-view-cell album-list-cover">
+                  {album.photos.length ? (
+                    <CachedThumbnail itemId={album.photos[0].id} name={album.name} size={64} />
+                  ) : (
+                    <span className="album-list-cover-placeholder">
+                      <AlbumsIcon size={18} />
+                    </span>
+                  )}
+                </span>
+                <span className="list-view-cell album-list-name">
+                  <i className={`album-dot ${album.color}`} aria-hidden="true" />
+                  <MiddleTruncate
+                    className="album-list-name-text"
+                    text={album.name}
+                    tailLength={6}
+                  />
+                </span>
+                <span className="list-view-cell list-view-cell--numeric">
+                  {Number(album.count).toLocaleString()} {album.count === 1 ? "item" : "items"}
+                </span>
+                <span className="list-view-cell list-view-cell--numeric">
+                  {formatBytesSimple(Number((album as any).itemSize ?? 0))}
+                </span>
+                <span className="list-view-cell list-view-cell--muted">
+                  {album.updatedAt ? formatFileDate(album.updatedAt) : "—"}
+                </span>
+                <div
+                  className="album-card-actions album-list-actions"
+                  role="group"
+                  aria-label={`${album.name} actions`}
                 >
-                  <ChevronUpIcon size={14} />
-                </button>
-                <button
-                  type="button"
-                  className="album-card-action"
-                  title="Move later"
-                  aria-label={`Move ${album.name} later`}
-                  disabled={albumsSort !== null || index === albums.length - 1}
-                  onClick={() => moveAlbum(album.id, 1)}
-                >
-                  <ChevronDownIcon size={14} />
-                </button>
-                <button
-                  type="button"
-                  className="album-card-action"
-                  title="Rename album"
-                  aria-label={`Rename ${album.name}`}
-                  onClick={() => props.onRenameAlbum?.(album)}
-                >
-                  <PencilIcon size={14} />
-                </button>
-                <button
-                  type="button"
-                  className="album-card-action is-danger"
-                  title="Delete album"
-                  aria-label={`Delete ${album.name}`}
-                  onClick={() => props.onDeleteAlbum?.(album)}
-                >
-                  <TrashIcon size={14} />
-                </button>
+                  <button
+                    type="button"
+                    className="album-card-action"
+                    title="Play slideshow"
+                    aria-label={`Play slideshow of ${album.name}`}
+                    onClick={() => props.onPlayAlbum?.(album.id)}
+                  >
+                    <SlideshowIcon size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="album-card-action"
+                    title="Add items"
+                    aria-label={`Add items to ${album.name}`}
+                    onClick={() => props.onAddItemsToAlbum?.(album.id)}
+                  >
+                    <PlusIcon size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="album-card-action"
+                    title="Move earlier"
+                    aria-label={`Move ${album.name} earlier`}
+                    disabled={albumsSort !== null || index === 0}
+                    onClick={() => moveAlbum(album.id, -1)}
+                  >
+                    <ChevronUpIcon size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="album-card-action"
+                    title="Move later"
+                    aria-label={`Move ${album.name} later`}
+                    disabled={albumsSort !== null || index === albums.length - 1}
+                    onClick={() => moveAlbum(album.id, 1)}
+                  >
+                    <ChevronDownIcon size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="album-card-action"
+                    title="Rename album"
+                    aria-label={`Rename ${album.name}`}
+                    onClick={() => props.onRenameAlbum?.(album)}
+                  >
+                    <PencilIcon size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="album-card-action is-danger"
+                    title="Delete album"
+                    aria-label={`Delete ${album.name}`}
+                    onClick={() => props.onDeleteAlbum?.(album)}
+                  >
+                    <TrashIcon size={14} />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       ) : (
         <div className="albums-grid">

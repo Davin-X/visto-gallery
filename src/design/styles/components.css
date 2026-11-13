@@ -143,12 +143,15 @@
   box-shadow: var(--panel-shadow);
 }
 
-.app-frame :is(.sources-table, .gallery-grid.layout-details) {
+/* The Library's details layout is a .list-view table now; these older panel
+   rules still gave it a 12px panel radius and a grey header band, so the two
+   tables read differently. Only the settings sources table needs them. */
+.app-frame .sources-table {
   border-color: var(--panel-border);
   border-radius: var(--panel-radius);
 }
 
-.app-frame :is(.sources-table th, .details-header-sticky) {
+.app-frame .sources-table th {
   background: var(--surface-2);
   color: var(--muted);
   font-size: 10px;
@@ -243,6 +246,14 @@
   text-overflow: ellipsis;
 }
 
+/* The tail keeps its full width while there is room and is capped at the
+   container when there is not — i.e. only after the head has shrunk to zero.
+   Without the cap the fixed tail painted under adjacent content (the row's
+   metadata cluster) instead of ellipsizing. */
 .middle-truncate-tail {
   flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

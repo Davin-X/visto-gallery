@@ -4841,6 +4841,10 @@ body.is-resizing .photo-inspector {
 .albums-page {
   width: 100%;
   max-width: 1120px;
+  /* A sticky header can never scroll above its scroll container's content
+     box, so the page's top inset lives on the heading instead of the
+     scroller's padding — otherwise rows peek through above the header. */
+  padding-top: 0;
 }
 
 /* Albums: the heading block is three lines tall, so the page action centres
@@ -4849,6 +4853,7 @@ body.is-resizing .photo-inspector {
    bottom alignment, which is already right for them. */
 .albums-page > .page-heading {
   align-items: center;
+  margin-top: var(--page-top);
 }
 
 .albums-grid {
@@ -8205,8 +8210,25 @@ body.is-dragging-albums * {
   border-radius: 6px;
 }
 
-.albums-list-view.list-view {
+.albums-list-view {
   --list-columns: 34px 64px minmax(0, 1fr) minmax(0, 92px) minmax(0, 104px) minmax(0, 140px) 168px;
+  /* Fixed columns (602px) + six 12px gaps + 20px row padding + the 2px frame,
+     which leaves the name track 110px — the same floor the details table
+     keeps. Below this the page scrolls sideways instead of squeezing the
+     name to a few pixels. Header and body share it so they stay in lockstep. */
+  --albums-list-min-width: 806px;
+  min-width: 0;
+}
+
+/* The body declares the library's default column template on itself, which
+   would otherwise shadow the album template inherited from the wrapper. */
+.albums-list-view > .list-view {
+  --list-columns: inherit;
+  min-width: var(--albums-list-min-width);
+}
+
+.albums-list-view > .list-view-header {
+  min-width: var(--albums-list-min-width);
 }
 
 .albums-col-grip {
@@ -8344,11 +8366,15 @@ body.is-dragging-albums * {
 .list-view {
   /* Must stay in lockstep with .library-grid-container:has(> .list-view-header). */
   --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px) minmax(0, 110px) minmax(0, 96px);
+  --list-zebra: var(--surface-2);
   /* Rows this wide look sparse; the columns carry enough content to fill
      about this much space comfortably. */
   max-width: 1240px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  /* The Library reuses .gallery-grid (16px gap) for the details layout; a
+     table needs contiguous rows or every row reads as a floating band. */
+  gap: 0;
   min-width: 650px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -8368,10 +8394,19 @@ body.is-dragging-albums * {
   column-gap: 12px;
   grid-template-columns: var(--list-columns);
   align-items: center;
-  min-height: 40px;
+  min-height: 36px;
   padding: 0 10px;
-  border-bottom: 1px solid var(--line);
+  /* Header and body share one frame: the header is the table's top band, so
+     it carries the top/side borders and the rounded top corners instead of
+     sitting above the table's own rounded edge as a separate strip. */
+  border: 1px solid var(--line);
+  border-radius: 10px 10px 0 0;
   background: var(--surface);
+}
+
+.list-view-header + .list-view {
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
 }
 
 .list-view-head-cell--numeric {
@@ -8381,7 +8416,9 @@ body.is-dragging-albums * {
 
 .list-view-head-cell {
   min-width: 0;
-  padding: 8px 0;
+  /* The sort button carries the vertical padding; adding it here too made the
+     header 49px instead of the 36px rhythm the rows were tightened to. */
+  padding: 0;
   color: var(--muted);
   font-size: 10px;
   font-weight: 700;
@@ -8441,12 +8478,17 @@ body.is-dragging-albums * {
   background: var(--surface);
 }
 
-.list-view-row:first-child {
-  border-top: 0;
+/* Dark surfaces compress small luminance steps, so the 55% mix that whispers
+   in light mode is almost invisible against #0b0d12. Stepping up a surface
+   level keeps the same tint weight while the alternation still reads. */
+.app-frame.dark .list-view {
+  --list-zebra: var(--surface-3);
 }
 
+/* Grouping comes from a whisper of fill on every other row, not from a rule
+   between rows: adjacent borders read as gaps at this density. */
 .list-view-row:nth-child(even) {
-  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  background: color-mix(in srgb, var(--list-zebra) 55%, transparent);
 }
 
 .list-view-row:hover {
@@ -8520,16 +8562,39 @@ body.is-dragging-albums * {
   color: var(--accent-contrast);
 }
 
-.list-view-row .tile-image {
+/* Scoped with the parent list so it outranks the later `.gallery-tile
+   .tile-image` reset that zeroes the border and radius. Same chrome as the
+   Albums cover so both tables read identically. */
+.list-view .list-view-row .tile-image {
   grid-column: 2;
   align-self: center;
   justify-self: center;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 7px;
   background: var(--surface-3);
+  box-shadow: none;
+}
+
+/* A table row zooms on hover as a row, not as a thumbnail; and selection is
+   the row fill, never a ring around the 36px preview. */
+.list-view .gallery-tile:hover .tile-image img,
+.list-view .gallery-tile:hover .tile-image video {
+  transform: none;
+}
+
+/* Inspection gets a left accent bar instead of a ring, which would wrap the
+   row in card chrome again. The row fill stays with the zebra/selection rules. */
+.list-view-row.gallery-tile.inspected {
+  box-shadow: inset 2px 0 0 var(--accent, var(--blue));
+}
+
+.list-view .library-skeleton-row {
+  min-height: 44px;
+  border: 0;
+  border-radius: 0;
 }
 
 .list-view-row .tile-caption {
@@ -8547,6 +8612,62 @@ body.is-dragging-albums * {
   text-overflow: ellipsis;
   white-space: nowrap;
   display: flex;
+}
+
+/* Row metadata sits at the end of the name cell: the 36px preview is too
+   small to carry the grid's corner badges, and a separate column would cost
+   more width than the three states are worth. */
+.list-row-meta {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  padding-left: 12px;
+}
+
+.list-row-meta .list-row-color {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 20%, transparent);
+}
+
+.list-row-color--red {
+  background: #ef4444;
+}
+.list-row-color--yellow {
+  background: #eab308;
+}
+.list-row-color--green {
+  background: #22c55e;
+}
+.list-row-color--blue {
+  background: #3b82f6;
+}
+.list-row-color--purple {
+  background: #a855f7;
+}
+
+.list-row-meta .list-row-favorite {
+  display: grid;
+  place-items: center;
+  color: #f43f5e;
+}
+
+.list-row-meta .list-row-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.list-row-meta .list-row-rating .star {
+  color: #f0a92b;
+  font-size: 10px;
 }
 
 .list-view-row .tile-caption .tile-date,
@@ -9007,9 +9128,18 @@ body.is-dragging-albums * {
    .list-view — any change must update both. */
 .library-grid-container:has(> .list-view-header) {
   --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px) minmax(0, 110px) minmax(0, 96px);
-  padding-top: 4px;
+  /* No top padding (see the header's margin) so the sticky header pins flush
+     to the scrollport instead of leaving a strip of rows above it. */
+  padding-top: 0;
   padding-right: var(--page-gutter);
   padding-left: var(--page-gutter);
+}
+
+.library-grid-container > .list-view-header {
+  /* The table hangs from the toolbar: its bottom rule is the table's top
+     edge, so a second border would read as a floating strip. */
+  border-top: 0;
+  border-radius: 0;
 }
 
 .library-stats {
