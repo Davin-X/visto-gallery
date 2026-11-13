@@ -624,9 +624,28 @@ export function DeleteAlbumDialog({
   );
 }
 
+/**
+ * What the Move to Trash dialog calls the items: the name for one, up to
+ * three names, or two names and "N more". Falls back to the count when the
+ * items aren't loaded.
+ */
+export function describeTrashTargets(count: number, names: string[]): string {
+  const known = names.filter(Boolean);
+  if (known.length === 0 || known.length < Math.min(count, 2)) {
+    return count === 1 ? "1 item" : `${count.toLocaleString()} items`;
+  }
+  const quoted = known.map((name) => `“${name}”`);
+  if (count === 1) return quoted[0];
+  if (count <= 3 && known.length === count) {
+    return `${quoted.slice(0, -1).join(", ")} and ${quoted[quoted.length - 1]}`;
+  }
+  return `${quoted.slice(0, 2).join(", ")} and ${(count - 2).toLocaleString()} more`;
+}
+
 function DeleteItemDialog({
   open,
   count,
+  names = [],
   summary,
   onClose,
   onConfirm,
@@ -634,6 +653,8 @@ function DeleteItemDialog({
 }: {
   open: boolean;
   count: number;
+  /** Names of the items going to the Trash, when known. */
+  names?: string[];
   /** Optional breakdown shown under the count, e.g. "2 groups · 412 MB". */
   summary?: string | null;
   onClose: () => void;
@@ -661,7 +682,7 @@ function DeleteItemDialog({
           onClose={onClose}
         />
         <p className="delete-album-copy">
-          Move <b>{count === 1 ? "1 item" : `${count.toLocaleString()} items`}</b> to the Trash?{" "}
+          Move <b>{describeTrashTargets(count, names)}</b> to the Trash?{" "}
           {count === 1 ? "It stays" : "They stay"} there until you empty it, so you can put{" "}
           {count === 1 ? "it" : "them"} back from Finder.
         </p>
@@ -987,6 +1008,23 @@ export function AppDialogs(props: AppDialogsProps) {
     itemPendingDeleteRef.current = null;
   };
 
+  // Name what is about to go to the Trash. The request carries ids (and the
+  // full items for a duplicate cleanup); look the rest up in what is loaded.
+  let pendingDeleteNames: string[] = [];
+  if (itemPendingDeleteCount > 0 && itemPendingDeleteRef.current) {
+    const request = itemPendingDeleteRef.current;
+    const byId = new Map<string, string>();
+    for (const item of [
+      ...(request.undoItems ?? []),
+      ...props.library.items,
+      ...props.library.hiddenItems,
+      ...props.library.duplicates.flatMap((group) => group.items),
+    ]) {
+      if (!byId.has(item.id)) byId.set(item.id, item.name);
+    }
+    pendingDeleteNames = request.ids.slice(0, 3).map((id) => byId.get(id) ?? "");
+  }
+
   return (
     <>
       <UpdateDialog
@@ -1046,6 +1084,7 @@ export function AppDialogs(props: AppDialogsProps) {
       <DeleteItemDialog
         open={itemPendingDeleteCount > 0}
         count={itemPendingDeleteCount}
+        names={pendingDeleteNames}
         summary={itemPendingDeleteSummary}
         onClose={closeItemDialog}
         onConfirm={confirmDeleteItem}
