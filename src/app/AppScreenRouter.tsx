@@ -65,7 +65,10 @@ interface AppScreenRouterProps {
   queueHasMore: boolean;
   onLoadMoreQueue: () => unknown;
   playSlideshow: (ids?: string[]) => void;
+  playAlbumSlideshow: (albumId: string) => void;
   openAlbumMenu: (album: any, e: React.MouseEvent) => void;
+  openRenameAlbumDialog: (album: any) => void;
+  setAlbumPendingDelete: (album: any) => void;
   openSmartAlbum: (albumId: string) => Promise<void>;
   openSmartAlbumMenu: (album: any, e: React.MouseEvent) => void;
   setAlbumRemovePending: (pending: { albumId: string; itemIds: string[] } | null) => void;
@@ -118,7 +121,10 @@ export function AppScreenRouter({
   queueHasMore,
   onLoadMoreQueue,
   playSlideshow,
+  playAlbumSlideshow,
   openAlbumMenu,
+  openRenameAlbumDialog,
+  setAlbumPendingDelete,
   openSmartAlbum,
   openSmartAlbumMenu,
   setAlbumRemovePending,
@@ -243,6 +249,10 @@ export function AppScreenRouter({
           assetUrl={assetUrl}
           onCreateAlbum={openAlbumDialog}
           onAlbumContextMenu={openAlbumMenu}
+          onPlayAlbum={playAlbumSlideshow}
+          onRenameAlbum={openRenameAlbumDialog}
+          onAddItemsToAlbum={addItemsToAlbum}
+          onDeleteAlbum={setAlbumPendingDelete}
           onSmartAlbumContextMenu={openSmartAlbumMenu}
           onOpenSmartAlbum={(albumId: string) => void openSmartAlbum(albumId)}
           onOpenAlbum={async (albumId: string) => {

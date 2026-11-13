@@ -5228,6 +5228,112 @@ body.is-resizing .photo-inspector {
   padding: 11px 12px 12px;
 }
 
+/* Cards are wrapped so the hover action row can sit over the cover without
+   nesting buttons inside the card's own <button>. */
+.album-card-wrap {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+.album-card-wrap > .album-card {
+  width: 100%;
+}
+
+/* With a timestamp under the meta row, the meta's bottom padding would double
+   up and leave a gap between the name and the date. */
+.album-card:has(.album-updated) > .album-meta {
+  padding-bottom: 2px;
+}
+
+.album-updated {
+  display: block;
+  padding: 0 12px 12px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+/* Hidden until the card is hovered or something inside it takes focus. The
+   buttons stay out of the tab order until then via `visibility`, so keyboard
+   users do not tab through four invisible controls per card. */
+.album-card-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  /* The hover fan lifts the top print past this row; the stack assigns the
+     prints z-index 1–3, so the buttons sit at 4 to stay above the whole fan. */
+  z-index: 4;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.12s ease,
+    visibility 0.12s ease;
+}
+
+.album-card-wrap:hover .album-card-actions,
+.album-card-wrap:focus-within .album-card-actions {
+  opacity: 1;
+  visibility: visible;
+}
+
+.album-card-action {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--text);
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.album-card-action:hover {
+  border-color: color-mix(in srgb, var(--blue) 45%, var(--line));
+  background: var(--surface);
+}
+
+.album-card-action.is-danger:hover {
+  border-color: color-mix(in srgb, #d6455f 55%, var(--line));
+  background: color-mix(in srgb, #d6455f 12%, var(--surface));
+  color: #c23b54;
+}
+
+.album-card-action:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+/* When smart albums exist but no regular albums, the grid is not empty for the
+   page as a whole — a full-page empty state underneath the strip would read as
+   an error. A single inline hint fills the space instead. */
+.albums-empty-inline {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  color: var(--muted);
+}
+
+.albums-empty-inline p {
+  margin: 0;
+  font-size: 12px;
+}
+
 .album-meta > .album-dot {
   flex: 0 0 auto;
 }
