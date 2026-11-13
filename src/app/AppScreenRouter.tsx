@@ -13,7 +13,12 @@ import BatchScreen from "../screens/BatchScreen";
 import AlbumsScreen from "../screens/AlbumsScreen";
 import DuplicatesScreen from "../screens/DuplicatesScreen";
 import { SettingsScreen } from "../design/components/SettingsScreen";
-import type { LibraryFolder, LibraryStats, ErrorCode } from "../engine/types/commands";
+import type { LibraryFolder, LibraryStats, ErrorCode, SmartAlbum } from "../engine/types/commands";
+import type { LibraryState } from "../engine/stores/useLibraryStore";
+import type { ViewerState } from "../engine/stores/useViewerStore";
+import type { EditState } from "../engine/stores/useEditStore";
+import type { BatchState } from "../engine/stores/useBatchStore";
+import type { AlbumTarget, OpenContextMenu } from "./types";
 import type { LayoutMode, MediaItem } from "../engine/types/media";
 import type { DeleteRequest } from "../engine/types/deleteRequest";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
@@ -22,10 +27,10 @@ import { buildItemContextMenu, type ItemMenuActions } from "../engine/utils/item
 
 interface AppScreenRouterProps {
   screen: Screen;
-  library: any;
-  viewer: any;
-  edit: any;
-  batch: any;
+  library: LibraryState;
+  viewer: ViewerState;
+  edit: EditState;
+  batch: BatchState;
   assetUrl: (path: string) => string;
   setScreen: (screen: Screen) => void;
   openViewer: (id?: string, origin?: Screen, scope?: "library" | "hidden") => void;
@@ -33,7 +38,7 @@ interface AppScreenRouterProps {
   openAlbumDialog: (seedIds?: string[]) => void;
   changeLibraryLayout: (layout: LayoutMode) => void;
   openAlbumPicker: (itemIds?: string[]) => void;
-  openContextMenu: (items: any[], e: React.MouseEvent) => void;
+  openContextMenu: OpenContextMenu;
   searchInputRef: RefObject<HTMLInputElement | null>;
   itemPendingDeleteRef: MutableRefObject<DeleteRequest | null>;
   setItemPendingDeleteCount: (count: number) => void;
@@ -67,14 +72,14 @@ interface AppScreenRouterProps {
   onLoadMoreQueue: () => unknown;
   playSlideshow: (ids?: string[]) => void;
   playAlbumSlideshow: (albumId: string) => void;
-  openAlbumMenu: (album: any, e: React.MouseEvent) => void;
-  openRenameAlbumDialog: (album: any) => void;
-  setAlbumPendingDelete: (album: any) => void;
+  openAlbumMenu: (album: AlbumTarget, e: React.MouseEvent) => void;
+  openRenameAlbumDialog: (album: AlbumTarget) => void;
+  setAlbumPendingDelete: (album: AlbumTarget | null) => void;
   openSmartAlbum: (albumId: string) => Promise<void>;
-  openSmartAlbumMenu: (album: any, e: React.MouseEvent) => void;
+  openSmartAlbumMenu: (album: SmartAlbum, e: React.MouseEvent) => void;
   openSmartAlbumCreate: () => void;
-  openSmartAlbumEdit: (album: any) => void;
-  deleteSmartAlbum: (album: any) => void;
+  openSmartAlbumEdit: (album: SmartAlbum) => void;
+  deleteSmartAlbum: (album: SmartAlbum) => void;
   setAlbumRemovePending: (pending: { albumId: string; itemIds: string[] } | null) => void;
   copyTagsToFinderForIds: (ids: string[]) => Promise<void>;
   playVideoInBackground: (id?: string, scope?: "library" | "hidden") => void;
@@ -194,7 +199,7 @@ export function AppScreenRouter({
           onAddItems={(albumId: string) => addItemsToAlbum(albumId)}
           onOpenAlbumPicker={(itemIds?: string[]) => openAlbumPicker(itemIds)}
           onAlbumMenu={(e: React.MouseEvent) => {
-            const album = library.albums.find((a: any) => a.id === library.activeAlbum);
+            const album = library.albums.find((a) => a.id === library.activeAlbum);
             if (album) openAlbumMenu(album, e);
           }}
           albumDragOver={albumDragOver}
@@ -226,7 +231,7 @@ export function AppScreenRouter({
           }
           onOpenViewer={(id?: string) => openViewer(id, "Library")}
           onPlayBackground={(id: string) => playVideoInBackground(id, "library")}
-          onOpenEdit={async (item: any) => {
+          onOpenEdit={async (item: MediaItem) => {
             if (item?.kind === "video") {
               openViewer(item.id, "Library");
               return;
@@ -427,11 +432,11 @@ export function AppScreenRouter({
                 await edit.clearDraft();
                 await library.loadLibrary();
                 const fresh =
-                  useLibraryStore.getState().items.find((i: any) => i.id === item.id) ??
+                  useLibraryStore.getState().items.find((i) => i.id === item.id) ??
                   ({
                     ...item,
                     modifiedAt: Date.now(),
-                  } as any);
+                  } satisfies MediaItem);
                 await edit.open(fresh);
               } else {
                 clearEditDraft(item.id);
@@ -453,12 +458,11 @@ export function AppScreenRouter({
           onNotice={showNotice}
           onReloadLibrary={library.loadLibrary}
           assetUrl={assetUrl}
-          items={library.items.filter((i: any) => i.kind === "photo" && !i.hidden)}
-          onOpenEdit={async (item: any) => {
+          items={library.items.filter((i) => i.kind === "photo" && !i.hidden)}
+          onOpenEdit={async (item: MediaItem) => {
             await edit.saveDraft();
             // Prefer freshest library metadata (size/modifiedAt) after file ops.
-            const fresh =
-              useLibraryStore.getState().items.find((i: any) => i.id === item.id) ?? item;
+            const fresh = useLibraryStore.getState().items.find((i) => i.id === item.id) ?? item;
             await edit.open(fresh);
           }}
         />
@@ -466,7 +470,7 @@ export function AppScreenRouter({
 
       {screen === "Batch" && (
         <BatchScreen
-          items={library.items.filter((i: any) => library.selectedIds.includes(i.id))}
+          items={library.items.filter((i) => library.selectedIds.includes(i.id))}
           selectedIds={library.selectedIds}
           state={batch}
           onSetPattern={batch.setPattern}
@@ -515,7 +519,7 @@ export function AppScreenRouter({
             setItemPendingDeleteCount(ids.length);
             setItemPendingDeleteSummary(null);
           }}
-          onOpenEdit={async (item: any) => {
+          onOpenEdit={async (item: MediaItem) => {
             if (item?.kind === "video") {
               openViewer(item.id, "Hidden", "hidden");
               return;

@@ -1,0 +1,384 @@
+/* ===== Slideshow overlay =====
+   A context-scoped mode launched from Library, an album or the Viewer — not a
+   navigation destination. The stage stays dark in both themes so photos read
+   the same way, and the HUD fades out while the show plays.
+   Top offset clears the 56px app topbar (which hosts macOS traffic lights). */
+.slideshow-overlay {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-slideshow);
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  background: #08090b;
+  color: #fff;
+  user-select: none;
+}
+
+.slideshow-media {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  cursor: none;
+}
+
+.slideshow-overlay.hud-visible .slideshow-media {
+  cursor: default;
+}
+
+.slideshow-media img,
+.slideshow-media video {
+  max-width: 94vw;
+  max-height: 88vh;
+  object-fit: contain;
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.5);
+  animation: slideshow-fade 0.35s ease;
+}
+
+/* Containers WebKit can't decode (MKV/AVI/…) show their poster frame and a
+   short explanation instead of a black, frozen <video>. */
+.slideshow-video-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 94vw;
+  color: #fff;
+  text-align: center;
+}
+
+.slideshow-video-fallback img,
+.slideshow-video-fallback > span {
+  max-width: min(80vw, 960px);
+  max-height: 70vh;
+  border-radius: 10px;
+  object-fit: contain;
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.5);
+}
+
+.slideshow-video-fallback p {
+  margin: 0;
+  max-width: 420px;
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.75;
+}
+
+.slideshow-overlay[data-transition="slide"] .slideshow-media img,
+.slideshow-overlay[data-transition="slide"] .slideshow-media video {
+  animation-name: slideshow-slide;
+}
+
+.slideshow-overlay[data-transition="none"] .slideshow-media img,
+.slideshow-overlay[data-transition="none"] .slideshow-media video {
+  animation: none;
+}
+
+@keyframes slideshow-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideshow-slide {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Slideshow bottom controls - matches viewer video controls style */
+.slideshow-controls {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(720px, 90vw);
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(20, 24, 30, 0.92);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+  transform: translateX(-50%) translateY(8px);
+}
+
+.slideshow-overlay.hud-visible .slideshow-controls {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.slideshow-controls button {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 6px;
+  border: 0 !important;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.slideshow-controls button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.slideshow-controls button:focus {
+  outline: none;
+  background: transparent;
+}
+
+.slideshow-controls button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.slideshow-controls button:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.slideshow-controls input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--blue);
+}
+
+.slideshow-controls .slideshow-time {
+  flex: 0 0 auto;
+  min-width: 0;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.slideshow-volume {
+  flex: 0 0 80px;
+  width: 80px;
+  min-width: 60px;
+}
+
+.slideshow-controls input:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* Caption in the controls bar */
+.slideshow-caption {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 400px;
+  text-align: center;
+}
+
+.slideshow-caption > div:first-child {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.slideshow-caption > div:last-child {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.slideshow-zoom-value {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  text-align: center;
+}
+
+.slideshow-stop {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Transform active state */
+.slideshow-controls button.active {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.slideshow-position {
+  position: absolute;
+  top: 16px;
+  left: 24px;
+  z-index: 10;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  padding: 4px 12px;
+  border-radius: 100px;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  min-width: 100px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Settings popover - anchored to the gear button */
+.slideshow-settings-pop {
+  position: absolute;
+  right: 0;
+  bottom: 68px;
+  z-index: 1;
+  display: grid;
+  width: 258px;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(24, 26, 31, 0.94);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 12px;
+  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(18px);
+}
+
+.slideshow-settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.slideshow-settings-head b {
+  color: #fff;
+  font-size: 12px;
+}
+
+.slideshow-settings-head button {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 16px;
+}
+
+.slideshow-settings-head button:hover {
+  background: transparent;
+  color: #fff;
+}
+
+.slideshow-setting {
+  display: grid;
+  gap: 7px;
+}
+
+.slideshow-setting.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slideshow-setting > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.slideshow-setting > span i {
+  color: rgba(255, 255, 255, 0.9);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.slideshow-setting input[type="range"] {
+  width: 100%;
+  height: 3px;
+  accent-color: #fff;
+}
+
+.slideshow-setting input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  accent-color: #fff;
+}
+
+.slideshow-setting select {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font: inherit;
+}
+
+.slideshow-setting select option {
+  color: #15181c;
+}
+
+.slideshow-hints {
+  position: absolute;
+  top: 16px;
+  right: 24px;
+  z-index: 10;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  padding: 8px 14px;
+  border-radius: 100px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.slideshow-zoom-value {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  text-align: center;
+}
+
+.slideshow-stop {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+

@@ -1,0 +1,213 @@
+/* Narrow library header (inspector open, or a small window): every control
+   must stay reachable. Earlier rules sized the actions row to max-content
+   inside an overflow-hidden toolbar and scrolled the type chips with a hidden
+   scrollbar, so Sort, its direction toggle, Favorites and Filters were cut
+   off with no way to reach them. These rules come last on purpose: the rows
+   wrap instead of clipping. */
+@media (max-width: 1299px) {
+  .library-layout.with-inspector .library-header .toolbar-right,
+  .library-layout .library-header .toolbar-right {
+    overflow: visible;
+  }
+
+  .library-layout.with-inspector .library-header .toolbar-actions,
+  .library-layout .library-header .toolbar-actions {
+    width: auto;
+    max-width: 100%;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    row-gap: 6px;
+    overflow: visible;
+  }
+
+  /* The row wraps now, so Slideshow and Album keep their text labels
+     instead of being squeezed into 26px icon buttons that clipped it. */
+  .library-layout.with-inspector .library-header .toolbar-actions .slideshow-action,
+  .library-layout.with-inspector
+    .library-header
+    .toolbar-actions
+    > .toolbar-button[aria-label="Create album"] {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 0;
+    gap: 5px;
+    padding: 0 9px;
+    font-size: 12px;
+  }
+
+  /* With its own row, the sort menu can show its whole label. */
+  .library-layout.with-inspector .library-header .toolbar-actions > .sort-control {
+    min-width: 0;
+  }
+
+  .library-layout.with-inspector .library-header .toolbar-actions > .sort-control select {
+    flex: 0 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .library-layout.with-inspector .library-header .filter-cluster,
+  .library-layout .library-header .filter-cluster {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    overflow: visible;
+  }
+}
+
+/* Cached-thumbnail placeholders inside the inspector frame and album covers
+   fill their frame. Without this the inspector's badge rule (any direct span
+   child) shrank the placeholder into a small bottom-right label. */
+.inspector-image > span.cached-thumb-placeholder,
+.photo-inspector .inspector-image > span.cached-thumb-placeholder,
+.album-stack-photo > span.cached-thumb-placeholder {
+  position: static;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background-color: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* Inspector action buttons (View, Favorite, Hide, Select) must never spill
+   their label: four equal columns, labels that ellipsize as a last resort,
+   and a 2x2 grid once the panel is dragged narrow (it can go down to 180px). */
+.photo-inspector {
+  container-type: inline-size;
+}
+
+.photo-inspector .inspector-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.photo-inspector .inspector-actions button {
+  min-width: 0;
+  padding-inline: 1px;
+  overflow: hidden;
+}
+
+.photo-inspector .inspector-actions button span {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@container (max-width: 195px) {
+  .photo-inspector .inspector-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ==========================================================================
+   #16 — Library header controls: distinct groups instead of one long row of
+   pills, and one split button for the import actions.
+   ========================================================================== */
+
+.segmented-control {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.segmented-control .quick-filter {
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 11px;
+  box-shadow: none;
+}
+
+.segmented-control .quick-filter:hover {
+  background: color-mix(in srgb, var(--surface-2) 65%, transparent);
+}
+
+.segmented-control .quick-filter.active {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: none;
+}
+
+.segmented-control .quick-filter .filter-count {
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+}
+
+.segmented-control .quick-filter.active .filter-count {
+  background: color-mix(in srgb, var(--accent-contrast) 18%, transparent);
+  border-color: transparent;
+  color: var(--accent-contrast);
+}
+
+.filter-cluster-separator {
+  flex: 0 0 1px;
+  width: 1px;
+  height: 22px;
+  margin: 0 var(--space-1);
+  background: var(--line);
+}
+
+/* Split button: one primary action, variants behind a chevron. */
+.split-button {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.split-button .split-button-main {
+  border-radius: 8px 0 0 8px;
+}
+
+.split-button .split-button-toggle {
+  border-radius: 0 8px 8px 0;
+  border-left: 1px solid color-mix(in srgb, #fff 18%, transparent);
+  padding: 0 10px;
+  min-width: 0;
+}
+
+.split-button-panel {
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface-2);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.split-button-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.split-button-item:hover {
+  background: var(--surface-3);
+}
+
+.split-button-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

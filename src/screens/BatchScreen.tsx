@@ -35,7 +35,7 @@ const BATCH_MAX_DIMENSIONS: Array<{ value: number | null; label: string }> = [
   { value: 1080, label: "Longest edge 1080 px" },
 ];
 
-function batchExtension(format: string, item: any) {
+function batchExtension(format: string, item: Pick<MediaItem, "extension">) {
   if (format === "source") {
     const ext = String(item.extension || "jpg").toLowerCase();
     return ext === "jpeg" ? "jpg" : ext;
@@ -60,7 +60,7 @@ function batchDateLabel(ms?: number) {
 }
 
 /** Mirrors `render_batch_filename` in src-tauri so the preview matches reality. */
-function batchPreviewName(item: any, pattern: string, index: number, format: string) {
+function batchPreviewName(item: MediaItem, pattern: string, index: number, format: string) {
   const extension = batchExtension(format, item);
   const stem = String(item.name || "export").replace(/\.[^.]+$/, "");
   const template = pattern.trim() || "{name}_{number}";
@@ -108,7 +108,7 @@ interface BatchScreenProps {
 
 function BatchScreen(props: BatchScreenProps) {
   const [showAllFailures, setShowAllFailures] = React.useState(false);
-  const items: any[] = props.items || [];
+  const items: MediaItem[] = props.items || [];
   const total = items.length;
   const busy = Boolean(props.state.busy);
   const result = props.state.result;
@@ -350,14 +350,12 @@ function BatchScreen(props: BatchScreenProps) {
                 </small>
               </div>
               <div className="batch-failure-list">
-                {(showAllFailures ? failed : failed.slice(0, 5)).map(
-                  (failure: any, index: number) => (
-                    <div key={`${failure.itemId}-${index}`} className="batch-failure">
-                      <b>{failure.itemId ? failedName(failure.itemId) : "Export"}</b>
-                      <small>{failure.error}</small>
-                    </div>
-                  ),
-                )}
+                {(showAllFailures ? failed : failed.slice(0, 5)).map((failure, index) => (
+                  <div key={`${failure.itemId}-${index}`} className="batch-failure">
+                    <b>{failure.itemId ? failedName(failure.itemId) : "Export"}</b>
+                    <small>{failure.error}</small>
+                  </div>
+                ))}
                 {failed.length > 5 && (
                   <button
                     className="batch-link-button"

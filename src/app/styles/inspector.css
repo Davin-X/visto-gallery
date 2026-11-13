@@ -1,0 +1,617 @@
+/* Photo Inspector - polished native macOS style */
+.photo-inspector {
+  position: relative;
+  /* Width comes from the persisted setting; PanelResizer updates this custom
+     property live while dragging. */
+  flex: 0 0 var(--inspector-width, 300px);
+  width: var(--inspector-width, 300px);
+  max-width: var(--inspector-width, 300px);
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--surface-2);
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px 24px;
+  box-sizing: border-box;
+  z-index: 2;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+.inspector-close-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.inspector-close-btn:hover {
+  background: var(--surface-3);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.inspector-empty-state {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.inspector-empty-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  flex: 1;
+  padding: 40px 16px;
+  color: var(--muted);
+  gap: 12px;
+}
+
+.inspector-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--surface-3);
+  color: var(--faint);
+  margin-bottom: 4px;
+}
+
+.inspector-empty-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.inspector-empty-placeholder p {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 220px;
+  margin: 0;
+}
+
+.inspector-empty-placeholder small {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.photo-inspector::-webkit-scrollbar {
+  width: 6px;
+}
+.photo-inspector::-webkit-scrollbar-track {
+  background: transparent;
+}
+.photo-inspector::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 3px;
+}
+.photo-inspector::-webkit-scrollbar-thumb:hover {
+  background: var(--blue);
+}
+
+.inspector-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.inspector-top small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.inspector-top h2 {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  max-width: 200px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-image {
+  position: relative;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--surface-3);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.inspector-image:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  transform: scale(1.01);
+}
+
+.inspector-image img,
+.inspector-image video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.inspector-image span {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 11px;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+/* Inspector video preview: matches tiles (poster + play affordance); the
+   actual session goes through the same background player as everything
+   else. */
+.inspector-video-preview {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #000;
+}
+
+.inspector-video-preview video,
+.inspector-video-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.inspector-image-wrapper {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.inspector-video-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0 0 0 2px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  backdrop-filter: blur(3px);
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.inspector-video-play:hover {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--accent) 65%, rgba(0, 0, 0, 0.7));
+}
+
+.inspector-video-play:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.inspector-video-play[aria-pressed="true"] {
+  padding: 0;
+  background: color-mix(in srgb, var(--accent) 65%, rgba(0, 0, 0, 0.7));
+}
+
+.inspector-actions {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 16px;
+  flex-wrap: wrap;
+}
+
+.inspector-action {
+  /* Buttons size to their own labels instead of splitting the row evenly, so
+     longer labels ("Open in default app") wrap to their own line rather than
+     truncating inside a too-narrow flex cell. */
+  flex: 1 1 auto;
+  min-width: max-content;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.inspector-action:hover {
+  background: var(--surface-3);
+  border-color: var(--blue);
+}
+
+.inspector-action.primary {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  color: var(--accent);
+}
+
+.inspector-action.primary:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent-text);
+}
+
+.inspector-action.favorite {
+  color: #b64059;
+}
+
+.inspector-action.favorite.active {
+  background: #fff1f3;
+  border-color: #e6a5b1;
+  color: #b64059;
+}
+
+.inspector-action.favorite.active span {
+  color: #b64059;
+}
+
+.app-frame.dark .inspector-action.favorite.active {
+  background: #38252b;
+  border-color: #77424d;
+  color: #ff8ba0;
+}
+
+.app-frame.dark .inspector-action.favorite.active span {
+  color: #ff8ba0;
+}
+
+/* Generic "already applied" state (e.g. the item is in the selection). */
+.inspector-action.active {
+  background: var(--blue-soft);
+  border-color: var(--blue);
+  color: var(--accent-text);
+}
+
+.inspector-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.inspector-action:disabled:hover {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.inspector-selection-note {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.inspector-section {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.inspector-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+
+/* Rating and color label live in the inspector as well as the context menu,
+   so a single inspected item can be rated without opening a menu. */
+.inspector-star-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.inspector-star {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--line-strong);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background 0.15s;
+}
+
+.inspector-star:hover {
+  background: var(--surface-3);
+  color: #b7791f;
+}
+
+.inspector-star.filled {
+  color: #b7791f;
+}
+
+.app-frame.dark .inspector-star.filled,
+.app-frame.dark .inspector-star:hover {
+  color: #f5b544;
+}
+
+.inspector-color-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  margin-bottom: 10px;
+}
+
+.inspector-color {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.inspector-color .ctx-dot {
+  width: 12px;
+  height: 12px;
+  border-width: 0;
+}
+
+.inspector-color:hover {
+  border-color: var(--line-strong);
+}
+
+.inspector-color.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.metadata {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.metadata div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.metadata div:last-child {
+  border-bottom: none;
+}
+
+.metadata dt {
+  color: var(--muted);
+}
+.metadata dd {
+  color: var(--text);
+  text-align: right;
+}
+
+/* Info card */
+.info-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 4px 0;
+}
+
+.inspector-hidden-note {
+  padding: 12px 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  color: var(--muted);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.info-value {
+  color: var(--text);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Kind badges */
+.kind-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+.kind-badge.photo {
+  background: var(--blue-soft);
+  color: var(--accent-text);
+}
+.kind-badge.video {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.kind-badge.raw {
+  background: var(--orange-soft);
+  color: var(--orange);
+}
+
+/* Inspector tags */
+.inspector-tags {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.inspector-tags .inspector-section-head {
+  margin-bottom: 10px;
+}
+.tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.app-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+  transition: background 0.15s ease;
+}
+
+.app-tag:hover {
+  background: var(--line);
+}
+
+.app-tag button {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.app-tag button:hover {
+  background: var(--danger);
+  color: white;
+}
+
+.tag-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.tag-input:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-soft);
+}
+
+.tag-input::placeholder {
+  color: var(--faint);
+}
+
+/* Kind badge dot in details view */
+.kind-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.kind-dot.photo {
+  background: var(--blue);
+}
+.kind-dot.video {
+  background: var(--green);
+}
+.kind-dot.raw {
+  background: var(--orange);
+}
+

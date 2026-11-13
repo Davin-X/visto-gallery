@@ -92,7 +92,7 @@ function loadThumbnail(itemId: string, size: CachedThumbnailSize): Promise<strin
           quality: currentQuality(),
           maxCacheBytes: maxCacheBytes(),
         })
-        .then((response: any) => {
+        .then((response) => {
           const url = thumbnailToDataUrl(response);
           // Real UTF-8 bytes, not `url.length`: a data URL is ASCII so the two
           // match for the string itself, and TextEncoder keeps this correct if

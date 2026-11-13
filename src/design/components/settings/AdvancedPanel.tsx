@@ -2,13 +2,14 @@ import type { CSSProperties } from "react";
 import { CpuIcon, TrashIcon } from "../icons";
 import type { ErrorCode } from "../../../engine/types/commands";
 import { RootPathMapping } from "./RootPathMapping";
+import type { SettingsChange } from "./types";
 
 export function AdvancedPanel(props: {
   maxCacheSize: number;
   thumbnailQuality: number;
   debugLogging: boolean;
   showNativeWarnings: boolean;
-  onChange: (key: any, value: any) => void;
+  onChange: SettingsChange;
   setShowResetConfirm: (v: boolean) => void;
   setShowDeleteConfirm: (v: boolean) => void;
   deleting: boolean;

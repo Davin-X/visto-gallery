@@ -4,7 +4,7 @@ import type { MediaItem } from "../types/media";
 import { useLibraryStore } from "./useLibraryStore";
 import { useSettingsStore } from "./useSettingsStore";
 
-interface ViewerState {
+export interface ViewerState {
   // State
   isOpen: boolean;
   zoom: number;

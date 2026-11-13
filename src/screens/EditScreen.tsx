@@ -240,6 +240,15 @@ const ASPECT_RATIO_OPTIONS: Array<{
   { label: "9:16", value: 9 / 16, ratioName: "Vertical Story", fractionText: "9:16" },
 ];
 
+/** An in-progress crop-frame drag: where it started and the crop it started from. */
+interface CropDrag {
+  type: string;
+  startX: number;
+  startY: number;
+  crop: EditScreenProps["crop"];
+  rect: DOMRect;
+}
+
 interface EditScreenProps {
   item: MediaItem | null;
   values: EditValues | null;
@@ -257,7 +266,7 @@ interface EditScreenProps {
   assetUrl: (path: string) => string;
   canUndo: boolean;
   canRedo: boolean;
-  onSetValue: (key: keyof EditValues, value: any) => void;
+  onSetValue: (key: keyof EditValues, value: EditValues[keyof EditValues]) => void;
   onSetValues: (values: EditValues) => void;
   onReset: () => void;
   onAuto: () => void;
@@ -388,7 +397,7 @@ function EditScreen(props: EditScreenProps) {
   const draftTransforms = useDraftTransforms();
   const draftIds = useDraftIds();
   const stageRef = useRef<HTMLDivElement | null>(null);
-  const [drag, setDrag] = useState<any>(null);
+  const [drag, setDrag] = useState<CropDrag | null>(null);
 
   const values = (props.values || {}) as EditValues;
 
@@ -404,10 +413,10 @@ function EditScreen(props: EditScreenProps) {
   // Draft chip and Replace/Discard/Reset stayed disabled.
   const hasAdjustments =
     crop.enabled ||
-    Object.entries(initialEdits).some(([key, value]) => (values as any)[key] !== value);
+    Object.entries(initialEdits).some(([key, value]) => values[key as keyof EditValues] !== value);
 
   const savedDraftItems = useMemo(
-    () => (props.items || []).filter((item: any) => draftIds.has(item.id) && !item.hidden),
+    () => (props.items || []).filter((item) => draftIds.has(item.id) && !item.hidden),
     [props.items, draftIds],
   );
 
@@ -728,7 +737,7 @@ function EditScreen(props: EditScreenProps) {
 
   /* ===== EMPTY STATE ===== */
   if (!props.item) {
-    const draftTiles = savedDraftItems.map((item: any) => (
+    const draftTiles = savedDraftItems.map((item) => (
       <div key={item.id} className="edit-picker-tile">
         <button
           type="button"
@@ -938,7 +947,7 @@ function EditScreen(props: EditScreenProps) {
                         </small>
                       </div>
                       <div className="edit-drafts-list">
-                        {savedDraftItems.map((item: any) => (
+                        {savedDraftItems.map((item) => (
                           <div key={item.id} className="edit-draft-card">
                             <button
                               className="edit-draft-open"

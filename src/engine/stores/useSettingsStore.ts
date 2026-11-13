@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import type { AppSettings } from "../types/settings";
+type AccentColor = AppSettings["accentColor"];
 import { defaultSettings } from "../types/settings";
 import { tauri } from "../commands/tauri";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -62,7 +63,7 @@ export function flushSettingsSaves(): void {
   void tauri.settings.save(toSave);
 }
 
-interface SettingsState extends AppSettings {
+export interface SettingsState extends AppSettings {
   // Hydration state
   _hydrated: boolean;
   _loading: boolean;
@@ -231,7 +232,7 @@ export function applyTheme(settings: Pick<AppSettings, "appearance" | "accentCol
 // them) — otherwise a single hue flips its label and looks broken next to the
 // others, which is what a mid-tone orange (#dd6b16) used to do.
 export const ACCENT_PALETTE: {
-  id: string;
+  id: AccentColor;
   label: string;
   light: string;
   dark: string;
@@ -394,8 +395,8 @@ if (typeof window !== "undefined") {
   // WKWebView exposes for this; `addListener` is the legacy fallback.
   if (typeof osThemeQuery.addEventListener === "function") {
     osThemeQuery.addEventListener("change", osThemeHandler);
-  } else if (typeof (osThemeQuery as any).addListener === "function") {
-    (osThemeQuery as any).addListener(osThemeHandler);
+  } else if (typeof osThemeQuery.addListener === "function") {
+    osThemeQuery.addListener(osThemeHandler);
   }
 }
 
@@ -412,7 +413,7 @@ if (typeof window !== "undefined") {
 
 // Conditional debug logging — only emits when enableDebugLogging is true.
 // Use this instead of console.log for diagnostics that should be opt-in.
-export function debugLog(...args: any[]): void {
+export function debugLog(...args: unknown[]): void {
   if (typeof window === "undefined") return;
   const settings = useSettingsStore.getState();
   if (settings.enableDebugLogging) {

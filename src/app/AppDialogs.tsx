@@ -14,6 +14,8 @@ import { TypedConfirmDialog } from "../design/components/TypedConfirmDialog";
 import { tauri } from "../engine/commands/tauri";
 import type { LibraryFolder, UpdateCheckResult } from "../engine/types/commands";
 import type { DeleteRequest } from "../engine/types/deleteRequest";
+import type { LibraryState } from "../engine/stores/useLibraryStore";
+import type { Screen } from "./screen";
 
 type AlbumDialogMode = "create" | "rename";
 
@@ -78,8 +80,8 @@ interface AppDialogsProps {
   updateInfo: UpdateCheckResult | null;
   updateChecking: boolean;
 
-  library: any;
-  setScreen: (screen: string) => void;
+  library: LibraryState;
+  setScreen: (screen: Screen) => void;
   submitAlbum: (e: React.FormEvent<HTMLFormElement>) => Promise<void>;
   closeAlbumDialog: () => void;
   addPickedItemsToAlbum: (album: AlbumPickerTarget) => Promise<void>;
@@ -322,7 +324,7 @@ function AlbumDialog({
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => Promise<void>;
   dialogRef: RefObject<HTMLFormElement | null>;
   inputRef: RefObject<HTMLInputElement | null>;
-  library: any;
+  library: LibraryState;
   setName: (name: string) => void;
 }) {
   useFocusTrap(open, dialogRef);
@@ -420,7 +422,7 @@ function AlbumPickerDialog({
   onAddToAlbum: (album: AlbumPickerTarget) => Promise<void>;
   onCreateAlbum: () => void;
   searchRef: RefObject<HTMLInputElement | null>;
-  library: any;
+  library: LibraryState;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   useFocusTrap(open, dialogRef);
@@ -434,10 +436,10 @@ function AlbumPickerDialog({
 
   if (!open) return null;
 
-  const selectedItems = library.items.filter((item: any) => itemIds.includes(item.id));
+  const selectedItems = library.items.filter((item) => itemIds.includes(item.id));
   const query = search.trim().toLowerCase();
   const matching = library.albums.filter(
-    (album: any) => !query || album.name.toLowerCase().includes(query),
+    (album) => !query || album.name.toLowerCase().includes(query),
   );
 
   return (
@@ -493,10 +495,10 @@ function AlbumPickerDialog({
               </p>
             </div>
           ) : (
-            matching.map((album: any, index: number) => {
+            matching.map((album, index) => {
               const alreadyAdded =
                 selectedItems.length > 0 &&
-                selectedItems.every((item: any) => item.albumIds?.includes(album.id));
+                selectedItems.every((item) => item.albumIds?.includes(album.id));
               const busy = addingToAlbumId === album.id;
               const count = album.itemCount || 0;
               return (
@@ -742,7 +744,7 @@ function SourcesSheet({
   onRequestRemoveAll: () => void;
   /** When a confirmation is stacked on top, it owns Escape instead. */
   escapeBlocked: boolean;
-  library: any;
+  library: LibraryState;
 }) {
   const sheetRef = useRef<HTMLDivElement | null>(null);
   useFocusTrap(open, sheetRef);

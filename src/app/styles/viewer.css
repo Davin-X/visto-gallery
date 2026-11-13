@@ -1,0 +1,808 @@
+/* Viewer */
+.viewer-screen {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  /* Fill the pane rather than guessing the chrome height: the old
+     100vh - 80px was 26px short of .main-content, which left a dead band under
+     the filmstrip and cost the stage that much picture. */
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  position: relative;
+  gap: 8px;
+}
+
+.viewer-stage {
+  flex: 1 1 auto;
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 200px;
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 14px;
+  background: radial-gradient(ellipse at 50% 35%, rgba(48, 56, 68, 0.42), transparent 62%), #0f1216;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  /* overflow: hidden; */
+}
+
+.viewer-stage img,
+.viewer-stage video {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+/* Video playback gets our own always-visible controls: WebKit's native bar
+   fades out, and on short or letterboxed videos it is clipped by the frame. */
+.viewer-stage > video.viewer-video,
+.viewer-stage > .viewer-video-frame-focused > video.viewer-video {
+  max-width: 100%;
+  max-height: 100%;
+  cursor: pointer;
+}
+
+.viewer-video-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  padding: 32px 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.viewer-video-fallback-art {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 4px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.viewer-video-fallback-title {
+  max-width: 620px;
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.viewer-video-fallback-copy {
+  max-width: 460px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.viewer-video-fallback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.viewer-video-fallback-actions button {
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.viewer-video-fallback-actions button:hover {
+  border-color: var(--muted);
+}
+
+.viewer-video-fallback-actions button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.viewer-video-feedback {
+  max-width: 480px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.viewer-video-feedback.error {
+  color: var(--red, #e5484d);
+}
+
+/* The transport bar. Every box declaration lives here. A second block scoped to
+   .video-player-stage used to override the width, padding, border, radius,
+   background and shadow, so the bar was a different size depending on which
+   screen drew it, and a media query at the top of the file carried a third set.
+   One rule now serves both screens.
+
+   No scroll container: it clipped on both axes, which hid the shortcut list that
+   opens above the bar, and it hid controls behind a scrollbar nobody could see.
+   The seek input shrinks to make room instead. */
+.viewer-video-controls {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  max-width: min(1040px, calc(100% - 32px));
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(15, 18, 23, 0.9);
+  backdrop-filter: blur(12px);
+  color: #fff;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.viewer-video-controls button {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.viewer-video-controls button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* The shortcut button carries a word, unlike the icon-only transport buttons. */
+.viewer-video-controls .media-keys-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.viewer-video-controls input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--blue);
+}
+
+.viewer-video-controls .video-time {
+  flex: 0 0 auto;
+  min-width: 0;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.video-volume {
+  flex: 0 0 80px;
+  width: 80px;
+  min-width: 60px;
+}
+
+.viewer-video-controls button:focus-visible,
+.viewer-video-controls input:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* Keep every source ratio inside the same calm, dark viewing canvas. */
+.viewer-stage {
+  overflow: hidden;
+  isolation: isolate;
+  container-type: size;
+  border-color: color-mix(in srgb, var(--line) 75%, transparent);
+  border-radius: 16px;
+  background: radial-gradient(ellipse at 50% 44%, rgba(52, 60, 72, 0.22), transparent 58%), #101216;
+}
+
+.viewer-stage > img,
+.viewer-stage > video.viewer-video,
+.viewer-stage > .viewer-video-frame-focused > video.viewer-video {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
+  aspect-ratio: auto;
+}
+
+.viewer-stage > video.viewer-video,
+.viewer-stage > .viewer-video-frame-focused > video.viewer-video {
+  width: auto;
+  height: auto;
+}
+
+.viewer-stage > .photo-viewer-image {
+  position: relative;
+  z-index: 1;
+  display: block;
+  align-self: stretch;
+  justify-self: stretch;
+  min-width: 0;
+  min-height: 0;
+  opacity: 0;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.viewer-stage > .photo-viewer-image.is-loaded {
+  opacity: 1;
+}
+
+/* Dragging must track the cursor, so the easing only applies to zoom/rotate. */
+.viewer-stage > .photo-viewer-image.is-panning {
+  transition: opacity 180ms ease;
+}
+
+.photo-preview-state {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: rgba(235, 239, 247, 0.72);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+
+.photo-preview-state.is-failed {
+  color: #ffb8b8;
+}
+
+.photo-preview-indicator {
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: photo-preview-spin 800ms linear infinite;
+}
+
+.photo-preview-state.is-failed .photo-preview-indicator {
+  display: none;
+}
+
+@keyframes photo-preview-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .photo-preview-indicator {
+    animation: none;
+    border-color: var(--accent);
+  }
+}
+
+.video-player-stage .video-player-surface > .viewer-video {
+  aspect-ratio: auto;
+  object-fit: contain;
+  object-position: center;
+}
+
+.filmstrip-spacer {
+  display: block;
+  flex: 0 0 auto;
+  height: 1px;
+  pointer-events: none;
+}
+
+.filmstrip {
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.filmstrip img {
+  content-visibility: auto;
+}
+
+.filmstrip button.active {
+  outline: 2px solid var(--accent, #7c9cff);
+  outline-offset: 1px;
+}
+
+.slideshow-media {
+  inset: 0;
+  container-type: size;
+  padding: 24px clamp(16px, 4vw, 56px);
+  box-sizing: border-box;
+}
+
+.slideshow-media img,
+.slideshow-media video {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slideshow-media img,
+  .slideshow-media video {
+    animation: none !important;
+  }
+}
+
+/* The viewer bar. All of its declarations live here and nowhere else: global.css
+   and the responsive section each carried their own copy, so load order decided
+   the layout and this rule had to be scoped to .viewer-screen to win. It is a
+   docked pill sized by its controls, the player transport treatment without the
+   timeline, and it never scrolls or wraps - a scroll container clips on both
+   axes and hid the more menu that opens above it. */
+.viewer-overlay-bottom {
+  position: absolute;
+  z-index: 3;
+  bottom: 12px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 4px;
+  /* max-content, not fit-content: an absolutely positioned box anchored at 50%
+     only gets to shrink-to-fit against the half of the stage left of that point
+     (614px here), so the row wrapped onto a second line. max-content asks for
+     the row it actually needs, and the transform keeps it centred. */
+  width: max-content;
+  max-width: calc(100% - 32px);
+  /* Height comes from min-height plus the 34px controls centred in it, so the
+     vertical padding stays 0 and the bar is exactly as tall as intended. */
+  min-height: 46px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  /* Full pill, matching the now-playing strip that sits in the top bar. */
+  border-radius: 999px;
+  background: rgba(16, 20, 26, 0.9);
+  color: white;
+  white-space: nowrap;
+  backdrop-filter: blur(18px);
+  box-shadow:
+    0 16px 38px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.viewer-overlay-bottom button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.viewer-overlay-bottom button svg {
+  flex: 0 0 auto;
+  opacity: 0.9;
+}
+
+/* The zoom value is a readout first and a control second, so it keeps its text
+   weight and takes no hover fill between the two buttons that change it. */
+.viewer-overlay-bottom .viewer-zoom-value {
+  min-width: 52px;
+  padding: 0 4px;
+  color: rgba(255, 255, 255, 0.95);
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer-overlay-bottom .viewer-zoom-value:hover {
+  background: transparent;
+  color: #fff;
+}
+
+.viewer-overlay-bottom button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.viewer-overlay-bottom button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* Rotate/Flip stay pressed while the transform is applied. */
+.viewer-overlay-bottom button.active {
+  background: rgba(255, 255, 255, 0.18);
+  color: #8fd3ff;
+}
+
+/* The step arrows are bar buttons now: no floating disc, no shadow, and they
+   do not shift on hover because the bar they sit in must not jump. */
+.viewer-overlay-bottom .viewer-arrow.is-docked {
+  position: static;
+  transform: none;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.viewer-overlay-bottom .viewer-arrow.is-docked:hover {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.12);
+  transform: none;
+}
+
+.viewer-bar-label {
+  white-space: nowrap;
+}
+
+/* Narrow windows. The bar must not scroll (a scroll container clips on both
+   axes, which hid the more menu opening out of it) and must not wrap (it became
+   two rows), so it drops its labels instead. The stage is roughly the window
+   minus the sidebar, and the labelled row needs about 730px of it, which fails
+   at the 960px window floor. Icons keep every control; title and aria-label
+   still name them. */
+@media (max-width: 1000px) {
+  .viewer-screen .viewer-overlay-bottom {
+    gap: 2px;
+    padding: 0 6px;
+  }
+  .viewer-screen .viewer-overlay-bottom button {
+    min-width: 34px;
+    padding: 0 9px;
+  }
+  .viewer-bar-label {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .viewer-screen .viewer-overlay-bottom {
+    gap: 0;
+    padding: 0 4px;
+  }
+  .viewer-screen .viewer-overlay-bottom button {
+    min-width: 30px;
+    padding: 0 6px;
+  }
+  .viewer-screen .viewer-overlay-bottom .viewer-zoom-value {
+    min-width: 46px;
+  }
+  .viewer-screen .viewer-overlay-bottom .viewer-divider {
+    margin: 0 2px;
+  }
+}
+
+.media-anchor {
+  position: relative;
+  display: flex;
+}
+
+.media-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 11px;
+  background: rgba(18, 22, 28, 0.97);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.42);
+}
+
+.viewer-overlay-bottom .media-popover button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  text-align: left;
+}
+
+.viewer-transform-state {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer-overlay-bottom > span {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+}
+
+.viewer-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* File details as clean chips - compact and secondary to the image */
+.viewer-meta {
+  margin-top: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  align-items: center;
+}
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  color: var(--text);
+  font-size: 10.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.meta-chip svg {
+  flex-shrink: 0;
+  opacity: 0.55;
+}
+
+/* Path chip matches meta-chip style but stays subtle */
+.path-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: min(100%, 560px);
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.path-chip svg {
+  flex-shrink: 0;
+  opacity: 0.55;
+}
+
+/* Shortcut list, opened from the help button in the bar. It used to be a strip
+   pinned to the top-right corner of the stage, which was the last thing still
+   overlaying the picture. */
+.media-shortcuts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 7px 14px;
+  min-width: 208px;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+.viewer-arrow.hidden,
+.viewer-overlay-top.hidden,
+.viewer-overlay-bottom.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.35s ease,
+    visibility 0.35s ease;
+}
+
+/* A pointer resting on the bar outranks the idle fade. The timer already
+   refuses to hide a hovered bar; this covers a fade that is already in flight
+   when the pointer arrives. */
+.viewer-overlay-bottom:hover,
+.viewer-overlay-bottom:focus-within {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.viewer-arrow,
+.viewer-overlay-top,
+.viewer-overlay-bottom {
+  transition:
+    opacity 0.35s ease,
+    visibility 0.35s ease;
+}
+.media-shortcut-keys {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.media-shortcuts kbd {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 5px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 600;
+}
+.media-shortcut-label {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+}
+
+/* Arrow buttons on sides of viewer */
+.viewer-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(18, 22, 28, 0.72);
+  backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    transform 0.15s;
+  z-index: 1;
+}
+.viewer-arrow:hover {
+  background: rgba(34, 40, 50, 0.88);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-50%) scale(1.03);
+}
+.viewer-arrow:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.viewer-arrow.left {
+  left: 12px;
+}
+.viewer-arrow.right {
+  right: 12px;
+}
+
+/* Viewer filmstrip: with a real library (40+ videos) the row used to squeeze
+   every thumbnail down to ~6px instead of scrolling. */
+.filmstrip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 7px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scroll-behavior: auto;
+  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.filmstrip button {
+  flex: 0 0 64px;
+  width: 64px;
+  height: 44px;
+  scroll-margin: 0 10px;
+  border-radius: 7px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  background: var(--surface-3);
+  cursor: pointer;
+  /* The current photo is the only fully lit thumbnail: a 2px border alone is
+     too quiet in a row of forty similar images. */
+  opacity: 0.66;
+  transition:
+    border-color 0.15s ease,
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.filmstrip button:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+.filmstrip button.active {
+  opacity: 1;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.filmstrip button:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.filmstrip button img,
+.filmstrip button video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Video thumbnails get a subtle play indicator border */
+.filmstrip button:has(video) {
+  border-color: color-mix(in srgb, var(--blue) 30%, var(--line));
+}
+.filmstrip button:has(video):hover {
+  border-color: var(--blue);
+}
+.filmstrip button:has(video).active {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px var(--blue-soft);
+}
+

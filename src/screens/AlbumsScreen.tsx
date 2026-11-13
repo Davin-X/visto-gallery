@@ -21,6 +21,7 @@ import { formatFileDate } from "../engine/utils/mediaDate";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { Album, MediaItem } from "../engine/types/media";
 import type { SmartAlbum } from "../engine/types/commands";
+import type { AlbumTarget } from "../app/types";
 
 interface AlbumsScreenProps {
   albums: Album[];
@@ -28,7 +29,7 @@ interface AlbumsScreenProps {
   smartAlbums?: SmartAlbum[];
   assetUrl: (path: string) => string;
   onCreateAlbum: () => void;
-  onAlbumContextMenu: (album: any, e: React.MouseEvent) => void;
+  onAlbumContextMenu: (album: AlbumTarget, e: React.MouseEvent) => void;
   onOpenAlbum: (albumId: string) => void;
   onOpenSmartAlbum?: (albumId: string) => void;
   onSmartAlbumContextMenu?: (album: SmartAlbum, e: React.MouseEvent) => void;
@@ -37,9 +38,9 @@ interface AlbumsScreenProps {
   onDeleteSmartAlbum?: (album: SmartAlbum) => void;
   /** Same actions as the card's right-click menu, reachable without one. */
   onPlayAlbum?: (albumId: string) => void;
-  onRenameAlbum?: (album: any) => void;
+  onRenameAlbum?: (album: AlbumTarget) => void;
   onAddItemsToAlbum?: (albumId: string) => void;
-  onDeleteAlbum?: (album: any) => void;
+  onDeleteAlbum?: (album: AlbumTarget) => void;
 }
 
 /** Counts in smart-album overviews can arrive undefined; treat anything
@@ -85,11 +86,11 @@ function AlbumsScreen(props: AlbumsScreenProps) {
   // complete membership is loaded only when a card is opened.
   const albums = React.useMemo(() => {
     const byId = new Map(overviews.map((overview) => [overview.id, overview]));
-    return (props.albums || []).map((album: any) => {
+    return (props.albums || []).map((album) => {
       const overview = byId.get(album.id);
       const coverItems: MediaItem[] = overview?.coverItems ?? [];
       const photos = coverItems
-        .filter((item: any) => item.kind === "photo" || item.kind === "video")
+        .filter((item) => item.kind === "photo" || item.kind === "video")
         .slice(0, 3);
       // The backend persists a per-album color_index (0-3); the render index used to win instead,
       // so cards swapped colours on every sort or overview refresh.
@@ -125,13 +126,13 @@ function AlbumsScreen(props: AlbumsScreenProps) {
     if (!albumsSort) return albums;
     const { key, dir } = albumsSort;
     const mult = dir === "asc" ? 1 : -1;
-    const read = (album: any): string | number => {
+    const read = (album: (typeof albums)[number]): string | number => {
       if (key === "name") return String(album.name ?? "").toLowerCase();
       if (key === "itemSize") return Number(album.itemSize ?? 0) || 0;
       if (key === "itemCount") return Number(album.count ?? album.itemCount ?? 0) || 0;
       return Number(album.updatedAt) || 0;
     };
-    return [...albums].sort((a: any, b: any) => {
+    return [...albums].sort((a, b) => {
       const av = read(a);
       const bv = read(b);
       if (typeof av === "string") return mult * av.localeCompare(bv as string);
@@ -156,10 +157,10 @@ function AlbumsScreen(props: AlbumsScreenProps) {
   const [dropTarget, setDropTarget] = React.useState<{ id: string; before: boolean } | null>(null);
   // Cards render from a memo that preserves props order, so this is just the
   // current on-screen order.
-  const albumOrderIds = albums.map((album: any) => album.id as string);
+  const albumOrderIds = albums.map((album) => album.id);
 
   const moveAlbum = (albumId: string, delta: number) => {
-    const current = (props.albums || []).map((album: any) => album.id as string);
+    const current = (props.albums || []).map((album) => album.id);
     const from = current.indexOf(albumId);
     const to = from + delta;
     if (from < 0 || to < 0 || to >= current.length) return;
@@ -374,7 +375,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 else if (filter.query) badge = "🔍";
                 else if (filter.tags?.length) badge = "🏷️";
                 const coverPhotos = (album.coverItems ?? [])
-                  .filter((item: any) => item.kind === "photo" || item.kind === "video")
+                  .filter((item) => item.kind === "photo" || item.kind === "video")
                   .slice(0, 3);
                 return (
                   <div className="smart-album-item" role="listitem" key={album.id}>
@@ -531,7 +532,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
               .list-view grid: a sticky grid item is clipped to its own track,
               which left the Albums header unable to stick like the Library's. */}
           <div className="list-view" role="rowgroup">
-            {sortedAlbums.map((album: any, index: number) => (
+            {sortedAlbums.map((album, index) => (
               <div
                 className={`list-view-row album-list-row album-card-wrap${dragId === album.id ? " is-dragging" : ""}${
                   dropTarget && dropTarget.id === album.id
@@ -578,7 +579,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                     // A fanned stack instead of one print: the album rows should
                     // not read as a slimmer copy of the Library's item table.
                     <span className="album-list-cover-fan" aria-hidden="true">
-                      {album.photos.map((photo: any) => (
+                      {album.photos.map((photo) => (
                         <span key={photo.id} className="album-list-cover-fan-item">
                           <CachedThumbnail itemId={photo.id} name={album.name} size={64} />
                         </span>
@@ -605,7 +606,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   className="list-view-cell list-view-cell--numeric albums-cell-size"
                   role="gridcell"
                 >
-                  {formatBytesSimple(Number((album as any).itemSize ?? 0))}
+                  {formatBytesSimple(Number(album.itemSize ?? 0))}
                 </span>
                 <span
                   className="list-view-cell list-view-cell--muted albums-cell-updated"
@@ -681,7 +682,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
         </div>
       ) : (
         <div className="albums-grid">
-          {albums.map((album: any, index: number) => (
+          {albums.map((album, index) => (
             <div
               className={`album-card-wrap${dragId === album.id ? " is-dragging" : ""}${
                 dropTarget && dropTarget.id === album.id

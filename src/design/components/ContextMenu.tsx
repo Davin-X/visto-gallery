@@ -106,22 +106,24 @@ function ContextMenuContent({
       role="menu"
       tabIndex={-1}
       onKeyDown={(e) => {
-        const items = menuRef.current?.querySelectorAll('[role="menuitem"]:not([disabled])');
+        const items = menuRef.current?.querySelectorAll<HTMLElement>(
+          '[role="menuitem"]:not([disabled])',
+        );
         const current = Array.from(items || []).findIndex((el) => el === document.activeElement);
         const last = (items?.length || 0) - 1;
 
         if (current === -1) {
           if (e.key === "ArrowDown" && last >= 0) {
-            (items as any)?.[0]?.focus();
+            items?.[0]?.focus();
             e.preventDefault();
           } else if (e.key === "ArrowUp" && last >= 0) {
-            (items as any)?.[last]?.focus();
+            items?.[last]?.focus();
             e.preventDefault();
           } else if (e.key === "Home" && last >= 0) {
-            (items as any)?.[0]?.focus();
+            items?.[0]?.focus();
             e.preventDefault();
           } else if (e.key === "End" && last >= 0) {
-            (items as any)?.[last]?.focus();
+            items?.[last]?.focus();
             e.preventDefault();
           }
           return;
@@ -135,7 +137,7 @@ function ContextMenuContent({
         if (e.key === "End") next = last;
 
         if (next !== current) {
-          (items as any)?.[next]?.focus();
+          items?.[next]?.focus();
           e.preventDefault();
         }
       }}

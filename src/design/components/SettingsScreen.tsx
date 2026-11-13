@@ -259,7 +259,7 @@ export function SettingsScreen(props: {
   const renderRadioGroup = (
     name: string,
     value: string,
-    options: { id: string; label: string }[],
+    options: readonly { id: string; label: string }[],
     onChange: (v: string) => void,
   ) => (
     <div className="radio-group" role="radiogroup" aria-label={name}>

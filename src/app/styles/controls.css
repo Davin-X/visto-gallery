@@ -1,0 +1,501 @@
+/* Page Heading — one shape for every screen: eyebrow, title, optional
+   subtitle on the left; actions on the right. */
+.page-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.page-heading .eyebrow {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+
+.page-heading h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--heading-1-size);
+  font-weight: var(--heading-1-weight);
+  letter-spacing: var(--heading-1-letter-spacing);
+  line-height: var(--heading-1-line-height);
+}
+
+.page-subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Toolbar */
+.collection-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* Search field. One clean box: a single border, a soft fill, and a focus
+   glow outside the border. No inner hairline, so focus never draws a second
+   rectangle inside the control. */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 200px;
+  min-width: 0;
+  max-width: 420px;
+  height: 36px;
+  padding: 0 8px 0 12px;
+  border: 1px solid var(--field-line);
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--muted);
+  box-shadow: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background 0.15s;
+}
+
+.search-field:hover {
+  border-color: var(--field-line-hover);
+  background: var(--surface-3);
+}
+
+.search-field:focus-within {
+  border-color: var(--blue);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 16%, transparent);
+}
+
+/* interactive.css adds two inset rings on focus; drop them so the field
+   shows one border plus a soft outer glow instead of nested rectangles. */
+.app-frame .library-header .search-field:focus-within {
+  box-shadow: 0 0 0 3px var(--i-ring);
+}
+
+/* The global design-system focus ring targets inputs directly. Inside the
+   search field that draws a second rectangle around the text area, so the
+   field's own border + glow is the focus indicator instead. */
+.app-frame .search-field input:focus,
+.app-frame .search-field input:focus-visible {
+  outline: none;
+}
+
+.search-field .search-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--faint);
+}
+
+.search-field:focus-within .search-icon {
+  color: var(--accent-text);
+}
+
+.search-field .clear-btn {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.search-field .clear-btn.visible {
+  display: grid;
+  place-items: center;
+}
+
+.search-field .clear-btn:hover {
+  background: var(--line-strong);
+  color: var(--text);
+  border-color: transparent;
+}
+
+.search-field input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  /* WKWebView still paints a native focus rectangle inside a text field
+     even with border/outline removed. appearance:none drops that second
+     box so the field shows only its own border and glow. */
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 0;
+}
+
+.search-field input::placeholder {
+  color: var(--faint);
+}
+
+/* Shortcut hint inside the search field. It sits on the recessed well, so it
+   uses its own surface tone rather than the app-wide kbd treatment. */
+.search-field kbd {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid var(--field-line);
+  border-radius: 5px;
+  /* A tinted chip, not a white one: the field turns white on focus in the
+     light theme, and a white keycap would disappear into it. */
+  background: var(--surface-3);
+  color: var(--muted);
+  box-shadow: 0 1px 1px var(--field-inner);
+  font-size: 11px;
+  font-family: inherit;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+/* The shortcut hint stays visible while the field is focused: hiding it
+   made the field look like it had lost a control, especially in light mode. */
+.search-field:focus-within kbd {
+  border-color: var(--field-line);
+  color: var(--muted);
+}
+
+.toolbar-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.layout-switcher {
+  display: flex;
+  height: 40px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.layout-switcher button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+/* One selected treatment for every segmented control in the app: the chosen
+   segment is the accent fill with contrast text. */
+.layout-switcher button.selected {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.zoom-control {
+  display: flex;
+  height: 40px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  margin-left: 8px;
+}
+
+.zoom-control button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.zoom-control button:hover {
+  color: var(--text);
+}
+
+.zoom-control button.selected {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.zoom-glyph {
+  display: grid;
+  box-sizing: border-box;
+  width: 15px;
+  height: 13px;
+  gap: 1.5px;
+}
+
+.zoom-glyph i {
+  display: block;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid currentColor;
+  border-radius: 1.5px;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  opacity: 0.86;
+}
+
+.zoom-glyph-small {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.zoom-glyph-medium {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.zoom-glyph-large {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  padding: 1px;
+}
+
+.zoom-glyph-large i {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+}
+
+.zoom-control button.selected .zoom-glyph {
+  opacity: 1;
+}
+
+.zoom-control button.selected .zoom-glyph i {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.sort-control {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 4px;
+  margin-left: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.sort-control select,
+.sort-control button {
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+}
+
+.sort-control select {
+  max-width: 130px;
+  padding: 0 5px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.sort-control button {
+  width: 30px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.sort-control button:hover {
+  background: var(--surface-3);
+}
+
+.app-frame .library-header .toolbar-actions > .sort-control {
+  box-sizing: border-box;
+  min-height: 32px;
+  height: 32px;
+  gap: 4px;
+  padding: 3px;
+  margin-left: 0;
+  border-color: var(--line-strong);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-2) 84%, transparent);
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.app-frame .library-header .toolbar-actions > .sort-control:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 56%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.app-frame .library-header .toolbar-actions > .sort-control select {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 150px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.app-frame .library-header .toolbar-actions > .sort-control button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: auto;
+  min-width: 34px;
+  height: 26px;
+  min-height: 0;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    transform 100ms ease;
+}
+
+.app-frame .library-header .toolbar-actions > .sort-control button:hover {
+  background: color-mix(in srgb, var(--accent) 17%, var(--surface));
+  color: var(--accent-text);
+}
+
+.app-frame .library-header .toolbar-actions > .sort-control button:active {
+  transform: scale(0.96);
+}
+
+.sort-direction-arrow {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.smart-label {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.quick-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.quick-filter:hover {
+  background: var(--surface-2);
+}
+
+.quick-filter.active {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  color: var(--accent-text);
+}
+
+.quick-filter span {
+  color: inherit;
+  font-size: 12px;
+}
+
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--blue);
+  border-radius: 8px;
+  background: var(--blue);
+  color: var(--accent-contrast);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.primary-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.quiet-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.quiet-button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.quiet-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
