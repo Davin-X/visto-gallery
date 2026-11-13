@@ -59,3 +59,46 @@ test("list rows offer the same actions as the cards and reorder in place", async
   await expect(cards.nth(0)).toContainText("Benchmark Album 1");
   await expect(cards.nth(1)).toContainText("Benchmark Album 0");
 });
+
+test("the list keeps its name column legible when the page is narrow", async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await page.goto("/harness.html?benchmark=40&albums=4&longNames=1", {
+    waitUntil: "domcontentloaded",
+  });
+  await page.waitForSelector(".gallery-tile");
+  await page.getByRole("button", { name: "Albums", exact: true }).click();
+  await page.getByRole("button", { name: "List view" }).click();
+
+  const metrics = await page.evaluate(() => {
+    const list = document.querySelector<HTMLElement>(".albums-list-view > .list-view")!;
+    const header = document.querySelector<HTMLElement>(".albums-list-view > .list-view-header")!;
+    const row = list.querySelector<HTMLElement>(".list-view-row")!;
+    const name = row.querySelector<HTMLElement>(".album-list-name")!;
+    const truncate = name.querySelector<HTMLElement>(".middle-truncate")!;
+    const actions = row.querySelector<HTMLElement>(".album-list-actions")!;
+    return {
+      listWidth: list.getBoundingClientRect().width,
+      headerWidth: header.getBoundingClientRect().width,
+      nameWidth: name.getBoundingClientRect().width,
+      truncateOverflows: truncate.scrollWidth > truncate.clientWidth + 0.5,
+      actionsInside:
+        actions.getBoundingClientRect().right <= list.getBoundingClientRect().right + 0.5,
+    };
+  });
+
+  // Assert the intent, not the exact column sum: the name keeps its readable
+  // 110px floor instead of collapsing, and the sticky header stays as wide as
+  // the body it heads.
+  expect(metrics.nameWidth).toBeGreaterThanOrEqual(109.5);
+  expect(metrics.headerWidth).toBeCloseTo(metrics.listWidth, 0);
+  expect(metrics.truncateOverflows).toBe(false);
+  expect(metrics.actionsInside).toBe(true);
+
+  // Sort direction is exposed on the header cell, not only as an arrow glyph.
+  const nameHeader = page.getByRole("columnheader", { name: /^Name/ });
+  await expect(nameHeader).toHaveAttribute("aria-sort", "none");
+  await page.getByRole("button", { name: /^Name/ }).click();
+  await expect(nameHeader).toHaveAttribute("aria-sort", "ascending");
+  await page.getByRole("button", { name: /^Name/ }).click();
+  await expect(nameHeader).toHaveAttribute("aria-sort", "descending");
+});

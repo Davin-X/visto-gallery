@@ -8211,12 +8211,12 @@ body.is-dragging-albums * {
 }
 
 .albums-list-view {
-  --list-columns: 34px 64px minmax(0, 1fr) minmax(0, 92px) minmax(0, 104px) minmax(0, 140px) 168px;
-  /* Fixed columns (602px) + six 12px gaps + 20px row padding + the 2px frame,
+  --list-columns: 34px 72px minmax(0, 1fr) minmax(0, 92px) minmax(0, 104px) minmax(0, 140px) 168px;
+  /* Fixed columns (610px) + six 12px gaps + 20px row padding + the 2px frame,
      which leaves the name track 110px — the same floor the details table
      keeps. Below this the page scrolls sideways instead of squeezing the
      name to a few pixels. Header and body share it so they stay in lockstep. */
-  --albums-list-min-width: 806px;
+  --albums-list-min-width: 814px;
   min-width: 0;
 }
 
@@ -8244,13 +8244,50 @@ body.is-dragging-albums * {
   padding: 0;
 }
 
-.album-list-cover img {
-  width: 36px;
-  height: 36px;
+/* Albums get a taller row and a fanned cover stack so this table is
+   distinguishable at a glance from the Library's item table. */
+.album-list-cover-fan {
+  position: relative;
+  width: 46px;
+  height: 40px;
+}
+
+.album-list-cover-fan-item {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 7px;
-  object-fit: cover;
+  border-radius: 6px;
   background: var(--surface-3);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.16);
+  transform-origin: 50% 100%;
+}
+
+.album-list-cover-fan-item img,
+.album-list-cover-fan-item .cached-thumb-placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.album-list-cover-fan-item:nth-child(1) {
+  z-index: 3;
+  transform: rotate(-2deg) translateX(1px);
+}
+
+.album-list-cover-fan-item:nth-child(2) {
+  z-index: 2;
+  transform: rotate(-9deg) translateX(-5px);
+}
+
+.album-list-cover-fan-item:nth-child(3) {
+  z-index: 1;
+  transform: rotate(8deg) translateX(8px);
 }
 
 .album-list-cover-placeholder {
@@ -8279,8 +8316,11 @@ body.is-dragging-albums * {
   white-space: nowrap;
 }
 
-.album-list-row {
+/* Taller than the Library's 44px rows; the fanned cover needs the room.
+   Two classes so this beats the later .list-view-row min-height. */
+.list-view-row.album-list-row {
   align-items: stretch;
+  min-height: 56px;
 }
 
 /* Reorder grip lives as its own column before the thumbnail (like the

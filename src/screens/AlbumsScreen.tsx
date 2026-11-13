@@ -144,6 +144,14 @@ function AlbumsScreen(props: AlbumsScreenProps) {
       if (current.dir === "asc") return { key, dir: "desc" };
       return null;
     });
+  // The sort state belongs on the header cell (aria-sort), not on its button:
+  // assistive tech reads which column is sorted and in which direction.
+  const sortProps = (key: AlbumsSortKey) =>
+    ({
+      role: "columnheader",
+      "aria-sort":
+        albumsSort?.key !== key ? "none" : albumsSort.dir === "asc" ? "ascending" : "descending",
+    }) as const;
   const [dragId, setDragId] = React.useState<string | null>(null);
   const [dropTarget, setDropTarget] = React.useState<{ id: string; before: boolean } | null>(null);
   // Cards render from a memo that preserves props order, so this is just the
@@ -455,11 +463,10 @@ function AlbumsScreen(props: AlbumsScreenProps) {
           <div className="list-view-header">
             <div className="list-view-head-cell albums-col-grip" aria-hidden="true" />
             <div className="list-view-head-cell albums-col-cover" aria-hidden="true" />
-            <div className="list-view-head-cell">
+            <div className="list-view-head-cell" {...sortProps("name")}>
               <button
                 type="button"
                 className="details-sort-header"
-                aria-pressed={albumsSort?.key === "name"}
                 onClick={() => cycleAlbumsSort("name")}
               >
                 Name
@@ -468,11 +475,13 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 </span>
               </button>
             </div>
-            <div className="list-view-head-cell list-view-head-cell--numeric">
+            <div
+              className="list-view-head-cell list-view-head-cell--numeric"
+              {...sortProps("itemCount")}
+            >
               <button
                 type="button"
                 className="details-sort-header"
-                aria-pressed={albumsSort?.key === "itemCount"}
                 onClick={() => cycleAlbumsSort("itemCount")}
               >
                 Items
@@ -481,11 +490,13 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 </span>
               </button>
             </div>
-            <div className="list-view-head-cell list-view-head-cell--numeric">
+            <div
+              className="list-view-head-cell list-view-head-cell--numeric"
+              {...sortProps("itemSize")}
+            >
               <button
                 type="button"
                 className="details-sort-header"
-                aria-pressed={albumsSort?.key === "itemSize"}
                 onClick={() => cycleAlbumsSort("itemSize")}
               >
                 Size
@@ -494,11 +505,10 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 </span>
               </button>
             </div>
-            <div className="list-view-head-cell">
+            <div className="list-view-head-cell" {...sortProps("updatedAt")}>
               <button
                 type="button"
                 className="details-sort-header"
-                aria-pressed={albumsSort?.key === "updatedAt"}
                 onClick={() => cycleAlbumsSort("updatedAt")}
               >
                 Updated
@@ -555,7 +565,15 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 </button>
                 <span className="list-view-cell album-list-cover">
                   {album.photos.length ? (
-                    <CachedThumbnail itemId={album.photos[0].id} name={album.name} size={64} />
+                    // A fanned stack instead of one print: the album rows should
+                    // not read as a slimmer copy of the Library's item table.
+                    <span className="album-list-cover-fan" aria-hidden="true">
+                      {album.photos.map((photo: any) => (
+                        <span key={photo.id} className="album-list-cover-fan-item">
+                          <CachedThumbnail itemId={photo.id} name={album.name} size={64} />
+                        </span>
+                      ))}
+                    </span>
                   ) : (
                     <span className="album-list-cover-placeholder">
                       <AlbumsIcon size={18} />

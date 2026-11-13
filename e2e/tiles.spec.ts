@@ -183,3 +183,50 @@ test("details header and rows stay aligned with the inspector open at 1280px", a
   const layout = await readAlignment(page);
   expectDetailsAligned(layout);
 });
+
+test("details names truncate before the metadata cluster with the inspector open", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/harness.html?benchmark=40&longNames=1", { waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".gallery-tile");
+  const showInspector = page.getByRole("button", { name: "Show inspector", exact: true });
+  if (await showInspector.count()) {
+    await showInspector.click();
+  }
+  await page.getByRole("button", { name: "Details view", exact: true }).click();
+  await page.waitForSelector(".gallery-grid.layout-details .gallery-tile");
+
+  const collisions = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll(".gallery-grid.layout-details .list-view-row")];
+    return rows.flatMap((row) => {
+      const meta = row.querySelector(".list-row-meta");
+      const truncate = row.querySelector<HTMLElement>(".middle-truncate");
+      const tail = row.querySelector(".middle-truncate-tail");
+      const cell = row.querySelector(".tile-caption b");
+      if (!meta || !truncate || !tail || !cell) return [];
+      const problems: string[] = [];
+      if (tail.getBoundingClientRect().right > meta.getBoundingClientRect().left + 0.5) {
+        problems.push("tail paints under the metadata");
+      }
+      if (tail.getBoundingClientRect().right > cell.getBoundingClientRect().right + 0.5) {
+        problems.push("tail escapes the name cell");
+      }
+      if (truncate.scrollWidth > truncate.clientWidth + 0.5) {
+        problems.push("truncation box overflows");
+      }
+      return problems;
+    });
+  });
+  expect(collisions).toEqual([]);
+
+  // The sorted column reports its direction; unsorted sortable columns say none.
+  await expect(page.getByRole("columnheader", { name: /^Captured/ })).toHaveAttribute(
+    "aria-sort",
+    "descending",
+  );
+  await expect(page.getByRole("columnheader", { name: /^Name/ })).toHaveAttribute(
+    "aria-sort",
+    "none",
+  );
+});

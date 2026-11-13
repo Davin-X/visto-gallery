@@ -943,7 +943,19 @@ function LibraryScreen(props: LibraryScreenProps) {
     );
   };
   const detailsHeader = (label: string, sortBy?: typeof library.sortBy) => (
-    <div className="details-col list-view-head-cell">
+    <div
+      className="details-col list-view-head-cell"
+      role={sortBy ? "columnheader" : undefined}
+      aria-sort={
+        sortBy
+          ? library.sortBy === sortBy
+            ? library.sortOrder === "asc"
+              ? "ascending"
+              : "descending"
+            : "none"
+          : undefined
+      }
+    >
       {sortBy ? (
         <button type="button" className="details-sort-header" onClick={() => sortDetailsBy(sortBy)}>
           {label}
