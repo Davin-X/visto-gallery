@@ -669,7 +669,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   <button
                     type="button"
                     className="album-card-action is-danger"
-                    title="Delete album"
+                    title="Delete Album"
                     aria-label={`Delete ${album.name}`}
                     onClick={() => props.onDeleteAlbum?.(album)}
                   >
@@ -780,7 +780,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                 <button
                   type="button"
                   className="album-card-action is-danger"
-                  title="Delete album"
+                  title="Delete Album"
                   aria-label={`Delete ${album.name}`}
                   onClick={() => props.onDeleteAlbum?.(album)}
                 >
