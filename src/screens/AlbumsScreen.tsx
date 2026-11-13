@@ -6,11 +6,16 @@ import {
   DetailsIcon,
   DragIcon,
   GridIcon,
+  HeartIcon,
   PencilIcon,
+  PlayIcon,
   PlusIcon,
   SlideshowIcon,
+  SearchIcon,
   SparkleIcon,
+  TagIcon,
   TrashIcon,
+  ViewerIcon,
 } from "../design/components/icons";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
@@ -367,13 +372,15 @@ function AlbumsScreen(props: AlbumsScreenProps) {
               onScroll={syncSmartListOverflow}
             >
               {smartAlbums.map((album) => {
+                // An icon from the app's own set hints at what the filter
+                // matches (emoji looked foreign and were read out by VoiceOver).
                 const filter = album.filter;
-                let badge = "📷";
-                if (filter.kind === "video") badge = "▶️";
-                else if (filter.kind === "raw") badge = "📷";
-                else if (filter.favorite) badge = "❤️";
-                else if (filter.query) badge = "🔍";
-                else if (filter.tags?.length) badge = "🏷️";
+                let Badge = SparkleIcon;
+                if (filter.kind === "video") Badge = PlayIcon;
+                else if (filter.kind === "raw") Badge = ViewerIcon;
+                else if (filter.favorite) Badge = HeartIcon;
+                else if (filter.query) Badge = SearchIcon;
+                else if (filter.tags?.length) Badge = TagIcon;
                 const coverPhotos = (album.coverItems ?? [])
                   .filter((item) => item.kind === "photo" || item.kind === "video")
                   .slice(0, 3);
@@ -393,7 +400,9 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                             albumItems={album.coverItems ?? []}
                           />
                         ) : (
-                          <span className="smart-album-tile-cover-empty">{badge}</span>
+                          <span className="smart-album-tile-cover-empty" aria-hidden="true">
+                            <Badge size={22} />
+                          </span>
                         )}
                       </span>
                       <AlbumMeta name={album.name} count={formatAlbumCount(album.itemCount)} />
