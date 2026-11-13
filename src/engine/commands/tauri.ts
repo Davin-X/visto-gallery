@@ -68,6 +68,9 @@ export const tauri = {
     getHiddenItems: (filter?: LibraryFilterDTO): Promise<LibraryItemsPage> =>
       invoke("get_hidden_items", { filter }),
 
+    /** Cataloged items for `ids`, in that order; unknown ids are skipped. */
+    getItemsByIds: (ids: string[]): Promise<MediaItem[]> => invoke("get_items_by_ids", { ids }),
+
     getThumbnail: (request: ThumbnailRequest): Promise<ThumbnailResponse> =>
       invoke("get_item_thumbnail", { request }),
 
