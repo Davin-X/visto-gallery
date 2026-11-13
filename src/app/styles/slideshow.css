@@ -368,56 +368,6 @@
   pointer-events: none;
 }
 
-/* Transform popover (kept for zoom/rotate/flip) */
-.slideshow-transform-group {
-  position: relative;
-}
-
-.slideshow-transform-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  width: auto;
-  padding: 0 10px;
-}
-
-.slideshow-transform-popover {
-  position: absolute;
-  bottom: 100%;
-  right: 0;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 10px;
-  background: rgba(24, 26, 31, 0.96);
-  color: rgba(255, 255, 255, 0.86);
-  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(18px);
-  z-index: 5;
-  white-space: nowrap;
-}
-
-.slideshow-transform-popover button {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  font-size: 14px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #fff;
-  cursor: pointer;
-}
-
-.slideshow-transform-popover button:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
 .slideshow-zoom-value {
   color: rgba(255, 255, 255, 0.7);
   font-size: 12px;
@@ -430,10 +380,5 @@
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 600;
-}
-
-.viewer-slideshow-button {
-  flex: 0 0 auto;
-  gap: 7px;
 }
 

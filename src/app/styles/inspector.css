@@ -427,12 +427,6 @@
   box-shadow: 0 0 0 1px var(--accent);
 }
 
-.capture-time {
-  margin: 8px 0 12px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
 .metadata {
   display: grid;
   gap: 10px;

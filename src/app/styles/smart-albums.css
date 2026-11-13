@@ -149,22 +149,6 @@
   background: var(--surface-3);
 }
 
-.smart-albums-heading {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
-}
-
-.smart-albums-heading h2 {
-  margin: 3px 0 0;
-  color: var(--ink);
-  font-size: 15px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-}
-
 .smart-albums-list {
   display: flex;
   flex-wrap: nowrap;
@@ -244,11 +228,6 @@
   box-shadow: 0 0 0 3px var(--accent);
 }
 
-.smart-album-tile-badge {
-  font-size: 20px;
-  line-height: 1;
-}
-
 .smart-album-tile-cover {
   position: relative;
   width: 100%;
@@ -277,12 +256,6 @@
   place-items: center;
   font-size: 20px;
   color: color-mix(in srgb, var(--ink) 55%, transparent);
-}
-
-.smart-album-count {
-  color: var(--muted);
-  font-size: 11px;
-  white-space: nowrap;
 }
 
 /* Date range + saved-filter controls inside the filter popover */

@@ -73,14 +73,6 @@
     flex: 1 1 auto;
     justify-content: center;
   }
-  /* When the filter row wraps, the selection cluster drops to its own line;
-     sit it left-aligned at natural width like the filter cluster above. */
-  .smart-filter-row .selection-cluster {
-    flex: 0 0 auto;
-    width: auto;
-    margin-left: 0;
-    justify-content: flex-start;
-  }
 }
 /* ==========================================================================
    Library header - inspector open
@@ -120,19 +112,6 @@
     font-size: 12px;
   }
 
-  .library-layout.with-inspector .library-header .import-actions {
-    gap: 6px;
-  }
-
-  .library-layout.with-inspector .library-header .import-actions .primary-button,
-  .library-layout.with-inspector .library-header .import-actions .quiet-button {
-    height: 32px;
-    min-height: 32px;
-    padding: 0 11px;
-    border-radius: 8px;
-    font-size: 12px;
-  }
-
   .library-layout.with-inspector .library-header .collection-toolbar {
     gap: 6px;
     margin-bottom: 8px;
@@ -166,10 +145,6 @@
     display: none;
   }
 
-  .library-layout.with-inspector .library-header .selection-cluster {
-    margin-left: 0;
-  }
-
   .library-layout.with-inspector .library-header .search-field {
     max-width: none;
     height: 34px;
@@ -197,10 +172,6 @@
     height: 26px;
     min-height: 26px;
     padding: 0 8px;
-  }
-
-  .library-layout.with-inspector .library-header .smart-filter-row {
-    padding-bottom: 10px;
   }
 
   .library-layout.with-inspector .library-header .selection-bar {
@@ -262,31 +233,6 @@
     height: 23px;
     min-width: 22px;
     min-height: 0;
-  }
-}
-
-/* Tight centre pane: the import actions become icon buttons so the title and
-   subtitle keep their line. */
-@media (max-width: 1019px) {
-  .library-layout.with-inspector .library-header .import-actions .btn-label {
-    display: none;
-  }
-
-  .library-layout.with-inspector .library-header .import-actions .primary-button,
-  .library-layout.with-inspector .library-header .import-actions .quiet-button {
-    width: 32px;
-    padding: 0;
-  }
-}
-
-/* When the filter rail has to scroll, fade its right edge so a clipped pill
-   reads as "more filters this way" instead of a broken control. The extra
-   padding keeps the final pill clear of the fade at the end of the scroll. */
-@media (max-width: 1229px) {
-  .library-layout.with-inspector .smart-filter-row .filter-cluster {
-    padding-right: 32px;
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
-    mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
   }
 }
 

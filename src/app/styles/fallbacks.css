@@ -5,21 +5,8 @@
       padding: 12px 12px 10px;
     }
 
-    .library-header .library-header-row {
-      align-items: flex-start;
-      gap: 8px;
-      padding-bottom: 10px;
-    }
-
     .library-header .header-left {
       flex: 1 1 100%;
-    }
-
-    .library-header .header-title-row {
-      flex-wrap: wrap;
-      align-items: baseline;
-      column-gap: 8px;
-      row-gap: 2px;
     }
 
     .library-header .header-left .page-subtitle {
@@ -239,22 +226,9 @@
     display: none;
   }
 
-  .library-header .library-header-row {
-    align-items: center;
-    flex-wrap: nowrap;
-    gap: 8px;
-    padding-bottom: 7px;
-  }
-
   .library-header .header-left {
     flex: 1 1 auto;
     min-width: 0;
-  }
-
-  .library-header .header-title-row {
-    flex-wrap: nowrap;
-    align-items: baseline;
-    gap: 6px;
   }
 
   .library-header .header-left .page-subtitle {
@@ -436,22 +410,12 @@
     font-size: 0;
   }
 
-  .library-header .library-header-row {
-    gap: 4px;
-    padding-bottom: 5px;
-  }
-
   .library-header .header-left .eyebrow {
     display: none;
   }
 
   .library-header .header-left h1 {
     font-size: 18px;
-  }
-
-  .library-header .header-title-row {
-    margin-top: 0;
-    gap: 4px;
   }
 
   .library-header .header-left .page-subtitle {
@@ -528,21 +492,9 @@
 /* Viewport fallback for narrow inspector panes in older embedded WebKit. */
 @supports not (container-type: inline-size) {
   @media (max-width: 1299px) {
-    .library-layout.with-inspector .library-header .library-header-row {
-      align-items: center;
-      flex-wrap: nowrap;
-      gap: 6px;
-      padding-bottom: 7px;
-    }
-
     .library-layout.with-inspector .library-header .header-left {
       flex: 1 1 auto;
       min-width: 0;
-    }
-
-    .library-layout.with-inspector .library-header .header-title-row {
-      flex-wrap: nowrap;
-      gap: 5px;
     }
 
     .library-layout.with-inspector .library-header .header-left .eyebrow {
@@ -834,12 +786,6 @@
 }
 
 @container library-pane (max-width: 760px) {
-  .library-header .library-header-row {
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 7px;
-  }
-
   .library-header .header-left {
     flex: 1 1 100%;
   }

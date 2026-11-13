@@ -172,16 +172,6 @@
   }
 }
 
-/* Native Limit Note */
-.native-limit-note {
-  padding: 10px 16px;
-  border-top: 1px solid var(--line);
-  background: var(--surface-2);
-  color: var(--muted);
-  text-align: center;
-  font-size: 12px;
-}
-
 /* Empty State */
 .empty-state {
   display: grid;

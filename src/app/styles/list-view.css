@@ -415,10 +415,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.list-view-cell--image {
-  justify-self: center;
-}
-
 .list-view .tile-select-check {
   grid-column: 1;
   position: static;

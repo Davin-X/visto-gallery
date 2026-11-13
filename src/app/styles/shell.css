@@ -181,9 +181,6 @@ body.is-resizing .photo-inspector {
   .app-frame .nav-icon {
     display: flex !important;
   }
-  .app-frame .nav-badge {
-    display: inline-flex !important;
-  }
   .app-frame .nav-item {
     padding: 10px 12px !important;
   }

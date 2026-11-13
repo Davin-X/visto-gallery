@@ -630,21 +630,6 @@
   opacity: 0.55;
 }
 
-.viewer-path {
-  margin-top: 8px;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-2);
-  color: var(--faint);
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
 /* Shortcut list, opened from the help button in the bar. It used to be a strip
    pinned to the top-right corner of the stage, which was the last thing still
    overlaying the picture. */
@@ -819,77 +804,5 @@
 .filmstrip button:has(video).active {
   border-color: var(--blue);
   box-shadow: 0 0 0 2px var(--blue-soft);
-}
-
-.gesture-hints {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 20px;
-  flex-wrap: wrap;
-  padding: 10px 4px 4px;
-  border-top: 1px solid var(--line);
-  margin-top: 6px;
-}
-
-.gesture-hints .hint-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.gesture-hints .hint-group + .hint-group {
-  border-left: 1px solid var(--line);
-  padding-left: 16px;
-  margin-left: 4px;
-}
-
-.gesture-hints kbd {
-  display: inline-flex;
-  align-items: center;
-  min-width: 28px;
-  height: 22px;
-  padding: 0 8px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--surface-2);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text);
-  justify-content: center;
-}
-
-.gesture-hints kbd.wide {
-  min-width: auto;
-  padding: 0 10px;
-}
-
-.gesture-hints .hint-label {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.viewer-caption {
-  flex: 0 0 auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 4px;
-  gap: 16px;
-  flex-wrap: wrap;
-  width: 100%;
-  max-width: 100%;
-}
-
-.viewer-caption .caption-meta {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.viewer-caption .caption-meta b {
-  color: var(--ink);
-  font-weight: 600;
 }
 

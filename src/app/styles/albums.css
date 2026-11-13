@@ -189,17 +189,6 @@
   color: var(--muted);
 }
 
-.album-cover-placeholder .album-cover-placeholder-icon {
-  display: grid;
-  place-items: center;
-  width: 58px;
-  height: 58px;
-  border: 1px dashed var(--line-strong);
-  border-radius: 16px;
-  color: var(--faint);
-  background: color-mix(in srgb, var(--surface-3) 55%, transparent);
-}
-
 /* One meta row for both an album card and a smart-album tile: accent slot,
    name, count. Shared so the two cannot drift into different layouts. */
 .album-meta {
@@ -510,13 +499,6 @@ body.is-dragging-albums * {
     margin-left: 0;
   }
 }
-.album-detail-lead {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  flex: 0 0 auto;
-  min-width: 0;
-}
 
 /* Back button for the album detail view: compact chevron inline with the
    cover, so the header needs no breadcrumb row above it. */
@@ -552,14 +534,6 @@ body.is-dragging-albums * {
   font-weight: 500;
   letter-spacing: 0;
   white-space: nowrap;
-}
-
-.album-detail-heading {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 16px;
 }
 
 .album-detail-cover {
