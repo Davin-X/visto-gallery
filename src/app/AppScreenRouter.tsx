@@ -71,6 +71,9 @@ interface AppScreenRouterProps {
   setAlbumPendingDelete: (album: any) => void;
   openSmartAlbum: (albumId: string) => Promise<void>;
   openSmartAlbumMenu: (album: any, e: React.MouseEvent) => void;
+  openSmartAlbumCreate: () => void;
+  openSmartAlbumEdit: (album: any) => void;
+  deleteSmartAlbum: (album: any) => void;
   setAlbumRemovePending: (pending: { albumId: string; itemIds: string[] } | null) => void;
   copyTagsToFinderForIds: (ids: string[]) => Promise<void>;
   playVideoInBackground: (id?: string, scope?: "library" | "hidden") => void;
@@ -127,6 +130,9 @@ export function AppScreenRouter({
   setAlbumPendingDelete,
   openSmartAlbum,
   openSmartAlbumMenu,
+  openSmartAlbumCreate,
+  openSmartAlbumEdit,
+  deleteSmartAlbum,
   setAlbumRemovePending,
   copyTagsToFinderForIds,
   playVideoInBackground,
@@ -254,6 +260,9 @@ export function AppScreenRouter({
           onAddItemsToAlbum={addItemsToAlbum}
           onDeleteAlbum={setAlbumPendingDelete}
           onSmartAlbumContextMenu={openSmartAlbumMenu}
+          onCreateSmartAlbum={openSmartAlbumCreate}
+          onEditSmartAlbum={openSmartAlbumEdit}
+          onDeleteSmartAlbum={deleteSmartAlbum}
           onOpenSmartAlbum={(albumId: string) => void openSmartAlbum(albumId)}
           onOpenAlbum={async (albumId: string) => {
             library.setActiveAlbum(albumId);

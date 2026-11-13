@@ -5854,6 +5854,38 @@ body.is-resizing .photo-inspector {
   cursor: pointer;
 }
 
+/* When an empty state offers two real choices, the buttons need their normal
+   chrome back: the rule above strips borders for its single text action. */
+.empty-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.empty-state .empty-state-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.empty-state .empty-state-actions .secondary-button {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.empty-state .empty-state-actions .secondary-button:hover {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
 /* Responsive */
 @media (max-width: 1100px) {
   .app-body {
@@ -6265,6 +6297,66 @@ body.is-resizing .photo-inspector {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
+}
+
+/* A failed save keeps the dialog open with the typed definition intact, so the
+   error has somewhere to live. Toast notices are for actions that closed. */
+.dialog-error {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, #d6455f 34%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, #d6455f 8%, var(--surface));
+  color: #c23b54;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* Smart Albums are filter rules, so the dialog is a little wider than the
+   album-name dialogs to keep the date range on one line. */
+.smart-album-dialog {
+  width: min(520px, 100%);
+}
+
+.smart-album-dialog .filter-section {
+  margin-top: 16px;
+}
+
+.smart-album-dialog .filter-section:first-of-type {
+  margin-top: 18px;
+}
+
+.smart-album-dialog .dialog-actions {
+  margin-top: 18px;
+}
+
+.smart-album-dialog .filter-chip-row {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.smart-album-text {
+  width: 100%;
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.smart-album-text:focus-visible {
+  border-color: var(--blue);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--field-focus-inner, rgba(52, 116, 212, 0.22));
+}
+
+.smart-album-summary {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .dialog-actions {
@@ -13539,6 +13631,68 @@ body.is-resizing .photo-inspector {
   gap: 4px;
 }
 
+/* The head row's controls travel together on the right, so the heading keeps
+   its left alignment and "View all" is no longer the only thing that can own
+   the free space. */
+.smart-albums-headactions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.smart-albums-headactions .smart-albums-viewall {
+  margin-left: 0;
+}
+
+.smart-albums-new {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.smart-albums-new:hover {
+  border-color: color-mix(in srgb, var(--blue) 45%, var(--line));
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.smart-albums-new svg {
+  color: var(--muted);
+}
+
+.smart-albums-new:hover svg {
+  color: var(--accent-text);
+}
+
+/* Shown when no Smart Album exists yet: the create control stays in the head
+   row, and this line says what the feature is for. */
+.smart-albums-empty {
+  margin: 10px 0 0;
+  padding: 12px 14px;
+  border: 1px dashed color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 /* Heading, count and the automatic-update note read as one line, in that order.
    The note used to be thrown to the far right by margin-left:auto, which glued
    it to View all and separated it from the heading it describes. */
@@ -13647,6 +13801,26 @@ body.is-resizing .photo-inspector {
 .smart-album-item {
   display: flex;
   flex: 0 0 auto;
+  position: relative;
+}
+
+/* Same affordance as a regular album card: the tile itself opens, the row
+   behind it edits or deletes. Revealed on hover and on keyboard focus. */
+.smart-album-actions {
+  top: 6px;
+  right: 6px;
+  gap: 3px;
+}
+
+.smart-album-item:hover .smart-album-actions,
+.smart-album-item:focus-within .smart-album-actions {
+  opacity: 1;
+  visibility: visible;
+}
+
+.smart-album-actions .album-card-action {
+  width: 24px;
+  height: 24px;
 }
 
 .smart-album-tile {

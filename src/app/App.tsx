@@ -45,10 +45,13 @@ import type {
   LibraryFolder,
   LibraryFilterDTO,
   LibraryStats,
+  SmartAlbum,
+  SmartAlbumFilter,
   UpdateCheckResult,
   ErrorCode,
 } from "../engine/types/commands";
 import { SlideshowOverlay } from "../design/components/SlideshowOverlay";
+import { SmartAlbumDialog } from "../design/components/SmartAlbumDialog";
 import { ContextMenu } from "../design/components/ContextMenu";
 import { ShortcutsCheatSheet } from "../design/components/ShortcutsCheatSheet";
 
@@ -87,6 +90,14 @@ function App() {
   const [albumSeedIds, setAlbumSeedIds] = useState<string[] | null>(null);
   const [renamingAlbumId, setRenamingAlbumId] = useState<string | null>(null);
   const [creatingAlbum, setCreatingAlbum] = useState(false);
+  // Smart Albums are edited in their own dialog, mounted only while open so
+  // the form always starts from the album's current definition.
+  const [smartAlbumDialog, setSmartAlbumDialog] = useState<{
+    mode: "create" | "edit";
+    albumId?: string;
+    name: string;
+    filter: SmartAlbumFilter;
+  } | null>(null);
   const albumInputRef = useRef<HTMLInputElement | null>(null);
   const albumDialogRef = useRef<HTMLFormElement | null>(null);
   const updateDialogRef = useRef<HTMLDivElement | null>(null);
@@ -1931,6 +1942,39 @@ function App() {
     setScreen("Library");
   };
 
+  const openSmartAlbumCreate = () =>
+    setSmartAlbumDialog({
+      mode: "create",
+      name: "",
+      filter: {},
+    });
+
+  const openSmartAlbumEdit = (album: SmartAlbum) =>
+    setSmartAlbumDialog({
+      mode: "edit",
+      albumId: album.id,
+      name: album.name,
+      filter: album.filter,
+    });
+
+  const confirmDeleteSmartAlbum = (album: SmartAlbum) => {
+    if (
+      window.confirm(
+        `Delete the Smart Album "${album.name}"? The saved filter is removed; photos are not changed.`,
+      )
+    ) {
+      void library.deleteSmartAlbum(album.id);
+    }
+  };
+
+  const submitSmartAlbum = async (name: string, filter: SmartAlbumFilter) => {
+    if (!smartAlbumDialog) return false;
+    if (smartAlbumDialog.mode === "edit" && smartAlbumDialog.albumId) {
+      return library.updateSmartAlbum(smartAlbumDialog.albumId, name, filter);
+    }
+    return library.createSmartAlbumFrom(name, filter);
+  };
+
   const openSmartAlbumMenu = (album: any, e: React.MouseEvent) => {
     openContextMenu(
       [
@@ -1939,25 +1983,14 @@ function App() {
           onClick: () => void openSmartAlbum(album.id),
         },
         {
-          label: "Rename Smart Album…",
-          onClick: () => {
-            const name = window.prompt("Smart Album name", album.name);
-            if (name?.trim()) void library.renameSmartAlbum(album.id, name);
-          },
+          label: "Edit Smart Album…",
+          onClick: () => openSmartAlbumEdit(album),
         },
         { divider: true },
         {
           label: "Delete Smart Album…",
           danger: true,
-          onClick: () => {
-            if (
-              window.confirm(
-                `Delete the Smart Album "${album.name}"? The saved filter is removed; photos are not changed.`,
-              )
-            ) {
-              void library.deleteSmartAlbum(album.id);
-            }
-          },
+          onClick: () => confirmDeleteSmartAlbum(album),
         },
       ],
       e,
@@ -2610,6 +2643,16 @@ function App() {
 
           <SlideshowOverlay assetUrl={assetUrl} />
 
+          {smartAlbumDialog && (
+            <SmartAlbumDialog
+              mode={smartAlbumDialog.mode}
+              initialName={smartAlbumDialog.name}
+              initialFilter={smartAlbumDialog.filter}
+              onSubmit={submitSmartAlbum}
+              onClose={() => setSmartAlbumDialog(null)}
+            />
+          )}
+
           {contextMenu && (
             <ContextMenu
               items={contextMenu.items}
@@ -2679,6 +2722,9 @@ function App() {
         setAlbumPendingDelete={setAlbumPendingDelete}
         openSmartAlbum={openSmartAlbum}
         openSmartAlbumMenu={openSmartAlbumMenu}
+        openSmartAlbumCreate={openSmartAlbumCreate}
+        openSmartAlbumEdit={openSmartAlbumEdit}
+        deleteSmartAlbum={confirmDeleteSmartAlbum}
         setAlbumRemovePending={setAlbumRemovePending}
         copyTagsToFinderForIds={copyTagsToFinderForIds}
       />

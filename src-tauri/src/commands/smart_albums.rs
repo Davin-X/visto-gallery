@@ -244,6 +244,60 @@ pub(crate) async fn create_smart_album_in_catalog(
     })
 }
 
+/// Replace a Smart Album's name and definition in place.
+///
+/// Editing must not change the album's identity: the id, and therefore every
+/// reference the client holds, survives. The row is rewritten with the same
+/// validation the create path uses, and the returned album carries fresh match
+/// counts and covers so the caller can swap it into state without a reload.
+pub(crate) async fn update_smart_album_in_catalog(
+    db: &sqlx::SqlitePool,
+    album_id: &str,
+    name: String,
+    filter: SmartAlbumFilter,
+) -> Result<SmartAlbum, CommandError> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err(CommandError::invalid(
+            "Smart Album name cannot be empty".to_string(),
+        ));
+    }
+    filter.validate()?;
+    let now = super::now_ms();
+    let filter_json = serde_json::to_string(&filter)?;
+    let result = sqlx::query(
+        "UPDATE smart_albums SET name = ?, filter_json = ?, updated_at = ? WHERE id = ?",
+    )
+    .bind(&name)
+    .bind(&filter_json)
+    .bind(now)
+    .bind(album_id)
+    .execute(db)
+    .await
+    .map_err(|e| {
+        if e.to_string().contains("UNIQUE") {
+            format!("A Smart Album named \"{name}\" already exists")
+        } else {
+            e.to_string()
+        }
+    })?;
+    if result.rows_affected() == 0 {
+        return Err(CommandError::invalid(
+            "Smart Album no longer exists".to_string(),
+        ));
+    }
+
+    let row = sqlx::query(
+        "SELECT id, name, filter_json, created_at, updated_at FROM smart_albums WHERE id = ?",
+    )
+    .bind(album_id)
+    .fetch_one(db)
+    .await?;
+    let item_count = count_matches(db, &filter).await?;
+    let covers = cover_items_for(db, &filter).await?;
+    row_to_album(&row, item_count, covers)
+}
+
 #[tauri::command]
 pub async fn get_smart_albums(
     catalog: State<'_, crate::Catalog>,
@@ -260,6 +314,17 @@ pub async fn create_smart_album(
 ) -> Result<SmartAlbum, CommandError> {
     let db = super::get_db(&catalog)?;
     create_smart_album_in_catalog(&db, name, filter).await
+}
+
+#[tauri::command]
+pub async fn update_smart_album(
+    album_id: String,
+    name: String,
+    filter: SmartAlbumFilter,
+    catalog: State<'_, crate::Catalog>,
+) -> Result<SmartAlbum, CommandError> {
+    let db = super::get_db(&catalog)?;
+    update_smart_album_in_catalog(&db, &album_id, name, filter).await
 }
 
 #[tauri::command]
@@ -432,6 +497,89 @@ mod tests {
         assert!(error
             .message
             .contains("Smart Album rating must be between 0 and 5"));
+    }
+
+    #[tokio::test]
+    async fn updating_a_smart_album_keeps_its_id_and_recomputes_matches() {
+        use sqlx::sqlite::SqlitePoolOptions;
+
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&db).await.unwrap();
+
+        sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, created_at, updated_at, rating, color_label) VALUES ('photo', '/photo.jpg', 'photo.jpg', 'jpg', 'photo', 1, 100, 100, 1, 1, 5, 'blue')")
+            .execute(&db)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, created_at, updated_at, rating, color_label) VALUES ('video', '/clip.mov', 'clip.mov', 'mov', 'video', 1, 100, 100, 1, 1, 5, 'blue')")
+            .execute(&db)
+            .await
+            .unwrap();
+
+        let created = super::create_smart_album_in_catalog(
+            &db,
+            "Rated".into(),
+            SmartAlbumFilter {
+                rating: Some(4),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(created.item_count, 2);
+
+        // Editing must preserve identity and creation time, and must recompute
+        // the count from the new definition rather than carrying the old one.
+        let updated = super::update_smart_album_in_catalog(
+            &db,
+            &created.id,
+            "Videos only".into(),
+            SmartAlbumFilter {
+                kind: Some("video".into()),
+                rating: Some(4),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated.id, created.id);
+        assert_eq!(updated.name, "Videos only");
+        assert_eq!(updated.created_at, created.created_at);
+        assert!(updated.updated_at >= created.updated_at);
+        assert_eq!(updated.item_count, 1);
+
+        let listed = super::get_smart_albums_in_catalog(&db).await.unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, created.id);
+        assert_eq!(listed[0].filter.kind.as_deref(), Some("video"));
+
+        // An id that no longer exists is an error, not a silent no-op.
+        let missing = super::update_smart_album_in_catalog(
+            &db,
+            "does-not-exist",
+            "Gone".into(),
+            Default::default(),
+        )
+        .await
+        .unwrap_err();
+        assert!(missing.message.contains("no longer exists"));
+
+        // Renaming onto another album's name keeps the UNIQUE constraint honest.
+        let second = super::create_smart_album_in_catalog(&db, "Second".into(), Default::default())
+            .await
+            .unwrap();
+        let duplicate = super::update_smart_album_in_catalog(
+            &db,
+            &second.id,
+            "Videos only".into(),
+            Default::default(),
+        )
+        .await
+        .unwrap_err();
+        assert!(duplicate.message.contains("already exists"));
     }
 
     #[test]

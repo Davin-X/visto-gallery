@@ -4,6 +4,7 @@ import {
   PencilIcon,
   PlusIcon,
   SlideshowIcon,
+  SparkleIcon,
   TrashIcon,
 } from "../design/components/icons";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
@@ -23,6 +24,9 @@ interface AlbumsScreenProps {
   onOpenAlbum: (albumId: string) => void;
   onOpenSmartAlbum?: (albumId: string) => void;
   onSmartAlbumContextMenu?: (album: SmartAlbum, e: React.MouseEvent) => void;
+  onCreateSmartAlbum?: () => void;
+  onEditSmartAlbum?: (album: SmartAlbum) => void;
+  onDeleteSmartAlbum?: (album: SmartAlbum) => void;
   /** Same actions as the card's right-click menu, reachable without one. */
   onPlayAlbum?: (albumId: string) => void;
   onRenameAlbum?: (album: any) => void;
@@ -96,8 +100,10 @@ function AlbumsScreen(props: AlbumsScreenProps) {
 
   // The film strip shows one row; "View all" expands it into the full
   // multi-row grid. Shown only when there is something to expand into.
+  const smartAlbums = props.smartAlbums ?? [];
+  const hasSmartAlbums = smartAlbums.length > 0;
   const [smartAlbumsExpanded, setSmartAlbumsExpanded] = React.useState(false);
-  const canExpandSmartAlbums = (props.smartAlbums?.length ?? 0) > 4;
+  const canExpandSmartAlbums = smartAlbums.length > 4;
   const toggleSmartAlbumsExpanded = React.useCallback(() => {
     setSmartAlbumsExpanded((value) => !value);
   }, []);
@@ -139,7 +145,10 @@ function AlbumsScreen(props: AlbumsScreenProps) {
         </div>
       </div>
 
-      {(props.smartAlbums?.length ?? 0) > 0 && (
+      {/* The section exists to explain Smart Albums and to create one. When the
+          page is entirely empty, the page-level empty state already offers both
+          creates, so a second copy of the same panel would just repeat it. */}
+      {(hasSmartAlbums || albums.length > 0) && (
         <section
           className={`smart-albums-section${smartAlbumsExpanded ? " is-expanded" : ""}${
             smartListHasMore ? " has-more" : ""
@@ -149,65 +158,112 @@ function AlbumsScreen(props: AlbumsScreenProps) {
           <div className="smart-albums-headrow">
             <div className="smart-albums-heading-left">
               <h2>Smart Albums</h2>
-              <span className="smart-albums-count">
-                {props.smartAlbums!.length.toLocaleString()}{" "}
-                {props.smartAlbums!.length === 1 ? "album" : "albums"}
+              {hasSmartAlbums && (
+                <span className="smart-albums-count">
+                  {smartAlbums.length.toLocaleString()}{" "}
+                  {smartAlbums.length === 1 ? "album" : "albums"}
+                </span>
+              )}
+              <span className="smart-albums-toggle-desc">
+                {hasSmartAlbums ? "Updates automatically" : "Saved filters that update themselves"}
               </span>
-              <span className="smart-albums-toggle-desc">Updates automatically</span>
             </div>
-            {canExpandSmartAlbums && (
+            <div className="smart-albums-headactions">
+              {canExpandSmartAlbums && (
+                <button
+                  type="button"
+                  className="smart-albums-viewall"
+                  onClick={toggleSmartAlbumsExpanded}
+                  aria-pressed={smartAlbumsExpanded}
+                >
+                  {smartAlbumsExpanded ? "Show less" : "View all"}
+                </button>
+              )}
               <button
                 type="button"
-                className="smart-albums-viewall"
-                onClick={toggleSmartAlbumsExpanded}
-                aria-pressed={smartAlbumsExpanded}
+                className="smart-albums-new"
+                onClick={() => props.onCreateSmartAlbum?.()}
               >
-                {smartAlbumsExpanded ? "Show less" : "View all"}
+                <PlusIcon size={12} /> New smart album
               </button>
-            )}
+            </div>
           </div>
-          <div
-            id="smart-albums-list"
-            ref={smartListRef}
-            className="smart-albums-list"
-            role="list"
-            aria-label="Smart albums"
-            tabIndex={0}
-            onScroll={syncSmartListOverflow}
-          >
-            {props.smartAlbums!.map((album) => {
-              const filter = album.filter;
-              let badge = "📷";
-              if (filter.kind === "video") badge = "▶️";
-              else if (filter.kind === "raw") badge = "📷";
-              else if (filter.favorite) badge = "❤️";
-              else if (filter.query) badge = "🔍";
-              else if (filter.tags?.length) badge = "🏷️";
-              const coverPhotos = (album.coverItems ?? [])
-                .filter((item: any) => item.kind === "photo" || item.kind === "video")
-                .slice(0, 3);
-              return (
-                <div className="smart-album-item" role="listitem" key={album.id}>
-                  <button
-                    type="button"
-                    className="smart-album-tile"
-                    onClick={() => props.onOpenSmartAlbum?.(album.id)}
-                    onContextMenu={(e) => props.onSmartAlbumContextMenu?.(album, e)}
-                    title={`Open ${album.name}`}
-                  >
-                    <span className="smart-album-tile-cover">
-                      {coverPhotos.length ? (
-                        <AlbumPhotoStack photos={coverPhotos} albumItems={album.coverItems ?? []} />
-                      ) : (
-                        <span className="smart-album-tile-cover-empty">{badge}</span>
-                      )}
-                    </span>
-                    <AlbumMeta name={album.name} count={formatAlbumCount(album.itemCount)} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+          {hasSmartAlbums ? (
+            <div
+              id="smart-albums-list"
+              ref={smartListRef}
+              className="smart-albums-list"
+              role="list"
+              aria-label="Smart albums"
+              tabIndex={0}
+              onScroll={syncSmartListOverflow}
+            >
+              {smartAlbums.map((album) => {
+                const filter = album.filter;
+                let badge = "📷";
+                if (filter.kind === "video") badge = "▶️";
+                else if (filter.kind === "raw") badge = "📷";
+                else if (filter.favorite) badge = "❤️";
+                else if (filter.query) badge = "🔍";
+                else if (filter.tags?.length) badge = "🏷️";
+                const coverPhotos = (album.coverItems ?? [])
+                  .filter((item: any) => item.kind === "photo" || item.kind === "video")
+                  .slice(0, 3);
+                return (
+                  <div className="smart-album-item" role="listitem" key={album.id}>
+                    <button
+                      type="button"
+                      className="smart-album-tile"
+                      onClick={() => props.onOpenSmartAlbum?.(album.id)}
+                      onContextMenu={(e) => props.onSmartAlbumContextMenu?.(album, e)}
+                      title={`Open ${album.name}`}
+                    >
+                      <span className="smart-album-tile-cover">
+                        {coverPhotos.length ? (
+                          <AlbumPhotoStack
+                            photos={coverPhotos}
+                            albumItems={album.coverItems ?? []}
+                          />
+                        ) : (
+                          <span className="smart-album-tile-cover-empty">{badge}</span>
+                        )}
+                      </span>
+                      <AlbumMeta name={album.name} count={formatAlbumCount(album.itemCount)} />
+                    </button>
+                    <div
+                      className="album-card-actions smart-album-actions"
+                      role="group"
+                      aria-label={`${album.name} actions`}
+                    >
+                      <button
+                        type="button"
+                        className="album-card-action"
+                        title="Edit Smart Album"
+                        aria-label={`Edit ${album.name}`}
+                        onClick={() => props.onEditSmartAlbum?.(album)}
+                      >
+                        <PencilIcon size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="album-card-action is-danger"
+                        title="Delete Smart Album"
+                        aria-label={`Delete ${album.name}`}
+                        onClick={() => props.onDeleteSmartAlbum?.(album)}
+                      >
+                        <TrashIcon size={14} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="smart-albums-empty">
+              Smart Albums are saved filters — they pick up new matches as your library changes.
+              Build one here, or choose “Save as Smart Album” from the Library filter.
+            </p>
+          )}
         </section>
       )}
 
@@ -218,9 +274,22 @@ function AlbumsScreen(props: AlbumsScreenProps) {
           </span>
           <b>No albums yet</b>
           <p>Create an album, then select photos in Library and choose Add to album.</p>
-          <button className="primary-button" type="button" onClick={() => props.onCreateAlbum?.()}>
-            <PlusIcon size={14} /> Create album
-          </button>
+          <div className="empty-state-actions">
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => props.onCreateAlbum?.()}
+            >
+              <PlusIcon size={14} /> Create album
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => props.onCreateSmartAlbum?.()}
+            >
+              <SparkleIcon size={13} /> New smart album
+            </button>
+          </div>
         </div>
       ) : (
         <div className="albums-grid">
