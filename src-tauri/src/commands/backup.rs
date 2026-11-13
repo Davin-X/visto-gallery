@@ -364,7 +364,14 @@ async fn restore_backup_into_catalog(db: &SqlitePool, path: &str) -> Result<(), 
         copy_table(
             &mut tx,
             "albums",
-            &["id", "name", "color_index", "created_at", "updated_at", "position"],
+            &[
+                "id",
+                "name",
+                "color_index",
+                "created_at",
+                "updated_at",
+                "position",
+            ],
         )
         .await?;
         copy_table(
@@ -938,7 +945,9 @@ mod tests {
 
         let backup_path = temp_backup("album-order");
         snapshot_to(&db, &backup_path).await.unwrap();
-        annotate_snapshot(backup_path.to_str().unwrap()).await.unwrap();
+        annotate_snapshot(backup_path.to_str().unwrap())
+            .await
+            .unwrap();
 
         // Scramble the live order, then restore the snapshot. The custom
         // order must come back, not Alpha-then-Beta.

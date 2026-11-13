@@ -171,9 +171,10 @@ pub async fn create_album(
     let album = Album::new(name, color_index.unwrap_or(0));
     // New albums go last: an explicit order exists, so appending keeps the
     // list stable for anyone who has not dragged anything yet.
-    let next_position: i64 = sqlx::query_scalar("SELECT COALESCE(MAX(position), 0) + 1 FROM albums")
-        .fetch_one(&db)
-        .await?;
+    let next_position: i64 =
+        sqlx::query_scalar("SELECT COALESCE(MAX(position), 0) + 1 FROM albums")
+            .fetch_one(&db)
+            .await?;
     sqlx::query(
         "INSERT INTO albums (id, name, color_index, created_at, updated_at, position) VALUES (?, ?, ?, ?, ?, ?)",
     )

@@ -49,16 +49,19 @@ test("dragging an album card by its handle reorders the grid", async ({ page }) 
 
   const cards = page.locator(".albums-grid .album-card-wrap");
   const movedName = await cards.nth(0).locator(".album-meta-name").textContent();
+  const handle = cards.nth(0).locator(".album-card-reorder");
 
   await cards.nth(0).hover();
-  const box = await cards.nth(3).boundingBox();
-  await page.dragAndDrop(
-    ".albums-grid .album-card-wrap:nth-child(1) .album-card-reorder",
-    ".albums-grid .album-card-wrap:nth-child(4)",
-    // Land on the left edge of the fourth card: “before it”, whatever the
-    // card width happens to be.
-    { targetPosition: { x: 24, y: box ? box.height / 2 : 40 } },
-  );
+  const handleBox = await handle.boundingBox();
+  const targetBox = await cards.nth(3).boundingBox();
+  // Land on the left edge of the fourth card: "before it", whatever the
+  // card width happens to be.
+  await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(targetBox!.x + 24, targetBox!.y + targetBox!.height / 2, {
+    steps: 6,
+  });
+  await page.mouse.up();
 
   // The dropped card is inserted before the fourth card, not after it.
   await expect(cards.nth(2)).toContainText(movedName ?? "");

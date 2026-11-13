@@ -136,6 +136,62 @@ function AlbumsScreen(props: AlbumsScreenProps) {
     void reorderAlbums(next);
   };
 
+  // Native HTML5 drag-and-drop does not deliver drops reliably inside macOS's
+  // WebKit view, so the pointer is tracked at document level instead: a move
+  // re-derives the target from elementFromPoint, a release applies it.
+  const reorderAlbumRef = React.useRef(reorderAlbum);
+  reorderAlbumRef.current = reorderAlbum;
+  const dropTargetRef = React.useRef(dropTarget);
+  dropTargetRef.current = dropTarget;
+
+  const startAlbumDrag = (albumId: string, event: React.PointerEvent) => {
+    // Prevent the native click on the grip: a drag must never open the album.
+    event.preventDefault();
+    setDragId(albumId);
+  };
+
+  React.useEffect(() => {
+    if (!dragId) return;
+    document.body.classList.add("is-dragging-albums");
+    const onMove = (event: PointerEvent) => {
+      const element = document.elementFromPoint(event.clientX, event.clientY);
+      const wrap = element?.closest<HTMLElement>(".album-card-wrap");
+      const id = wrap?.dataset.albumId ?? null;
+      if (!wrap || !id || id === dragId) {
+        dropTargetRef.current = null;
+        setDropTarget(null);
+        return;
+      }
+      const rect = wrap.getBoundingClientRect();
+      const before = event.clientX < rect.left + rect.width / 2;
+      dropTargetRef.current = { id, before };
+      setDropTarget({ id, before });
+    };
+    const onUp = () => {
+      const target = dropTargetRef.current;
+      if (target) reorderAlbumRef.current(dragId, target.id, target.before);
+      else {
+        setDragId(null);
+        setDropTarget(null);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDragId(null);
+        setDropTarget(null);
+      }
+    };
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.classList.remove("is-dragging-albums");
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [dragId]);
+
   // The film strip shows one row; "View all" expands it into the full
   // multi-row grid. Shown only when there is something to expand into.
   const smartAlbums = props.smartAlbums ?? [];
@@ -341,56 +397,15 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   : ""
               }`}
               key={album.id}
-              onDragOver={(event) => {
-                if (!dragId || dragId === album.id) return;
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-                const rect = event.currentTarget.getBoundingClientRect();
-                const before = event.clientX < rect.left + rect.width / 2;
-                setDropTarget((current) =>
-                  current && current.id === album.id && current.before === before
-                    ? current
-                    : { id: album.id, before },
-                );
-              }}
-              onDragLeave={() =>
-                setDropTarget((current) => (current?.id === album.id ? null : current))
-              }
-              onDrop={(event) => {
-                event.preventDefault();
-                if (!dragId || dragId === album.id) {
-                  setDragId(null);
-                  setDropTarget(null);
-                  return;
-                }
-                const rect = event.currentTarget.getBoundingClientRect();
-                reorderAlbum(dragId, album.id, event.clientX < rect.left + rect.width / 2);
-              }}
+              data-album-id={album.id}
             >
               <button
                 type="button"
                 className="album-card-reorder"
                 title="Drag to reorder"
                 aria-label={`Drag to reorder ${album.name}`}
-                draggable
-                onDragStart={(event) => {
-                  setDragId(album.id);
-                  event.dataTransfer.effectAllowed = "move";
-                  event.dataTransfer.setData("text/plain", album.id);
-                  const card = event.currentTarget.closest(".album-card-wrap");
-                  const rect = card?.getBoundingClientRect();
-                  if (card && rect) {
-                    event.dataTransfer.setDragImage(
-                      card as HTMLElement,
-                      Math.min(40, rect.width / 2),
-                      Math.min(24, rect.height / 2),
-                    );
-                  }
-                }}
-                onDragEnd={() => {
-                  setDragId(null);
-                  setDropTarget(null);
-                }}
+                style={{ touchAction: "none" }}
+                onPointerDown={(event) => startAlbumDrag(album.id, event)}
               >
                 <DragIcon size={13} />
               </button>

@@ -5125,6 +5125,10 @@ body.is-resizing .photo-inspector {
   width: 100%;
   aspect-ratio: 4 / 3;
   place-items: center;
+  /* The card's top corners are rounded; the cover sits flush under the
+     border and must hand its top corners the same radius, or stack prints
+     square off the corner and paint over the border line. */
+  border-radius: 12px 12px 0 0;
   overflow: hidden;
   background:
     radial-gradient(
@@ -5283,6 +5287,14 @@ body.is-resizing .photo-inspector {
 
 .album-card-reorder:active {
   cursor: grabbing;
+}
+
+/* While a pointer-based drag is live, the whole page reads as the drag
+   container: grabbing everywhere and no text selection. */
+body.is-dragging-albums,
+body.is-dragging-albums * {
+  cursor: grabbing !important;
+  user-select: none !important;
 }
 
 .album-card-wrap:hover .album-card-reorder,
