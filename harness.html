@@ -11,6 +11,9 @@
       // `videos=N` renders the first N synthetic items as videos so the tile's
       // play-in-background action can be exercised.
       const videoCount = Math.max(0, Math.floor(Number(params.get("videos") || 0)));
+      // `longNames=1` stretches every fixture name so the list tables' name
+      // truncation and column floors can be exercised end to end.
+      const longNames = params.get("longNames") === "1";
       // `albums=N` limits the synthetic album overviews; `albums=0` reaches the
       // Albums screen's empty state.
       const albumOverviewParam = params.get("albums");
@@ -18,11 +21,13 @@
         albumOverviewParam == null ? 100 : Math.max(0, Math.floor(Number(albumOverviewParam) || 0));
       // An explicit order for the regular albums so the Albums screen's
       // reorder feature can be driven end to end.
-      let albumOrder = Array.from({ length: albumOverviewCount }, (_, index) => `benchmark-album-${index}`);
+      let albumOrder = Array.from(
+        { length: albumOverviewCount },
+        (_, index) => `benchmark-album-${index}`,
+      );
       const PAGE_SIZE = 250;
       const now = Date.UTC(2026, 10, 3, 12, 0, 0);
-      const tinyImage =
-        "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+      const tinyImage = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
       // A real 1-second H.264 clip so the video player in the harness mounts a
       // decodable <video> element instead of the decode-failure screen.
       const tinyVideoData =
@@ -36,7 +41,9 @@
           return {
             id: `benchmark-${index}`,
             path: isVideo ? tinyVideoData : `/synthetic/benchmark-${index}.${extension}`,
-            name: `benchmark-${index}.${extension}`,
+            name: longNames
+              ? `this-is-a-very-long-camera-generated-filename-with-a-shared-prefix-${index}-and-a-distinguishing-tail-0042.${extension}`
+              : `benchmark-${index}.${extension}`,
             extension,
             kind: isVideo ? "video" : "photo",
             size: 1024 * 1024,
@@ -75,15 +82,26 @@
       // Smart albums are mutable so the Albums screen's create/edit/delete
       // affordances can be driven end to end, not just rendered.
       // `smartAlbums=N` seeds N of them (default 8, `0` for the empty state).
-      const smartAlbumSeedParam = params.get("smartAlbums");      const smartAlbumSeedCount =
+      const smartAlbumSeedParam = params.get("smartAlbums");
+      const smartAlbumSeedCount =
         smartAlbumSeedParam == null ? 8 : Math.max(0, Math.floor(Number(smartAlbumSeedParam) || 0));
       let smartAlbumCounter = 0;
       const nowTs = Date.now();
-      const smartAlbumNames = ["Favorites", "RAW+Jpeg", "Autumn shots", "Videos", "People", "2024", "Best of", "Travel"];
+      const smartAlbumNames = [
+        "Favorites",
+        "RAW+Jpeg",
+        "Autumn shots",
+        "Videos",
+        "People",
+        "2024",
+        "Best of",
+        "Travel",
+      ];
       let smartAlbums = Array.from({ length: smartAlbumSeedCount }, (_, index) => ({
         id: `smart-${index}`,
         name: smartAlbumNames[index] ?? `Smart ${index}`,
-        filter: index === 0 ? { favorite: true } : index === 1 ? { kind: "raw" } : { query: "autumn" },
+        filter:
+          index === 0 ? { favorite: true } : index === 1 ? { kind: "raw" } : { query: "autumn" },
         itemCount: index === 0 ? 11 : 7,
         coverItems: [],
         createdAt: nowTs,
@@ -172,18 +190,25 @@
           const positions = new Map(albumOrder.map((id, index) => [id, index]));
           return Array.from({ length: albumOverviewCount }, (_, index) => ({
             id: `benchmark-album-${index}`,
-            name: `Benchmark Album ${index}`,
+            name: longNames
+              ? `A Very Long Album Name With A Shared Prefix And A Distinguishing Tail ${index} 2026`
+              : `Benchmark Album ${index}`,
             colorIndex: index % 4,
             createdAt: now - index * 60_000,
             updatedAt: now - index * 60_000,
-            itemCount: Math.min(100, totalItems - index * 100),
+            itemCount: Math.max(0, Math.min(100, totalItems - index * 100)),
+            itemSize: Math.max(0, Math.min(100, totalItems - index * 100)) * 3 * 1024 * 1024,
             coverItems: items.slice(index * 4, index * 4 + 4),
           })).sort(
-            (a, b) => (positions.get(a.id) ?? albumOrder.length) - (positions.get(b.id) ?? albumOrder.length),
+            (a, b) =>
+              (positions.get(a.id) ?? albumOrder.length) -
+              (positions.get(b.id) ?? albumOrder.length),
           );
         }
         if (command === "reorder_albums") {
-          const ids = Array.isArray(args?.albumIds) ? args.albumIds.filter((id) => typeof id === "string") : [];
+          const ids = Array.isArray(args?.albumIds)
+            ? args.albumIds.filter((id) => typeof id === "string")
+            : [];
           if (ids.length !== albumOrder.length) {
             throw new Error("Reorder needs every album id exactly once");
           }

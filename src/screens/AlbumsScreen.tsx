@@ -3,7 +3,9 @@ import {
   AlbumsIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  DetailsIcon,
   DragIcon,
+  GridIcon,
   PencilIcon,
   PlusIcon,
   SlideshowIcon,
@@ -12,8 +14,11 @@ import {
 } from "../design/components/icons";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
+import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
+import { useSettingsStore } from "../engine/stores/useSettingsStore";
 import { formatFileDate } from "../engine/utils/mediaDate";
+import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { Album, MediaItem } from "../engine/types/media";
 import type { SmartAlbum } from "../engine/types/commands";
 
@@ -105,6 +110,48 @@ function AlbumsScreen(props: AlbumsScreenProps) {
   // the query. `albumOrderIds` is the current order, used by the drag and by
   // the Move up / Move down buttons.
   const reorderAlbums = useLibraryStore((s) => s.reorderAlbums);
+  const albumsView = useSettingsStore((s) => s.albumsView);
+  const updateSettings = useSettingsStore((s) => s.update);
+
+  // View-only sort for the list, layered over the persisted manual order.
+  // Cycles manual → asc → desc → manual. Never persisted; cards always use
+  // the manual order.
+  type AlbumsSortKey = "name" | "itemCount" | "itemSize" | "updatedAt";
+  const [albumsSort, setAlbumsSort] = React.useState<{
+    key: AlbumsSortKey;
+    dir: "asc" | "desc";
+  } | null>(null);
+  const sortedAlbums = React.useMemo(() => {
+    if (!albumsSort) return albums;
+    const { key, dir } = albumsSort;
+    const mult = dir === "asc" ? 1 : -1;
+    const read = (album: any): string | number => {
+      if (key === "name") return String(album.name ?? "").toLowerCase();
+      if (key === "itemSize") return Number(album.itemSize ?? 0) || 0;
+      if (key === "itemCount") return Number(album.count ?? album.itemCount ?? 0) || 0;
+      return Number(album.updatedAt) || 0;
+    };
+    return [...albums].sort((a: any, b: any) => {
+      const av = read(a);
+      const bv = read(b);
+      if (typeof av === "string") return mult * av.localeCompare(bv as string);
+      return mult * ((av as number) - (bv as number));
+    });
+  }, [albums, albumsSort]);
+  const cycleAlbumsSort = (key: AlbumsSortKey) =>
+    setAlbumsSort((current) => {
+      if (!current || current.key !== key) return { key, dir: "asc" };
+      if (current.dir === "asc") return { key, dir: "desc" };
+      return null;
+    });
+  // The sort state belongs on the header cell (aria-sort), not on its button:
+  // assistive tech reads which column is sorted and in which direction.
+  const sortProps = (key: AlbumsSortKey) =>
+    ({
+      role: "columnheader",
+      "aria-sort":
+        albumsSort?.key !== key ? "none" : albumsSort.dir === "asc" ? "ascending" : "descending",
+    }) as const;
   const [dragId, setDragId] = React.useState<string | null>(null);
   const [dropTarget, setDropTarget] = React.useState<{ id: string; before: boolean } | null>(null);
   // Cards render from a memo that preserves props order, so this is just the
@@ -233,6 +280,32 @@ function AlbumsScreen(props: AlbumsScreenProps) {
           </p>
         </div>
         <div className="header-actions">
+          <div
+            className="layout-switcher albums-view-switcher"
+            role="group"
+            aria-label="Albums layout"
+          >
+            <button
+              type="button"
+              aria-label="Card view"
+              title="Card view"
+              aria-pressed={albumsView === "cards"}
+              className={albumsView === "cards" ? "selected" : ""}
+              onClick={() => void updateSettings("albumsView", "cards")}
+            >
+              <GridIcon size={14} />
+            </button>
+            <button
+              type="button"
+              aria-label="List view"
+              title="List view"
+              aria-pressed={albumsView === "list"}
+              className={albumsView === "list" ? "selected" : ""}
+              onClick={() => void updateSettings("albumsView", "list")}
+            >
+              <DetailsIcon size={14} />
+            </button>
+          </div>
           <button className="primary-button" type="button" onClick={() => props.onCreateAlbum?.()}>
             <PlusIcon size={14} /> Create album
           </button>
@@ -385,6 +458,211 @@ function AlbumsScreen(props: AlbumsScreenProps) {
             </button>
           </div>
         </div>
+      ) : albumsView === "list" ? (
+        <div className="albums-list-view">
+          <div className="list-view-header">
+            <div className="list-view-head-cell albums-col-grip" aria-hidden="true" />
+            <div className="list-view-head-cell albums-col-cover" aria-hidden="true" />
+            <div className="list-view-head-cell" {...sortProps("name")}>
+              <button
+                type="button"
+                className="details-sort-header"
+                onClick={() => cycleAlbumsSort("name")}
+              >
+                Name
+                <span aria-hidden="true">
+                  {albumsSort?.key === "name" ? (albumsSort.dir === "asc" ? "↑" : "↓") : "↕"}
+                </span>
+              </button>
+            </div>
+            <div
+              className="list-view-head-cell list-view-head-cell--numeric"
+              {...sortProps("itemCount")}
+            >
+              <button
+                type="button"
+                className="details-sort-header"
+                onClick={() => cycleAlbumsSort("itemCount")}
+              >
+                Items
+                <span aria-hidden="true">
+                  {albumsSort?.key === "itemCount" ? (albumsSort.dir === "asc" ? "↑" : "↓") : "↕"}
+                </span>
+              </button>
+            </div>
+            <div
+              className="list-view-head-cell list-view-head-cell--numeric"
+              {...sortProps("itemSize")}
+            >
+              <button
+                type="button"
+                className="details-sort-header"
+                onClick={() => cycleAlbumsSort("itemSize")}
+              >
+                Size
+                <span aria-hidden="true">
+                  {albumsSort?.key === "itemSize" ? (albumsSort.dir === "asc" ? "↑" : "↓") : "↕"}
+                </span>
+              </button>
+            </div>
+            <div className="list-view-head-cell" {...sortProps("updatedAt")}>
+              <button
+                type="button"
+                className="details-sort-header"
+                onClick={() => cycleAlbumsSort("updatedAt")}
+              >
+                Updated
+                <span aria-hidden="true">
+                  {albumsSort?.key === "updatedAt" ? (albumsSort.dir === "asc" ? "↑" : "↓") : "↕"}
+                </span>
+              </button>
+            </div>
+            <div className="list-view-head-cell albums-col-actions" aria-label="Actions" />
+          </div>
+          {/* The header must be a sibling of the rows, not a child of the
+              .list-view grid: a sticky grid item is clipped to its own track,
+              which left the Albums header unable to stick like the Library's. */}
+          <div className="list-view">
+            {sortedAlbums.map((album: any, index: number) => (
+              <div
+                className={`list-view-row album-list-row album-card-wrap${dragId === album.id ? " is-dragging" : ""}${
+                  dropTarget && dropTarget.id === album.id
+                    ? dropTarget.before
+                      ? " is-drop-before"
+                      : " is-drop-after"
+                    : ""
+                }`}
+                key={album.id}
+                role="listitem"
+                data-album-id={album.id}
+                onContextMenu={(e) => props.onAlbumContextMenu?.(album, e)}
+              >
+                <button
+                  type="button"
+                  className="tile-open-button"
+                  aria-label={`Open ${album.name}`}
+                  onClick={() => props.onOpenAlbum(album.id)}
+                  onContextMenu={(e) => props.onAlbumContextMenu?.(album, e)}
+                />
+                <button
+                  type="button"
+                  className="albums-list-grip"
+                  title={
+                    albumsSort
+                      ? "Sorting pauses manual ordering — pick Manual order (↕) to drag"
+                      : "Drag to reorder"
+                  }
+                  aria-label={`Drag to reorder ${album.name}`}
+                  style={{ touchAction: "none" }}
+                  disabled={albumsSort !== null}
+                  aria-disabled={albumsSort !== null}
+                  onPointerDown={(event) => {
+                    if (albumsSort !== null) return;
+                    startAlbumDrag(album.id, event);
+                  }}
+                >
+                  <DragIcon size={13} />
+                </button>
+                <span className="list-view-cell album-list-cover">
+                  {album.photos.length ? (
+                    // A fanned stack instead of one print: the album rows should
+                    // not read as a slimmer copy of the Library's item table.
+                    <span className="album-list-cover-fan" aria-hidden="true">
+                      {album.photos.map((photo: any) => (
+                        <span key={photo.id} className="album-list-cover-fan-item">
+                          <CachedThumbnail itemId={photo.id} name={album.name} size={64} />
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="album-list-cover-placeholder">
+                      <AlbumsIcon size={18} />
+                    </span>
+                  )}
+                </span>
+                <span className="list-view-cell album-list-name">
+                  <i className={`album-dot ${album.color}`} aria-hidden="true" />
+                  <MiddleTruncate
+                    className="album-list-name-text"
+                    text={album.name}
+                    tailLength={6}
+                  />
+                </span>
+                <span className="list-view-cell list-view-cell--numeric">
+                  {Number(album.count).toLocaleString()} {album.count === 1 ? "item" : "items"}
+                </span>
+                <span className="list-view-cell list-view-cell--numeric">
+                  {formatBytesSimple(Number((album as any).itemSize ?? 0))}
+                </span>
+                <span className="list-view-cell list-view-cell--muted">
+                  {album.updatedAt ? formatFileDate(album.updatedAt) : "—"}
+                </span>
+                <div
+                  className="album-card-actions album-list-actions"
+                  role="group"
+                  aria-label={`${album.name} actions`}
+                >
+                  <button
+                    type="button"
+                    className="album-card-action"
+                    title="Play slideshow"
+                    aria-label={`Play slideshow of ${album.name}`}
+                    onClick={() => props.onPlayAlbum?.(album.id)}
+                  >
+                    <SlideshowIcon size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="album-card-action"
+                    title="Add items"
+                    aria-label={`Add items to ${album.name}`}
+                    onClick={() => props.onAddItemsToAlbum?.(album.id)}
+                  >
+                    <PlusIcon size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="album-card-action"
+                    title="Move earlier"
+                    aria-label={`Move ${album.name} earlier`}
+                    disabled={albumsSort !== null || index === 0}
+                    onClick={() => moveAlbum(album.id, -1)}
+                  >
+                    <ChevronUpIcon size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="album-card-action"
+                    title="Move later"
+                    aria-label={`Move ${album.name} later`}
+                    disabled={albumsSort !== null || index === albums.length - 1}
+                    onClick={() => moveAlbum(album.id, 1)}
+                  >
+                    <ChevronDownIcon size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="album-card-action"
+                    title="Rename album"
+                    aria-label={`Rename ${album.name}`}
+                    onClick={() => props.onRenameAlbum?.(album)}
+                  >
+                    <PencilIcon size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="album-card-action is-danger"
+                    title="Delete album"
+                    aria-label={`Delete ${album.name}`}
+                    onClick={() => props.onDeleteAlbum?.(album)}
+                  >
+                    <TrashIcon size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : (
         <div className="albums-grid">
           {albums.map((album: any, index: number) => (
@@ -458,7 +736,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   className="album-card-action"
                   title="Move earlier"
                   aria-label={`Move ${album.name} earlier`}
-                  disabled={index === 0}
+                  disabled={albumsSort !== null || index === 0}
                   onClick={() => moveAlbum(album.id, -1)}
                 >
                   <ChevronUpIcon size={14} />
@@ -468,7 +746,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   className="album-card-action"
                   title="Move later"
                   aria-label={`Move ${album.name} later`}
-                  disabled={index === albums.length - 1}
+                  disabled={albumsSort !== null || index === albums.length - 1}
                   onClick={() => moveAlbum(album.id, 1)}
                 >
                   <ChevronDownIcon size={14} />

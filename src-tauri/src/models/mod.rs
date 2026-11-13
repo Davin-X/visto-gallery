@@ -68,6 +68,8 @@ pub struct Album {
     pub updated_at: i64,
     // Not a column on `albums`: every query selects it as a correlated count.
     pub item_count: i64,
+    // Not a column on `albums`: every query selects it as a correlated sum.
+    pub item_size: i64,
     // Not a column on `albums`: hydrated by get_albums via album_items join.
     pub item_ids: Vec<String>,
 }
@@ -81,6 +83,7 @@ impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for Album {
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
             item_count: row.try_get("item_count")?,
+            item_size: row.try_get("item_size")?,
             item_ids: Vec::new(),
         })
     }
@@ -211,6 +214,7 @@ impl Album {
             created_at: now,
             updated_at: now,
             item_count: 0,
+            item_size: 0,
             item_ids: Vec::new(),
         }
     }

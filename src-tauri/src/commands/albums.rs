@@ -22,6 +22,8 @@ pub struct AlbumOverview {
     pub updated_at: i64,
     pub item_count: i64,
     pub cover_items: Vec<MediaItem>,
+    // Sum of visible member sizes, in bytes. Not a column on `albums`.
+    pub item_size: i64,
 }
 
 const ALBUM_COVER_LIMIT: i64 = 4;
@@ -113,6 +115,7 @@ pub(crate) async fn load_album_overviews(
                 updated_at: album.updated_at,
                 item_count: album.item_count,
                 cover_items,
+                item_size: album.item_size,
             }
         })
         .collect())

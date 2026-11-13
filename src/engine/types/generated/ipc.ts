@@ -15,6 +15,8 @@ export type DefaultLayout = "grid" | "details" | "timeline";
 
 export type ThumbnailSize = "small" | "medium" | "large";
 
+export type AlbumsView = "cards" | "list";
+
 export type ViewerZoomBehavior = "fit" | "actual" | "last";
 
 export type MediaKind = "photo" | "video" | "raw";
@@ -34,7 +36,7 @@ hiddenReason?: string | null,
  */
 isAnimated: boolean, rating?: number | null, colorLabel?: string | null, importSessionId?: string | null, createdAt: number, updatedAt: number, tags: Array<string>, albumIds: Array<string>, };
 
-export type Album = { id: string, name: string, colorIndex: number, createdAt: number, updatedAt: number, itemCount: number, itemIds: Array<string>, };
+export type Album = { id: string, name: string, colorIndex: number, createdAt: number, updatedAt: number, itemCount: number, itemSize: number, itemIds: Array<string>, };
 
 export type Tag = { id: string, name: string, colorIndex: number, createdAt: number, itemCount: number, };
 
@@ -186,7 +188,7 @@ export type RootPathMappingPreview = { oldRoot: string, newRoot: string, itemCou
 
 export type RootPathMappingResult = { oldRoot: string, newRoot: string, updatedItemCount: number, };
 
-export type AlbumOverview = { id: string, name: string, colorIndex: number, createdAt: number, updatedAt: number, itemCount: number, coverItems: Array<MediaItem>, };
+export type AlbumOverview = { id: string, name: string, colorIndex: number, createdAt: number, updatedAt: number, itemCount: number, coverItems: Array<MediaItem>, itemSize: number, };
 
 export type EditRecipe = { mediaId: string, edits: EditValues, crop?: CropState | null, history: EditValues[], historyIndex: number, createdAt: number, updatedAt: number, };
 
@@ -220,7 +222,7 @@ detail: string | null, };
 
 export type UpdateCheck = { available: boolean, currentVersion: string, latestVersion: string, notes: string, releaseUrl: string, downloadUrl?: string | null, publishedAt?: string | null, checkedAt: number, };
 
-export type AppSettings = { appearance: Appearance, accentColor: AccentColor, sidebarWidth: number, inspectorWidth: number, showExtensions: boolean, animateTransitions: boolean, startupView: StartupView, openLastFolder: boolean, restoreWindowState: boolean, defaultLayout: DefaultLayout, thumbnailSize: ThumbnailSize, viewerZoomBehavior: ViewerZoomBehavior, slideshowInterval: number, slideshowShuffle: boolean, slideshowLoop: boolean, videoAutoPlay: boolean, videoLoop: boolean, watchFolders: Array<string>, autoImport: boolean, 
+export type AppSettings = { appearance: Appearance, accentColor: AccentColor, sidebarWidth: number, inspectorWidth: number, showExtensions: boolean, animateTransitions: boolean, startupView: StartupView, openLastFolder: boolean, restoreWindowState: boolean, defaultLayout: DefaultLayout, thumbnailSize: ThumbnailSize, albumsView: AlbumsView, viewerZoomBehavior: ViewerZoomBehavior, slideshowInterval: number, slideshowShuffle: boolean, slideshowLoop: boolean, videoAutoPlay: boolean, videoLoop: boolean, watchFolders: Array<string>, autoImport: boolean, 
 /**
  * Dormant compatibility field. RAW+JPEG pairing is not implemented yet;
  * the control is marked unavailable in Settings, but the persisted value
@@ -250,7 +252,7 @@ checkForUpdatesOnLaunch: boolean,
  */
 maxCacheSizeGB: number, thumbnailQuality: number, enableDebugLogging: boolean, showNativeLimitWarnings: boolean, };
 
-export type PartialSettings = { appearance?: Appearance, accentColor?: AccentColor, sidebarWidth?: number, inspectorWidth?: number, showExtensions?: boolean, animateTransitions?: boolean, startupView?: StartupView, openLastFolder?: boolean, restoreWindowState?: boolean, defaultLayout?: DefaultLayout, thumbnailSize?: ThumbnailSize, viewerZoomBehavior?: ViewerZoomBehavior, slideshowInterval?: number, slideshowShuffle?: boolean, slideshowLoop?: boolean, videoAutoPlay?: boolean, videoLoop?: boolean, watchFolders?: Array<string>, autoImport?: boolean, 
+export type PartialSettings = { appearance?: Appearance, accentColor?: AccentColor, sidebarWidth?: number, inspectorWidth?: number, showExtensions?: boolean, animateTransitions?: boolean, startupView?: StartupView, openLastFolder?: boolean, restoreWindowState?: boolean, defaultLayout?: DefaultLayout, thumbnailSize?: ThumbnailSize, albumsView?: AlbumsView, viewerZoomBehavior?: ViewerZoomBehavior, slideshowInterval?: number, slideshowShuffle?: boolean, slideshowLoop?: boolean, videoAutoPlay?: boolean, videoLoop?: boolean, watchFolders?: Array<string>, autoImport?: boolean, 
 /**
  * Dormant compatibility field. RAW+JPEG pairing is not implemented yet;
  * the control is marked unavailable in Settings, but the persisted value

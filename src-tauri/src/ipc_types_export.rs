@@ -15,15 +15,15 @@ mod tests {
     use ts_rs::{Config, TS};
 
     use crate::commands::{
-        AccentColor, AlbumOverview, AppSettings, Appearance, BackupInfo, BatchExportError,
-        BatchExportItem, BatchExportProgress, BatchExportRequest, BatchExportResult, CropRect,
-        CropState, DefaultLayout, DuplicateGroup, EditPreset, EditRecipe, EditValues, ExifData,
-        ExportResult, ExternalPlayer, LibraryFilterDTO, LibraryFolder, LibraryItemsPage,
-        LibraryStats, MediaProbe, PartialSettings, PlaybackStrategy, PreparedPlayback,
-        RenderRequest, RestoreResult, RootPathMappingPreview, RootPathMappingResult, ScanResult,
-        SmartAlbum, SmartAlbumFilter, StartupView, ThumbnailRequest, ThumbnailResponse,
-        ThumbnailSize, TrashError, TrashRestoreFailure, TrashRestoreItem, TrashRestoreResult,
-        TrashResult, UpdateCheck, ViewerZoomBehavior,
+        AccentColor, AlbumOverview, AlbumsView, AppSettings, Appearance, BackupInfo,
+        BatchExportError, BatchExportItem, BatchExportProgress, BatchExportRequest,
+        BatchExportResult, CropRect, CropState, DefaultLayout, DuplicateGroup, EditPreset,
+        EditRecipe, EditValues, ExifData, ExportResult, ExternalPlayer, LibraryFilterDTO,
+        LibraryFolder, LibraryItemsPage, LibraryStats, MediaProbe, PartialSettings,
+        PlaybackStrategy, PreparedPlayback, RenderRequest, RestoreResult, RootPathMappingPreview,
+        RootPathMappingResult, ScanResult, SmartAlbum, SmartAlbumFilter, StartupView,
+        ThumbnailRequest, ThumbnailResponse, ThumbnailSize, TrashError, TrashRestoreFailure,
+        TrashRestoreItem, TrashRestoreResult, TrashResult, UpdateCheck, ViewerZoomBehavior,
     };
     use crate::errors::{CommandError, ErrorCode};
     use crate::media_kind::MediaKind;
@@ -61,6 +61,7 @@ mod tests {
             StartupView,
             DefaultLayout,
             ThumbnailSize,
+            AlbumsView,
             ViewerZoomBehavior,
             MediaKind,
             MediaItem,

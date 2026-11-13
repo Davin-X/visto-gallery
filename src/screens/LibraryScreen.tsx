@@ -195,6 +195,46 @@ interface LibraryScreenProps {
   showInspector: boolean;
 }
 
+/**
+ * Colour label, favourite and rating for a details row. The preview there is
+ * only 36px, so the grid's corner badges were clipped on it; the row states
+ * them inline at the end of the name cell instead.
+ */
+function ListRowMeta({ item }: { item: MediaItem }) {
+  const rating = Number(item.rating) || 0;
+  if (!item.favorite && !item.colorLabel && rating === 0) return null;
+  return (
+    <span className="list-row-meta">
+      {item.colorLabel ? (
+        <i
+          className={`list-row-color list-row-color--${item.colorLabel}`}
+          role="img"
+          aria-label={`Color label: ${item.colorLabel}`}
+          title={`Color label: ${item.colorLabel}`}
+        />
+      ) : null}
+      {item.favorite ? (
+        <span className="list-row-favorite" role="img" aria-label="Favorite" title="Favorite">
+          <HeartIcon size={11} filled />
+        </span>
+      ) : null}
+      {rating > 0 ? (
+        <span
+          className="list-row-rating"
+          role="img"
+          aria-label={`Rating: ${rating} of 5 stars`}
+          title={`Rating: ${rating} of 5 stars`}
+        >
+          <span className="star" aria-hidden="true">
+            {"\u2605"}
+          </span>
+          {rating}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function LibraryScreen(props: LibraryScreenProps) {
   const library = useLibraryStore();
   const playingId = usePlaybackStore((state) => state.itemId);
@@ -903,7 +943,19 @@ function LibraryScreen(props: LibraryScreenProps) {
     );
   };
   const detailsHeader = (label: string, sortBy?: typeof library.sortBy) => (
-    <div className="details-col">
+    <div
+      className="details-col list-view-head-cell"
+      role={sortBy ? "columnheader" : undefined}
+      aria-sort={
+        sortBy
+          ? library.sortBy === sortBy
+            ? library.sortOrder === "asc"
+              ? "ascending"
+              : "descending"
+            : "none"
+          : undefined
+      }
+    >
       {sortBy ? (
         <button type="button" className="details-sort-header" onClick={() => sortDetailsBy(sortBy)}>
           {label}
@@ -955,7 +1007,11 @@ function LibraryScreen(props: LibraryScreenProps) {
   };
 
   const tileClass = (item: any) =>
-    `gallery-tile${props.inspectedId === item.id ? " inspected" : ""}${selectedIdSet.has(item.id) ? " selected" : ""}${item.favorite ? " is-favorite" : ""}${masked(item) ? " hidden-obscured" : ""}`;
+    `gallery-tile${props.layout === "details" ? " list-view-row" : ""}${
+      props.inspectedId === item.id ? " inspected" : ""
+    }${selectedIdSet.has(item.id) ? " selected" : ""}${item.favorite ? " is-favorite" : ""}${
+      masked(item) ? " hidden-obscured" : ""
+    }`;
 
   // Right-clicking a photo is the most direct place to manage its album
   // membership. The picker itself carries the album list and search. The menu
@@ -1556,8 +1612,8 @@ function LibraryScreen(props: LibraryScreenProps) {
           onKeyDown={handleGridKeyDown}
         >
           {props.layout === "details" && (
-            <div className="details-header-sticky">
-              <div className="details-col details-preview-heading">Preview</div>
+            <div className="details-header-sticky list-view-header">
+              <div className="details-col list-view-head-cell details-preview-heading">Preview</div>
               {detailsHeader("Name", "name")}
               {detailsHeader("Captured", "capturedAt")}
               {detailsHeader("Kind", "kind")}
@@ -1567,7 +1623,7 @@ function LibraryScreen(props: LibraryScreenProps) {
           {(() => {
             if (props.layout === "details") {
               return (
-                <div className="gallery-grid layout-details">
+                <div className="gallery-grid layout-details list-view">
                   {renderedItems.length === 0 && (awaitingFirstPage ? skeletonView() : emptyView())}
                   {renderedItems.map((item: any) => (
                     <article
@@ -1679,29 +1735,18 @@ function LibraryScreen(props: LibraryScreenProps) {
                             <KindBadge kind={item.kind} />
                           </span>
                         )}
-                        {item.favorite && !masked(item) ? (
-                          <span className="tile-favorite" aria-label="Favorite">
-                            <HeartIcon size={10} filled />
-                          </span>
-                        ) : null}
-                        {item.colorLabel && !masked(item) ? (
-                          <span
-                            className={`tile-color-label tile-color-${item.colorLabel}`}
-                            aria-label={`Color label: ${item.colorLabel}`}
-                            title={`Color: ${item.colorLabel}`}
-                          >
-                            <span className="color-dot" />
-                          </span>
-                        ) : null}
                       </span>
                       <span className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}>
                         <b>
                           {masked(item) ? (
                             "Hidden item"
                           ) : (
-                            <MiddleTruncate
-                              text={displayFileName(item.name, item.extension, showExtensions)}
-                            />
+                            <>
+                              <MiddleTruncate
+                                text={displayFileName(item.name, item.extension, showExtensions)}
+                              />
+                              <ListRowMeta item={item} />
+                            </>
                           )}
                         </b>
                         <small className="tile-date">{formatItemDate(item)}</small>

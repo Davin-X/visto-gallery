@@ -16,7 +16,9 @@ use crate::{AppState, Catalog};
 pub(crate) const ALBUM_SELECT: &str =
     "SELECT a.id, a.name, a.color_index, a.created_at, a.updated_at, \
      (SELECT COUNT(*) FROM album_items ai JOIN media_items m ON m.id = ai.media_id \
-      WHERE ai.album_id = a.id AND m.hidden = 0) AS item_count FROM albums a";
+      WHERE ai.album_id = a.id AND m.hidden = 0) AS item_count, \
+     (SELECT COALESCE(SUM(m.size), 0) FROM album_items ai JOIN media_items m ON m.id = ai.media_id \
+      WHERE ai.album_id = a.id AND m.hidden = 0) AS item_size FROM albums a";
 
 /// Tag rows with their item count folded in, mirroring [`ALBUM_SELECT`].
 pub(crate) const TAG_SELECT: &str = "SELECT t.id, t.name, t.color_index, t.created_at, \

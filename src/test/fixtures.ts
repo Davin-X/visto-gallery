@@ -30,6 +30,7 @@ export function makeAlbum(overrides: Partial<Album> = {}): Album {
     name: "Trip",
     colorIndex: 0,
     itemCount: 0,
+    itemSize: 0,
     itemIds: [],
     createdAt: NOW,
     updatedAt: NOW,

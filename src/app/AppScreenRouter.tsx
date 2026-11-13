@@ -14,7 +14,7 @@ import AlbumsScreen from "../screens/AlbumsScreen";
 import DuplicatesScreen from "../screens/DuplicatesScreen";
 import { SettingsScreen } from "../design/components/SettingsScreen";
 import type { LibraryFolder, LibraryStats, ErrorCode } from "../engine/types/commands";
-import type { MediaItem } from "../engine/types/media";
+import type { LayoutMode, MediaItem } from "../engine/types/media";
 import type { DeleteRequest } from "../engine/types/deleteRequest";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { Screen } from "./screen";
@@ -31,6 +31,7 @@ interface AppScreenRouterProps {
   openViewer: (id?: string, origin?: Screen, scope?: "library" | "hidden") => void;
   openScreen: (screen: Screen) => void;
   openAlbumDialog: (seedIds?: string[]) => void;
+  changeLibraryLayout: (layout: LayoutMode) => void;
   openAlbumPicker: (itemIds?: string[]) => void;
   openContextMenu: (items: any[], e: React.MouseEvent) => void;
   searchInputRef: RefObject<HTMLInputElement | null>;
@@ -90,6 +91,7 @@ export function AppScreenRouter({
   openViewer,
   openScreen,
   openAlbumDialog,
+  changeLibraryLayout,
   openAlbumPicker,
   openContextMenu,
   searchInputRef,
@@ -185,7 +187,7 @@ export function AppScreenRouter({
           onOpenBatch={() => exportToBatch()}
           onChangeFilter={library.setFilter}
           onChangeQuery={library.setQuery}
-          onChangeLayout={library.setLayout}
+          onChangeLayout={changeLibraryLayout}
           onToggleInspector={library.toggleInspector}
           onSetActiveAlbum={library.setActiveAlbum}
           onOpenAlbums={() => openScreen("Albums")}
