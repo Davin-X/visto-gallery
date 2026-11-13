@@ -3,6 +3,10 @@
    navigation destination. The stage stays dark in both themes so photos read
    the same way, and the HUD fades out while the show plays.
    Top offset clears the 56px app topbar (which hosts macOS traffic lights). */
+.slideshow-overlay:focus {
+  outline: none;
+}
+
 .slideshow-overlay {
   position: fixed;
   top: 56px;
@@ -190,8 +194,11 @@
   outline-offset: 2px;
 }
 
-/* Caption in the controls bar */
+/* Caption in the controls bar. An older global rule positions
+   .slideshow-caption absolutely (bottom-left of the stage), which pulled it
+   out of the bar and left it floating above it; keep it in the flow here. */
 .slideshow-caption {
+  position: static;
   flex: 1;
   display: flex;
   flex-direction: column;
