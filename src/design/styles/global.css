@@ -3593,13 +3593,27 @@ body {
   --sidebar: #f4f6f8;
   --ink: #202a36;
   --text: #3f4b5a;
-  --muted: #687587;
-  --faint: #778394;
+  /* Darkened from #687587: the old value was 4.41:1 on --surface-2, which is
+     where album counts and the "Updated" line live. 4.81:1 there, 5.12:1 on
+     white. */
+  --muted: #626f80;
+  /* Darkened from #778394 (3.85:1 on white) so timestamp/filter-count text
+     clears 4.5:1 instead of disappearing at 11-12px. */
+  --faint: #697686;
   --line: #e1e6ec;
   --line-strong: #cbd3dd;
+  /* Edges that have to be *seen* — toolbar clusters, album cards, smart tiles,
+     the top-bar control group. --line is a 1.26:1 hairline on white, which is
+     fine for a table rule but not for a container boundary; this is 1.63:1. */
+  --edge: #c2ccd8;
+  /* Glyphs that sit on --surface-3 (library toolbar, zoom steps, layout
+     switcher). --muted only reached 4.10:1 on that fill. */
+  --icon-quiet: #5c6b7f;
   /* Cards that lift on hover (album cards, smart-album tiles) share this, so
-     the light and dark themes each get a shadow that actually reads. */
+     the light and dark themes each get a shadow that actually reads. The
+     resting shadow gives a card an edge even where its border is subtle. */
   --card-hover-shadow: 0 8px 24px rgba(20, 30, 45, 0.09);
+  --card-rest-shadow: 0 1px 2px rgba(20, 30, 45, 0.07);
   /* Accent tokens: a single accent setting drives every --blue reference in
      the UI, so the accent picker actually changes buttons, links, active
      nav, sliders and focus rings. */
@@ -3686,9 +3700,15 @@ body {
   --faint: #7d8799;
   --line: #2a3042;
   --line-strong: #353c52;
+  /* Same separation as light mode: an edge you can see and a glyph step that
+     is not already at the muted floor. */
+  --edge: #3a4257;
+  --icon-quiet: var(--muted);
   /* The light shadow disappears on a near-black surface, so the dark theme
      gets a deeper one instead of the same value at low opacity. */
   --card-hover-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+  /* Dark surfaces are already separated by value, so no resting lift. */
+  --card-rest-shadow: none;
   --accent: #3b82f6;
   --blue: var(--accent);
   --accent-hover: #2563eb;

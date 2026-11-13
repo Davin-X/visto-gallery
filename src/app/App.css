@@ -698,7 +698,7 @@ body.is-resizing .photo-inspector {
   flex-wrap: nowrap;
   gap: 2px;
   padding: 2px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-radius: 10px;
   background: var(--surface-3);
   box-shadow: none;
@@ -731,7 +731,7 @@ body.is-resizing .photo-inspector {
 }
 
 .library-header .toolbar-actions .slideshow-action {
-  color: var(--muted);
+  color: var(--icon-quiet);
 }
 
 .library-header .toolbar-actions .slideshow-action:hover:not(:disabled) {
@@ -775,7 +775,7 @@ body.is-resizing .photo-inspector {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--muted);
+  color: var(--icon-quiet);
   cursor: pointer;
   transition:
     background 0.16s cubic-bezier(0.16, 1, 0.3, 1),
@@ -983,15 +983,23 @@ body.is-resizing .photo-inspector {
   font-variant-numeric: tabular-nums;
 }
 
-/* A type with nothing in the current view stays clickable but steps back,
-   so the chips that lead somewhere stand out. */
+/* A type with nothing in the current view keeps its label readable and lets
+   the dashed edge plus the zero count say "nothing here". It used to sit at
+   0.5 opacity, which put the text at 1.9:1 on the toolbar and read as a
+   rendering glitch rather than a state. */
 .quick-filter.is-empty:not(.active) {
-  opacity: 0.5;
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.quick-filter.is-empty:not(.active) .filter-count {
+  color: var(--faint);
 }
 
 .quick-filter.is-empty:not(.active):hover,
 .quick-filter.is-empty:not(.active):focus-visible {
-  opacity: 0.85;
+  border-style: dashed;
+  color: var(--ink);
 }
 
 .quick-filter.active .filter-count {
@@ -2914,7 +2922,7 @@ body.is-resizing .photo-inspector {
   border: none;
   border-radius: 7px;
   background: transparent;
-  color: var(--muted);
+  color: var(--icon-quiet);
   font-size: 14px;
   cursor: pointer;
   transition: all 0.15s;
@@ -2944,7 +2952,7 @@ body.is-resizing .photo-inspector {
   border: none;
   border-radius: 7px;
   background: transparent;
-  color: var(--text);
+  color: var(--icon-quiet);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -2952,7 +2960,7 @@ body.is-resizing .photo-inspector {
 }
 
 .zoom-control button:hover {
-  color: var(--text);
+  color: var(--ink);
 }
 
 .zoom-control button.selected {
@@ -3397,9 +3405,11 @@ body.is-resizing .photo-inspector {
   align-items: center;
   gap: 2px;
   padding: 2px;
-  border: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+  /* The cluster boundary used to be --line at 45%: ~1.09:1 against the bar,
+     i.e. invisible, so five buttons floated with no container. */
+  border: 1px solid color-mix(in srgb, var(--edge) 75%, transparent);
   border-radius: 9px;
-  background: color-mix(in srgb, var(--surface-2) 38%, transparent);
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
 }
 
 /* Titlebar controls: quiet by default, clear on hover/active — like native
@@ -3520,7 +3530,7 @@ body.is-resizing .photo-inspector {
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
-  color: var(--faint);
+  color: var(--icon-quiet);
   cursor: pointer;
   flex: 0 0 auto;
   transition:
@@ -5076,11 +5086,12 @@ body.is-resizing .photo-inspector {
   flex-direction: column;
   padding: 0;
   overflow: visible;
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-radius: 13px;
   /* --surface is also the page background, so it gave the card no fill at all:
      the card was a hairline outline around art. --surface-2 is the card step. */
   background: var(--surface-2);
+  box-shadow: var(--card-rest-shadow);
   color: var(--text);
   text-align: left;
   cursor: pointer;
@@ -13659,9 +13670,10 @@ body.is-resizing .photo-inspector {
   width: 172px;
   min-height: 96px;
   padding: 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-radius: 12px;
   background: var(--surface-2);
+  box-shadow: var(--card-rest-shadow);
   color: var(--ink);
   font: inherit;
   text-align: left;
