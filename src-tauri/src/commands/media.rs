@@ -130,6 +130,71 @@ async fn resolve_trash_targets(
 
 /// The OS-level Trash operation, behind a trait so tests can drive the whole
 /// flow without moving real user files.
+/// Paths per Finder call. One AppleScript call per batch keeps the number of
+/// Finder trash sounds and process launches low (4,000 duplicates take 20
+/// calls), and Cancel is still checked between batches. A failing batch is
+/// split rather than retried file by file, so a larger batch stays cheap
+/// when one file in it cannot be moved.
+const TRASH_BATCH: usize = 200;
+
+/// Move `chunk` to the Trash. When a batch fails, split it in halves and
+/// retry each half, recursing only into halves that fail, until the failing
+/// files are isolated. One bad file in a batch of 200 then costs about 15
+/// Finder calls instead of 200. The caller checks Cancel before handing over
+/// the batch; Cancel is checked again before every retry of a split part.
+async fn trash_splitting(
+    sink: &Arc<dyn TrashSink>,
+    chunk: &[(String, String)],
+    cancel: &super::CancelToken<'_>,
+    trashed: &mut Vec<String>,
+    failed: &mut Vec<TrashError>,
+) {
+    // A stack of parts still to try; the first half is pushed last so files
+    // are processed (and reported) in their original order.
+    let mut pending: Vec<&[(String, String)]> = vec![chunk];
+    let mut first_attempt = true;
+    while let Some(part) = pending.pop() {
+        if !std::mem::take(&mut first_attempt) && cancel.is_cancelled() {
+            for (id, _) in part {
+                failed.push(TrashError {
+                    id: id.clone(),
+                    code: ErrorCode::Cancelled,
+                    error: "Operation cancelled".to_string(),
+                });
+            }
+            continue;
+        }
+        let part_sink = Arc::clone(sink);
+        let paths: Vec<String> = part.iter().map(|(_, path)| path.clone()).collect();
+        match tokio::task::spawn_blocking(move || part_sink.delete_all(&paths)).await {
+            Ok(Ok(())) => trashed.extend(part.iter().map(|(id, _)| id.clone())),
+            Ok(Err(e)) if part.len() == 1 => failed.push(TrashError {
+                id: part[0].0.clone(),
+                code: ErrorCode::Io,
+                error: format!("Could not move to Trash: {}", e),
+            }),
+            Ok(Err(_)) => {
+                let mid = part.len() / 2;
+                pending.push(&part[mid..]);
+                pending.push(&part[..mid]);
+            }
+            Err(e) => {
+                // The blocking task panicked or was cancelled mid-batch, so we
+                // cannot claim any of these files moved. Report every id in the
+                // part: dropping them would leave rows that the UI believes
+                // are still deletable attached to files that may be gone.
+                for (id, _) in part {
+                    failed.push(TrashError {
+                        id: id.clone(),
+                        code: ErrorCode::Internal,
+                        error: format!("Trash task failed: {}", e),
+                    });
+                }
+            }
+        }
+    }
+}
+
 trait TrashSink: Send + Sync {
     /// Trashes multiple paths in a single OS operation where possible.
     /// On macOS this is one AppleScript `tell Finder delete` call per batch —
@@ -249,12 +314,6 @@ where
     let total = targets.len();
     let mut processed = 0usize;
 
-    // One AppleScript call per batch keeps the sound count low while still
-    // allowing Cancel between batches. 50 paths per AppleScript call means
-    // Cancel is checked every ~50 files — responsive enough for 4000+ file
-    // operations without excessive Finder sounds.
-    const TRASH_BATCH: usize = 50;
-
     for chunk in targets.chunks(TRASH_BATCH) {
         if cancel.is_cancelled() {
             for (id, _) in chunk {
@@ -274,61 +333,7 @@ where
             chunk.first().map(|(_, path)| path.as_str()),
         );
 
-        let batch_sink = Arc::clone(&sink);
-        let batch_paths: Vec<String> = chunk.iter().map(|(_, path)| path.clone()).collect();
-        let result = tokio::task::spawn_blocking(move || batch_sink.delete_all(&batch_paths)).await;
-
-        match result {
-            Ok(Ok(())) => {
-                trashed.extend(chunk.iter().map(|(id, _)| id.clone()));
-            }
-            Ok(Err(_batch_err)) => {
-                // Batch failed: try each file individually so partial
-                // successes still count and failures are reported per-id.
-                for (id, path) in chunk {
-                    if cancel.is_cancelled() {
-                        failed.push(TrashError {
-                            id: id.clone(),
-                            code: ErrorCode::Cancelled,
-                            error: "Operation cancelled".to_string(),
-                        });
-                        continue;
-                    }
-                    let single_sink = Arc::clone(&sink);
-                    let single_path = path.clone();
-                    match tokio::task::spawn_blocking(move || {
-                        single_sink.delete_all(&[single_path])
-                    })
-                    .await
-                    {
-                        Ok(Ok(())) => trashed.push(id.clone()),
-                        Ok(Err(e)) => failed.push(TrashError {
-                            id: id.clone(),
-                            code: ErrorCode::Io,
-                            error: format!("Could not move to Trash: {}", e),
-                        }),
-                        Err(e) => failed.push(TrashError {
-                            id: id.clone(),
-                            code: ErrorCode::Internal,
-                            error: format!("Trash task failed: {}", e),
-                        }),
-                    }
-                }
-            }
-            Err(e) => {
-                // The blocking task panicked or was cancelled mid-batch, so we
-                // cannot claim any of these files moved. Report every id in the
-                // chunk: dropping them would leave rows that the UI believes
-                // are still deletable attached to files that may be gone.
-                for (id, _) in chunk {
-                    failed.push(TrashError {
-                        id: id.clone(),
-                        code: ErrorCode::Internal,
-                        error: format!("Trash task failed: {}", e),
-                    });
-                }
-            }
-        }
+        trash_splitting(&sink, chunk, cancel, &mut trashed, &mut failed).await;
 
         processed += chunk.len();
     }
@@ -2568,16 +2573,22 @@ mod trash_flow_tests {
     struct FakeTrash {
         fail_paths: HashSet<String>,
         moved: Mutex<Vec<String>>,
+        calls: std::sync::atomic::AtomicUsize,
     }
 
     impl FakeTrash {
         fn moved(&self) -> Vec<String> {
             self.moved.lock().unwrap().clone()
         }
+
+        fn calls(&self) -> usize {
+            self.calls.load(std::sync::atomic::Ordering::SeqCst)
+        }
     }
 
     impl TrashSink for FakeTrash {
         fn delete_all(&self, paths: &[String]) -> Result<(), CommandError> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             // If any path in the batch is a known failure, the whole batch
             // fails (mirrors a single osascript call failing partway).
             if paths.iter().any(|p| self.fail_paths.contains(p)) {
@@ -2750,7 +2761,7 @@ mod trash_flow_tests {
 
         let fake = Arc::new(FakeTrash {
             fail_paths: HashSet::from([bad.to_string_lossy().into_owned()]),
-            moved: Mutex::new(Vec::new()),
+            ..FakeTrash::default()
         });
         let sink: Arc<dyn TrashSink> = fake.clone();
         let group = super::super::CancelGroup::default();
@@ -2773,6 +2784,53 @@ mod trash_flow_tests {
         assert_eq!(outcome.failed[0].id, "bad");
         assert!(outcome.failed[0].error.contains("permission denied"));
         assert_eq!(catalog_ids(&db).await, vec!["bad"]);
+    }
+
+    /// One file that cannot be moved must not cost a Finder call per file in
+    /// its batch: the batch is split until the bad file is isolated.
+    #[tokio::test]
+    async fn one_bad_file_is_isolated_by_splitting_not_per_file_retries() {
+        let db = test_db().await;
+        let dir = temp_dir("split");
+        let mut targets = Vec::new();
+        for index in 0..super::TRASH_BATCH {
+            let id = format!("item-{index:03}");
+            let path = dir.join(format!("{id}.jpg"));
+            write_file(&path);
+            insert_item(&db, &id, &path).await;
+            targets.push((id, path.to_string_lossy().into_owned()));
+        }
+        let bad = targets[137].1.clone();
+        let fake = Arc::new(FakeTrash {
+            fail_paths: HashSet::from([bad]),
+            ..FakeTrash::default()
+        });
+        let sink: Arc<dyn TrashSink> = fake.clone();
+        let group = super::super::CancelGroup::default();
+        let cancel = group.start();
+
+        let outcome = execute_trash(&db, targets.clone(), sink, &cancel, |_, _, _| {})
+            .await
+            .expect("trash targets");
+
+        assert_eq!(outcome.trashed.len(), super::TRASH_BATCH - 1);
+        assert_eq!(outcome.failed.len(), 1);
+        assert_eq!(outcome.failed[0].id, "item-137");
+        assert_eq!(outcome.failed[0].code, crate::errors::ErrorCode::Io);
+        // The original batch, then two calls per halving level down to one
+        // file: far below one call per file (200).
+        assert!(
+            fake.calls() <= 1 + 2 * 8,
+            "expected a handful of Finder calls, got {}",
+            fake.calls()
+        );
+        // Order is preserved for everything that moved.
+        let expected: Vec<String> = targets
+            .iter()
+            .map(|(id, _)| id.clone())
+            .filter(|id| id != "item-137")
+            .collect();
+        assert_eq!(outcome.trashed, expected);
     }
 
     /// A panicking sink makes `spawn_blocking` return a JoinError. Every id in
@@ -2855,10 +2913,10 @@ mod trash_flow_tests {
         let dir = temp_dir("cancel");
         let group = Arc::new(super::super::CancelGroup::default());
 
-        // 51 targets cross the 50-file batch boundary exactly once.
+        // One more target than a batch crosses the batch boundary exactly once.
         let mut targets = Vec::new();
-        for index in 0..51 {
-            let id = format!("item-{index:02}");
+        for index in 0..=super::TRASH_BATCH {
+            let id = format!("item-{index:03}");
             let path = dir.join(format!("{id}.jpg"));
             write_file(&path);
             insert_item(&db, &id, &path).await;
@@ -2886,14 +2944,17 @@ mod trash_flow_tests {
             1,
             "the cancel is seen before the second batch"
         );
-        assert_eq!(outcome.trashed.len(), 50);
+        assert_eq!(outcome.trashed.len(), super::TRASH_BATCH);
         assert_eq!(
             fake.moved().len(),
-            50,
+            super::TRASH_BATCH,
             "the cancelled batch must never reach the trash backend"
         );
         assert_eq!(outcome.failed.len(), 1);
-        assert_eq!(outcome.failed[0].id, "item-50");
+        assert_eq!(
+            outcome.failed[0].id,
+            format!("item-{:03}", super::TRASH_BATCH)
+        );
         assert_eq!(outcome.failed[0].code, crate::errors::ErrorCode::Cancelled);
 
         // A run that starts after the cancel owns a fresh flag and completes.
