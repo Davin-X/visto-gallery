@@ -1,8 +1,23 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
-import { render } from "@testing-library/react";
+import { cleanup, render, waitFor } from "@testing-library/react";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
 import type { MediaItem } from "../engine/types/media";
+
+const mocks = vi.hoisted(() => ({
+  getHiddenStats: vi.fn(async () => ({
+    photos: 4,
+    videos: 3,
+    raws: 2,
+    animations: 1,
+    favorites: 1,
+    hidden: 10,
+  })),
+}));
+
+vi.mock("../engine/commands/tauri", () => ({
+  tauri: { library: { getHiddenStats: mocks.getHiddenStats } },
+}));
 
 vi.mock("../engine/stores/useLibraryStore", () => ({
   useLibraryStore: vi.fn(),
@@ -103,11 +118,24 @@ function renderHiddenScreen(storeOverrides: Partial<ReturnType<typeof defaultSto
   );
 }
 
+const hiddenStats = {
+  photos: 4,
+  videos: 3,
+  raws: 2,
+  animations: 1,
+  favorites: 1,
+  hidden: 10,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.getHiddenStats.mockResolvedValue(hiddenStats);
 });
 
 afterEach(() => {
+  // Unmount first: the stats fetch resolves asynchronously and must not
+  // re-render a screen whose store mock has already been reset.
+  cleanup();
   vi.resetAllMocks();
 });
 
@@ -124,17 +152,22 @@ describe("HiddenScreen", () => {
     expect(props.items[0].hidden).toBe(true);
   });
 
-  it("passes libraryStats derived from hidden items", () => {
-    renderHiddenScreen();
-    const props = mockedLibraryScreen.mock.calls[0][0];
-    expect(props.libraryStats).toEqual({
-      photos: 1,
-      videos: 1,
-      raws: 0,
-      animations: 0,
-      favorites: 1,
+  it("counts every hidden item by type, not just the loaded page", async () => {
+    // The loaded page is already filtered to Photos, yet the Videos and RAW
+    // chips must keep their real counts from the catalog.
+    renderHiddenScreen({ hiddenFilter: "Photos" });
+    await waitFor(() => {
+      const calls = mockedLibraryScreen.mock.calls;
+      expect(calls[calls.length - 1][0].libraryStats).toEqual({
+        photos: 4,
+        videos: 3,
+        raws: 2,
+        animations: 1,
+        favorites: 1,
+      });
     });
-    expect(props.hiddenCount).toBe(2);
+    expect(mocks.getHiddenStats).toHaveBeenCalled();
+    expect(mockedLibraryScreen.mock.calls[0][0].hiddenCount).toBe(2);
   });
 
   it("passes the server-filtered page through untouched when hiddenFilter changes", () => {

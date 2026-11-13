@@ -1910,23 +1910,47 @@ pub async fn get_library_stats(
 }
 
 pub(crate) async fn library_stats(db: &SqlitePool) -> Result<LibraryStats, CommandError> {
+    library_stats_scoped(db, false).await
+}
+
+/// Per-kind counts and sizes for the hidden items, so the Hidden screen's
+/// type chips count the whole hidden collection rather than whichever page
+/// (already filtered to the selected type) happens to be loaded.
+#[tauri::command]
+pub async fn get_hidden_stats(
+    catalog: State<'_, crate::Catalog>,
+) -> Result<LibraryStats, CommandError> {
+    let db = super::get_db(&catalog)?;
+    library_stats_scoped(&db, true).await
+}
+
+/// The stats query over visible items (`hidden = 0`) or hidden ones
+/// (`hidden = 1`). `scope` is a constant 0/1, never user input. The `hidden`
+/// and `hidden_size` fields always count every hidden item.
+async fn library_stats_scoped(
+    db: &SqlitePool,
+    hidden_scope: bool,
+) -> Result<LibraryStats, CommandError> {
+    let scope = u8::from(hidden_scope);
     let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
-        "SELECT
-            SUM(CASE WHEN kind = 'photo' AND hidden = 0 AND is_animated = 0 THEN 1 ELSE 0 END),
-            SUM(CASE WHEN kind = 'video' AND hidden = 0 THEN 1 ELSE 0 END),
-            SUM(CASE WHEN kind = 'raw' AND hidden = 0 THEN 1 ELSE 0 END),
-            SUM(CASE WHEN is_animated = 1 AND hidden = 0 THEN 1 ELSE 0 END),
-            SUM(CASE WHEN is_animated = 1 AND hidden = 0 THEN size ELSE 0 END),
-            SUM(CASE WHEN kind NOT IN ('photo', 'video', 'raw') AND hidden = 0 THEN 1 ELSE 0 END),
-            SUM(CASE WHEN favorite = 1 AND hidden = 0 THEN 1 ELSE 0 END),
+        &format!(
+            "SELECT
+            SUM(CASE WHEN kind = 'photo' AND hidden = {scope} AND is_animated = 0 THEN 1 ELSE 0 END),
+            SUM(CASE WHEN kind = 'video' AND hidden = {scope} THEN 1 ELSE 0 END),
+            SUM(CASE WHEN kind = 'raw' AND hidden = {scope} THEN 1 ELSE 0 END),
+            SUM(CASE WHEN is_animated = 1 AND hidden = {scope} THEN 1 ELSE 0 END),
+            SUM(CASE WHEN is_animated = 1 AND hidden = {scope} THEN size ELSE 0 END),
+            SUM(CASE WHEN kind NOT IN ('photo', 'video', 'raw') AND hidden = {scope} THEN 1 ELSE 0 END),
+            SUM(CASE WHEN favorite = 1 AND hidden = {scope} THEN 1 ELSE 0 END),
             SUM(CASE WHEN hidden = 1 THEN 1 ELSE 0 END),
-            SUM(CASE WHEN kind = 'photo' AND hidden = 0 AND is_animated = 0 THEN size ELSE 0 END),
-            SUM(CASE WHEN kind = 'video' AND hidden = 0 THEN size ELSE 0 END),
-            SUM(CASE WHEN kind = 'raw' AND hidden = 0 THEN size ELSE 0 END),
-            SUM(CASE WHEN kind NOT IN ('photo', 'video', 'raw') AND hidden = 0 THEN size ELSE 0 END),
-            SUM(CASE WHEN favorite = 1 AND hidden = 0 THEN size ELSE 0 END),
+            SUM(CASE WHEN kind = 'photo' AND hidden = {scope} AND is_animated = 0 THEN size ELSE 0 END),
+            SUM(CASE WHEN kind = 'video' AND hidden = {scope} THEN size ELSE 0 END),
+            SUM(CASE WHEN kind = 'raw' AND hidden = {scope} THEN size ELSE 0 END),
+            SUM(CASE WHEN kind NOT IN ('photo', 'video', 'raw') AND hidden = {scope} THEN size ELSE 0 END),
+            SUM(CASE WHEN favorite = 1 AND hidden = {scope} THEN size ELSE 0 END),
             SUM(CASE WHEN hidden = 1 THEN size ELSE 0 END)
-        FROM media_items",
+        FROM media_items"
+        ),
     )
     .fetch_one(db)
     .await
@@ -3359,6 +3383,46 @@ mod library_stats_tests {
         assert_eq!(stats.photo_size, 100);
         assert_eq!(stats.animations_size, 40);
         assert_eq!(stats.total_size, 1140);
+    }
+
+    /// The Hidden screen's chips count every hidden item by kind, and the
+    /// library's own counts leave hidden items out.
+    #[tokio::test]
+    async fn hidden_scope_counts_only_hidden_items_by_kind() {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&db).await.unwrap();
+        for (id, ext, kind, size, hidden) in [
+            ("shown", "jpg", "photo", 10, 0),
+            ("p1", "jpg", "photo", 20, 1),
+            ("p2", "heic", "photo", 30, 1),
+            ("v1", "mp4", "video", 500, 1),
+            ("r1", "cr2", "raw", 70, 1),
+        ] {
+            sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at, hidden) VALUES (?, ?, ?, ?, ?, ?, 1, 1, 1, ?)")
+                .bind(id)
+                .bind(format!("/lib/{id}.{ext}"))
+                .bind(format!("{id}.{ext}"))
+                .bind(ext)
+                .bind(kind)
+                .bind(size)
+                .bind(hidden)
+                .execute(&db)
+                .await
+                .unwrap();
+        }
+
+        let hidden = super::library_stats_scoped(&db, true).await.unwrap();
+        assert_eq!((hidden.photos, hidden.videos, hidden.raws), (2, 1, 1));
+        assert_eq!(hidden.total_size, 620);
+        assert_eq!(hidden.hidden, 4);
+
+        let visible = library_stats(&db).await.unwrap();
+        assert_eq!((visible.photos, visible.videos, visible.raws), (1, 0, 0));
+        assert_eq!(visible.hidden, 4);
     }
 }
 
