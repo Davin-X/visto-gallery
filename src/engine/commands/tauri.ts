@@ -84,6 +84,9 @@ export const tauri = {
 
     getStats: (): Promise<LibraryStats> => invoke("get_library_stats"),
 
+    /** Per-kind counts over hidden items (the Hidden screen's type chips). */
+    getHiddenStats: (): Promise<LibraryStats> => invoke("get_hidden_stats"),
+
     removeFolder: (path: string, deleteFiles = false): Promise<number> =>
       invoke("remove_library_folder", { path, deleteFiles }),
 

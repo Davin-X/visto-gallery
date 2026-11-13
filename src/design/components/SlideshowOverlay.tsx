@@ -181,6 +181,20 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
     setFlipX(false);
   }, [item?.id]);
 
+  // The show is a modal dialog: VoiceOver and the keyboard should land in it.
+  // Focus the overlay itself, not its first button (Space must stay
+  // play/pause rather than pressing "Previous slide"), and hand focus back
+  // to where it was when the show closes.
+  const overlayRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    overlayRef.current?.focus({ preventScroll: true });
+    return () => {
+      if (previous?.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, [isOpen]);
+
   // Cleanup on close
   useEffect(() => {
     if (!isOpen) {
@@ -300,6 +314,8 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
 
   return (
     <div
+      ref={overlayRef}
+      tabIndex={-1}
       className={`slideshow-overlay${hudShown ? " hud-visible" : ""}`}
       data-transition={transition}
       role="dialog"

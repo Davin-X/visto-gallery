@@ -346,20 +346,6 @@
   font-weight: 650;
 }
 
-.duplicate-group-hash {
-  align-self: flex-start;
-  max-width: 100%;
-  overflow: hidden;
-  padding: 1px 6px;
-  border-radius: 5px;
-  background: var(--surface-3);
-  color: var(--faint);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
-  font-size: 10px;
-  line-height: 1.5;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
 
 .duplicate-group-chevron {
   display: grid;

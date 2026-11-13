@@ -173,6 +173,7 @@ pub fn run() {
             get_library_items,
             get_matching_ids,
             get_hidden_items,
+            get_hidden_stats,
             get_items_by_ids,
             get_albums,
             get_album_overviews,

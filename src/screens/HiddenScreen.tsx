@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { EyeOffIcon, ImageOffIcon } from "../design/components/icons";
 import { BrandMark } from "../design/components/BrandMark";
 import LibraryScreen from "./LibraryScreen";
 import { useFocusTrap } from "../design/hooks/useFocusTrap";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
+import { tauri } from "../engine/commands/tauri";
 import { useShallow } from "zustand/react/shallow";
 import type { MediaItem } from "../engine/types/media";
 import type { Screen } from "../app/screen";
@@ -71,16 +72,38 @@ function HiddenScreen(props: HiddenScreenProps) {
       updateItemTags: s.updateItemTags,
     })),
   );
-  const hiddenLibraryStats = useMemo(
-    () => ({
-      photos: library.hiddenItems.filter((i: MediaItem) => i.kind === "photo").length,
-      videos: library.hiddenItems.filter((i: MediaItem) => i.kind === "video").length,
-      raws: library.hiddenItems.filter((i: MediaItem) => i.kind === "raw").length,
-      animations: library.hiddenItems.filter((i: MediaItem) => i.isAnimated).length,
-      favorites: library.hiddenItems.filter((i: MediaItem) => i.favorite).length,
-    }),
-    [library.hiddenItems],
-  );
+  // Type chip counts come from the catalog, not the loaded list: that list
+  // is already filtered to the selected type and paged, so counting it made
+  // every other type read 0 as soon as one was chosen. Refreshed whenever
+  // the hidden list reloads (hide, unhide, filter change).
+  const [hiddenLibraryStats, setHiddenLibraryStats] = useState({
+    photos: 0,
+    videos: 0,
+    raws: 0,
+    animations: 0,
+    favorites: 0,
+  });
+  useEffect(() => {
+    let cancelled = false;
+    tauri.library
+      .getHiddenStats()
+      .then((stats) => {
+        if (cancelled || !stats) return;
+        setHiddenLibraryStats({
+          photos: stats.photos,
+          videos: stats.videos,
+          raws: stats.raws,
+          animations: stats.animations,
+          favorites: stats.favorites,
+        });
+      })
+      .catch(() => {
+        // Keep the last counts; the grid itself still works.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [library.hiddenItems]);
   const [pendingReveal, setPendingReveal] = useState<
     | { kind: "viewer"; id?: string }
     | { kind: "background"; id: string }
