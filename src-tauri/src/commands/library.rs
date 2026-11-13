@@ -529,6 +529,49 @@ pub async fn get_hidden_items(
     get_library_items_page(&db, f).await
 }
 
+/// Return the cataloged items for `ids`, in the order given. Ids that are no
+/// longer in the catalog are skipped. Lets a screen show specific items (for
+/// example every photo with a saved edit draft) without depending on which
+/// library pages happen to be loaded.
+#[tauri::command]
+pub async fn get_items_by_ids(
+    ids: Vec<String>,
+    catalog: State<'_, crate::Catalog>,
+) -> Result<Vec<MediaItem>, CommandError> {
+    let db = super::get_db(&catalog)?;
+    items_by_ids(&db, &ids).await
+}
+
+/// SQLite caps bound parameters per statement, so look ids up in chunks.
+const ITEMS_BY_IDS_CHUNK: usize = 500;
+
+pub(crate) async fn items_by_ids(
+    db: &SqlitePool,
+    ids: &[String],
+) -> Result<Vec<MediaItem>, CommandError> {
+    let mut found: HashMap<String, MediaItem> = HashMap::new();
+    for chunk in ids.chunks(ITEMS_BY_IDS_CHUNK) {
+        let mut qb: QueryBuilder<Sqlite> =
+            QueryBuilder::new("SELECT * FROM media_items WHERE id IN (");
+        let mut separated = qb.separated(", ");
+        for id in chunk {
+            separated.push_bind(id);
+        }
+        separated.push_unseparated(")");
+        for item in qb.build_query_as::<MediaItem>().fetch_all(db).await? {
+            found.insert(item.id.clone(), item);
+        }
+    }
+    let mut seen = HashSet::new();
+    let mut items: Vec<MediaItem> = ids
+        .iter()
+        .filter(|id| seen.insert(id.as_str()))
+        .filter_map(|id| found.remove(id))
+        .collect();
+    hydrate_relations(db, &mut items).await?;
+    Ok(items)
+}
+
 /// Escape `\\`, `%` and `_` so a search term matches literally inside a
 /// `LIKE ... ESCAPE '\\'` pattern.
 fn escape_like(term: &str) -> String {
@@ -3316,5 +3359,59 @@ mod library_stats_tests {
         assert_eq!(stats.photo_size, 100);
         assert_eq!(stats.animations_size, 40);
         assert_eq!(stats.total_size, 1140);
+    }
+}
+
+#[cfg(test)]
+mod items_by_ids_tests {
+    use super::items_by_ids;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn db_with_items(count: usize) -> sqlx::SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&db).await.unwrap();
+        for i in 0..count {
+            sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at) VALUES (?, ?, ?, 'jpg', 'photo', 1, 1, 1, 1)")
+                .bind(format!("id-{i}"))
+                .bind(format!("/lib/{i}.jpg"))
+                .bind(format!("{i}.jpg"))
+                .execute(&db)
+                .await
+                .unwrap();
+        }
+        db
+    }
+
+    fn ids(values: &[&str]) -> Vec<String> {
+        values.iter().map(|v| v.to_string()).collect()
+    }
+
+    #[tokio::test]
+    async fn returns_items_in_request_order_and_skips_unknown_ids() {
+        let db = db_with_items(3).await;
+        let items = items_by_ids(&db, &ids(&["id-2", "gone", "id-0", "id-2"]))
+            .await
+            .unwrap();
+        let got: Vec<&str> = items.iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(got, vec!["id-2", "id-0"]);
+    }
+
+    #[tokio::test]
+    async fn looks_up_more_ids_than_one_statement_can_bind() {
+        let db = db_with_items(1200).await;
+        let wanted: Vec<String> = (0..1200).map(|i| format!("id-{i}")).collect();
+        let items = items_by_ids(&db, &wanted).await.unwrap();
+        assert_eq!(items.len(), 1200);
+        assert_eq!(items[1199].id, "id-1199");
+    }
+
+    #[tokio::test]
+    async fn empty_request_returns_nothing() {
+        let db = db_with_items(1).await;
+        assert!(items_by_ids(&db, &[]).await.unwrap().is_empty());
     }
 }

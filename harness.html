@@ -220,6 +220,10 @@
           const index = Number(albumId.replace("benchmark-album-", "")) || 0;
           return items.slice(index * 4, index * 4 + 4);
         }
+        if (command === "get_items_by_ids") {
+          const byId = new Map(items.map((item) => [item.id, item]));
+          return (args?.ids || []).map((id) => byId.get(id)).filter(Boolean);
+        }
         if (command === "get_library_items") {
           const filter = args?.filter || {};
           const cursor = filter.cursor || "items-0";

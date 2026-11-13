@@ -458,7 +458,6 @@ export function AppScreenRouter({
           onNotice={showNotice}
           onReloadLibrary={library.loadLibrary}
           assetUrl={assetUrl}
-          items={library.items.filter((i) => i.kind === "photo" && !i.hidden)}
           onOpenEdit={async (item: MediaItem) => {
             await edit.saveDraft();
             // Prefer freshest library metadata (size/modifiedAt) after file ops.

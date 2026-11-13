@@ -26,6 +26,7 @@ import {
 } from "../engine/stores/useEditStore";
 import type { MediaItem, EditValues } from "../engine/types/media";
 import { draftImageStyle } from "../engine/utils/draftImage";
+import { useDraftItems } from "./useDraftItems";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 
 /* ===== Dedicated Edit Icons ===== */
@@ -262,7 +263,6 @@ interface EditScreenProps {
   };
   history: EditValues[];
   historyIndex: number;
-  items: MediaItem[];
   assetUrl: (path: string) => string;
   canUndo: boolean;
   canRedo: boolean;
@@ -415,10 +415,7 @@ function EditScreen(props: EditScreenProps) {
     crop.enabled ||
     Object.entries(initialEdits).some(([key, value]) => values[key as keyof EditValues] !== value);
 
-  const savedDraftItems = useMemo(
-    () => (props.items || []).filter((item) => draftIds.has(item.id) && !item.hidden),
-    [props.items, draftIds],
-  );
+  const savedDraftItems = useDraftItems(draftIds);
 
   const previewValues = showOriginalPreview ? initialEdits : values;
   const warmth = Number(previewValues.warmth || 0);
