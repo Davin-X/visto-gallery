@@ -301,26 +301,26 @@ import { listen } from "@tauri-apps/api/event";
 // Event listeners
 export const events = {
   onLibraryChanged: (callback: (event: LibraryChangedEvent) => void) =>
-    listen("library-changed", (e: any) => callback(e.payload)),
+    listen<LibraryChangedEvent>("library-changed", (e) => callback(e.payload)),
 
   /** Catalog-wide counts may have changed (scan or import added rows). */
   onLibraryCountsChanged: (callback: () => void) =>
     listen("library-counts-changed", () => callback()),
 
   onImportProgress: (callback: (event: ImportProgressEvent) => void) =>
-    listen("import-progress", (e: any) => callback(e.payload)),
+    listen<ImportProgressEvent>("import-progress", (e) => callback(e.payload)),
 
   onThumbnailReady: (callback: (event: ThumbnailReadyEvent) => void) =>
-    listen("thumbnail-ready", (e: any) => callback(e.payload)),
+    listen<ThumbnailReadyEvent>("thumbnail-ready", (e) => callback(e.payload)),
 
   onBatchProgress: (callback: (event: BatchProgressEvent) => void) =>
-    listen("batch-progress", (e: any) => callback(e.payload)),
+    listen<BatchProgressEvent>("batch-progress", (e) => callback(e.payload)),
 
   onFolderChanged: (callback: (path: string) => void) =>
-    listen("folder-changed", (e: any) => callback(e.payload)),
+    listen<string>("folder-changed", (e) => callback(e.payload)),
 
   onFolderWatchError: (callback: (event: { path: string; message: string }) => void) =>
-    listen("folder-watch-error", (e: any) => callback(e.payload)),
+    listen<{ path: string; message: string }>("folder-watch-error", (e) => callback(e.payload)),
 };
 
 // Helper: Build thumbnail data URL from response

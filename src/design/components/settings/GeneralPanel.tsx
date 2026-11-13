@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
 import { GearIcon, ChevronDownIcon } from "../icons";
+import type { AppSettings } from "../../../engine/types/settings";
+import type { RenderAccentPicker, RenderRadioGroup, SettingsChange } from "./types";
 
 export function GeneralPanel(props: {
   appearance: string;
@@ -10,10 +12,10 @@ export function GeneralPanel(props: {
   startupView: string;
   openLastFolder: boolean;
   restoreWindow: boolean;
-  onChange: (key: any, value: any) => void;
+  onChange: SettingsChange;
   onSidebarWidthChange: (width: number) => void;
-  renderRadioGroup: any;
-  renderAccentPicker: any;
+  renderRadioGroup: RenderRadioGroup;
+  renderAccentPicker: RenderAccentPicker;
 }) {
   return (
     <>
@@ -34,7 +36,7 @@ export function GeneralPanel(props: {
                 { id: "dark", label: "Dark" },
                 { id: "system", label: "System" },
               ],
-              (v: string) => props.onChange("appearance", v),
+              (v: string) => props.onChange("appearance", v as AppSettings["appearance"]),
             )}
           </div>
         </div>
@@ -44,7 +46,7 @@ export function GeneralPanel(props: {
           </div>
           <div className="settings-row-control">
             {props.renderAccentPicker(props.accentColor, (v: string) =>
-              props.onChange("accentColor", v),
+              props.onChange("accentColor", v as AppSettings["accentColor"]),
             )}
           </div>
         </div>
@@ -121,7 +123,9 @@ export function GeneralPanel(props: {
                 className="settings-select"
                 aria-label="Open on launch"
                 value={props.startupView}
-                onChange={(e) => props.onChange("startupView", e.target.value)}
+                onChange={(e) =>
+                  props.onChange("startupView", e.target.value as AppSettings["startupView"])
+                }
               >
                 {STARTUP_VIEWS.map((v) => (
                   <option key={v.id} value={v.id}>

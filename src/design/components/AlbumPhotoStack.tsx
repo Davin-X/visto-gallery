@@ -2,6 +2,7 @@ import React from "react";
 import { CachedThumbnail } from "./CachedThumbnail";
 import { useDraftTransforms } from "../../engine/stores/useEditStore";
 import { draftImageStyle } from "../../engine/utils/draftImage";
+import type { MediaItem } from "../../engine/types/media";
 
 function albumStackPose(count: number, index: number) {
   const poses =
@@ -23,11 +24,17 @@ function albumStackPose(count: number, index: number) {
   return poses[index] || poses[0];
 }
 
-function AlbumPhotoStack({ photos, albumItems = [] }: { photos: any[]; albumItems?: any[] }) {
+function AlbumPhotoStack({
+  photos,
+  albumItems = [],
+}: {
+  photos: Pick<MediaItem, "id" | "name">[];
+  albumItems?: Pick<MediaItem, "kind">[];
+}) {
   const draftTransforms = useDraftTransforms();
   return (
     <span className="album-stack">
-      {photos.map((item: any, photoIndex: number) => {
+      {photos.map((item, photoIndex) => {
         const pose = albumStackPose(photos.length, photoIndex);
         return (
           <span

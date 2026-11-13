@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
 import { EyeIcon } from "../icons";
+import type { AppSettings } from "../../../engine/types/settings";
+import type { RenderRadioGroup, SettingsChange } from "./types";
 
 export function ViewingPanel(props: {
   defaultLayout: string;
@@ -9,8 +11,8 @@ export function ViewingPanel(props: {
   slideshowLoop: boolean;
   videoAutoPlay: boolean;
   videoLoop: boolean;
-  onChange: (key: any, value: any) => void;
-  renderRadioGroup: any;
+  onChange: SettingsChange;
+  renderRadioGroup: RenderRadioGroup;
 }) {
   return (
     <>
@@ -25,7 +27,7 @@ export function ViewingPanel(props: {
           </div>
           <div className="settings-row-control">
             {props.renderRadioGroup("layout", props.defaultLayout, LAYOUT_OPTIONS, (v: string) =>
-              props.onChange("defaultLayout", v),
+              props.onChange("defaultLayout", v as AppSettings["defaultLayout"]),
             )}
           </div>
         </div>
@@ -39,7 +41,9 @@ export function ViewingPanel(props: {
               className="settings-select"
               aria-label="Thumbnail size"
               value={props.thumbnailSize}
-              onChange={(e) => props.onChange("thumbnailSize", e.target.value)}
+              onChange={(e) =>
+                props.onChange("thumbnailSize", e.target.value as AppSettings["thumbnailSize"])
+              }
             >
               {THUMBNAIL_SIZES.map((v) => (
                 <option key={v.id} value={v.id}>

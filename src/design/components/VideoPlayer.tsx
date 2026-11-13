@@ -492,11 +492,11 @@ function VideoPlayer({
 
     const checkDecodedFrames = () => {
       if (failed || sawVideoFrame) return;
-      const el = ref.current as any;
+      const el = ref.current;
       if (!el) return;
       // With a frame callback available the watchdog above is the reliable
       // signal; decoded-frame counters lag or stay at zero in WebKit.
-      if ("requestVideoFrameCallback" in el) return;
+      if (Reflect.has(el, "requestVideoFrameCallback")) return;
       if (el.readyState < 2) return;
       const decoded = getDecodedFrameCount();
       if (decoded !== null && decoded > 0) {
@@ -514,7 +514,7 @@ function VideoPlayer({
       if (!progressing) return;
       if (noDecodedFramesTimer) window.clearTimeout(noDecodedFramesTimer);
       noDecodedFramesTimer = window.setTimeout(() => {
-        const media = ref.current as any;
+        const media = ref.current;
         if (!media) return;
         const nextDecoded = getDecodedFrameCount();
         const stillProgressing =

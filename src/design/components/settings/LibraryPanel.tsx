@@ -1,6 +1,7 @@
 import { FolderIcon, ShieldIcon } from "../icons";
 import type { LibraryFolder } from "../../../engine/types/commands";
 import { SourcesManager } from "../SourcesManager";
+import type { SettingsChange } from "./types";
 
 export function LibraryPanel(props: {
   autoImport: boolean;
@@ -9,7 +10,7 @@ export function LibraryPanel(props: {
   onRescan?: () => void;
   onRescanFolder?: (folder: LibraryFolder) => void;
   onRemoveAllSources?: () => void;
-  onChange: (key: any, value: any) => void;
+  onChange: SettingsChange;
 }) {
   return (
     <>

@@ -7,12 +7,14 @@ import { useKeyboard } from "../engine/hooks/useKeyboard";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
 import { useShallow } from "zustand/react/shallow";
 import type { MediaItem } from "../engine/types/media";
+import type { Screen } from "../app/screen";
+import type { ContextMenuItem } from "../design/components/ContextMenu";
 
 interface HiddenScreenProps {
   assetUrl: (path: string) => string;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
-  onContextMenu: (items: MediaItem[], e: React.MouseEvent) => void;
-  onNavigate: (screen: any) => void;
+  onContextMenu: (items: ContextMenuItem[], e: React.MouseEvent) => void;
+  onNavigate: (screen: Screen) => void;
   onCreateAlbum: () => void;
   onOpenAlbumPicker: (itemIds?: string[]) => void;
   onRequestDeleteItems: (ids: string[]) => void;
@@ -134,7 +136,7 @@ function HiddenScreen(props: HiddenScreenProps) {
     if (request.kind === "slideshow") {
       const ids = new Set(request.ids);
       const scope = library.hiddenItems.filter((item) => ids.has(item.id));
-      if (scope.length) props.onPlaySlideshow?.(scope.map((item: any) => item.id));
+      if (scope.length) props.onPlaySlideshow?.(scope.map((item) => item.id));
       return;
     }
     if (request.kind === "background") {

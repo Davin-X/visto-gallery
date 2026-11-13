@@ -395,8 +395,8 @@ if (typeof window !== "undefined") {
   // WKWebView exposes for this; `addListener` is the legacy fallback.
   if (typeof osThemeQuery.addEventListener === "function") {
     osThemeQuery.addEventListener("change", osThemeHandler);
-  } else if (typeof (osThemeQuery as any).addListener === "function") {
-    (osThemeQuery as any).addListener(osThemeHandler);
+  } else if (typeof osThemeQuery.addListener === "function") {
+    osThemeQuery.addListener(osThemeHandler);
   }
 }
 
@@ -413,7 +413,7 @@ if (typeof window !== "undefined") {
 
 // Conditional debug logging — only emits when enableDebugLogging is true.
 // Use this instead of console.log for diagnostics that should be opt-in.
-export function debugLog(...args: any[]): void {
+export function debugLog(...args: unknown[]): void {
   if (typeof window === "undefined") return;
   const settings = useSettingsStore.getState();
   if (settings.enableDebugLogging) {
