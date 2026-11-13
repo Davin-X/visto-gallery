@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, RefObject } from "react";
 import React, {
   useState,
   useMemo,
@@ -40,7 +40,12 @@ import VideoThumb from "../design/components/VideoThumb";
 import { useDraftTransforms } from "../engine/stores/useEditStore";
 import { draftImageStyle } from "../engine/utils/draftImage";
 import { searchShortcutLabel } from "../engine/utils/shortcut";
-import { useLibraryStore, libraryViewKey } from "../engine/stores/useLibraryStore";
+import {
+  useLibraryStore,
+  libraryViewKey,
+  type LibraryState,
+} from "../engine/stores/useLibraryStore";
+import type { ContextMenuItem } from "../design/components/ContextMenu";
 import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { FilterDropdown } from "../design/components/FilterDropdown";
 import SplitButton from "../design/components/SplitButton";
@@ -142,7 +147,7 @@ interface LibraryScreenProps {
   onChangeLayout: (layout: LayoutMode) => void;
   onChangeQuery: (query: string) => void;
   onClearSelection: () => void;
-  onContextMenu: (items: any[], e: React.MouseEvent) => void;
+  onContextMenu: (items: ContextMenuItem[], e: React.MouseEvent) => void;
   onCopyTagsToFinder?: (ids: string[]) => void | Promise<void>;
   onCreateAlbum: (itemIds?: string[]) => void;
   onImportFiles?: () => void;
@@ -188,9 +193,9 @@ interface LibraryScreenProps {
   onSetColorLabelFilter: (colorLabel: string | null) => void;
   onSetDateRange: (from: number | null, to: number | null) => void;
   onCreateSmartAlbum?: (name: string) => void;
-  notice: any;
-  progress: any;
-  searchInputRef: any;
+  notice: (text: string) => void;
+  progress: LibraryState["progress"];
+  searchInputRef: RefObject<HTMLInputElement | null>;
   selectedIds: string[];
   showInspector: boolean;
 }
@@ -259,7 +264,7 @@ function LibraryScreen(props: LibraryScreenProps) {
     [],
   );
   /** In sync with the top bar: starts the item, or toggles its session. */
-  const toggleBackground = (item: any) => {
+  const toggleBackground = (item: MediaItem) => {
     if (!item) return;
     if (usePlaybackStore.getState().itemId === item.id) {
       usePlaybackStore.getState().toggle();
@@ -379,8 +384,8 @@ function LibraryScreen(props: LibraryScreenProps) {
       window.removeEventListener("blur", concealAll);
     };
   }, [props.hiddenView, concealAll]);
-  const masked = (item: any) => Boolean(props.hiddenView) && !revealedIds.has(item.id);
-  const tileAlt = (item: any) => (masked(item) ? "Hidden item" : item.name);
+  const masked = (item: MediaItem) => Boolean(props.hiddenView) && !revealedIds.has(item.id);
+  const tileAlt = (item: MediaItem) => (masked(item) ? "Hidden item" : item.name);
   const holdHandlers = (id: string) =>
     props.hiddenView
       ? {
@@ -399,7 +404,7 @@ function LibraryScreen(props: LibraryScreenProps) {
   const assetUrl = props.assetUrl;
   // `activeAlbum` is the album id; the heading needs its display name.
   const activeAlbumRecord = props.activeAlbum
-    ? props.albums?.find((album: any) => album.id === props.activeAlbum)
+    ? props.albums?.find((album) => album.id === props.activeAlbum)
     : null;
   const activeAlbumName = props.activeAlbum ? (activeAlbumRecord?.name ?? "Album") : null;
   const inAlbum = Boolean(props.activeAlbum);
@@ -408,16 +413,14 @@ function LibraryScreen(props: LibraryScreenProps) {
       props.activeAlbum
         ? (library.albumItems?.[props.activeAlbum] ??
           library.items.filter(
-            (item: any) => item.albumIds?.includes(props.activeAlbum) && !item.hidden,
+            (item) => item.albumIds?.includes(props.activeAlbum as string) && !item.hidden,
           ))
         : [],
     [library.items, library.albumItems, props.activeAlbum],
   );
   const activeAlbumPhotos = useMemo(
     () =>
-      activeAlbumItems
-        .filter((item: any) => item.kind === "photo" || item.kind === "video")
-        .slice(0, 3),
+      activeAlbumItems.filter((item) => item.kind === "photo" || item.kind === "video").slice(0, 3),
     [activeAlbumItems],
   );
   // Hidden items do not count toward an album while they are hidden; the
@@ -431,7 +434,7 @@ function LibraryScreen(props: LibraryScreenProps) {
     if (!library.activeSource) return library.items;
     const prefix = `${library.activeSource.replace(/\/$/, "")}/`;
     return library.items.filter(
-      (item: any) => item.path === library.activeSource || item.path.startsWith(prefix),
+      (item) => item.path === library.activeSource || item.path.startsWith(prefix),
     );
   }, [library.items, library.hiddenItems, library.activeSource, props.hiddenView]);
   const filterSource = inAlbum ? activeAlbumItems : sourceItems;
@@ -890,20 +893,23 @@ function LibraryScreen(props: LibraryScreenProps) {
   const timelineGroups: {
     key: string;
     label: string;
-    items: any[];
+    items: MediaItem[];
     count: number;
   }[] = useMemo(
     () =>
       props.layout === "timeline"
         ? (() => {
-            const grouped = new Map<string, { timestamp: number; label: string; items: any[] }>();
+            const grouped = new Map<
+              string,
+              { timestamp: number; label: string; items: MediaItem[] }
+            >();
             for (const item of props.items) {
               const timestamp = item.capturedAt ?? item.modifiedAt;
               const { key, label } = itemMonth(item);
               const group = grouped.get(key) ?? {
                 timestamp,
                 label,
-                items: [] as any[],
+                items: [] as MediaItem[],
               };
               group.timestamp = Math.max(group.timestamp, timestamp);
               group.items.push(item);
@@ -923,7 +929,7 @@ function LibraryScreen(props: LibraryScreenProps) {
   );
   const visibleTimelineGroups = useMemo(() => {
     if (!timelineGroups.length) return [];
-    const visibleItemsByMonth = new Map<string, any[]>();
+    const visibleItemsByMonth = new Map<string, MediaItem[]>();
     for (const item of renderedItems) {
       const { key } = itemMonth(item);
       const items = visibleItemsByMonth.get(key) ?? [];
@@ -968,7 +974,7 @@ function LibraryScreen(props: LibraryScreenProps) {
       )}
     </div>
   );
-  const toggleTimelineGroup = (items: any[]) => {
+  const toggleTimelineGroup = (items: MediaItem[]) => {
     const groupIds = items.map((item) => item.id);
     const groupIdSet = new Set(groupIds);
     const allSelected = groupIds.length > 0 && groupIds.every((id) => selectedIdSet.has(id));
@@ -986,7 +992,7 @@ function LibraryScreen(props: LibraryScreenProps) {
   //  - Cmd/Ctrl-click → toggle selection membership (inspection untouched)
   //  - double click → inspect + open the viewer on exactly that item
   //  - checkbox → toggle selection membership only
-  const handleTileClick = (item: any, e: React.MouseEvent) => {
+  const handleTileClick = (item: MediaItem, e: React.MouseEvent) => {
     if (e.shiftKey && lastClickedRef.current && lastClickedRef.current !== item.id) {
       props.onSelectRange?.(lastClickedRef.current, item.id);
       return;
@@ -1000,13 +1006,13 @@ function LibraryScreen(props: LibraryScreenProps) {
     lastClickedRef.current = item.id;
   };
 
-  const handleTileDoubleClick = (item: any) => {
+  const handleTileDoubleClick = (item: MediaItem) => {
     lastClickedRef.current = item.id;
     props.onInspectItem?.(item.id);
     props.onOpenViewer?.(item.id);
   };
 
-  const tileClass = (item: any) =>
+  const tileClass = (item: MediaItem) =>
     `gallery-tile${props.layout === "details" ? " list-view-row" : ""}${
       props.inspectedId === item.id ? " inspected" : ""
     }${selectedIdSet.has(item.id) ? " selected" : ""}${item.favorite ? " is-favorite" : ""}${
@@ -1039,14 +1045,14 @@ function LibraryScreen(props: LibraryScreenProps) {
     if (!props.selectedIds.length) return [];
     const ids = new Set(props.selectedIds);
     const pool = props.hiddenView ? library.hiddenItems : library.items;
-    return pool.filter((i: any) => ids.has(i.id));
+    return pool.filter((i) => ids.has(i.id));
   }, [props.selectedIds, props.hiddenView, library.items, library.hiddenItems]);
-  const anySelectedFavorite = selectedItems.some((i: any) => i.favorite);
-  const anySelectedHidden = selectedItems.some((i: any) => i.hidden);
+  const anySelectedFavorite = selectedItems.some((i) => i.favorite);
+  const anySelectedHidden = selectedItems.some((i) => i.hidden);
   // Play on a video-only selection opens the player; anything with a photo
   // starts a slideshow. The label follows the action so it is never a surprise.
   const selectionPlaysInViewer =
-    selectedItems.length > 0 && selectedItems.every((i: any) => i.kind === "video");
+    selectedItems.length > 0 && selectedItems.every((i) => i.kind === "video");
   // Say what is actually in the selection: "3 photos · 2 videos" explains the
   // Play/Slideshow label and avoids surprises when a filter hides some of them.
   const selectedKindCounts = useMemo(() => {
@@ -1068,9 +1074,9 @@ function LibraryScreen(props: LibraryScreenProps) {
   // Select-all now lives in the selection bar and is scoped to the items the
   // screen is actually showing (including the Hidden and album views).
   const allVisibleSelected =
-    props.items.length > 0 && props.items.every((item: any) => selectedIdSet.has(item.id));
+    props.items.length > 0 && props.items.every((item) => selectedIdSet.has(item.id));
   const toggleSelectAllVisible = () => {
-    props.onSetSelection?.(allVisibleSelected ? [] : props.items.map((item: any) => item.id));
+    props.onSetSelection?.(allVisibleSelected ? [] : props.items.map((item) => item.id));
   };
 
   return (
@@ -1476,7 +1482,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                 <span className="selection-bar-divider" aria-hidden="true" />
                 <span className="selection-bar-size">
                   {formatBytesSimple(
-                    selectedItems.reduce((sum: number, item: any) => sum + (item.size || 0), 0),
+                    selectedItems.reduce((sum: number, item) => sum + (item.size || 0), 0),
                   )}{" "}
                   selected
                 </span>
@@ -1631,12 +1637,12 @@ function LibraryScreen(props: LibraryScreenProps) {
               return (
                 <div className="gallery-grid layout-details list-view" role="rowgroup">
                   {renderedItems.length === 0 && (awaitingFirstPage ? skeletonView() : emptyView())}
-                  {renderedItems.map((item: any) => (
+                  {renderedItems.map((item) => (
                     <article
                       key={item.id}
                       className={tileClass(item)}
                       role="row"
-                      onContextMenu={(e: any) => {
+                      onContextMenu={(e) => {
                         concealItem(item.id);
                         props.onContextMenu(itemContextMenu(item), e);
                       }}
@@ -1651,7 +1657,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                               ? "Remove from selection"
                               : "Add to selection"
                           }
-                          onClick={(e: any) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
                         />
                         <CheckIcon size={12} />
                       </div>
@@ -1781,8 +1787,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                       : emptyView()
                     : visibleTimelineGroups.map(({ key, label, items, count, visibleItems }) => {
                         const allSelected =
-                          items.length > 0 &&
-                          items.every((item: any) => selectedIdSet.has(item.id));
+                          items.length > 0 && items.every((item) => selectedIdSet.has(item.id));
                         return (
                           <React.Fragment key={key}>
                             <div className="timeline-group">
@@ -1806,11 +1811,11 @@ function LibraryScreen(props: LibraryScreenProps) {
                                 {allSelected ? "Selected" : "Select all"}
                               </button>
                             </div>
-                            {visibleItems.map((item: any) => (
+                            {visibleItems.map((item) => (
                               <article
                                 key={item.id}
                                 className={tileClass(item)}
-                                onContextMenu={(e: any) => {
+                                onContextMenu={(e) => {
                                   concealItem(item.id);
                                   props.onContextMenu(itemContextMenu(item), e);
                                 }}
@@ -1825,7 +1830,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                                         ? "Remove from selection"
                                         : "Add to selection"
                                     }
-                                    onClick={(e: any) => e.stopPropagation()}
+                                    onClick={(e) => e.stopPropagation()}
                                   />
                                   <CheckIcon size={12} />
                                 </div>
@@ -1972,11 +1977,11 @@ function LibraryScreen(props: LibraryScreenProps) {
                     style={{ height: virtualGrid.topSpacer }}
                   />
                 )}
-                {virtualGrid.items.map((item: any) => (
+                {virtualGrid.items.map((item) => (
                   <article
                     key={item.id}
                     className={tileClass(item)}
-                    onContextMenu={(e: any) => {
+                    onContextMenu={(e) => {
                       concealItem(item.id);
                       props.onContextMenu(itemContextMenu(item), e);
                     }}
@@ -1989,7 +1994,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                         title={
                           selectedIdSet.has(item.id) ? "Remove from selection" : "Add to selection"
                         }
-                        onClick={(e: any) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                       />
                       <CheckIcon size={12} />
                     </div>
@@ -2094,7 +2099,10 @@ function LibraryScreen(props: LibraryScreenProps) {
                       {item.rating != null && item.rating > 0 && !masked(item) ? (
                         <span className="tile-rating" aria-label={`Rating: ${item.rating} stars`}>
                           {Array.from({ length: 5 }).map((_, i) => (
-                            <span key={i} className={`star ${i < item.rating ? "filled" : ""}`}>
+                            <span
+                              key={i}
+                              className={`star ${i < (item.rating ?? 0) ? "filled" : ""}`}
+                            >
                               {"\u2605"}
                             </span>
                           ))}
@@ -2157,11 +2165,11 @@ function LibraryScreen(props: LibraryScreenProps) {
         <aside className="photo-inspector">
           {props.inspectedId &&
           (props.hiddenView ? library.hiddenItems : library.items).find(
-            (i: any) => i.id === props.inspectedId,
+            (i) => i.id === props.inspectedId,
           ) ? (
             (() => {
               const sel = (props.hiddenView ? library.hiddenItems : library.items).find(
-                (i: any) => i.id === props.inspectedId,
+                (i) => i.id === props.inspectedId,
               );
               if (!sel) return null;
               // Inspection is independent of selection: the Inspector always
@@ -2216,11 +2224,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                         (() => {
                           const ext = (sel.extension || "").toLowerCase();
                           const isAnimatedPhoto =
-                            !!(sel as any).isAnimated ||
-                            !!(sel as any).animated ||
-                            ext === "gif" ||
-                            ext === "webp" ||
-                            ext === "apng";
+                            !!sel.isAnimated || ext === "gif" || ext === "webp" || ext === "apng";
                           return isAnimatedPhoto ? (
                             <span className="inspector-video-preview">
                               <img
@@ -2275,8 +2279,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                           ? "Video"
                           : sel.kind === "raw"
                             ? "RAW"
-                            : (sel as any).isAnimated ||
-                                !!(sel as any).animated ||
+                            : sel.isAnimated ||
                                 ["gif", "webp", "apng"].includes(
                                   (sel.extension || "").toLowerCase(),
                                 )
@@ -2580,7 +2583,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                         className="tag-input"
                         aria-label="Add tag"
                         placeholder="Add tag and press Enter…"
-                        onKeyDown={(e: any) => {
+                        onKeyDown={(e) => {
                           if (e.key === "Enter" && e.currentTarget.value.trim()) {
                             const newTag = e.currentTarget.value.trim();
                             const currentTags = sel.tags || [];
