@@ -21,6 +21,11 @@ export type MediaKind = "photo" | "video" | "raw";
 
 export type MediaItem = { id: string, path: string, name: string, extension: string, kind: MediaKind, size: number, modifiedAt: number, capturedAt?: number | null, width?: number | null, height?: number | null, camera?: string | null, lens?: string | null, exposure?: string | null, iso?: number | null, latitude?: number | null, longitude?: number | null, sha256?: string | null, favorite: boolean, hidden: boolean, 
 /**
+ * Why the item is hidden: 'manual' for app-driven hides, NULL when
+ * unknown (rows hidden before this column existed).
+ */
+hiddenReason?: string | null, 
+/**
  * Whether the catalog treats this item as animated content, i.e. the file
  * contains more than one frame or an animation sequence.
  *

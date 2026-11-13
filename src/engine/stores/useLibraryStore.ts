@@ -247,6 +247,37 @@ export interface LibraryState {
   showErrorNotice: (error: unknown, prefix?: string) => void;
 }
 
+/** Map the hidden view's UI filter onto the backend page query, so filtering
+ * happens in SQL rather than over whatever subset happened to be loaded. */
+function hiddenPageFilter(state: {
+  hiddenFilter: Filter;
+  hiddenQuery: string;
+  sortBy: LibraryState["sortBy"];
+  sortOrder: LibraryState["sortOrder"];
+}): {
+  kind?: "photo" | "video" | "raw";
+  animated?: boolean;
+  favorite?: boolean;
+  hidden?: true;
+  query?: string;
+  sortBy: LibraryState["sortBy"];
+  sortOrder: LibraryState["sortOrder"];
+} {
+  const filter = state.hiddenFilter;
+  const base = {
+    hidden: true as const,
+    query: state.hiddenQuery.trim() || undefined,
+    sortBy: state.sortBy,
+    sortOrder: state.sortOrder,
+  };
+  if (filter === "Photos") return { ...base, kind: "photo" };
+  if (filter === "Videos") return { ...base, kind: "video" };
+  if (filter === "RAW") return { ...base, kind: "raw" };
+  if (filter === "Animations") return { ...base, animated: true };
+  if (filter === "Favorites") return { ...base, favorite: true };
+  return base;
+}
+
 // Load generation and query debounce are per-app (not per-store-instance).
 let libraryLoadGeneration = 0;
 // Request tickets for paged loads. A filter reload resets `loadingNextPage`,
@@ -256,6 +287,7 @@ let libraryLoadGeneration = 0;
 // paging state while it is still the newest request of its kind.
 let nextPageRequestId = 0;
 let nextHiddenRequestId = 0;
+let hiddenQueryReloadTimer: ReturnType<typeof setTimeout> | null = null;
 let queryReloadTimer: ReturnType<typeof setTimeout> | null = null;
 // Debounce for free-text camera/lens filters so typing doesn't reload the
 // library on every keystroke. State updates stay immediate; only the IPC
@@ -678,6 +710,7 @@ export const useLibraryStore = create<LibraryState>()(
           set({ hiddenLoading: true });
           const pageResult = await tauri.library.getHiddenItems({
             limit: HIDDEN_PAGE_SIZE,
+            ...hiddenPageFilter(get()),
           });
           if (!isCurrent()) {
             releaseIfOwner();
@@ -719,6 +752,7 @@ export const useLibraryStore = create<LibraryState>()(
           const pageResult = await tauri.library.getHiddenItems({
             limit: HIDDEN_PAGE_SIZE,
             cursor,
+            ...hiddenPageFilter(get()),
           });
           if (generation !== libraryLoadGeneration || requestId !== nextHiddenRequestId) {
             // A newer hidden request owns the list and the loading flag.
@@ -998,9 +1032,15 @@ export const useLibraryStore = create<LibraryState>()(
         void get().loadLibrary();
       },
 
-      clearHiddenFilters: () => set({ hiddenFilter: "All", hiddenQuery: "" }),
+      clearHiddenFilters: () => {
+        set({ hiddenFilter: "All", hiddenQuery: "" });
+        void get().loadHiddenItems();
+      },
 
-      setHiddenFilter: (hiddenFilter) => set({ hiddenFilter }),
+      setHiddenFilter: (hiddenFilter) => {
+        set({ hiddenFilter });
+        void get().loadHiddenItems();
+      },
 
       setActiveSource: (path) => {
         // Toggle off when the active source is clicked again; picking a source
@@ -1063,14 +1103,22 @@ export const useLibraryStore = create<LibraryState>()(
         }, 180);
       },
 
-      setHiddenQuery: (hiddenQuery) => set({ hiddenQuery }),
+      setHiddenQuery: (hiddenQuery) => {
+        set({ hiddenQuery });
+        if (hiddenQueryReloadTimer) clearTimeout(hiddenQueryReloadTimer);
+        hiddenQueryReloadTimer = setTimeout(() => {
+          hiddenQueryReloadTimer = null;
+          void get().loadHiddenItems();
+        }, 180);
+      },
 
       setLayout: (layout) => set({ layout }),
 
       setSort: (sortBy, sortOrder) => {
         set({ sortBy, sortOrder });
         get().refreshDerived();
-        void get().loadLibrary();
+        if (get().screen === "Hidden") void get().loadHiddenItems();
+        else void get().loadLibrary();
       },
 
       setScreen: (screen) => set({ screen }),
