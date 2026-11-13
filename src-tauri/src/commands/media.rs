@@ -711,13 +711,55 @@ fn move_back(entry: &std::path::Path, target: &std::path::Path) -> Result<(), Co
     Ok(())
 }
 
-/// Move items out of the user's Trash back to the paths they were trashed
-/// from. This deliberately avoids Finder automation: a plain filesystem move
-/// works no matter which sink trashed the file (Finder script or NSFileManager
+/// The Trash folders a file at `target` may have gone to: the user's
+/// `~/.Trash`, plus the `.Trashes/<uid>` folder of the volume when the file
+/// lives on another drive (macOS keeps trashed files on their own volume).
+fn trash_dirs_for(target: &std::path::Path) -> Vec<PathBuf> {
+    use std::os::unix::fs::MetadataExt;
+    let mut dirs = Vec::new();
+    let home = dirs::home_dir();
+    if let Some(home) = &home {
+        dirs.push(home.join(".Trash"));
+    }
+    let mut parts = target.components();
+    let on_volume = matches!(parts.next(), Some(std::path::Component::RootDir))
+        && parts
+            .next()
+            .map(|c| c.as_os_str() == "Volumes")
+            .unwrap_or(false);
+    if on_volume {
+        if let (Some(volume), Some(uid)) = (
+            parts.next(),
+            home.as_ref()
+                .and_then(|home| std::fs::metadata(home).ok())
+                .map(|metadata| metadata.uid()),
+        ) {
+            dirs.push(
+                PathBuf::from("/Volumes")
+                    .join(volume.as_os_str())
+                    .join(".Trashes")
+                    .join(uid.to_string()),
+            );
+        }
+    }
+    dirs
+}
+
+/// Move items out of the Trash back to the paths they were trashed from.
+/// This deliberately avoids Finder automation: a plain filesystem move works
+/// no matter which sink trashed the file (Finder script or NSFileManager
 /// fallback) and it is testable without driving Finder. The caller re-imports
 /// the restored paths into the catalog afterwards.
-fn restore_from_trash(trash: &std::path::Path, items: &[TrashRestoreItem]) -> TrashRestoreResult {
-    let entries = list_trash_entries(trash);
+///
+/// A target must sit inside a registered library source and carry the same
+/// file name as the item, so a restore can only put a library file back where
+/// it came from, never place a Trash entry anywhere else on disk.
+fn restore_from_trash(
+    trash_dirs_for: &dyn Fn(&std::path::Path) -> Vec<PathBuf>,
+    registered_roots: &[String],
+    items: &[TrashRestoreItem],
+) -> TrashRestoreResult {
+    let mut listed: HashMap<PathBuf, Vec<TrashEntry>> = HashMap::new();
     let mut restored = Vec::new();
     let mut failed = Vec::new();
     for item in items {
@@ -730,6 +772,10 @@ fn restore_from_trash(trash: &std::path::Path, items: &[TrashRestoreItem]) -> Tr
             failed.push(fail("Invalid file name.".to_string()));
             continue;
         }
+        if target.file_name() != Some(std::ffi::OsStr::new(&item.name)) {
+            failed.push(fail("The file name does not match the item.".to_string()));
+            continue;
+        }
         if let Some(parent) = target.parent() {
             if !parent.is_dir() {
                 failed.push(fail(format!(
@@ -739,13 +785,29 @@ fn restore_from_trash(trash: &std::path::Path, items: &[TrashRestoreItem]) -> Tr
                 continue;
             }
         }
+        if super::validate_path_under_registered_roots(&item.path, registered_roots).is_err() {
+            failed.push(fail(
+                "Only files inside your library sources can be put back.".to_string(),
+            ));
+            continue;
+        }
         if target.exists() {
             // Nothing to restore — the file is already back in place.
             restored.push(item.path.clone());
             continue;
         }
-        match select_trash_match(&entries, &item.name, item.size) {
-            Some(entry) => match move_back(&entry.path, &target) {
+        let mut found = None;
+        for dir in trash_dirs_for(&target) {
+            let entries = listed
+                .entry(dir.clone())
+                .or_insert_with(|| list_trash_entries(&dir));
+            if let Some(entry) = select_trash_match(entries, &item.name, item.size) {
+                found = Some(entry.path.clone());
+                break;
+            }
+        }
+        match found {
+            Some(entry) => match move_back(&entry, &target) {
                 Ok(()) => restored.push(item.path.clone()),
                 Err(error) => failed.push(fail(error.to_string())),
             },
@@ -761,14 +823,13 @@ fn restore_from_trash(trash: &std::path::Path, items: &[TrashRestoreItem]) -> Tr
 #[tauri::command]
 pub async fn restore_trashed_items(
     items: Vec<TrashRestoreItem>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<TrashRestoreResult, CommandError> {
-    // restore is deliberately not scoped to the catalog: these files are by
-    // definition the user's trashed items and going back to the original
-    // location is the only thing this function does.
-    let trash = dirs::home_dir()
-        .map(|home| home.join(".Trash"))
-        .ok_or_else(|| CommandError::io("Could not locate the Trash folder.".to_string()))?;
-    Ok(restore_from_trash(&trash, &items))
+    let db = super::get_db(&catalog)?;
+    let registered: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
+        .fetch_all(&db)
+        .await?;
+    Ok(restore_from_trash(&trash_dirs_for, &registered, &items))
 }
 
 /// Extract EXIF metadata from a file. Reusable by the scan path and the
@@ -2362,7 +2423,10 @@ mod trash_validation_tests {
 
 #[cfg(test)]
 mod trash_restore_tests {
-    use super::{list_trash_entries, restore_from_trash, select_trash_match, TrashRestoreItem};
+    use super::{
+        list_trash_entries, restore_from_trash, select_trash_match, trash_dirs_for,
+        TrashRestoreItem,
+    };
     use std::path::{Path, PathBuf};
 
     fn temp_dir(label: &str) -> PathBuf {
@@ -2372,6 +2436,10 @@ mod trash_restore_tests {
         ));
         std::fs::create_dir_all(&path).expect("create temp dir");
         path
+    }
+
+    fn roots(home: &Path) -> Vec<String> {
+        vec![home.to_string_lossy().into_owned()]
     }
 
     fn request(path: &Path, size: Option<i64>) -> TrashRestoreItem {
@@ -2452,7 +2520,11 @@ mod trash_restore_tests {
         std::fs::write(&trashed, b"image bytes").unwrap();
         let target = home.join("vacation.jpg");
 
-        let result = restore_from_trash(&trash, &[request(&target, Some(11))]);
+        let result = restore_from_trash(
+            &|_: &Path| vec![trash.clone()],
+            &roots(&home),
+            &[request(&target, Some(11))],
+        );
         assert_eq!(result.restored, vec![target.to_string_lossy().into_owned()]);
         assert!(result.failed.is_empty());
         assert_eq!(std::fs::read(&target).unwrap(), b"image bytes");
@@ -2468,7 +2540,11 @@ mod trash_restore_tests {
         let home = temp_dir("restore-missing-home");
         let target = home.join("gone.jpg");
 
-        let result = restore_from_trash(&trash, &[request(&target, None)]);
+        let result = restore_from_trash(
+            &|_: &Path| vec![trash.clone()],
+            &roots(&home),
+            &[request(&target, None)],
+        );
         assert!(result.restored.is_empty());
         assert_eq!(result.failed.len(), 1);
     }
@@ -2482,7 +2558,11 @@ mod trash_restore_tests {
         let target = home.join("keep.jpg");
         std::fs::write(&target, b"keep me").unwrap();
 
-        let result = restore_from_trash(&trash, &[request(&target, Some(13))]);
+        let result = restore_from_trash(
+            &|_: &Path| vec![trash.clone()],
+            &roots(&home),
+            &[request(&target, Some(13))],
+        );
         assert_eq!(
             result.restored.len(),
             1,
@@ -2492,6 +2572,76 @@ mod trash_restore_tests {
         assert!(trashed.exists(), "the trash entry is left untouched");
     }
 
+    /// macOS keeps a trashed file on its own volume, in `.Trashes/<uid>`.
+    /// Undo for a duplicate on an external drive must look there too.
+    #[test]
+    fn restore_from_trash_finds_files_in_a_volume_trash() {
+        let user_trash = temp_dir("restore-user-trash");
+        let volume_trash = temp_dir("restore-volume-trash");
+        let home = temp_dir("restore-volume-home");
+        let trashed = volume_trash.join("usb.jpg");
+        std::fs::write(&trashed, b"usb bytes").unwrap();
+        let target = home.join("usb.jpg");
+
+        let result = restore_from_trash(
+            &|_: &Path| vec![user_trash.clone(), volume_trash.clone()],
+            &roots(&home),
+            &[request(&target, Some(9))],
+        );
+        assert_eq!(result.restored, vec![target.to_string_lossy().into_owned()]);
+        assert_eq!(std::fs::read(&target).unwrap(), b"usb bytes");
+    }
+
+    #[test]
+    fn restore_from_trash_refuses_targets_outside_library_sources() {
+        let trash = temp_dir("restore-outside-trash");
+        let home = temp_dir("restore-outside-root");
+        let elsewhere = temp_dir("restore-outside-elsewhere");
+        let trashed = trash.join("note.jpg");
+        std::fs::write(&trashed, b"bytes").unwrap();
+        let target = elsewhere.join("note.jpg");
+
+        let result = restore_from_trash(
+            &|_: &Path| vec![trash.clone()],
+            &roots(&home),
+            &[request(&target, None)],
+        );
+        assert!(result.restored.is_empty());
+        assert_eq!(result.failed.len(), 1);
+        assert!(trashed.exists(), "the Trash entry stays where it is");
+        assert!(!target.exists());
+    }
+
+    #[test]
+    fn restore_from_trash_refuses_a_name_that_differs_from_the_target() {
+        let trash = temp_dir("restore-rename-trash");
+        let home = temp_dir("restore-rename-home");
+        std::fs::write(trash.join("photo.jpg"), b"bytes").unwrap();
+        let target = home.join("launch-agent.plist");
+
+        let result = restore_from_trash(
+            &|_: &Path| vec![trash.clone()],
+            &roots(&home),
+            &[TrashRestoreItem {
+                path: target.to_string_lossy().into_owned(),
+                name: "photo.jpg".to_string(),
+                size: None,
+            }],
+        );
+        assert!(result.restored.is_empty());
+        assert!(!target.exists());
+    }
+
+    #[test]
+    fn trash_dirs_include_the_volume_trash_for_external_drives() {
+        let external = trash_dirs_for(Path::new("/Volumes/USB Drive/Photos/a.jpg"));
+        assert!(external
+            .iter()
+            .any(|dir| dir.starts_with("/Volumes/USB Drive/.Trashes/")));
+        let internal = trash_dirs_for(Path::new("/Users/someone/Pictures/a.jpg"));
+        assert!(internal.iter().all(|dir| !dir.starts_with("/Volumes")));
+    }
+
     #[test]
     fn restore_from_trash_refuses_names_with_separators() {
         let trash = temp_dir("restore-traversal");
@@ -2499,7 +2649,8 @@ mod trash_restore_tests {
         let target = home.join("nested").join("photo.jpg");
 
         let result = restore_from_trash(
-            &trash,
+            &|_: &Path| vec![trash.clone()],
+            &roots(&home),
             &[TrashRestoreItem {
                 path: target.to_string_lossy().into_owned(),
                 name: "../photo.jpg".to_string(),
