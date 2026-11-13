@@ -19,6 +19,15 @@ export interface ItemMenuActions {
   activeAlbum?: string | null;
   onRequestRemoveFromAlbum?: (albumId: string, ids: string[]) => void;
   onToggleFavorite?: (id: string) => void | Promise<void>;
+  /** Bulk setters; when present they act on every targeted item. */
+  onSetFavorite?: (ids: string[], favorite: boolean) => void | Promise<void>;
+  onSetHidden?: (ids: string[], hidden: boolean) => void | Promise<void>;
+  /**
+   * The current selection. Right-clicking an item inside a multi-item
+   * selection acts on the whole selection (as in Finder); right-clicking
+   * outside it acts on that item alone.
+   */
+  selection?: MediaItem[];
   onSetRating?: (ids: string[], rating: number) => void | Promise<void>;
   onSetColorLabel?: (ids: string[], colorLabel: string | null) => void | Promise<void>;
   onToggleHidden?: (id: string) => void | Promise<void>;
@@ -38,8 +47,19 @@ const COLOR_LABELS = [
  * Hidden grid and the photo viewer offer the same actions in the same order.
  */
 export function buildItemContextMenu(item: MediaItem, actions: ItemMenuActions): ContextMenuItem[] {
-  const ids = [item.id];
+  const selection = actions.selection ?? [];
+  const targets =
+    selection.length > 1 && selection.some((selected) => selected.id === item.id)
+      ? selection
+      : [item];
+  const ids = targets.map((target) => target.id);
   const menu: ContextMenuItem[] = [];
+
+  // Say up front when the menu acts on more than the item under the pointer.
+  if (targets.length > 1) {
+    menu.push({ label: `${targets.length.toLocaleString()} items selected`, disabled: true });
+    menu.push({ divider: true });
+  }
 
   if (actions.onOpen) {
     menu.push({ label: "Open", onClick: () => actions.onOpen?.(item.id) });
@@ -59,7 +79,7 @@ export function buildItemContextMenu(item: MediaItem, actions: ItemMenuActions):
     { label: "Show in Finder", onClick: () => tauri.items.revealInFinder(item.path) },
     {
       label: "Copy tags to Finder",
-      disabled: !(item.tags || []).length,
+      disabled: !targets.some((target) => (target.tags || []).length),
       onClick: () => actions.onCopyTagsToFinder?.(ids),
     },
   );
@@ -90,8 +110,19 @@ export function buildItemContextMenu(item: MediaItem, actions: ItemMenuActions):
 
   menu.push({ divider: true });
 
-  if (actions.onToggleFavorite) {
-    menu.push({ label: "Favorite", onClick: () => actions.onToggleFavorite?.(item.id) });
+  // Same rule as the selection bar: if any target is a favorite, the action
+  // removes the favorite from all of them; otherwise it adds it.
+  const anyFavorite = targets.some((target) => target.favorite);
+  if (actions.onSetFavorite) {
+    menu.push({
+      label: anyFavorite ? "Unfavorite" : "Favorite",
+      onClick: () => actions.onSetFavorite?.(ids, !anyFavorite),
+    });
+  } else if (actions.onToggleFavorite) {
+    menu.push({
+      label: item.favorite ? "Unfavorite" : "Favorite",
+      onClick: () => actions.onToggleFavorite?.(item.id),
+    });
   }
   if (actions.onSetRating) {
     const rating = item.rating ?? 0;
@@ -132,7 +163,13 @@ export function buildItemContextMenu(item: MediaItem, actions: ItemMenuActions):
       ],
     });
   }
-  if (actions.onToggleHidden) {
+  const anyHidden = targets.some((target) => target.hidden);
+  if (actions.onSetHidden) {
+    menu.push({
+      label: anyHidden ? "Unhide" : "Hide",
+      onClick: () => actions.onSetHidden?.(ids, !anyHidden),
+    });
+  } else if (actions.onToggleHidden) {
     menu.push({
       label: item.hidden ? "Unhide" : "Hide",
       onClick: () => actions.onToggleHidden?.(item.id),
