@@ -39,7 +39,7 @@ import { AppShell } from "./AppShell";
 import { AppScreenRouter } from "./AppScreenRouter";
 import type { Screen } from "./screen";
 
-import type { MediaItem } from "../engine/types/media";
+import type { LayoutMode, MediaItem } from "../engine/types/media";
 import type { DeleteRequest } from "../engine/types/deleteRequest";
 import type {
   LibraryFolder,
@@ -192,6 +192,17 @@ function App() {
   const library = useLibraryStore();
   const settingsHydrated = useSettingsStore((s) => s._hydrated);
   const defaultLayout = useSettingsStore((s) => s.defaultLayout);
+  const updateSettings = useSettingsStore((s) => s.update);
+  // Persist the toolbar's layout choice to the same defaultLayout setting the
+  // Settings screen edits, so switching away and back never resets the view.
+  // Only the persisted set is saved; the screen keeps showing other layouts
+  // in-session without rewriting the saved default.
+  const changeLibraryLayout = (layout: LayoutMode) => {
+    library.setLayout(layout);
+    if (layout === "grid" || layout === "details" || layout === "timeline") {
+      void updateSettings("defaultLayout", layout);
+    }
+  };
 
   // Apply the saved library layout once settings are ready, and whenever the
   // user returns to the whole library. Avoid changing the current view while
@@ -2672,6 +2683,7 @@ function App() {
     >
       <AppScreenRouter
         screen={screen}
+        changeLibraryLayout={changeLibraryLayout}
         library={library}
         viewer={viewer}
         edit={edit}

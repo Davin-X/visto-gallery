@@ -17,7 +17,7 @@ test("Albums screen toggles between cards and list view", async ({ page }) => {
   await expect(page.locator(".albums-grid")).toHaveCount(0);
   const list = page.locator(".albums-list-view");
   await expect(list).toBeVisible();
-  await expect(list.locator(".list-view-head-cell").nth(2)).toHaveText("Name");
+  await expect(list.getByRole("button", { name: /^Name/ })).toBeVisible();
   await expect(list.locator(".list-view-row")).toHaveCount(4);
 
   // Each row shows items, a size and an updated date; the first row is the

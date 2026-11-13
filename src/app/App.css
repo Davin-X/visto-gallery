@@ -1150,7 +1150,7 @@ body.is-resizing .photo-inspector {
 .library-grid-container {
   flex: 1 1 0;
   overflow-y: auto;
-  padding: var(--space-4) var(--page-gutter) var(--space-6);
+  padding: var(--space-3) var(--page-gutter) var(--space-6);
   min-height: 0;
   box-sizing: border-box;
 }
@@ -1615,12 +1615,12 @@ body.is-resizing .photo-inspector {
   z-index: 4;
   display: grid;
   place-items: center;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: color-mix(in srgb, #f43f5e 90%, transparent);
+  background: color-mix(in srgb, #f43f5e 92%, transparent);
   color: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(6px);
 }
 
@@ -8206,7 +8206,7 @@ body.is-dragging-albums * {
 }
 
 .albums-list-view.list-view {
-  --list-columns: 34px 64px minmax(0, 1fr) minmax(0, 92px) minmax(0, 104px) minmax(0, 140px) auto;
+  --list-columns: 34px 64px minmax(0, 1fr) minmax(0, 92px) minmax(0, 104px) minmax(0, 140px) 168px;
 }
 
 .albums-col-grip {
@@ -8278,6 +8278,10 @@ body.is-dragging-albums * {
   color: var(--faint);
   cursor: grab;
   touch-action: none;
+  /* Sitting above the full-row open button; without this the overlay steals
+     the pointerdown and the grip cannot be gripped. */
+  position: relative;
+  z-index: 3;
 }
 
 .albums-list-grip:hover {
@@ -8338,7 +8342,11 @@ body.is-dragging-albums * {
    One column template serves the sticky header and every row — set --list-columns
    once per view and the two can never drift apart. */
 .list-view {
+  /* Must stay in lockstep with .library-grid-container:has(> .list-view-header). */
   --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px) minmax(0, 110px) minmax(0, 96px);
+  /* Rows this wide look sparse; the columns carry enough content to fill
+     about this much space comfortably. */
+  max-width: 1240px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-width: 650px;
@@ -8353,6 +8361,7 @@ body.is-dragging-albums * {
   /* The rows' grid keeps a 650px minimum under cramped viewports; the sticky
      header must match it or the two columns drift vertically apart. */
   min-width: 650px;
+  max-width: 1240px;
   top: 0;
   z-index: 12;
   display: grid;
@@ -8362,13 +8371,17 @@ body.is-dragging-albums * {
   min-height: 40px;
   padding: 0 10px;
   border-bottom: 1px solid var(--line);
-  background: var(--surface-2);
-  box-shadow: 0 5px 14px color-mix(in srgb, var(--ink) 5%, transparent);
+  background: var(--surface);
+}
+
+.list-view-head-cell--numeric {
+  justify-self: end;
+  text-align: right;
 }
 
 .list-view-head-cell {
   min-width: 0;
-  padding: 12px 0;
+  padding: 8px 0;
   color: var(--muted);
   font-size: 10px;
   font-weight: 700;
@@ -8388,7 +8401,7 @@ body.is-dragging-albums * {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px 0;
+  padding: 8px 0;
   border: 0;
   border-radius: 4px;
   background: transparent;
@@ -8423,9 +8436,8 @@ body.is-dragging-albums * {
   grid-column: 1 / -1;
   grid-template-columns: var(--list-columns);
   align-items: stretch;
-  min-height: 62px;
+  min-height: 44px;
   padding: 0 10px;
-  border-top: 1px solid var(--line);
   background: var(--surface);
 }
 
@@ -8434,7 +8446,7 @@ body.is-dragging-albums * {
 }
 
 .list-view-row:nth-child(even) {
-  background: var(--surface-2);
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
 }
 
 .list-view-row:hover {
@@ -8512,11 +8524,11 @@ body.is-dragging-albums * {
   grid-column: 2;
   align-self: center;
   justify-self: center;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--surface-3);
 }
 
@@ -8990,8 +9002,12 @@ body.is-dragging-albums * {
 }
 
 /* Keep the Details view on the same grid gutter as the other modes. */
+/* The header is NOT inside .list-view (it's a sibling), so it cannot inherit
+   its --list-columns. Keep this declaration in lockstep with the default on
+   .list-view — any change must update both. */
 .library-grid-container:has(> .list-view-header) {
-  --list-columns: 44px 68px minmax(0, 1fr) 140px 110px 96px;
+  --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px) minmax(0, 110px) minmax(0, 96px);
+  padding-top: 4px;
   padding-right: var(--page-gutter);
   padding-left: var(--page-gutter);
 }

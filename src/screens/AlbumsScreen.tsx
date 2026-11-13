@@ -112,6 +112,37 @@ function AlbumsScreen(props: AlbumsScreenProps) {
   const reorderAlbums = useLibraryStore((s) => s.reorderAlbums);
   const albumsView = useSettingsStore((s) => s.albumsView);
   const updateSettings = useSettingsStore((s) => s.update);
+
+  // View-only sort for the list, layered over the persisted manual order.
+  // Cycles manual → asc → desc → manual. Never persisted; cards always use
+  // the manual order.
+  type AlbumsSortKey = "name" | "itemCount" | "itemSize" | "updatedAt";
+  const [albumsSort, setAlbumsSort] = React.useState<
+    { key: AlbumsSortKey; dir: "asc" | "desc" } | null
+  >(null);
+  const sortedAlbums = React.useMemo(() => {
+    if (!albumsSort) return albums;
+    const { key, dir } = albumsSort;
+    const mult = dir === "asc" ? 1 : -1;
+    const read = (album: any): string | number => {
+      if (key === "name") return String(album.name ?? "").toLowerCase();
+      if (key === "itemSize") return Number(album.itemSize ?? 0) || 0;
+      if (key === "itemCount") return Number(album.count ?? album.itemCount ?? 0) || 0;
+      return Number(album.updatedAt) || 0;
+    };
+    return [...albums].sort((a: any, b: any) => {
+      const av = read(a);
+      const bv = read(b);
+      if (typeof av === "string") return mult * av.localeCompare(bv as string);
+      return mult * (av as number - (bv as number));
+    });
+  }, [albums, albumsSort]);
+  const cycleAlbumsSort = (key: AlbumsSortKey) =>
+    setAlbumsSort((current) => {
+      if (!current || current.key !== key) return { key, dir: "asc" };
+      if (current.dir === "asc") return { key, dir: "desc" };
+      return null;
+    });
   const [dragId, setDragId] = React.useState<string | null>(null);
   const [dropTarget, setDropTarget] = React.useState<{ id: string; before: boolean } | null>(null);
   // Cards render from a memo that preserves props order, so this is just the
@@ -423,13 +454,61 @@ function AlbumsScreen(props: AlbumsScreenProps) {
           <div className="list-view-header">
             <div className="list-view-head-cell albums-col-grip" aria-hidden="true" />
             <div className="list-view-head-cell albums-col-cover" aria-hidden="true" />
-            <div className="list-view-head-cell">Name</div>
-            <div className="list-view-head-cell list-view-head-cell--numeric">Items</div>
-            <div className="list-view-head-cell list-view-head-cell--numeric">Size</div>
-            <div className="list-view-head-cell">Updated</div>
+            <div className="list-view-head-cell">
+              <button
+                type="button"
+                className="details-sort-header"
+                aria-pressed={albumsSort?.key === "name"}
+                onClick={() => cycleAlbumsSort("name")}
+              >
+                Name
+                <span aria-hidden="true">
+                  {albumsSort?.key === "name" ? (albumsSort.dir === "asc" ? "↑" : "↓") : "↕"}
+                </span>
+              </button>
+            </div>
+            <div className="list-view-head-cell list-view-head-cell--numeric">
+              <button
+                type="button"
+                className="details-sort-header"
+                aria-pressed={albumsSort?.key === "itemCount"}
+                onClick={() => cycleAlbumsSort("itemCount")}
+              >
+                Items
+                <span aria-hidden="true">
+                  {albumsSort?.key === "itemCount" ? (albumsSort.dir === "asc" ? "↑" : "↓") : "↕"}
+                </span>
+              </button>
+            </div>
+            <div className="list-view-head-cell list-view-head-cell--numeric">
+              <button
+                type="button"
+                className="details-sort-header"
+                aria-pressed={albumsSort?.key === "itemSize"}
+                onClick={() => cycleAlbumsSort("itemSize")}
+              >
+                Size
+                <span aria-hidden="true">
+                  {albumsSort?.key === "itemSize" ? (albumsSort.dir === "asc" ? "↑" : "↓") : "↕"}
+                </span>
+              </button>
+            </div>
+            <div className="list-view-head-cell">
+              <button
+                type="button"
+                className="details-sort-header"
+                aria-pressed={albumsSort?.key === "updatedAt"}
+                onClick={() => cycleAlbumsSort("updatedAt")}
+              >
+                Updated
+                <span aria-hidden="true">
+                  {albumsSort?.key === "updatedAt" ? (albumsSort.dir === "asc" ? "↑" : "↓") : "↕"}
+                </span>
+              </button>
+            </div>
             <div className="list-view-head-cell albums-col-actions" aria-label="Actions" />
           </div>
-          {albums.map((album: any, index: number) => (
+          {sortedAlbums.map((album: any, index: number) => (
             <div
               className={`list-view-row album-list-row album-card-wrap${dragId === album.id ? " is-dragging" : ""}${
                 dropTarget && dropTarget.id === album.id
@@ -453,10 +532,19 @@ function AlbumsScreen(props: AlbumsScreenProps) {
               <button
                 type="button"
                 className="albums-list-grip"
-                title="Drag to reorder"
+                title={
+                  albumsSort
+                    ? "Sorting pauses manual ordering — pick Manual order (↕) to drag"
+                    : "Drag to reorder"
+                }
                 aria-label={`Drag to reorder ${album.name}`}
                 style={{ touchAction: "none" }}
-                onPointerDown={(event) => startAlbumDrag(album.id, event)}
+                disabled={albumsSort !== null}
+                aria-disabled={albumsSort !== null}
+                onPointerDown={(event) => {
+                  if (albumsSort !== null) return;
+                  startAlbumDrag(album.id, event);
+                }}
               >
                 <DragIcon size={13} />
               </button>
@@ -510,7 +598,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   className="album-card-action"
                   title="Move earlier"
                   aria-label={`Move ${album.name} earlier`}
-                  disabled={index === 0}
+                  disabled={albumsSort !== null || index === 0}
                   onClick={() => moveAlbum(album.id, -1)}
                 >
                   <ChevronUpIcon size={14} />
@@ -520,7 +608,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   className="album-card-action"
                   title="Move later"
                   aria-label={`Move ${album.name} later`}
-                  disabled={index === albums.length - 1}
+                  disabled={albumsSort !== null || index === albums.length - 1}
                   onClick={() => moveAlbum(album.id, 1)}
                 >
                   <ChevronDownIcon size={14} />
@@ -620,7 +708,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   className="album-card-action"
                   title="Move earlier"
                   aria-label={`Move ${album.name} earlier`}
-                  disabled={index === 0}
+                  disabled={albumsSort !== null || index === 0}
                   onClick={() => moveAlbum(album.id, -1)}
                 >
                   <ChevronUpIcon size={14} />
@@ -630,7 +718,7 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   className="album-card-action"
                   title="Move later"
                   aria-label={`Move ${album.name} later`}
-                  disabled={index === albums.length - 1}
+                  disabled={albumsSort !== null || index === albums.length - 1}
                   onClick={() => moveAlbum(album.id, 1)}
                 >
                   <ChevronDownIcon size={14} />
