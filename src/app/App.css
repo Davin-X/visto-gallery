@@ -8477,37 +8477,38 @@ body.is-dragging-albums * {
 }
 
 /* ===== Narrow-width column compaction =====
-   Instead of sideways scrolling below the old 650/814px floors, drop the
-   least-important columns once the container is cramped. Name always stays.
-   Breakpoints are set at the floor where the name column would otherwise
-   collapse (814px albums / 650px library), so columns drop before the name
-   track gets squeezed. */
+   Instead of sideways scrolling below the old 650/814px floors, drop
+   least-important columns (and their grid tracks) once the container is
+   cramped. Name column always stays. Breakpoints set at the floor where the
+   name column would otherwise collapse (814px albums / 650px library). */
 
-/* Albums list: hide Updated at <=820px, then Size at <=670px. */
+/* Albums list: hide Updated column at <=820px, then Size at <=670px. */
 @container (max-width: 820px) {
-  .albums-list-view .list-view-cell.list-view-cell--muted,
-  .albums-list-view .list-view-header > .list-view-head-cell:nth-child(6) {
-    display: none;
+  .albums-list-view {
+    --list-columns: 34px 72px minmax(0, 1fr) minmax(0, 92px) minmax(0, 104px) 168px;
   }
 }
 @container (max-width: 670px) {
-  .albums-list-view .list-view-cell.list-view-cell--size,
-  .albums-list-view .list-view-header > .list-view-head-cell:nth-child(5) {
-    display: none;
+  .albums-list-view {
+    --list-columns: 34px 72px minmax(0, 1fr) minmax(0, 92px) 168px;
   }
 }
 
-/* Library details: hide Kind at <=660px, then Size at <=530px. */
+/* Library details: hide Kind column at <=660px, then Size at <=530px. */
 @container (max-width: 660px) {
-  .library-grid-container .list-view-head-cell:nth-child(4),
-  .library-grid-container .list-view-row .tile-kind {
-    display: none;
+  .library-grid-container:has(> .list-view-header) {
+    --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px) 96px;
+  }
+  .list-view {
+    --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px) 96px;
   }
 }
 @container (max-width: 530px) {
-  .library-grid-container .list-view-head-cell:nth-child(5),
-  .library-grid-container .list-view-row .tile-size {
-    display: none;
+  .library-grid-container:has(> .list-view-header) {
+    --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px);
+  }
+  .list-view {
+    --list-columns: 44px 68px minmax(0, 1fr) minmax(0, 140px);
   }
 }
 
