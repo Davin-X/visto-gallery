@@ -3535,6 +3535,7 @@ body.is-resizing .photo-inspector {
   /* The current screen and an open panel stay obvious: those are states, and
      they keep the accent the rail used to spend on decoration. */
   .app-body.sidebar-collapsed .nav-item.active,
+  .app-body.sidebar-collapsed .sources-entry.open,
   .app-body.sidebar-collapsed .sidebar-stats-button[aria-expanded="true"] {
     border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
     background: var(--blue-soft);
@@ -3772,6 +3773,11 @@ body.is-resizing .photo-inspector {
 .sources-entry:hover {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
   background: color-mix(in srgb, var(--blue-soft) 52%, var(--surface));
+}
+
+.sources-entry.open {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  background: color-mix(in srgb, var(--blue-soft) 58%, var(--surface));
 }
 
 .sources-entry-icon {
@@ -6113,6 +6119,27 @@ body.is-dragging-albums * {
   color: var(--text);
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.24);
   animation: dialog-pop 0.15s ease;
+}
+
+/* Sources needs room for names, paths and counts; the generic dialog width
+   would force every row into an ellipsis. */
+.album-dialog.sources-sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(780px, 100%);
+  max-height: min(84vh, 720px);
+  overflow: hidden;
+}
+
+.sources-sheet .sources-manager {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 16px;
+  overflow: hidden;
+}
+
+.sources-sheet .dialog-actions {
+  margin-top: 16px;
 }
 
 .dialog-heading {

@@ -235,6 +235,7 @@ export function AppTopBar({
 interface AppSidebarProps {
   screen: Screen;
   folders: LibraryFolder[];
+  sourcesSheetOpen: boolean;
   stats: LibraryStats;
   updateAvailable: boolean;
   updateVersion: string | null;
@@ -251,6 +252,7 @@ interface AppSidebarProps {
 export function AppSidebar({
   screen,
   folders,
+  sourcesSheetOpen,
   stats,
   updateAvailable,
   updateVersion,
@@ -489,9 +491,11 @@ export function AppSidebar({
         <div className="sidebar-section sources-entry-section">
           <button
             type="button"
-            className="sources-entry"
+            className={`sources-entry${sourcesSheetOpen ? " open" : ""}`}
             onClick={onOpenSources}
-            title="Manage sources (opens Settings)"
+            title="Manage library sources"
+            aria-haspopup="dialog"
+            aria-expanded={sourcesSheetOpen}
           >
             <span className="sources-entry-icon">
               <FolderIcon size={16} />

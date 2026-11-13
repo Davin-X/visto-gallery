@@ -9,6 +9,7 @@ import {
 import { useFocusTrap } from "../design/hooks/useFocusTrap";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
 import { AlbumsIcon, FolderIcon, PlusIcon, SearchIcon } from "../design/components/icons";
+import { SourcesManager } from "../design/components/SourcesManager";
 import { TypedConfirmDialog } from "../design/components/TypedConfirmDialog";
 import { tauri } from "../engine/commands/tauri";
 import type { LibraryFolder, UpdateCheckResult } from "../engine/types/commands";
@@ -56,6 +57,9 @@ interface AppDialogsProps {
   setAlbumPickerSearch: (search: string) => void;
   setAddingToAlbumId: (id: string | null) => void;
 
+  sourcesSheetOpen: boolean;
+  setSourcesSheetOpen: (open: boolean) => void;
+
   removeAllSourcesDialogOpen: boolean;
   setRemoveAllSourcesDialogOpen: (open: boolean) => void;
   removingAllSources: boolean;
@@ -75,6 +79,7 @@ interface AppDialogsProps {
   updateChecking: boolean;
 
   library: any;
+  setScreen: (screen: string) => void;
   submitAlbum: (e: React.FormEvent<HTMLFormElement>) => Promise<void>;
   closeAlbumDialog: () => void;
   addPickedItemsToAlbum: (album: AlbumPickerTarget) => Promise<void>;
@@ -84,6 +89,9 @@ interface AppDialogsProps {
   confirmRemoveFromAlbum: () => Promise<void>;
   confirmRemoveFolder: () => Promise<void>;
   removeAllSources: () => Promise<void>;
+  rescanSources: () => Promise<void>;
+  rescanSource: (folder: LibraryFolder) => Promise<void>;
+  importFolder: () => void;
   checkForUpdates: (manual: boolean) => void;
 
   albumDialogRef: RefObject<HTMLFormElement | null>;
@@ -712,6 +720,82 @@ function RemoveFromAlbumDialog({
   );
 }
 
+function SourcesSheet({
+  open,
+  onClose,
+  onAddFolder,
+  onRemoveFolder,
+  onFilterSource,
+  onRescan,
+  onRescanFolder,
+  onRequestRemoveAll,
+  escapeBlocked,
+  library,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onAddFolder: () => void;
+  onRemoveFolder: (folder: LibraryFolder) => void;
+  onFilterSource: () => void;
+  onRescan: () => Promise<void>;
+  onRescanFolder: (folder: LibraryFolder) => Promise<void>;
+  onRequestRemoveAll: () => void;
+  /** When a confirmation is stacked on top, it owns Escape instead. */
+  escapeBlocked: boolean;
+  library: any;
+}) {
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  useFocusTrap(open, sheetRef);
+  useEscape(onClose, open && !escapeBlocked);
+
+  if (!open) return null;
+
+  return (
+    <Backdrop open={open} onClose={onClose} className="sources-sheet-backdrop">
+      <div
+        ref={sheetRef}
+        className="album-dialog sources-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sources-sheet-title"
+      >
+        <DialogHeader
+          eyebrow="LIBRARY"
+          title="Sources"
+          titleId="sources-sheet-title"
+          onClose={onClose}
+        />
+        <SourcesManager
+          variant="sheet"
+          onAddFolder={onAddFolder}
+          onRemoveFolder={onRemoveFolder}
+          onFilterSource={onFilterSource}
+          onRescan={() => {
+            void onRescan();
+          }}
+          onRescanFolder={(folder) => {
+            void onRescanFolder(folder);
+          }}
+        />
+        <div className="dialog-actions">
+          <button
+            type="button"
+            className="danger-button"
+            disabled={library.busy || library.folders.length === 0}
+            onClick={onRequestRemoveAll}
+          >
+            Remove all sources
+          </button>
+          <div style={{ flex: 1 }} />
+          <button type="button" className="quiet-button" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
+    </Backdrop>
+  );
+}
+
 function RemoveAllSourcesDialog({
   open,
   onClose,
@@ -847,6 +931,8 @@ export function AppDialogs(props: AppDialogsProps) {
     albumPickerItemIds,
     albumPickerSearch,
     addingToAlbumId,
+    sourcesSheetOpen,
+    setSourcesSheetOpen,
     setAlbumPickerOpen,
     setAlbumPickerSearch,
     removeAllSourcesDialogOpen,
@@ -863,6 +949,7 @@ export function AppDialogs(props: AppDialogsProps) {
     updateInfo,
     updateChecking,
     library,
+    setScreen,
     submitAlbum,
     closeAlbumDialog,
     addPickedItemsToAlbum,
@@ -872,6 +959,9 @@ export function AppDialogs(props: AppDialogsProps) {
     confirmRemoveFromAlbum,
     confirmRemoveFolder,
     removeAllSources,
+    rescanSources,
+    rescanSource,
+    importFolder,
     checkForUpdates,
     albumDialogRef,
     updateDialogRef,
@@ -958,6 +1048,21 @@ export function AppDialogs(props: AppDialogsProps) {
         pending={albumRemovePending}
         onClose={() => setAlbumRemovePending(null)}
         onConfirm={confirmRemoveFromAlbum}
+      />
+      <SourcesSheet
+        open={sourcesSheetOpen}
+        onClose={() => setSourcesSheetOpen(false)}
+        onAddFolder={importFolder}
+        onRemoveFolder={(folder: LibraryFolder) => setFolderPendingRemove(folder)}
+        onFilterSource={() => {
+          setScreen("Library");
+          setSourcesSheetOpen(false);
+        }}
+        onRescan={rescanSources}
+        onRescanFolder={rescanSource}
+        onRequestRemoveAll={() => setRemoveAllSourcesDialogOpen(true)}
+        escapeBlocked={removeAllSourcesDialogOpen || folderPendingRemove != null}
+        library={library}
       />
       <RemoveAllSourcesDialog
         open={removeAllSourcesDialogOpen}

@@ -124,6 +124,7 @@ function App() {
   // the sidebar can never drop a chunk of the library.
   const [folderPendingRemove, setFolderPendingRemove] = useState<LibraryFolder | null>(null);
   const [removingFolder, setRemovingFolder] = useState(false);
+  const [sourcesSheetOpen, setSourcesSheetOpen] = useState(false);
   const [removeAllSourcesDialogOpen, setRemoveAllSourcesDialogOpen] = useState(false);
   const [removingAllSources, setRemovingAllSources] = useState(false);
 
@@ -663,6 +664,7 @@ function App() {
     albumPendingDelete,
     itemPendingDeleteCount,
     folderPendingRemove,
+    sourcesSheetOpen,
   });
   liveRef.current = {
     library,
@@ -676,6 +678,7 @@ function App() {
     albumPendingDelete,
     itemPendingDeleteCount,
     folderPendingRemove,
+    sourcesSheetOpen,
   };
 
   // Handlers are declared further down; stable listeners reach them through a ref.
@@ -717,6 +720,7 @@ function App() {
       albumPendingDelete,
       itemPendingDeleteCount,
       folderPendingRemove,
+      sourcesSheetOpen,
     } = liveRef.current;
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
@@ -740,6 +744,7 @@ function App() {
       albumPendingDelete ||
       itemPendingDeleteCount > 0 ||
       folderPendingRemove ||
+      sourcesSheetOpen ||
       updateDialogOpenRef.current ||
       shortcutsCheatSheetOpen
     )
@@ -2359,12 +2364,13 @@ function App() {
         <AppSidebar
           screen={screen}
           folders={library.folders}
+          sourcesSheetOpen={sourcesSheetOpen}
           stats={libraryStats}
           updateAvailable={Boolean(updateInfo?.available)}
           updateVersion={updateInfo?.latestVersion ?? null}
           appVersion={appVersion}
           onOpenScreen={openScreen}
-          onOpenSources={() => openSettings("library")}
+          onOpenSources={() => setSourcesSheetOpen(true)}
           onOpenUpdate={() => setUpdateDialogOpen(true)}
           sidebarCollapsed={library.sidebarCollapsed}
           onToggleCollapse={library.toggleSidebarCollapsed}
@@ -2616,6 +2622,8 @@ function App() {
             setAlbumPickerItemIds={setAlbumPickerItemIds}
             setAlbumPickerSearch={setAlbumSearch}
             setAddingToAlbumId={setAddingToAlbumId}
+            sourcesSheetOpen={sourcesSheetOpen}
+            setSourcesSheetOpen={setSourcesSheetOpen}
             removeAllSourcesDialogOpen={removeAllSourcesDialogOpen}
             setRemoveAllSourcesDialogOpen={setRemoveAllSourcesDialogOpen}
             removingAllSources={removingAllSources}
@@ -2631,6 +2639,7 @@ function App() {
             updateInfo={updateInfo}
             updateChecking={updateChecking}
             library={library}
+            setScreen={(screen: string) => setScreen(screen as Screen)}
             submitAlbum={submitAlbum}
             closeAlbumDialog={closeAlbumDialog}
             addPickedItemsToAlbum={addPickedItemsToAlbum}
@@ -2640,6 +2649,9 @@ function App() {
             confirmRemoveFromAlbum={confirmRemoveFromAlbum}
             confirmRemoveFolder={confirmRemoveFolder}
             removeAllSources={removeAllSources}
+            rescanSources={rescanSources}
+            rescanSource={rescanSource}
+            importFolder={importFolder}
             checkForUpdates={checkForUpdates}
             albumDialogRef={albumDialogRef}
             updateDialogRef={updateDialogRef}
