@@ -31,3 +31,23 @@ updates:
     commit-message:
       prefix: "chore(deps)"
       include: "scope"
+
+  # Keep workflow actions current so CI never drifts onto a retired runtime
+  # again (the v4 actions sat on deprecated Node 20 until #238). One grouped
+  # PR a week instead of one per action.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+    reviewers:
+      - "Davin-X"
+    commit-message:
+      prefix: "ci(deps)"
