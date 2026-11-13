@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FilterIcon } from "./icons";
 import { endOfLocalDay, startOfLocalDay, toDateInputValue } from "../../engine/utils/dateRange";
+import { usePopoverFocus } from "../hooks/usePopoverFocus";
 
 interface FilterDropdownProps {
   minRating: number | null;
@@ -29,6 +30,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  usePopoverFocus(open, panelRef, buttonRef);
   const portalRoot =
     typeof document === "undefined"
       ? null
@@ -108,6 +110,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
           setOpen(!open);
         }}
         aria-expanded={open}
+        aria-haspopup="dialog"
       >
         <FilterIcon size={13} />
         <span>Filters</span>
@@ -120,6 +123,8 @@ export function FilterDropdown(props: FilterDropdownProps) {
           <div
             ref={panelRef}
             className="filter-dropdown-panel"
+            role="dialog"
+            aria-label="Filters"
             style={{
               position: "fixed",
               top: position.top,

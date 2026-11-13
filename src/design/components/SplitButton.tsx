@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDownIcon } from "./icons";
+import { usePopoverFocus } from "../hooks/usePopoverFocus";
 
 interface SplitButtonItem {
   key: string;
@@ -43,6 +44,8 @@ export default function SplitButton({
     typeof document === "undefined"
       ? null
       : (document.querySelector<HTMLElement>(".app-frame") ?? document.body);
+
+  usePopoverFocus(open, panelRef, buttonRef, { menu: true });
 
   useEffect(() => {
     if (!open) return;
