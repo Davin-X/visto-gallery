@@ -1,6 +1,9 @@
 import React from "react";
 import {
   AlbumsIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  DragIcon,
   PencilIcon,
   PlusIcon,
   SlideshowIcon,
@@ -97,6 +100,97 @@ function AlbumsScreen(props: AlbumsScreenProps) {
       };
     });
   }, [props.albums, overviews]);
+
+  // Albums are reorderable, so the list order is user data, not an accident of
+  // the query. `albumOrderIds` is the current order, used by the drag and by
+  // the Move up / Move down buttons.
+  const reorderAlbums = useLibraryStore((s) => s.reorderAlbums);
+  const [dragId, setDragId] = React.useState<string | null>(null);
+  const [dropTarget, setDropTarget] = React.useState<{ id: string; before: boolean } | null>(null);
+  // Cards render from a memo that preserves props order, so this is just the
+  // current on-screen order.
+  const albumOrderIds = albums.map((album: any) => album.id as string);
+
+  const moveAlbum = (albumId: string, delta: number) => {
+    const current = (props.albums || []).map((album: any) => album.id as string);
+    const from = current.indexOf(albumId);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= current.length) return;
+    const next = [...current];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    void reorderAlbums(next);
+  };
+
+  const reorderAlbum = (sourceId: string, targetId: string, before: boolean) => {
+    const next = [...albumOrderIds];
+    const from = next.indexOf(sourceId);
+    if (from < 0) return;
+    next.splice(from, 1);
+    let to = next.indexOf(targetId);
+    if (to < 0) return;
+    if (!before) to += 1;
+    next.splice(to, 0, sourceId);
+    setDragId(null);
+    setDropTarget(null);
+    void reorderAlbums(next);
+  };
+
+  // Native HTML5 drag-and-drop does not deliver drops reliably inside macOS's
+  // WebKit view, so the pointer is tracked at document level instead: a move
+  // re-derives the target from elementFromPoint, a release applies it.
+  const reorderAlbumRef = React.useRef(reorderAlbum);
+  reorderAlbumRef.current = reorderAlbum;
+  const dropTargetRef = React.useRef(dropTarget);
+  dropTargetRef.current = dropTarget;
+
+  const startAlbumDrag = (albumId: string, event: React.PointerEvent) => {
+    // Prevent the native click on the grip: a drag must never open the album.
+    event.preventDefault();
+    setDragId(albumId);
+  };
+
+  React.useEffect(() => {
+    if (!dragId) return;
+    document.body.classList.add("is-dragging-albums");
+    const onMove = (event: PointerEvent) => {
+      const element = document.elementFromPoint(event.clientX, event.clientY);
+      const wrap = element?.closest<HTMLElement>(".album-card-wrap");
+      const id = wrap?.dataset.albumId ?? null;
+      if (!wrap || !id || id === dragId) {
+        dropTargetRef.current = null;
+        setDropTarget(null);
+        return;
+      }
+      const rect = wrap.getBoundingClientRect();
+      const before = event.clientX < rect.left + rect.width / 2;
+      dropTargetRef.current = { id, before };
+      setDropTarget({ id, before });
+    };
+    const onUp = () => {
+      const target = dropTargetRef.current;
+      if (target) reorderAlbumRef.current(dragId, target.id, target.before);
+      else {
+        setDragId(null);
+        setDropTarget(null);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDragId(null);
+        setDropTarget(null);
+      }
+    };
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.classList.remove("is-dragging-albums");
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [dragId]);
 
   // The film strip shows one row; "View all" expands it into the full
   // multi-row grid. Shown only when there is something to expand into.
@@ -293,8 +387,28 @@ function AlbumsScreen(props: AlbumsScreenProps) {
         </div>
       ) : (
         <div className="albums-grid">
-          {albums.map((album: any) => (
-            <div className="album-card-wrap" key={album.id}>
+          {albums.map((album: any, index: number) => (
+            <div
+              className={`album-card-wrap${dragId === album.id ? " is-dragging" : ""}${
+                dropTarget && dropTarget.id === album.id
+                  ? dropTarget.before
+                    ? " is-drop-before"
+                    : " is-drop-after"
+                  : ""
+              }`}
+              key={album.id}
+              data-album-id={album.id}
+            >
+              <button
+                type="button"
+                className="album-card-reorder"
+                title="Drag to reorder"
+                aria-label={`Drag to reorder ${album.name}`}
+                style={{ touchAction: "none" }}
+                onPointerDown={(event) => startAlbumDrag(album.id, event)}
+              >
+                <DragIcon size={13} />
+              </button>
               <button
                 type="button"
                 className="album-card"
@@ -338,6 +452,26 @@ function AlbumsScreen(props: AlbumsScreenProps) {
                   onClick={() => props.onAddItemsToAlbum?.(album.id)}
                 >
                   <PlusIcon size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="album-card-action"
+                  title="Move earlier"
+                  aria-label={`Move ${album.name} earlier`}
+                  disabled={index === 0}
+                  onClick={() => moveAlbum(album.id, -1)}
+                >
+                  <ChevronUpIcon size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="album-card-action"
+                  title="Move later"
+                  aria-label={`Move ${album.name} later`}
+                  disabled={index === albums.length - 1}
+                  onClick={() => moveAlbum(album.id, 1)}
+                >
+                  <ChevronDownIcon size={14} />
                 </button>
                 <button
                   type="button"

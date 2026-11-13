@@ -38,7 +38,7 @@ pub(crate) async fn load_album_overviews(
     db: &sqlx::SqlitePool,
 ) -> Result<Vec<AlbumOverview>, CommandError> {
     let albums = sqlx::query_as::<_, Album>(&format!(
-        "{} ORDER BY a.created_at ASC",
+        "{} ORDER BY a.position ASC, a.created_at ASC, a.id ASC",
         super::ALBUM_SELECT
     ))
     .fetch_all(db)
@@ -122,7 +122,7 @@ pub(crate) async fn load_album_overviews(
 pub async fn get_albums(catalog: State<'_, crate::Catalog>) -> Result<Vec<Album>, CommandError> {
     let db = super::get_db(&catalog)?;
     let mut albums = sqlx::query_as::<_, Album>(&format!(
-        "{} ORDER BY a.created_at ASC",
+        "{} ORDER BY a.position ASC, a.created_at ASC, a.id ASC",
         super::ALBUM_SELECT
     ))
     .fetch_all(&db)
@@ -169,17 +169,69 @@ pub async fn create_album(
         ));
     }
     let album = Album::new(name, color_index.unwrap_or(0));
+    // New albums go last: an explicit order exists, so appending keeps the
+    // list stable for anyone who has not dragged anything yet.
+    let next_position: i64 =
+        sqlx::query_scalar("SELECT COALESCE(MAX(position), 0) + 1 FROM albums")
+            .fetch_one(&db)
+            .await?;
     sqlx::query(
-        "INSERT INTO albums (id, name, color_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO albums (id, name, color_index, created_at, updated_at, position) VALUES (?, ?, ?, ?, ?, ?)",
     )
     .bind(&album.id)
     .bind(&album.name)
     .bind(album.color_index)
     .bind(album.created_at)
     .bind(album.updated_at)
+    .bind(next_position)
     .execute(&db)
     .await?;
     Ok(album)
+}
+
+/// Write an explicit album order.
+///
+/// The client sends the complete ordered id list, so one drag or one arrow
+/// press is a single round trip and the stored result is always a full
+/// permutation. A relative shift would let two albums collide on one position
+/// and silently depend on the order it was applied in.
+pub(crate) async fn reorder_albums_in_catalog(
+    db: &sqlx::SqlitePool,
+    album_ids: Vec<String>,
+) -> Result<(), CommandError> {
+    let album_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM albums")
+        .fetch_one(db)
+        .await?;
+    if album_ids.len() as i64 != album_count {
+        return Err(CommandError::invalid(
+            "Reorder needs every album id exactly once".to_string(),
+        ));
+    }
+
+    let mut tx = db.begin().await?;
+    for (index, album_id) in album_ids.iter().enumerate() {
+        let result = sqlx::query("UPDATE albums SET position = ? WHERE id = ?")
+            .bind(index as i64 + 1)
+            .bind(album_id)
+            .execute(&mut *tx)
+            .await?;
+        if result.rows_affected() == 0 {
+            return Err(CommandError::invalid(format!(
+                "Album {album_id} no longer exists"
+            )));
+        }
+    }
+    tx.commit().await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn reorder_albums(
+    album_ids: Vec<String>,
+    catalog: State<'_, crate::Catalog>,
+) -> Result<(), CommandError> {
+    let db = super::get_db(&catalog)?;
+    reorder_albums_in_catalog(&db, album_ids).await
 }
 
 #[tauri::command]
@@ -358,7 +410,10 @@ pub async fn remove_from_album(
 
 #[cfg(test)]
 mod tests {
-    use super::{add_to_album_db, fetch_album_items, remove_from_album_db};
+    use super::{
+        add_to_album_db, fetch_album_items, load_album_overviews, remove_from_album_db,
+        reorder_albums_in_catalog,
+    };
     use sqlx::sqlite::SqlitePoolOptions;
 
     async fn album_db() -> sqlx::SqlitePool {
@@ -377,7 +432,7 @@ mod tests {
             .execute(&db)
             .await
             .expect("create album items table");
-        sqlx::query("CREATE TABLE albums (id TEXT PRIMARY KEY, name TEXT NOT NULL, color_index INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0)")
+        sqlx::query("CREATE TABLE albums (id TEXT PRIMARY KEY, name TEXT NOT NULL, color_index INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0, position INTEGER NOT NULL DEFAULT 0)")
             .execute(&db)
             .await
             .expect("create albums table");
@@ -493,5 +548,60 @@ mod tests {
         assert_eq!(items.len(), 1);
         assert!(items[0].is_animated);
         assert_eq!(items[0].content_signature.as_deref(), Some("sig"));
+    }
+
+    #[tokio::test]
+    async fn reordering_albums_persists_an_explicit_order() {
+        let db = album_db().await;
+        for (id, created_at) in [("a1", 1), ("a2", 2), ("a3", 3)] {
+            sqlx::query("INSERT INTO albums (id, name, created_at, updated_at, position) VALUES (?, ?, ?, ?, ?)")
+                .bind(id)
+                .bind(id)
+                .bind(created_at)
+                .bind(created_at)
+                .bind(created_at)
+                .execute(&db)
+                .await
+                .expect("insert album row");
+        }
+
+        // Creation order.
+        let names = album_names(&db).await;
+        assert_eq!(names, vec!["a1", "a2", "a3"]);
+
+        reorder_albums_in_catalog(&db, vec!["a3".into(), "a1".into(), "a2".into()])
+            .await
+            .expect("reorder");
+        assert_eq!(album_names(&db).await, vec!["a3", "a1", "a2"]);
+
+        // Positions are unique, so reordering again cannot collide.
+        reorder_albums_in_catalog(&db, vec!["a2".into(), "a3".into(), "a1".into()])
+            .await
+            .expect("reorder");
+        assert_eq!(album_names(&db).await, vec!["a2", "a3", "a1"]);
+    }
+
+    #[tokio::test]
+    async fn reordering_albums_rejects_an_incomplete_list() {
+        let db = album_db().await;
+        for id in ["a1", "a2"] {
+            sqlx::query("INSERT INTO albums (id, name, created_at, updated_at, position) VALUES (?, ?, 1, 1, 1)")
+                .bind(id)
+                .bind(id)
+                .execute(&db)
+                .await
+                .expect("insert album row");
+        }
+
+        // One album missing: applying it would leave the omitted album sharing
+        // a position with its neighbour.
+        let result = reorder_albums_in_catalog(&db, vec!["a2".to_string()]).await;
+        assert!(result.is_err());
+        assert_eq!(album_names(&db).await, vec!["a1", "a2"]);
+    }
+
+    async fn album_names(db: &sqlx::SqlitePool) -> Vec<String> {
+        let albums = load_album_overviews(db).await.expect("load overviews");
+        albums.into_iter().map(|album| album.name).collect()
     }
 }

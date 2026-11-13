@@ -227,6 +227,9 @@ export interface LibraryState {
   createAlbum: (name: string, itemIds?: string[]) => Promise<void>;
   deleteAlbum: (albumId: string) => Promise<void>;
   renameAlbum: (albumId: string, name: string) => Promise<void>;
+  /** Persist the complete ordered album id list; albums are reordered
+   *  optimistically and reverted on failure. */
+  reorderAlbums: (albumIds: string[]) => Promise<boolean>;
   addToAlbum: (albumId: string, itemIds?: string[]) => Promise<void>;
   removeFromAlbum: (albumId: string, itemIds: string[]) => Promise<void>;
   loadAlbumItems: (albumId: string) => Promise<void>;
@@ -1518,6 +1521,33 @@ export const useLibraryStore = create<LibraryState>()(
           albums: s.albums.map((a) => (a.id === albumId ? { ...a, name } : a)),
           albumOverviews: s.albumOverviews.map((a) => (a.id === albumId ? { ...a, name } : a)),
         }));
+      },
+
+      reorderAlbums: async (albumIds) => {
+        // The two derived lists must move together or a card and its overview
+        // would disagree about where it sits until the next reload.
+        const previous = {
+          albums: get().albums,
+          albumOverviews: get().albumOverviews,
+        };
+        const orderIndex = new Map(albumIds.map((id, index) => [id, index]));
+        const sortByOrder = <T extends { id: string }>(list: T[]): T[] =>
+          [...list].sort(
+            (a, b) =>
+              (orderIndex.get(a.id) ?? albumIds.length) - (orderIndex.get(b.id) ?? albumIds.length),
+          );
+        set((s) => ({
+          albums: sortByOrder(s.albums),
+          albumOverviews: sortByOrder(s.albumOverviews),
+        }));
+        try {
+          await tauri.albums.reorder(albumIds);
+          return true;
+        } catch (error) {
+          set(previous);
+          get().showErrorNotice(error, "Could not save the album order");
+          return false;
+        }
       },
 
       addToAlbum: async (albumId, itemIds = get().selectedIds) => {

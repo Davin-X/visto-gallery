@@ -16,6 +16,9 @@
       const albumOverviewParam = params.get("albums");
       const albumOverviewCount =
         albumOverviewParam == null ? 100 : Math.max(0, Math.floor(Number(albumOverviewParam) || 0));
+      // An explicit order for the regular albums so the Albums screen's
+      // reorder feature can be driven end to end.
+      let albumOrder = Array.from({ length: albumOverviewCount }, (_, index) => `benchmark-album-${index}`);
       const PAGE_SIZE = 250;
       const now = Date.UTC(2026, 10, 3, 12, 0, 0);
       const tinyImage =
@@ -166,6 +169,7 @@
         if (command === "get_albums") return [];
         if (command === "get_tags") return [];
         if (command === "get_album_overviews") {
+          const positions = new Map(albumOrder.map((id, index) => [id, index]));
           return Array.from({ length: albumOverviewCount }, (_, index) => ({
             id: `benchmark-album-${index}`,
             name: `Benchmark Album ${index}`,
@@ -174,7 +178,17 @@
             updatedAt: now - index * 60_000,
             itemCount: Math.min(100, totalItems - index * 100),
             coverItems: items.slice(index * 4, index * 4 + 4),
-          }));
+          })).sort(
+            (a, b) => (positions.get(a.id) ?? albumOrder.length) - (positions.get(b.id) ?? albumOrder.length),
+          );
+        }
+        if (command === "reorder_albums") {
+          const ids = Array.isArray(args?.albumIds) ? args.albumIds.filter((id) => typeof id === "string") : [];
+          if (ids.length !== albumOrder.length) {
+            throw new Error("Reorder needs every album id exactly once");
+          }
+          albumOrder = [...ids];
+          return null;
         }
         if (command === "get_album_items") {
           const albumId = args?.albumId || "benchmark-album-0";

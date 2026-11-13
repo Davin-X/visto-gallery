@@ -18,6 +18,7 @@ vi.mock("../commands/tauri", () => ({
       create: vi.fn().mockResolvedValue({ id: "album-1", name: "Trip", itemCount: 0 }),
       delete: vi.fn().mockResolvedValue(undefined),
       rename: vi.fn().mockResolvedValue(undefined),
+      reorder: vi.fn().mockResolvedValue(undefined),
       addItems: vi.fn().mockResolvedValue(undefined),
       getOverviews: vi.fn().mockResolvedValue([]),
       get: vi.fn().mockResolvedValue([]),
@@ -1055,4 +1056,101 @@ describe("hidden view server-side filtering", () => {
     expect(filter.kind).toBe("photo");
     expect(filter.cursor).toBe("cursor-2");
   });
+});
+
+test("reorderAlbums reorders the two derived lists and persists the order", async () => {
+  const overviews = [
+    {
+      id: "one",
+      name: "One",
+      colorIndex: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      itemCount: 0,
+      coverItems: [],
+    },
+    {
+      id: "two",
+      name: "Two",
+      colorIndex: 0,
+      createdAt: 2,
+      updatedAt: 2,
+      itemCount: 0,
+      coverItems: [],
+    },
+    {
+      id: "three",
+      name: "Three",
+      colorIndex: 0,
+      createdAt: 3,
+      updatedAt: 3,
+      itemCount: 0,
+      coverItems: [],
+    },
+  ];
+  useLibraryStore.setState({
+    albums: overviews.map(({ id, name, colorIndex, createdAt, updatedAt, itemCount }) => ({
+      id,
+      name,
+      colorIndex,
+      createdAt,
+      updatedAt,
+      itemCount,
+      itemIds: [],
+    })),
+    albumOverviews: overviews as any,
+  });
+
+  const ok = await useLibraryStore.getState().reorderAlbums(["three", "one", "two"]);
+
+  expect(ok).toBe(true);
+  expect(useLibraryStore.getState().albums.map((a) => a.id)).toEqual(["three", "one", "two"]);
+  expect(useLibraryStore.getState().albumOverviews.map((a) => a.id)).toEqual([
+    "three",
+    "one",
+    "two",
+  ]);
+  expect(tauri.albums.reorder).toHaveBeenCalledWith(["three", "one", "two"]);
+});
+
+test("reorderAlbums reverts both derived lists when the backend rejects the order", async () => {
+  const overviews = [
+    {
+      id: "one",
+      name: "One",
+      colorIndex: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      itemCount: 0,
+      coverItems: [],
+    },
+    {
+      id: "two",
+      name: "Two",
+      colorIndex: 0,
+      createdAt: 2,
+      updatedAt: 2,
+      itemCount: 0,
+      coverItems: [],
+    },
+  ];
+  useLibraryStore.setState({
+    albums: overviews.map(({ id, name, colorIndex, createdAt, updatedAt, itemCount }) => ({
+      id,
+      name,
+      colorIndex,
+      createdAt,
+      updatedAt,
+      itemCount,
+      itemIds: [],
+    })),
+    albumOverviews: overviews as any,
+  });
+  (tauri.albums.reorder as any).mockRejectedValue(new Error("stale album list"));
+
+  const ok = await useLibraryStore.getState().reorderAlbums(["two", "one"]);
+
+  expect(ok).toBe(false);
+  expect(useLibraryStore.getState().albums.map((a) => a.id)).toEqual(["one", "two"]);
+  expect(useLibraryStore.getState().albumOverviews.map((a) => a.id)).toEqual(["one", "two"]);
 });
