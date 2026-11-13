@@ -326,6 +326,38 @@ test("removeFromAlbum stamps the updated date on both derived lists", async () =
   expect(state.albumOverviews[0].updatedAt).toBeGreaterThan(1);
 });
 
+test("removeFromAlbum stamps the updated date when only hidden members are removed", async () => {
+  const a = makeItem("a", "photo.jpg");
+  a.albumIds = ["album-1"];
+  a.hidden = true;
+  useLibraryStore.setState({
+    items: [a],
+    albums: [{ id: "album-1", name: "Trip", itemCount: 0, updatedAt: 1 } as any],
+    albumOverviews: [{ id: "album-1", name: "Trip", itemCount: 0, updatedAt: 1 } as any],
+  });
+
+  await useLibraryStore.getState().removeFromAlbum("album-1", ["a"]);
+
+  const state = useLibraryStore.getState();
+  expect(state.albums[0].itemCount).toBe(0);
+  expect(state.albums[0].updatedAt).toBeGreaterThan(1);
+  expect(state.albumOverviews[0].updatedAt).toBeGreaterThan(1);
+});
+
+test("removeFromAlbum leaves the updated date alone when nothing was a member", async () => {
+  useLibraryStore.setState({
+    items: [makeItem("a", "photo.jpg")],
+    albums: [{ id: "album-1", name: "Trip", itemCount: 0, updatedAt: 1 } as any],
+    albumOverviews: [{ id: "album-1", name: "Trip", itemCount: 0, updatedAt: 1 } as any],
+  });
+
+  await useLibraryStore.getState().removeFromAlbum("album-1", ["a"]);
+
+  const state = useLibraryStore.getState();
+  expect(state.albums[0].updatedAt).toBe(1);
+  expect(state.albumOverviews[0].updatedAt).toBe(1);
+});
+
 test("loadLibrary applies date filters to the backend query and uses album overviews", async () => {
   vi.mocked(tauri.albums.getOverviews).mockResolvedValueOnce([
     {
