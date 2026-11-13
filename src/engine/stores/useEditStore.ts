@@ -290,7 +290,7 @@ export function hasEditChanges(values: EditValues, crop?: CropState): boolean {
   );
 }
 
-interface EditState {
+export interface EditState {
   // State
   item: MediaItem | null;
   values: EditValues;

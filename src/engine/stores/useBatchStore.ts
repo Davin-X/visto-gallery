@@ -6,7 +6,7 @@ import { useLibraryStore } from "./useLibraryStore";
 
 export type BatchFormat = "jpeg" | "png" | "webp" | "heic" | "avif" | "source";
 
-interface BatchState {
+export interface BatchState {
   // Config
   outputFolder: string;
   pattern: string;

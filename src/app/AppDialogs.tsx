@@ -14,6 +14,7 @@ import { TypedConfirmDialog } from "../design/components/TypedConfirmDialog";
 import { tauri } from "../engine/commands/tauri";
 import type { LibraryFolder, UpdateCheckResult } from "../engine/types/commands";
 import type { DeleteRequest } from "../engine/types/deleteRequest";
+import type { Screen } from "./screen";
 
 type AlbumDialogMode = "create" | "rename";
 
@@ -79,7 +80,7 @@ interface AppDialogsProps {
   updateChecking: boolean;
 
   library: any;
-  setScreen: (screen: string) => void;
+  setScreen: (screen: Screen) => void;
   submitAlbum: (e: React.FormEvent<HTMLFormElement>) => Promise<void>;
   closeAlbumDialog: () => void;
   addPickedItemsToAlbum: (album: AlbumPickerTarget) => Promise<void>;
