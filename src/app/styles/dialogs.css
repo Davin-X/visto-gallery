@@ -178,6 +178,17 @@
 
 .smart-album-dialog .dialog-actions {
   margin-top: 18px;
+  /* The editor is taller than the 680 px minimum window, so it scrolls; keep
+     Create and Cancel pinned to the bottom edge instead of below the fold.
+     The negative margins reach across the dialog's 20 px padding. */
+  position: sticky;
+  bottom: -20px;
+  z-index: 1;
+  margin-inline: -20px;
+  margin-bottom: -20px;
+  padding: 12px 20px 20px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
 }
 
 .smart-album-dialog .filter-chip-row {
