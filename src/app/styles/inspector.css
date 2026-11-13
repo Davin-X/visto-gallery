@@ -497,6 +497,23 @@
   white-space: nowrap;
 }
 
+/* A value that does something (Location opens Finder, GPS opens Maps): looks
+   like the other values until hovered, then reads as a link. */
+.info-link {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.info-link:hover,
+.info-link:focus-visible {
+  color: var(--accent-text);
+  text-decoration: underline;
+}
+
 /* Kind badges */
 .kind-badge {
   display: inline-flex;

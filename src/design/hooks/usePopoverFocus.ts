@@ -5,7 +5,8 @@ const FOCUSABLE =
 
 /**
  * Keyboard focus for a non-modal popover (a dropdown panel or a small menu):
- * - opening moves focus to its first control, so the keyboard can reach it;
+ * - opening moves focus to its first control (or the panel itself when it has
+ *   none), so the keyboard and VoiceOver reach it;
  * - closing returns focus to the trigger, unless the user already clicked
  *   somewhere else;
  * - with `menu`, ArrowUp/ArrowDown/Home/End move between `role="menuitem"`s.
@@ -26,7 +27,9 @@ export function usePopoverFocus(
         const first =
           panel?.querySelector<HTMLElement>("[data-autofocus]:not([disabled])") ??
           panel?.querySelector<HTMLElement>(menu ? "[role='menuitem']:not([disabled])" : FOCUSABLE);
-        first?.focus();
+        // A read-only panel (no controls) takes focus itself; it needs
+        // tabIndex={-1} for that.
+        (first ?? panel)?.focus();
       });
       return () => cancelAnimationFrame(frame);
     }

@@ -31,6 +31,7 @@ import type { Appearance } from "../engine/types/generated/ipc";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { LibraryFolder, LibraryStats } from "../engine/types/commands";
 import type { Screen } from "./screen";
+import { usePopoverFocus } from "../design/hooks/usePopoverFocus";
 
 /** The top-bar button cycles light → dark → system → light. */
 export function cycleAppearance(appearance: Appearance): Appearance {
@@ -272,6 +273,9 @@ export function AppSidebar({
   const statsWrapRef = useRef<HTMLDivElement>(null);
   const statsButtonRef = useRef<HTMLButtonElement>(null);
   const statsPopupRef = useRef<HTMLDivElement>(null);
+  // The popup is read-only, so it takes focus itself when it opens and
+  // hands it back to the chart button when it closes.
+  usePopoverFocus(statsOpen, statsPopupRef, statsButtonRef);
   // The popup must escape the rail: .sidebar (overflow hidden) and
   // .sidebar-scroll (overflow-y auto / overflow-x hidden) clip anything
   // rendered inside them, and the sibling .main-content paints over
@@ -379,14 +383,6 @@ export function AppSidebar({
           <span className="stat-size">· {formatBytesSimple(stats.animationsSize)}</span>
         </span>
       </div>
-      <div className="stat-row">
-        <HeartIcon className="stat-icon" size={13} strokeWidth={1.7} />
-        <span className="stat-label">Favorites</span>
-        <span className="stat-value">
-          {stats.favorites.toLocaleString()}
-          <span className="stat-size">· {formatBytesSimple(stats.favoriteSize)}</span>
-        </span>
-      </div>
       {/* The catalog only stores photo, video and raw kinds, so this row
           only appears if an older catalog holds something else. */}
       {stats.uncategorized > 0 && (
@@ -399,14 +395,6 @@ export function AppSidebar({
           </span>
         </div>
       )}
-      <div className="stat-row hidden">
-        <EyeOffIcon className="stat-icon" size={13} strokeWidth={1.7} />
-        <span className="stat-label">Hidden</span>
-        <span className="stat-value">
-          {stats.hidden.toLocaleString()}
-          <span className="stat-size">· {formatBytesSimple(stats.hiddenSize)}</span>
-        </span>
-      </div>
       <div className="stat-row size">
         <span className="stat-label">Total</span>
         <span className="stat-value">
@@ -418,6 +406,25 @@ export function AppSidebar({
             stats.uncategorized
           ).toLocaleString()}{" "}
           · {formatBytesSimple(stats.totalSize)}
+        </span>
+      </div>
+      {/* Favorites and Hidden are views, not kinds: favorites are already in
+          the counts above and hidden items are left out of the total, so they
+          sit apart from the rows that add up to it. */}
+      <div className="stat-row view-start" title="Already counted in the kinds above">
+        <HeartIcon className="stat-icon" size={13} strokeWidth={1.7} />
+        <span className="stat-label">Favorites</span>
+        <span className="stat-value">
+          {stats.favorites.toLocaleString()}
+          <span className="stat-size">· {formatBytesSimple(stats.favoriteSize)}</span>
+        </span>
+      </div>
+      <div className="stat-row hidden" title="Not counted in the total">
+        <EyeOffIcon className="stat-icon" size={13} strokeWidth={1.7} />
+        <span className="stat-label">Hidden</span>
+        <span className="stat-value">
+          {stats.hidden.toLocaleString()}
+          <span className="stat-size">· {formatBytesSimple(stats.hiddenSize)}</span>
         </span>
       </div>
     </>
@@ -456,7 +463,7 @@ export function AppSidebar({
               className={`sidebar-back-button${sidebarCollapsed ? " is-collapsed" : ""}`}
               onClick={onGoBack}
               aria-label="Go back"
-              title="Go back"
+              title="Go back (⌘[)"
             >
               <span className="sidebar-back-icon">
                 <ChevronLeftIcon size={16} strokeWidth={2} />
@@ -544,6 +551,7 @@ export function AppSidebar({
               <div
                 ref={statsPopupRef}
                 className="sidebar-stats-popup"
+                tabIndex={-1}
                 role="dialog"
                 aria-label="Library stats"
                 style={{ position: "fixed", top: statsPos.top, left: statsPos.left, zIndex: 200 }}

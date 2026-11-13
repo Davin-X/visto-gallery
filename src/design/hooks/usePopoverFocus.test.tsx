@@ -52,4 +52,28 @@ describe("usePopoverFocus", () => {
     fireEvent.keyDown(screen.getByText("Close it"), { key: "ArrowDown" });
     expect(screen.getByText("First")).toHaveFocus();
   });
+
+  it("focuses a read-only panel itself when it has no controls", async () => {
+    function ReadOnlyDemo() {
+      const [open, setOpen] = useState(false);
+      const triggerRef = useRef<HTMLButtonElement>(null);
+      const panelRef = useRef<HTMLDivElement>(null);
+      usePopoverFocus(open, panelRef, triggerRef);
+      return (
+        <>
+          <button ref={triggerRef} type="button" onClick={() => setOpen((v) => !v)}>
+            Stats
+          </button>
+          {open && (
+            <div ref={panelRef} role="dialog" aria-label="Library stats" tabIndex={-1}>
+              Photos 12
+            </div>
+          )}
+        </>
+      );
+    }
+    render(<ReadOnlyDemo />);
+    fireEvent.click(screen.getByText("Stats"));
+    await waitFor(() => expect(screen.getByRole("dialog")).toHaveFocus());
+  });
 });
