@@ -25,7 +25,7 @@ use std::process::Command;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Serialize;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, State};
 use ts_rs::TS;
 
 use crate::errors::CommandError;
@@ -411,7 +411,22 @@ pub async fn prepare_playback(
     app: AppHandle,
     path: String,
     force_remux: Option<bool>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<PreparedPlayback, CommandError> {
+    // Remuxes are written into the asset-protocol cache, so only a cataloged
+    // item may be prepared. Same check as `open_file`: the renderer cannot ask
+    // the backend to copy an arbitrary file into a webview-readable folder.
+    let db = super::get_db(&catalog)?;
+    let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
+        .bind(&path)
+        .fetch_optional(&db)
+        .await?;
+    if exists.is_none() {
+        return Err(CommandError::path(
+            "Path is not part of the catalog.".to_string(),
+        ));
+    }
+
     let source = PathBuf::from(&path);
     if !source.is_file() {
         return Ok(PreparedPlayback {
