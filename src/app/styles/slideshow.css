@@ -41,7 +41,6 @@
    layout unchanged, so closing the show does not reflow the library. */
 .app-frame.slideshow-open .topbar {
   visibility: hidden;
-  pointer-events: none;
 }
 
 .app-frame.slideshow-open .slideshow-overlay {
@@ -49,7 +48,8 @@
 }
 
 /* The native traffic lights sit in the top-left at every window size; nudge
-   the position pill past them now that the top bar no longer does it. */
+   the position pill past them now that the top bar no longer does it. 96px is
+   the top bar's own 90px traffic-light inset plus a little air. */
 .app-frame.slideshow-open .slideshow-position {
   left: 96px;
 }
