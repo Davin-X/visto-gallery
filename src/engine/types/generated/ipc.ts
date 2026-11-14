@@ -58,7 +58,11 @@ export type LibraryFilterDTO = { kind?: string, favorite?: boolean, hidden?: boo
  * `Some(true)` narrows to animated items, `Some(false)` to still ones.
  * Independent of `kind`, which keeps its photo | video | raw meaning.
  */
-animated?: boolean, albumId?: string, query?: string, tags?: Array<string>, dateFrom?: number, dateTo?: number, sourcePath?: string, rating?: number, colorLabel?: string, camera?: string, lens?: string, limit?: number, 
+animated?: boolean, albumId?: string, query?: string, tags?: Array<string>, dateFrom?: number, dateTo?: number, 
+/**
+ * `YYYY-MM`: only items in that Timeline month (see `TIMELINE_MONTH_SQL`).
+ */
+month?: string, sourcePath?: string, rating?: number, colorLabel?: string, camera?: string, lens?: string, limit?: number, 
 /**
  * Opaque cursor returned by a previous `get_library_items` page.
  */
@@ -286,6 +290,12 @@ checkForUpdatesOnLaunch?: boolean,
  * Thumbnail cache budget in gigabytes.
  */
 maxCacheSizeGB?: number, thumbnailQuality?: number, enableDebugLogging?: boolean, showNativeLimitWarnings?: boolean, };
+
+export type TimelineMonth = { 
+/**
+ * `YYYY-MM`.
+ */
+key: string, count: number, coverIds: Array<string>, };
 
 export type StorageUsage = { 
 /**

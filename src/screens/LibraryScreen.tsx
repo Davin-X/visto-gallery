@@ -6,6 +6,7 @@ import {
   ChevronLeftIcon,
   BatchIcon,
   CheckIcon,
+  ChevronDownIcon,
   DetailsIcon,
   FullscreenIcon,
   EyeIcon,
@@ -35,8 +36,16 @@ import { searchShortcutLabel } from "../engine/utils/shortcut";
 import {
   useLibraryStore,
   libraryViewKey,
+  currentLibraryFilter,
   type LibraryState,
 } from "../engine/stores/useLibraryStore";
+import {
+  isMonthCollapsed,
+  monthsFromItems,
+  monthYear,
+  useTimelineCollapse,
+  useTimelineMonths,
+} from "./timeline/timelineMonths";
 import type { ContextMenuItem } from "../design/components/ContextMenu";
 import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { FilterDropdown } from "../design/components/FilterDropdown";
@@ -52,6 +61,7 @@ import {
   formatFileDateTime,
   formatItemDate,
   itemMonth,
+  monthLabel,
 } from "../engine/utils/mediaDate";
 import { displayFileName } from "../engine/utils/fileName";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
@@ -900,59 +910,81 @@ function LibraryScreen(props: LibraryScreenProps) {
   ]);
   const selectedIdSet = useMemo(() => new Set(props.selectedIds), [props.selectedIds]);
 
-  // Timeline groups use the photo's capture date when available, with file
-  // modification time as a reliable fallback for screenshots and videos.
-  const timelineGroups: {
-    key: string;
-    label: string;
-    items: MediaItem[];
-    count: number;
-  }[] = useMemo(
-    () =>
-      props.layout === "timeline"
-        ? (() => {
-            const grouped = new Map<
-              string,
-              { timestamp: number; label: string; items: MediaItem[] }
-            >();
-            for (const item of props.items) {
-              const timestamp = item.capturedAt ?? item.modifiedAt;
-              const { key, label } = itemMonth(item);
-              const group = grouped.get(key) ?? {
-                timestamp,
-                label,
-                items: [] as MediaItem[],
-              };
-              group.timestamp = Math.max(group.timestamp, timestamp);
-              group.items.push(item);
-              grouped.set(key, group);
-            }
-            return [...grouped.entries()]
-              .sort((a, b) => b[1].timestamp - a[1].timestamp)
-              .map(([key, group]) => ({
-                key,
-                label: group.label,
-                items: group.items,
-                count: group.items.length,
-              }));
-          })()
-        : [],
-    [props.items, props.layout],
+  // Timeline months come from the catalog, so a month's count and its
+  // Select all describe the whole month, not just the loaded pages. Loaded
+  // items are then placed under their month by the same key.
+  const timelineActive = props.layout === "timeline";
+  const catalogTimeline = timelineActive && !props.hiddenView;
+  const catalogMonths = useTimelineMonths(
+    catalogTimeline,
+    currentLibraryFilter(library),
+    `${viewKey}|${library.totalCount}`,
   );
+  const timelineMonths = useMemo(
+    () => (timelineActive ? (catalogMonths ?? monthsFromItems(props.items)) : []),
+    [timelineActive, catalogMonths, props.items],
+  );
+  const timelineCollapse = useTimelineCollapse();
+  const newestTimelineYear = timelineMonths[0] ? monthYear(timelineMonths[0].key) : null;
+  const loadedByMonth = useMemo(() => {
+    const byMonth = new Map<string, MediaItem[]>();
+    if (!timelineActive) return byMonth;
+    for (const item of props.items) {
+      const { key } = itemMonth(item);
+      const items = byMonth.get(key) ?? [];
+      items.push(item);
+      byMonth.set(key, items);
+    }
+    return byMonth;
+  }, [props.items, timelineActive]);
   const visibleTimelineGroups = useMemo(() => {
-    if (!timelineGroups.length) return [];
-    const visibleItemsByMonth = new Map<string, MediaItem[]>();
+    if (!timelineMonths.length) return [];
+    const renderedByMonth = new Map<string, MediaItem[]>();
     for (const item of renderedItems) {
       const { key } = itemMonth(item);
-      const items = visibleItemsByMonth.get(key) ?? [];
+      const items = renderedByMonth.get(key) ?? [];
       items.push(item);
-      visibleItemsByMonth.set(key, items);
+      renderedByMonth.set(key, items);
     }
-    return timelineGroups.flatMap((group) => {
-      const visibleItems = visibleItemsByMonth.get(group.key);
-      return visibleItems?.length ? [{ ...group, visibleItems }] : [];
-    });
-  }, [renderedItems, timelineGroups]);
+    // Show months down to the oldest rendered item; older ones appear as
+    // scrolling loads them, so the infinite-scroll sentinel stays at the end.
+    const complete = !library.hasMore && renderedItems.length >= props.items.length;
+    const oldest = renderedItems.length
+      ? itemMonth(renderedItems[renderedItems.length - 1]).key
+      : null;
+    return timelineMonths
+      .filter((month) => complete || (oldest !== null && month.key >= oldest))
+      .map((month) => ({
+        ...month,
+        label: monthLabel(month.key),
+        visibleItems: renderedByMonth.get(month.key) ?? [],
+        collapsed: isMonthCollapsed(timelineCollapse.overrides, month.key, newestTimelineYear),
+      }));
+  }, [
+    timelineMonths,
+    renderedItems,
+    props.items.length,
+    library.hasMore,
+    timelineCollapse.overrides,
+    newestTimelineYear,
+  ]);
+  const timelineYears = useMemo(() => {
+    const years = new Map<string, number>();
+    for (const month of timelineMonths) {
+      const year = monthYear(month.key);
+      years.set(year, (years.get(year) ?? 0) + month.count);
+    }
+    return [...years.entries()].map(([year, count]) => ({ year, count }));
+  }, [timelineMonths]);
+
+  // The Timeline is a chronology: it always reads newest first by date.
+  const { sortBy: librarySortBy, sortOrder: librarySortOrder, setSort: setLibrarySort } = library;
+  useEffect(() => {
+    if (!catalogTimeline) return;
+    if (librarySortBy !== "capturedAt" || librarySortOrder !== "desc") {
+      setLibrarySort("capturedAt", "desc");
+    }
+  }, [catalogTimeline, librarySortBy, librarySortOrder, setLibrarySort]);
 
   const sortDetailsBy = (sortBy: typeof library.sortBy) => {
     library.setSort(
@@ -986,14 +1018,102 @@ function LibraryScreen(props: LibraryScreenProps) {
       )}
     </div>
   );
-  const toggleTimelineGroup = (items: MediaItem[]) => {
-    const groupIds = items.map((item) => item.id);
-    const groupIdSet = new Set(groupIds);
-    const allSelected = groupIds.length > 0 && groupIds.every((id) => selectedIdSet.has(id));
-    const next = allSelected
-      ? props.selectedIds.filter((id: string) => !groupIdSet.has(id))
-      : [...new Set([...props.selectedIds, ...groupIds])];
-    props.onSetSelection?.(next);
+  // Ids of every item in a month, fetched once per view and catalog state.
+  const monthIdsRef = useRef<{ view: string; ids: Map<string, string[]> }>({
+    view: "",
+    ids: new Map(),
+  });
+  const monthIdsView = `${viewKey}|${library.totalCount}`;
+  if (monthIdsRef.current.view !== monthIdsView) {
+    monthIdsRef.current = { view: monthIdsView, ids: new Map() };
+  }
+  const knownMonthIds = (month: { key: string; count: number }): string[] | null => {
+    const fetched = monthIdsRef.current.ids.get(month.key);
+    if (fetched) return fetched;
+    const loaded = loadedByMonth.get(month.key) ?? [];
+    return loaded.length >= month.count ? loaded.map((item) => item.id) : null;
+  };
+  const monthAllSelected = (month: { key: string; count: number }) => {
+    const ids = knownMonthIds(month);
+    return !!ids && ids.length > 0 && ids.every((id) => selectedIdSet.has(id));
+  };
+  const toggleTimelineMonth = async (month: { key: string; count: number }) => {
+    let ids = knownMonthIds(month);
+    if (!ids) {
+      try {
+        ids = await tauri.library.getMatchingIds({
+          ...currentLibraryFilter(useLibraryStore.getState()),
+          month: month.key,
+          limit: undefined,
+          cursor: undefined,
+        });
+      } catch {
+        ids = (loadedByMonth.get(month.key) ?? []).map((item) => item.id);
+      }
+      monthIdsRef.current.ids.set(month.key, ids);
+    }
+    const selected = useLibraryStore.getState().selectedIds;
+    const monthIds = new Set(ids);
+    const allSelected = ids.length > 0 && ids.every((id) => selected.includes(id));
+    props.onSetSelection?.(
+      allSelected
+        ? selected.filter((id: string) => !monthIds.has(id))
+        : [...new Set([...selected, ...ids])],
+    );
+  };
+  const toggleTimelineCollapse = (key: string, collapsed: boolean, everything: boolean) => {
+    if (everything) {
+      timelineCollapse.setAll(
+        timelineYears.map(({ year }) => year),
+        !collapsed,
+      );
+    } else {
+      timelineCollapse.setMonth(key, !collapsed);
+    }
+  };
+  const toggleTimelineYear = (year: string, everything: boolean) => {
+    const months = timelineMonths.filter((month) => monthYear(month.key) === year);
+    const allCollapsed = months.every((month) =>
+      isMonthCollapsed(timelineCollapse.overrides, month.key, newestTimelineYear),
+    );
+    if (everything) {
+      timelineCollapse.setAll(
+        timelineYears.map((entry) => entry.year),
+        !allCollapsed,
+      );
+    } else {
+      timelineCollapse.setYear(year, !allCollapsed);
+    }
+  };
+  /** Open a month, load pages until it is reached, and scroll to it. */
+  const jumpToTimelineMonth = async (key: string, toYear = false) => {
+    timelineCollapse.setMonth(key, false);
+    const reached = (items: MediaItem[]) =>
+      items.length > 0 && itemMonth(items[items.length - 1]).key < key;
+    for (let attempt = 0; attempt < 400; attempt += 1) {
+      const state = useLibraryStore.getState();
+      if (!state.hasMore || reached(state.items)) break;
+      const before = state.items.length;
+      await state.loadNextPage();
+      if (useLibraryStore.getState().items.length === before) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    }
+    const items = useLibraryStore.getState().items;
+    let last = -1;
+    items.forEach((item, index) => {
+      if (itemMonth(item).key === key) last = index;
+    });
+    if (last >= 0) setRenderLimit((limit) => Math.max(limit, last + 1));
+    // A year jump lands on the year's heading when there is one.
+    const scroll = () =>
+      (
+        (toYear && document.getElementById(`timeline-year-${monthYear(key)}`)) ||
+        document.getElementById(`timeline-month-${key}`)
+      )?.scrollIntoView({ block: "start", behavior: "auto" });
+    window.requestAnimationFrame(() => window.requestAnimationFrame(scroll));
+    // Settle once more after thumbnails and folded months finish laying out.
+    window.setTimeout(scroll, 200);
   };
 
   const lastClickedRef = useRef<string | null>(null);
@@ -1381,6 +1501,8 @@ function LibraryScreen(props: LibraryScreenProps) {
                   >
                     <select
                       aria-label="Sort library by"
+                      disabled={catalogTimeline}
+                      title={catalogTimeline ? "Timeline is always sorted by date" : undefined}
                       value={library.sortBy}
                       onChange={(e) =>
                         library.setSort(e.target.value as typeof library.sortBy, library.sortOrder)
@@ -1395,7 +1517,12 @@ function LibraryScreen(props: LibraryScreenProps) {
                     <button
                       type="button"
                       aria-label={`Sort ${nextSortDirectionLabel}`}
-                      title={`Currently ${sortDirectionLabel}; click to sort ${nextSortDirectionLabel}`}
+                      disabled={catalogTimeline}
+                      title={
+                        catalogTimeline
+                          ? "Timeline is always sorted by date, newest first"
+                          : `Currently ${sortDirectionLabel}; click to sort ${nextSortDirectionLabel}`
+                      }
                       onClick={() =>
                         library.setSort(
                           library.sortBy,
@@ -1796,29 +1923,114 @@ function LibraryScreen(props: LibraryScreenProps) {
             if (props.layout === "timeline") {
               return (
                 <div className={`gallery-grid layout-timeline thumb-${thumbnailSize}`}>
-                  {timelineGroups.length === 0
+                  {timelineMonths.length > 1 && (
+                    <nav className="timeline-jump" aria-label="Jump to a year or month">
+                      <div className="timeline-jump-years">
+                        {timelineYears.map(({ year, count }) => (
+                          <button
+                            key={year}
+                            type="button"
+                            className="timeline-jump-year"
+                            title={`${count.toLocaleString()} ${count === 1 ? "item" : "items"}`}
+                            onClick={() => {
+                              const newest = timelineMonths.find(
+                                (month) => monthYear(month.key) === year,
+                              );
+                              if (newest) void jumpToTimelineMonth(newest.key, true);
+                            }}
+                          >
+                            {year}
+                          </button>
+                        ))}
+                      </div>
+                      <select
+                        className="timeline-jump-month"
+                        aria-label="Jump to month"
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) void jumpToTimelineMonth(e.target.value);
+                        }}
+                      >
+                        <option value="">Month…</option>
+                        {timelineYears.map(({ year }) => (
+                          <optgroup key={year} label={year}>
+                            {timelineMonths
+                              .filter((month) => monthYear(month.key) === year)
+                              .map((month) => (
+                                <option key={month.key} value={month.key}>
+                                  {monthLabel(month.key)} · {month.count.toLocaleString()}
+                                </option>
+                              ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </nav>
+                  )}
+                  {timelineMonths.length === 0 ||
+                  (awaitingFirstPage && visibleTimelineGroups.length === 0)
                     ? awaitingFirstPage
                       ? skeletonView()
                       : emptyView()
-                    : visibleTimelineGroups.map(({ key, label, items, count, visibleItems }) => {
-                        const allSelected =
-                          items.length > 0 && items.every((item) => selectedIdSet.has(item.id));
+                    : visibleTimelineGroups.map((month, index) => {
+                        const { key, label, count, visibleItems, collapsed, coverIds } = month;
+                        const year = monthYear(key);
+                        const yearCount =
+                          timelineYears.find((entry) => entry.year === year)?.count ?? 0;
+                        const yearStarts =
+                          index === 0 || monthYear(visibleTimelineGroups[index - 1].key) !== year;
+                        const yearCollapsed = timelineMonths
+                          .filter((entry) => monthYear(entry.key) === year)
+                          .every((entry) =>
+                            isMonthCollapsed(
+                              timelineCollapse.overrides,
+                              entry.key,
+                              newestTimelineYear,
+                            ),
+                          );
+                        const allSelected = monthAllSelected(month);
+                        const countLabel = `${count.toLocaleString()} ${count === 1 ? "item" : "items"}`;
                         return (
                           <React.Fragment key={key}>
-                            <div className="timeline-group">
-                              <div className="timeline-date-marker" aria-hidden="true">
-                                <span />
+                            {yearStarts && timelineYears.length > 1 && (
+                              <div className="timeline-year" id={`timeline-year-${year}`}>
+                                <button
+                                  type="button"
+                                  className="timeline-year-toggle"
+                                  aria-expanded={!yearCollapsed}
+                                  title="Option-click to expand or collapse every year"
+                                  onClick={(e) => toggleTimelineYear(year, e.altKey)}
+                                >
+                                  <ChevronDownIcon size={13} />
+                                  <span>{year}</span>
+                                </button>
+                                <span className="timeline-count">
+                                  {yearCount.toLocaleString()} {yearCount === 1 ? "item" : "items"}
+                                </span>
                               </div>
+                            )}
+                            <div
+                              className={`timeline-group${collapsed ? " collapsed" : ""}`}
+                              id={`timeline-month-${key}`}
+                              data-month={key}
+                            >
+                              <button
+                                type="button"
+                                className="timeline-date-marker timeline-month-toggle"
+                                aria-expanded={!collapsed}
+                                aria-label={`${collapsed ? "Expand" : "Collapse"} ${label}`}
+                                title="Option-click to expand or collapse every month"
+                                onClick={(e) => toggleTimelineCollapse(key, collapsed, e.altKey)}
+                              >
+                                <ChevronDownIcon size={12} />
+                              </button>
                               <h3>{label}</h3>
-                              <span className="timeline-count">
-                                {count} {count === 1 ? "item" : "items"}
-                              </span>
+                              <span className="timeline-count">{countLabel}</span>
                               <button
                                 type="button"
                                 className="timeline-select-group"
                                 aria-pressed={allSelected}
-                                onClick={() => toggleTimelineGroup(items)}
-                                title={`Select or deselect all ${label} items`}
+                                onClick={() => void toggleTimelineMonth(month)}
+                                title={`Select or deselect all ${countLabel} from ${label}`}
                               >
                                 <span className="timeline-select-box">
                                   {allSelected ? <CheckIcon size={11} /> : null}
@@ -1826,157 +2038,180 @@ function LibraryScreen(props: LibraryScreenProps) {
                                 {allSelected ? "Selected" : "Select all"}
                               </button>
                             </div>
-                            {visibleItems.map((item) => (
-                              <article
-                                key={item.id}
-                                className={tileClass(item)}
-                                onContextMenu={(e) => {
-                                  concealItem(item.id);
-                                  props.onContextMenu(itemContextMenu(item), e);
-                                }}
+                            {collapsed && (
+                              <button
+                                type="button"
+                                className="timeline-covers"
+                                aria-label={`Show ${countLabel} from ${label}`}
+                                onClick={() => timelineCollapse.setMonth(key, false)}
                               >
-                                <div className="tile-select-check">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedIdSet.has(item.id)}
-                                    onChange={() => props.onToggleSelect(item.id)}
-                                    title={
-                                      selectedIdSet.has(item.id)
-                                        ? "Remove from selection"
-                                        : "Add to selection"
-                                    }
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                  <CheckIcon size={12} />
-                                </div>
-                                <button
-                                  type="button"
-                                  className="tile-open-button"
-                                  data-item-id={item.id}
-                                  aria-label={`Open ${tileAlt(item)}`}
-                                  onClick={(e) => {
-                                    e.currentTarget.focus();
-                                    handleTileClick(item, e);
+                                {coverIds.slice(0, 4).map((id) => (
+                                  <span key={id} className="timeline-cover">
+                                    <CachedThumbnail itemId={id} name="" size={128} />
+                                  </span>
+                                ))}
+                                {count > coverIds.length && (
+                                  <span className="timeline-cover-more">
+                                    +{(count - Math.min(coverIds.length, 4)).toLocaleString()}
+                                  </span>
+                                )}
+                              </button>
+                            )}
+                            {!collapsed &&
+                              visibleItems.map((item) => (
+                                <article
+                                  key={item.id}
+                                  className={tileClass(item)}
+                                  onContextMenu={(e) => {
+                                    concealItem(item.id);
+                                    props.onContextMenu(itemContextMenu(item), e);
                                   }}
-                                  onDoubleClick={() => handleTileDoubleClick(item)}
-                                  {...holdHandlers(item.id)}
-                                />
-                                <span className="tile-image">
-                                  {item.kind === "video" ? (
-                                    canPlayVideoInApp(item.path, item.name) ? (
-                                      <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} />
-                                    ) : (
+                                >
+                                  <div className="tile-select-check">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedIdSet.has(item.id)}
+                                      onChange={() => props.onToggleSelect(item.id)}
+                                      title={
+                                        selectedIdSet.has(item.id)
+                                          ? "Remove from selection"
+                                          : "Add to selection"
+                                      }
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                    <CheckIcon size={12} />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="tile-open-button"
+                                    data-item-id={item.id}
+                                    aria-label={`Open ${tileAlt(item)}`}
+                                    onClick={(e) => {
+                                      e.currentTarget.focus();
+                                      handleTileClick(item, e);
+                                    }}
+                                    onDoubleClick={() => handleTileDoubleClick(item)}
+                                    {...holdHandlers(item.id)}
+                                  />
+                                  <span className="tile-image">
+                                    {item.kind === "video" ? (
+                                      canPlayVideoInApp(item.path, item.name) ? (
+                                        <VideoThumb
+                                          src={assetUrl(item.path)}
+                                          name={tileAlt(item)}
+                                        />
+                                      ) : (
+                                        <CachedThumbnail
+                                          itemId={item.id}
+                                          name={tileAlt(item)}
+                                          size={thumbnailPixels}
+                                        />
+                                      )
+                                    ) : item.kind === "photo" ? (
                                       <CachedThumbnail
                                         itemId={item.id}
                                         name={tileAlt(item)}
                                         size={thumbnailPixels}
+                                        style={draftImageStyle(draftTransforms, item.id)}
+                                        fallbackSrc={assetUrl(item.path)}
                                       />
-                                    )
-                                  ) : item.kind === "photo" ? (
-                                    <CachedThumbnail
-                                      itemId={item.id}
-                                      name={tileAlt(item)}
-                                      size={thumbnailPixels}
-                                      style={draftImageStyle(draftTransforms, item.id)}
-                                      fallbackSrc={assetUrl(item.path)}
-                                    />
-                                  ) : (
-                                    <CachedThumbnail
-                                      itemId={item.id}
+                                    ) : (
+                                      <CachedThumbnail
+                                        itemId={item.id}
 
-                                      name={tileAlt(item)}
+                                        name={tileAlt(item)}
 
-                                      size={thumbnailPixels}
+                                        size={thumbnailPixels}
 
-                                      style={draftImageStyle(draftTransforms, item.id)}
-                                    />
-                                  )}
-                                  {item.kind === "video" && props.onPlayBackground && (
-                                    <button
-                                      type="button"
-                                      className="tile-play-background"
+                                        style={draftImageStyle(draftTransforms, item.id)}
+                                      />
+                                    )}
+                                    {item.kind === "video" && props.onPlayBackground && (
+                                      <button
+                                        type="button"
+                                        className="tile-play-background"
 
-                                      aria-label={
-                                        playingId === item.id && isPlaying
-                                          ? `Pause ${tileAlt(item)}`
-                                          : `Play ${tileAlt(item)} in background`
-                                      }
+                                        aria-label={
+                                          playingId === item.id && isPlaying
+                                            ? `Pause ${tileAlt(item)}`
+                                            : `Play ${tileAlt(item)} in background`
+                                        }
 
-                                      title={
-                                        playingId === item.id && isPlaying
-                                          ? "Pause"
-                                          : "Play in background"
-                                      }
+                                        title={
+                                          playingId === item.id && isPlaying
+                                            ? "Pause"
+                                            : "Play in background"
+                                        }
 
-                                      onClick={(event) => {
-                                        event.stopPropagation();
+                                        onClick={(event) => {
+                                          event.stopPropagation();
 
-                                        toggleBackground(item);
-                                      }}
+                                          toggleBackground(item);
+                                        }}
 
-                                      onDoubleClick={(event) => event.stopPropagation()}
+                                        onDoubleClick={(event) => event.stopPropagation()}
 
-                                      aria-pressed={playingId === item.id && isPlaying}
-                                    >
-                                      {playingId === item.id && isPlaying ? (
-                                        <PauseIcon size={16} />
-                                      ) : (
-                                        <PlayIcon size={16} />
-                                      )}
-                                    </button>
-                                  )}
-                                  {item.kind === "video" && (
-                                    <span className="video-label">
-                                      <PlayIcon size={10} />
-                                    </span>
-                                  )}
-                                  {item.kind === "raw" && (
-                                    <span className="format-label">
-                                      <KindBadge kind={item.kind} />
-                                    </span>
-                                  )}
-                                  {item.favorite && !masked(item) ? (
-                                    <span className="tile-favorite" aria-label="Favorite">
-                                      <HeartIcon size={10} filled />
-                                    </span>
-                                  ) : null}
-                                  {item.colorLabel && !masked(item) ? (
-                                    <span
-                                      className={`tile-color-label tile-color-${item.colorLabel}`}
-                                      aria-label={`Color label: ${item.colorLabel}`}
-                                      title={`Color: ${item.colorLabel}`}
-                                    >
-                                      <span className="color-dot" />
-                                    </span>
-                                  ) : null}
-                                </span>
-                                <span
-                                  className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
-                                >
-                                  <b>
-                                    <MiddleTruncate
-                                      text={displayFileName(
-                                        item.name,
-                                        item.extension,
-                                        showExtensions,
-                                      )}
-                                    />
-                                  </b>
-                                  <small className="tile-date">{formatItemDate(item)}</small>
-                                  <small className="tile-kind">
-                                    <KindDot kind={item.kind} />
-                                    {item.kind === "video"
-                                      ? "Video"
-                                      : item.kind === "raw"
-                                        ? "RAW"
-                                        : "Photo"}
-                                  </small>
-                                  <small className="tile-size">
-                                    {formatBytesSimple(item.size)}
-                                  </small>
-                                </span>
-                              </article>
-                            ))}
+                                        aria-pressed={playingId === item.id && isPlaying}
+                                      >
+                                        {playingId === item.id && isPlaying ? (
+                                          <PauseIcon size={16} />
+                                        ) : (
+                                          <PlayIcon size={16} />
+                                        )}
+                                      </button>
+                                    )}
+                                    {item.kind === "video" && (
+                                      <span className="video-label">
+                                        <PlayIcon size={10} />
+                                      </span>
+                                    )}
+                                    {item.kind === "raw" && (
+                                      <span className="format-label">
+                                        <KindBadge kind={item.kind} />
+                                      </span>
+                                    )}
+                                    {item.favorite && !masked(item) ? (
+                                      <span className="tile-favorite" aria-label="Favorite">
+                                        <HeartIcon size={10} filled />
+                                      </span>
+                                    ) : null}
+                                    {item.colorLabel && !masked(item) ? (
+                                      <span
+                                        className={`tile-color-label tile-color-${item.colorLabel}`}
+                                        aria-label={`Color label: ${item.colorLabel}`}
+                                        title={`Color: ${item.colorLabel}`}
+                                      >
+                                        <span className="color-dot" />
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                  <span
+                                    className={`tile-caption${masked(item) ? " hidden-caption" : ""}`}
+                                  >
+                                    <b>
+                                      <MiddleTruncate
+                                        text={displayFileName(
+                                          item.name,
+                                          item.extension,
+                                          showExtensions,
+                                        )}
+                                      />
+                                    </b>
+                                    <small className="tile-date">{formatItemDate(item)}</small>
+                                    <small className="tile-kind">
+                                      <KindDot kind={item.kind} />
+                                      {item.kind === "video"
+                                        ? "Video"
+                                        : item.kind === "raw"
+                                          ? "RAW"
+                                          : "Photo"}
+                                    </small>
+                                    <small className="tile-size">
+                                      {formatBytesSimple(item.size)}
+                                    </small>
+                                  </span>
+                                </article>
+                              ))}
                           </React.Fragment>
                         );
                       })}

@@ -394,7 +394,7 @@ function selectAllMatching() {
     });
 }
 
-function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
+export function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
   const kind =
     state.filter === "Photos"
       ? "photo"

@@ -14,6 +14,10 @@
       // `longNames=1` stretches every fixture name so the list tables' name
       // truncation and column floors can be exercised end to end.
       const longNames = params.get("longNames") === "1";
+      // `dayStep=N` spaces items N days apart (default one minute) so the
+      // Timeline spans many months and years.
+      const dayStep = Math.max(0, Number(params.get("dayStep") || 0));
+      const itemStepMs = dayStep > 0 ? dayStep * 86_400_000 : 60_000;
       // `albums=N` limits the synthetic album overviews; `albums=0` reaches the
       // Albums screen's empty state.
       const albumOverviewParam = params.get("albums");
@@ -35,7 +39,7 @@
 
       const makeItems = () =>
         Array.from({ length: totalItems }, (_, index) => {
-          const capturedAt = now - index * 60_000;
+          const capturedAt = now - index * itemStepMs;
           const isVideo = index < videoCount;
           const extension = isVideo ? "mp4" : "jpg";
           return {
@@ -219,6 +223,23 @@
           const albumId = args?.albumId || "benchmark-album-0";
           const index = Number(albumId.replace("benchmark-album-", "")) || 0;
           return items.slice(index * 4, index * 4 + 4);
+        }
+        // Capture times are wall-clock stored as UTC, so months are UTC.
+        const monthOf = (item) => new Date(item.capturedAt).toISOString().slice(0, 7);
+        if (command === "get_timeline_months") {
+          const months = new Map();
+          for (const item of items) {
+            const key = monthOf(item);
+            const month = months.get(key) ?? { key, count: 0, coverIds: [] };
+            month.count += 1;
+            if (month.coverIds.length < 4) month.coverIds.push(item.id);
+            months.set(key, month);
+          }
+          return [...months.values()];
+        }
+        if (command === "get_matching_ids") {
+          const month = args?.filter?.month;
+          return items.filter((item) => !month || monthOf(item) === month).map((item) => item.id);
         }
         if (command === "get_items_by_ids") {
           const byId = new Map(items.map((item) => [item.id, item]));

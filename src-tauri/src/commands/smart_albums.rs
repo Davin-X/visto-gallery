@@ -92,6 +92,7 @@ impl SmartAlbumFilter {
             tags: self.tags.clone(),
             date_from: self.date_from,
             date_to: self.date_to,
+            month: None,
             source_path: self.source_path.clone(),
             rating: self.rating,
             color_label: self.color_label.clone(),
