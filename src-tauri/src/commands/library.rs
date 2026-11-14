@@ -2005,6 +2005,7 @@ async fn library_stats_scoped(
 pub async fn remove_library_folder(
     path: String,
     delete_files: Option<bool>,
+    app: tauri::AppHandle,
     catalog: State<'_, crate::Catalog>,
 ) -> Result<i64, CommandError> {
     let db = super::get_db(&catalog)?;
@@ -2014,7 +2015,23 @@ pub async fn remove_library_folder(
             "Refusing to remove an empty folder path".to_string(),
         ));
     }
-    remove_library_folder_inner(&db, &root, delete_files.unwrap_or(false)).await
+    let removed = remove_library_folder_inner(&db, &root, delete_files.unwrap_or(false)).await?;
+    // The source is no longer registered, so it must not keep asset-protocol
+    // access until the next launch. Skip the revoke when another registered
+    // root still lives inside the removed one.
+    let remaining: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
+        .fetch_all(&db)
+        .await
+        .unwrap_or_default();
+    if !remaining
+        .iter()
+        .any(|registered| super::path_is_inside(registered, &root))
+    {
+        if let Err(error) = app.asset_protocol_scope().forbid_directory(&root, true) {
+            tracing::error!("removed root could not be forbidden in the asset scope: {error}");
+        }
+    }
+    Ok(removed)
 }
 
 async fn remove_library_folder_inner(

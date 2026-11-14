@@ -381,6 +381,22 @@ pub async fn apply_root_path_mapping(
     if let Err(error) = app.asset_protocol_scope().allow_directory(&new_root, true) {
         tracing::error!("remapped root could not be granted to the asset protocol scope: {error}");
     }
+
+    // The old root is no longer registered, so revoke its access too. Skip the
+    // revoke when another registered root lives inside the old one (overlapping
+    // sources are allowed, including a mapping into a subfolder of the old root).
+    let remaining: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders")
+        .fetch_all(&db)
+        .await
+        .unwrap_or_default();
+    let old_root_still_needed = remaining.iter().any(|root| {
+        super::normalize_root(root) == old_root || super::path_is_inside(root, &old_root)
+    });
+    if !old_root_still_needed {
+        if let Err(error) = app.asset_protocol_scope().forbid_directory(&old_root, true) {
+            tracing::warn!("old root could not be forbidden in the asset scope: {error}");
+        }
+    }
     clear_mapping_pick();
 
     Ok(RootPathMappingResult {

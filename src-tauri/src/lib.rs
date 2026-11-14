@@ -113,10 +113,24 @@ pub fn run() {
             });
             match opened {
                 Ok((db, folders)) => {
+                    // A restored or hand-edited catalog can list any folder.
+                    // Only grant roots that are real folders under the user's
+                    // home or a mounted volume; never `/`.
+                    let home = app_handle
+                        .path()
+                        .home_dir()
+                        .unwrap_or_else(|_| std::path::PathBuf::from("/Users"));
                     for folder in folders {
-                        let _ = app_handle
-                            .asset_protocol_scope()
-                            .allow_directory(&folder, true);
+                        match commands::security::paths::grantable_root(&folder, &home) {
+                            Ok(path) => {
+                                let _ = app_handle
+                                    .asset_protocol_scope()
+                                    .allow_directory(&path, true);
+                            }
+                            Err(reason) => tracing::warn!(
+                                "registered root '{folder}' was not granted to the asset scope: {reason}"
+                            ),
+                        }
                     }
                     let background = db.handle();
                     catalog.set(Ok(db.pool().clone()));

@@ -202,8 +202,11 @@ export function SettingsScreen(props: {
       const missing = result.missingRoots.length
         ? ` Missing source folder(s): ${result.missingRoots.slice(0, 3).join(", ")}${result.missingRoots.length > 3 ? ", …" : ""}.`
         : "";
+      const ungranted = result.ungrantedRoots.length
+        ? ` Not given file access because they are outside your home folder or a mounted volume: ${result.ungrantedRoots.slice(0, 3).join(", ")}${result.ungrantedRoots.length > 3 ? ", …" : ""}. Remove or re-locate them in Sources.`
+        : "";
       showNotice(
-        `Catalog restored (${result.backup.itemCount.toLocaleString()} items, ${result.backup.albumCount.toLocaleString()} albums). Pre-restore backup: ${result.preRestoreBackup}.${missing} Original media files were not modified.`,
+        `Catalog restored (${result.backup.itemCount.toLocaleString()} items, ${result.backup.albumCount.toLocaleString()} albums). Pre-restore backup: ${result.preRestoreBackup}.${missing}${ungranted} Original media files were not modified.`,
       );
     } catch (error) {
       showErrorNotice(error, "Restore failed; the active catalog was left in place");

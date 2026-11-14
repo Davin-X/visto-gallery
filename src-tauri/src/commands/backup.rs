@@ -90,6 +90,9 @@ pub struct RestoreResult {
     pub missing_item_count: i64,
     pub missing_paths: Vec<String>,
     pub missing_roots: Vec<String>,
+    /// Restored roots that stay in the catalog but were not given asset access
+    /// because they failed the grant check (for example `/`).
+    pub ungranted_roots: Vec<String>,
 }
 
 async fn open_read_only(path: &str) -> Result<SqliteConnection, CommandError> {
@@ -584,18 +587,30 @@ async fn restore_backup_into_catalog(db: &SqlitePool, path: &str) -> Result<(), 
 /// is already committed.
 async fn grant_restored_folders<F>(
     db: &SqlitePool,
+    home: &Path,
     mut grant: F,
 ) -> Result<Vec<String>, sqlx::Error>
 where
-    F: FnMut(&str) -> Result<(), String>,
+    F: FnMut(&Path) -> Result<(), String>,
 {
     let folders: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders ORDER BY path")
         .fetch_all(db)
         .await?;
-    Ok(folders
-        .into_iter()
-        .filter(|folder| grant(folder).is_err())
-        .collect())
+    let mut refused = Vec::new();
+    for folder in folders {
+        match crate::commands::security::paths::grantable_root(&folder, home) {
+            Ok(path) => {
+                if grant(&path).is_err() {
+                    refused.push(folder);
+                }
+            }
+            Err(reason) => {
+                tracing::warn!("restored root '{folder}' was not granted: {reason}");
+                refused.push(folder);
+            }
+        }
+    }
+    Ok(refused)
 }
 
 struct MissingPathReport {
@@ -679,21 +694,32 @@ pub async fn restore_catalog_backup(
 
     // The restore replaced `library_folders`, so replay those paths into the
     // asset scope before returning a catalog whose media the UI cannot render.
-    match grant_restored_folders(&db, |folder| {
+    // A backup can list any folder, so only roots that pass the same sanity
+    // check as a user pick are granted; the rest keep their rows and are
+    // reported so the user can re-locate or remove them.
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|e| CommandError::io(format!("Could not locate the home folder: {e}")))?;
+    let ungranted_roots = match grant_restored_folders(&db, &home, |folder| {
         app.asset_protocol_scope()
             .allow_directory(folder, true)
             .map_err(|error| error.to_string())
     })
     .await
     {
-        Ok(failed) if failed.is_empty() => {}
-        Ok(failed) => tracing::error!(
-            "restored folders could not be granted to the asset protocol scope: {failed:?}"
-        ),
-        Err(error) => {
-            tracing::error!("could not read restored folders to grant asset scope: {error}")
+        Ok(refused) if refused.is_empty() => Vec::new(),
+        Ok(refused) => {
+            tracing::error!(
+                "restored folders could not be granted to the asset protocol scope: {refused:?}"
+            );
+            refused
         }
-    }
+        Err(error) => {
+            tracing::error!("could not read restored folders to grant asset scope: {error}");
+            Vec::new()
+        }
+    };
 
     // The snapshot just taken is the newest, so it always survives pruning.
     prune_pre_restore_snapshots(&backup_dir, PRE_RESTORE_SNAPSHOTS_KEPT);
@@ -705,6 +731,7 @@ pub async fn restore_catalog_backup(
         missing_item_count: missing.missing_item_count,
         missing_paths: missing.missing_paths,
         missing_roots: missing.missing_roots,
+        ungranted_roots,
     })
 }
 
@@ -1000,9 +1027,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn grant_restored_folders_grants_each_folder_and_reports_failures() {
+    async fn grant_restored_folders_grants_safe_folders_and_reports_refusals() {
         let (db, catalog_path) = catalog_db().await;
-        for folder in ["/library/one", "/library/two", "/library/three"] {
+        let home = std::env::temp_dir().join(format!("visto-home-{}", uuid::Uuid::new_v4()));
+        let one = home.join("one");
+        let two = home.join("two");
+        let three = home.join("three");
+        for folder in [&one, &two, &three] {
+            std::fs::create_dir_all(folder).unwrap();
+        }
+        for folder in [
+            "/".to_string(),
+            one.to_string_lossy().into_owned(),
+            two.to_string_lossy().into_owned(),
+            three.to_string_lossy().into_owned(),
+        ] {
             sqlx::query("INSERT INTO library_folders (path, added_at) VALUES (?, 0)")
                 .bind(folder)
                 .execute(&db)
@@ -1011,9 +1050,9 @@ mod tests {
         }
 
         let mut granted = Vec::new();
-        let failed = grant_restored_folders(&db, |folder| {
-            granted.push(folder.to_string());
-            if folder == "/library/two" {
+        let refused = grant_restored_folders(&db, &home, |folder| {
+            granted.push(folder.to_string_lossy().into_owned());
+            if folder == two.canonicalize().unwrap() {
                 Err("scope refused".to_string())
             } else {
                 Ok(())
@@ -1024,17 +1063,22 @@ mod tests {
 
         assert_eq!(
             granted,
-            ["/library/one", "/library/three", "/library/two"],
-            "every restored folder is offered to the scope, not just the first"
+            [
+                one.canonicalize().unwrap().to_string_lossy().into_owned(),
+                three.canonicalize().unwrap().to_string_lossy().into_owned(),
+                two.canonicalize().unwrap().to_string_lossy().into_owned(),
+            ],
+            "safe folders are offered to the scope; `/` never is"
         );
         assert_eq!(
-            failed,
-            ["/library/two".to_string()],
-            "a refused folder is reported so it can be logged"
+            refused,
+            ["/".to_string(), two.to_string_lossy().into_owned(),],
+            "the filesystem root and a refused folder are reported"
         );
 
         db.close().await;
         let _ = std::fs::remove_file(catalog_path);
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]

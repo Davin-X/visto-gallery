@@ -182,7 +182,12 @@ export type SmartAlbum = { id: string, name: string, filter: SmartAlbumFilter, i
 
 export type BackupInfo = { path: string, version: number, appVersion: string, createdAt: number, itemCount: number, albumCount: number, tagCount: number, folderCount: number, };
 
-export type RestoreResult = { backup: BackupInfo, preRestoreBackup: string, missingItemCount: number, missingPaths: Array<string>, missingRoots: Array<string>, };
+export type RestoreResult = { backup: BackupInfo, preRestoreBackup: string, missingItemCount: number, missingPaths: Array<string>, missingRoots: Array<string>, 
+/**
+ * Restored roots that stay in the catalog but were not given asset access
+ * because they failed the grant check (for example `/`).
+ */
+ungrantedRoots: Array<string>, };
 
 export type RootPathMappingPreview = { oldRoot: string, newRoot: string, itemCount: number, rootCount: number, samplePaths: Array<string>, conflictingPaths: Array<string>, existingNewPathCount: number, };
 
