@@ -43,6 +43,7 @@ import type {
   CacheKind,
   ClearCacheResult,
   TimelineMonth,
+  HiddenLockStatus,
 } from "../types/commands";
 
 // Type-safe command wrappers
@@ -260,6 +261,19 @@ export const tauri = {
     /** Merge app tags into existing Finder tags without deleting any. */
     mergeTags: (path: string, tags: string[]): Promise<string[]> =>
       invoke("merge_finder_tags", { path, tags }),
+  },
+
+  hiddenLock: {
+    /** Whether Hidden needs unlocking and whether it is unlocked now. */
+    status: (): Promise<HiddenLockStatus> => invoke("hidden_lock_status"),
+
+    /** Show the system Touch ID / password prompt. False when cancelled. */
+    unlock: (): Promise<boolean> => invoke("unlock_hidden"),
+
+    /** Activity in Hidden; false once the unlock has expired. */
+    keepAlive: (): Promise<boolean> => invoke("keep_hidden_unlocked"),
+
+    lock: (): Promise<void> => invoke("lock_hidden"),
   },
 
   storage: {

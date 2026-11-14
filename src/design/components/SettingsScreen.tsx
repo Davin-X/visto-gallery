@@ -99,6 +99,7 @@ export function SettingsScreen(props: {
   const debugLogging = useSettingsStore((s) => s.enableDebugLogging);
   const showNativeWarnings = useSettingsStore((s) => s.showNativeLimitWarnings);
   const checkForUpdatesOnLaunch = useSettingsStore((s) => s.checkForUpdatesOnLaunch);
+  const requireHiddenUnlock = useSettingsStore((s) => s.requireHiddenUnlock);
 
   const update = useSettingsStore((s) => s.update);
   const resetSettings = useSettingsStore((s) => s.reset);
@@ -397,7 +398,11 @@ export function SettingsScreen(props: {
           />
         )}
         {activeTab === "privacy" && (
-          <PrivacyPanel checkForUpdatesOnLaunch={checkForUpdatesOnLaunch} onChange={update} />
+          <PrivacyPanel
+            checkForUpdatesOnLaunch={checkForUpdatesOnLaunch}
+            requireHiddenUnlock={requireHiddenUnlock}
+            onChange={update}
+          />
         )}
         {activeTab === "advanced" && (
           <AdvancedPanel

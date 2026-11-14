@@ -3,6 +3,8 @@ import LibraryScreen from "./LibraryScreen";
 import { useFocusTrap } from "../design/hooks/useFocusTrap";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
+import { isHiddenLocked, useHiddenLockStore } from "../engine/stores/useHiddenLockStore";
+import { LockIcon } from "../design/components/icons";
 import { tauri } from "../engine/commands/tauri";
 import { useShallow } from "zustand/react/shallow";
 import type { MediaItem } from "../engine/types/media";
@@ -114,10 +116,12 @@ function HiddenScreen(props: HiddenScreenProps) {
   // paged cursor) since 2026-11; nothing is filtered again here.
   const items = library.hiddenItems;
 
+  // Set below once `reveal` exists; the listener is registered only once.
+  const openHiddenRef = useRef<(id?: string) => void>(() => {});
   useEffect(() => {
     const onOpenHidden = (event: Event) => {
       const id = (event as CustomEvent<{ id?: string }>).detail?.id;
-      setPendingReveal({ kind: "viewer", id });
+      openHiddenRef.current(id);
     };
     window.addEventListener("mac-gallery:open-hidden", onOpenHidden);
     return () => window.removeEventListener("mac-gallery:open-hidden", onOpenHidden);
@@ -136,9 +140,19 @@ function HiddenScreen(props: HiddenScreenProps) {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [pendingReveal]);
 
-  const requestViewer = (id?: string) => setPendingReveal({ kind: "viewer", id });
-  const requestBackground = (id: string) => setPendingReveal({ kind: "background", id });
-  const requestEdit = (item: MediaItem) => setPendingReveal({ kind: "edit", item });
+  // With the Touch ID / password lock on, this screen only renders once its
+  // owner has unlocked it, so the veil and the "show this item?" step would
+  // ask twice. They stay for when the lock is turned off.
+  const unlockedByOwner = useHiddenLockStore(
+    (s) => s.status?.required === true && s.status.unlocked,
+  );
+  type RevealRequest = NonNullable<typeof pendingReveal>;
+  const reveal = (request: RevealRequest) =>
+    unlockedByOwner ? runReveal(request) : setPendingReveal(request);
+  const requestViewer = (id?: string) => reveal({ kind: "viewer", id });
+  openHiddenRef.current = requestViewer;
+  const requestBackground = (id: string) => reveal({ kind: "background", id });
+  const requestEdit = (item: MediaItem) => reveal({ kind: "edit", item });
 
   const requestSlideshow = (ids?: string[]) => {
     const selection = ids && ids.length ? new Set(ids) : null;
@@ -147,13 +161,17 @@ function HiddenScreen(props: HiddenScreenProps) {
       library.showNotice("Add photos or videos to start a slideshow.");
       return;
     }
-    setPendingReveal({ kind: "slideshow", ids: scope.map((item) => item.id) });
+    reveal({ kind: "slideshow", ids: scope.map((item) => item.id) });
   };
 
   const confirmReveal = () => {
     const request = pendingReveal;
     if (!request) return;
     setPendingReveal(null);
+    runReveal(request);
+  };
+
+  function runReveal(request: RevealRequest) {
     if (request.kind === "slideshow") {
       const ids = new Set(request.ids);
       const scope = library.hiddenItems.filter((item) => ids.has(item.id));
@@ -169,7 +187,7 @@ function HiddenScreen(props: HiddenScreenProps) {
       return;
     }
     props.onOpenViewer(request.id);
-  };
+  }
 
   const revealCopy = (() => {
     if (!pendingReveal) return { title: "", body: "", action: "Show" };
@@ -246,10 +264,74 @@ function HiddenScreen(props: HiddenScreenProps) {
     ),
   ]);
 
+  // Touch ID / password lock. The backend refuses hidden items while locked;
+  // this keeps the screen honest about it and keeps an unlock alive while
+  // the screen is in use.
+  const lockStatus = useHiddenLockStore((s) => s.status);
+  const unlocking = useHiddenLockStore((s) => s.unlocking);
+  const locked = isHiddenLocked(lockStatus);
+  const lockRequired = lockStatus?.required === true;
+  useEffect(() => {
+    if (!lockRequired) return;
+    const refresh = () => void useHiddenLockStore.getState().refresh();
+    window.addEventListener("focus", refresh);
+    if (locked) return () => window.removeEventListener("focus", refresh);
+    const timer = window.setInterval(() => void useHiddenLockStore.getState().keepAlive(), 60_000);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [locked, lockRequired]);
+  useEffect(() => {
+    if (!locked) return;
+    // Nothing hidden may stay selected or inspected behind the lock.
+    const state = useLibraryStore.getState();
+    state.clearSelection();
+    state.inspectItem(null);
+    setPendingReveal(null);
+  }, [locked]);
+
+  if (locked) {
+    const touchId = lockStatus?.method === "touchId";
+    const unlock = async () => {
+      if (await useHiddenLockStore.getState().unlock()) {
+        await useLibraryStore.getState().loadHiddenItems();
+      }
+    };
+    return (
+      <section className="hidden-locked" aria-labelledby="hidden-locked-title">
+        <div className="empty-state">
+          <span>
+            <LockIcon size={30} />
+          </span>
+          <b id="hidden-locked-title">Hidden is locked</b>
+          <p>
+            {lockStatus?.available === false
+              ? "Set a login password for this Mac in System Settings to unlock Hidden."
+              : `Use ${touchId ? "Touch ID or your Mac password" : "your Mac password"} to see your hidden photos and videos.`}
+          </p>
+          <div className="empty-state-actions">
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => void unlock()}
+              disabled={unlocking || lockStatus?.available === false}
+              autoFocus
+            >
+              <LockIcon size={13} />{" "}
+              {unlocking ? "Waiting…" : touchId ? "Unlock with Touch ID" : "Unlock"}
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <>
       <LibraryScreen
         hiddenView
+        veilHidden={!unlockedByOwner}
         items={items}
         inspectedId={library.inspectedId}
         selectedIds={library.selectedIds}

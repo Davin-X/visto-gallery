@@ -7,6 +7,7 @@ mod cancel;
 mod duplicates;
 mod edit_recipes;
 mod finder_tags;
+pub(crate) mod hidden_lock;
 mod import_pipeline;
 mod library;
 mod media;
@@ -32,6 +33,11 @@ pub(crate) use cancel::{CancelGroup, CancelToken};
 pub use duplicates::*;
 pub use edit_recipes::*;
 pub use finder_tags::{merge_finder_tags, read_finder_tags, write_finder_tags};
+#[cfg(test)]
+pub use hidden_lock::HiddenLockStatus;
+pub use hidden_lock::{
+    hidden_lock_status, keep_hidden_unlocked, lock_hidden, unlock_hidden, HiddenLock,
+};
 use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, ImageDecoder};
 pub use import_pipeline::supported_extensions;
@@ -142,6 +148,7 @@ pub(crate) fn apply_setting(settings: &mut AppSettings, key: &str, value: &str) 
         "check_for_updates_on_launch" => {
             settings.check_for_updates_on_launch = value.parse().unwrap_or(false)
         }
+        "require_hidden_unlock" => settings.require_hidden_unlock = value.parse().unwrap_or(true),
         "max_cache_size_gb" => settings.max_cache_size_gb = value.parse().unwrap_or(5),
         "thumbnail_quality" => settings.thumbnail_quality = value.parse().unwrap_or(80),
         "enable_debug_logging" => settings.enable_debug_logging = value.parse().unwrap_or(false),

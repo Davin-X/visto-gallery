@@ -387,6 +387,8 @@ define_settings! {
     /// to false to preserve the local-first promise; Help > Check for Updates
     /// always works regardless of this preference.
     check_for_updates_on_launch: bool = false,
+    /// Ask for Touch ID or the Mac password before showing Hidden.
+    require_hidden_unlock: bool = true,
     /// Thumbnail cache budget in gigabytes.
     // Serialized with the acronym the UI has always used.
     #[serde(rename = "maxCacheSizeGB")]

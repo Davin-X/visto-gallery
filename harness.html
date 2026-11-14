@@ -14,6 +14,10 @@
       // `longNames=1` stretches every fixture name so the list tables' name
       // truncation and column floors can be exercised end to end.
       const longNames = params.get("longNames") === "1";
+      // `lock=1` turns on the Hidden lock; the system prompt always succeeds.
+      const hiddenLockRequired = params.get("lock") === "1";
+      let hiddenUnlocked = false;
+      const hiddenVisible = () => !hiddenLockRequired || hiddenUnlocked;
       // `dayStep=N` spaces items N days apart (default one minute) so the
       // Timeline spans many months and years.
       const dayStep = Math.max(0, Number(params.get("dayStep") || 0));
@@ -119,6 +123,28 @@
         if (command === "get_vault_status") {
           return { configured: false, locked: true, itemCount: 0 };
         }
+        if (command === "hidden_lock_status") {
+          return {
+            required: hiddenLockRequired,
+            unlocked: hiddenVisible(),
+            available: true,
+            method: "touchId",
+          };
+        }
+        if (command === "unlock_hidden") {
+          hiddenUnlocked = true;
+          return true;
+        }
+        if (command === "keep_hidden_unlocked") return hiddenVisible();
+        if (command === "lock_hidden") {
+          hiddenUnlocked = false;
+          return null;
+        }
+        if (command === "get_hidden_items") {
+          if (!hiddenVisible()) throw { code: "locked", message: "Hidden is locked." };
+          const hiddenItems = items.slice(0, 3).map((item) => ({ ...item, hidden: true }));
+          return { items: hiddenItems, hasMore: false, totalCount: hiddenItems.length };
+        }
         if (command === "get_library_stats") {
           return {
             photos: totalItems - videoCount,
@@ -128,7 +154,7 @@
             animationsSize: 0,
             uncategorized: 0,
             favorites: Math.floor(totalItems / 11),
-            hidden: 0,
+            hidden: hiddenVisible() ? 7 : 0,
             photoSize: totalItems * 1024 * 1024,
             videoSize: 0,
             rawSize: 0,

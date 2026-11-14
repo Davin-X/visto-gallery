@@ -1,9 +1,26 @@
 import { LockIcon, ShieldIcon } from "../icons";
+import { useHiddenLockStore } from "../../../engine/stores/useHiddenLockStore";
+import { tauri } from "../../../engine/commands/tauri";
 
 export function PrivacyPanel(props: {
   checkForUpdatesOnLaunch: boolean;
-  onChange: (key: "checkForUpdatesOnLaunch", value: boolean) => void;
+  requireHiddenUnlock: boolean;
+  onChange: (key: "checkForUpdatesOnLaunch" | "requireHiddenUnlock", value: boolean) => void;
 }) {
+  const unlocking = useHiddenLockStore((s) => s.unlocking);
+  // Turning the lock off is itself protected: otherwise anyone at the Mac
+  // could switch it off and open Hidden.
+  const setRequireUnlock = async (value: boolean) => {
+    if (!value && !(await useHiddenLockStore.getState().unlock())) return;
+    props.onChange("requireHiddenUnlock", value);
+    // Save at once rather than after the settings debounce: the backend reads
+    // this on every Hidden request, and the lock state shown must match it.
+    try {
+      await tauri.settings.save({ requireHiddenUnlock: value });
+    } finally {
+      await useHiddenLockStore.getState().refresh();
+    }
+  };
   return (
     <section className="settings-section privacy-section">
       <h2 className="settings-section-title">
@@ -38,6 +55,30 @@ export function PrivacyPanel(props: {
               aria-label="Check for updates on launch"
               checked={props.checkForUpdatesOnLaunch}
               onChange={(e) => props.onChange("checkForUpdatesOnLaunch", e.target.checked)}
+            />
+            <span className="toggle-track" />
+          </label>
+        </div>
+      </div>
+
+      <div className="settings-row">
+        <div className="settings-row-label">
+          <b>Require Touch ID or password for Hidden</b>
+          <span className="settings-row-desc">
+            Hidden asks for Touch ID or your Mac password before it shows anything, and its count is
+            not shown while locked. It locks again when the screen locks, when the window closes,
+            and 5 minutes after you leave it. Hidden files are not encrypted and stay in their
+            folders.
+          </span>
+        </div>
+        <div className="settings-row-control">
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              aria-label="Require Touch ID or password for Hidden"
+              checked={props.requireHiddenUnlock}
+              disabled={unlocking}
+              onChange={(e) => void setRequireUnlock(e.target.checked)}
             />
             <span className="toggle-track" />
           </label>

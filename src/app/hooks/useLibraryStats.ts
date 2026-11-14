@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { tauri, events } from "../../engine/commands/tauri";
 import { debugLog, refreshDraftMeta, useSettingsStore } from "../../engine/stores";
 import type { LibraryStats } from "../../engine/types/commands";
+import { useHiddenLockStore } from "../../engine/stores/useHiddenLockStore";
 
 const EMPTY_STATS: LibraryStats = {
   photos: 0,
@@ -42,6 +43,18 @@ export function useLibraryStats(showNotice: (text: string) => void) {
       .then(setLibraryStats)
       .catch(() => {});
   }, []);
+
+  // Hidden's count and size are withheld while it is locked, so re-read the
+  // stats whenever the lock opens or closes.
+  const hiddenUnlocked = useHiddenLockStore((s) => s.status?.unlocked ?? null);
+  const hiddenRequired = useHiddenLockStore((s) => s.status?.required ?? null);
+  useEffect(() => {
+    void useHiddenLockStore.getState().refresh();
+  }, []);
+  useEffect(() => {
+    if (hiddenUnlocked === null) return;
+    refreshLibraryStats();
+  }, [hiddenUnlocked, hiddenRequired, refreshLibraryStats]);
 
   useEffect(() => {
     void refreshDraftMeta();

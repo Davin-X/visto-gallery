@@ -92,6 +92,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
         .manage(Catalog::default())
+        .manage(commands::HiddenLock::default())
         // Native drops are user intent: grant the dropped paths before the
         // webview relays them to `import_files`.
         .on_window_event(|window, event| {
@@ -99,8 +100,16 @@ pub fn run() {
                 let state: State<'_, AppState> = window.state();
                 state.grants.grant(paths);
             }
+            // Closing the window locks Hidden again.
+            if matches!(
+                event,
+                tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+            ) {
+                window.state::<commands::HiddenLock>().lock();
+            }
         })
         .setup(|app| {
+            commands::hidden_lock::observe_screen_lock(app.handle().clone());
             // Initialize database (await so it's ready before any invoke). A
             // locked or damaged catalog must not crash launch: the error is
             // returned by every command so the UI can explain it.
@@ -189,6 +198,10 @@ pub fn run() {
             import_files,
             get_library_items,
             get_matching_ids,
+            hidden_lock_status,
+            unlock_hidden,
+            keep_hidden_unlocked,
+            lock_hidden,
             get_timeline_months,
             get_hidden_items,
             get_hidden_stats,

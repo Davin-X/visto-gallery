@@ -43,6 +43,8 @@ pub enum ErrorCode {
     Serialization,
     /// Anything without a more specific class.
     Internal,
+    /// Hidden is locked until its owner unlocks it with Touch ID or the Mac password.
+    Locked,
 }
 
 /// A command failure with a stable code and a user-facing message.
