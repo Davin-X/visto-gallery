@@ -1,7 +1,8 @@
 use crate::errors::CommandError;
 use serde::Serialize;
 use sqlx::Row;
-use tauri::State;
+use tauri::{Manager, State};
+use tauri_plugin_dialog::DialogExt;
 use ts_rs::TS;
 
 /// Explicit, reviewable repair for a source root that moved on disk.
@@ -29,6 +30,45 @@ pub struct RootPathMappingResult {
     pub old_root: String,
     pub new_root: String,
     pub updated_item_count: i64,
+}
+
+/// The folder the user picked in the native dialog for the current mapping.
+///
+/// Recorded server-side so preview and apply accept the renderer's claimed
+/// `new_root` only when the user actually chose it, matching the rule that a
+/// registered library root must come from a native picker or a drop.
+///
+/// Single-slot by design: the mapping flow is modal and the app has one
+/// window, so a newer pick replaces the previous one (last writer wins).
+static MAPPING_PICK: std::sync::Mutex<Option<(String, String)>> = std::sync::Mutex::new(None);
+
+fn canonical_pick_path(path: &str) -> String {
+    std::fs::canonicalize(path)
+        .map(|path| super::normalize_root(&path.to_string_lossy()))
+        .unwrap_or_else(|_| super::normalize_root(path))
+}
+
+fn remember_mapping_pick(old_root: &str, new_root: &str) {
+    let mut pick = MAPPING_PICK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *pick = Some((old_root.to_string(), canonical_pick_path(new_root)));
+}
+
+fn mapping_pick_allows(old_root: &str, new_root: &str) -> bool {
+    let pick = MAPPING_PICK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    pick.as_ref().is_some_and(|(picked_old, picked_new)| {
+        picked_old == old_root && picked_new == &canonical_pick_path(new_root)
+    })
+}
+
+fn clear_mapping_pick() {
+    let mut pick = MAPPING_PICK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *pick = None;
 }
 
 fn normalize(path: &str) -> Result<String, CommandError> {
@@ -207,6 +247,49 @@ async fn find_conflicts(
     Ok(conflicts)
 }
 
+/// Native folder picker for a moved source root. The picked folder is the only
+/// `new_root` preview and apply will accept for this mapping, and it is granted
+/// for the session so scanning it works immediately.
+#[tauri::command]
+pub async fn choose_root_mapping_folder(
+    app: tauri::AppHandle,
+    old_root: String,
+    catalog: State<'_, crate::Catalog>,
+    state: State<'_, crate::AppState>,
+) -> Result<Option<String>, CommandError> {
+    let old_root = normalize(&old_root)?;
+    let db = super::get_db(&catalog)?;
+    ensure_registered_root(&db, &old_root).await?;
+
+    let mut dialog = app
+        .dialog()
+        .file()
+        .set_title("Choose the folder that now contains the moved library");
+    if let Some(parent) = std::path::Path::new(&old_root).parent() {
+        if parent.is_dir() {
+            dialog = dialog.set_directory(parent);
+        }
+    }
+    let Some(picked) = dialog.blocking_pick_folder() else {
+        return Ok(None);
+    };
+    let path = picked
+        .into_path()
+        .map_err(|error| CommandError::new(crate::errors::ErrorCode::Dialog, error.to_string()))?;
+    let canonical = path.canonicalize().unwrap_or(path);
+    let new_root = super::normalize_root(&canonical.to_string_lossy());
+
+    if new_root.len() <= 1 || new_root == old_root {
+        return Err(CommandError::invalid(
+            "Choose a different real folder as the new source root.".to_string(),
+        ));
+    }
+
+    remember_mapping_pick(&old_root, &new_root);
+    state.grants.grant([&canonical]);
+    Ok(Some(new_root))
+}
+
 #[tauri::command]
 pub async fn preview_root_path_mapping(
     old_root: String,
@@ -214,6 +297,12 @@ pub async fn preview_root_path_mapping(
     catalog: State<'_, crate::Catalog>,
 ) -> Result<RootPathMappingPreview, CommandError> {
     let (old_root, new_root) = validate_mapping(&old_root, &new_root)?;
+    if !mapping_pick_allows(&old_root, &new_root) {
+        return Err(CommandError::path(
+            "Choose the new source folder with the folder picker before previewing a mapping."
+                .to_string(),
+        ));
+    }
     let db = super::get_db(&catalog)?;
     ensure_registered_root(&db, &old_root).await?;
 
@@ -241,9 +330,16 @@ pub async fn preview_root_path_mapping(
 pub async fn apply_root_path_mapping(
     old_root: String,
     new_root: String,
+    app: tauri::AppHandle,
     catalog: State<'_, crate::Catalog>,
 ) -> Result<RootPathMappingResult, CommandError> {
     let (old_root, new_root) = validate_mapping(&old_root, &new_root)?;
+    if !mapping_pick_allows(&old_root, &new_root) {
+        return Err(CommandError::path(
+            "Choose the new source folder with the folder picker before applying a mapping."
+                .to_string(),
+        ));
+    }
     let db = super::get_db(&catalog)?;
     ensure_registered_root(&db, &old_root).await?;
     let affected = find_affected_paths(&db, &old_root).await?;
@@ -277,6 +373,15 @@ pub async fn apply_root_path_mapping(
     tx.commit().await.map_err(|e| {
         format!("Could not commit the root mapping; the mapping was rolled back: {e}")
     })?;
+
+    // The catalog now points at the new root, so its originals must load
+    // through `asset://` without waiting for a relaunch. Failing to widen the
+    // scope after the commit is logged rather than reported as a mapping
+    // failure: the paths have already moved.
+    if let Err(error) = app.asset_protocol_scope().allow_directory(&new_root, true) {
+        tracing::error!("remapped root could not be granted to the asset protocol scope: {error}");
+    }
+    clear_mapping_pick();
 
     Ok(RootPathMappingResult {
         old_root,
@@ -487,5 +592,24 @@ mod tests {
         assert!(error.message.contains("not a registered library source"));
         db.close().await;
         let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn only_the_picked_folder_is_allowed_for_a_mapping() {
+        clear_mapping_pick();
+        assert!(!mapping_pick_allows("/old-root", "/new-root"));
+
+        remember_mapping_pick("/old-root", "/new-root");
+        assert!(mapping_pick_allows("/old-root", "/new-root"));
+        assert!(!mapping_pick_allows("/old-root", "/somewhere-else"));
+        assert!(!mapping_pick_allows("/another-root", "/new-root"));
+
+        // A newer pick replaces the previous one; the stale path is refused.
+        remember_mapping_pick("/old-root", "/newer-root");
+        assert!(!mapping_pick_allows("/old-root", "/new-root"));
+        assert!(mapping_pick_allows("/old-root", "/newer-root"));
+
+        clear_mapping_pick();
+        assert!(!mapping_pick_allows("/old-root", "/new-root"));
     }
 }

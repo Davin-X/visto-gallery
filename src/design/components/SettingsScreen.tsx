@@ -13,7 +13,6 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useKeyboard } from "../../engine/hooks/useKeyboard";
 import { TypedConfirmDialog } from "./TypedConfirmDialog";
 import { tauri } from "../../engine/commands/tauri";
-import { save, open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { BackupInfo, LibraryFolder } from "../../engine/types/commands";
 import { GeneralPanel } from "./settings/GeneralPanel";
 import { ViewingPanel } from "./settings/ViewingPanel";
@@ -158,11 +157,9 @@ export function SettingsScreen(props: {
 
   const handleCreateBackup = useCallback(async () => {
     try {
-      const destination = await save({
-        title: "Save VistoGallery catalog backup",
-        defaultPath: `VistoGallery-Catalog-${new Date().toISOString().slice(0, 10)}.db`,
-        filters: [{ name: "VistoGallery catalog backup", extensions: ["db"] }],
-      });
+      const destination = await tauri.backup.chooseDestination(
+        `VistoGallery-Catalog-${new Date().toISOString().slice(0, 10)}.db`,
+      );
       if (!destination) return;
       setBackupBusy(true);
       const info = await tauri.backup.create(destination);
@@ -178,12 +175,8 @@ export function SettingsScreen(props: {
 
   const handleChooseRestore = useCallback(async () => {
     try {
-      const path = await openDialog({
-        title: "Choose a VistoGallery catalog backup",
-        multiple: false,
-        filters: [{ name: "VistoGallery catalog backup", extensions: ["db"] }],
-      });
-      if (!path || Array.isArray(path)) return;
+      const path = await tauri.backup.chooseFile();
+      if (!path) return;
       setBackupBusy(true);
       const info = await tauri.backup.validate(path);
       setPendingRestore({ path, info });

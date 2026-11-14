@@ -219,9 +219,12 @@ pub fn run() {
             // Catalog backup / restore
             preview_root_path_mapping,
             apply_root_path_mapping,
+            choose_root_mapping_folder,
             create_catalog_backup,
             validate_catalog_backup,
             restore_catalog_backup,
+            choose_backup_destination,
+            choose_backup_file,
             // Metadata
             read_exif,
             backfill_metadata,

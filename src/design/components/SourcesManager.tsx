@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { formatBytes, tauri } from "../../engine/commands/tauri";
 import { useLibraryStore } from "../../engine/stores";
 import type { LibraryFolder } from "../../engine/types/commands";
@@ -59,18 +58,14 @@ export function SourcesManager(props: {
   const locate = async (folder: LibraryFolder) => {
     if (locating) return;
     const library = useLibraryStore.getState();
-    let picked: string | string[] | null;
+    let picked: string | null;
     try {
-      picked = await openDialog({
-        directory: true,
-        multiple: false,
-        title: `Locate “${folder.name}”`,
-      });
+      picked = await tauri.rootMap.chooseFolder(folder.path);
     } catch (error) {
       library.showErrorNotice(error, "Could not open the folder picker");
       return;
     }
-    if (!picked || Array.isArray(picked)) return;
+    if (!picked) return;
     setLocating(folder.path);
     try {
       const preview = await tauri.rootMap.preview(folder.path, picked);

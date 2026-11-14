@@ -16,18 +16,21 @@ const mocks = vi.hoisted(() => {
   };
   return {
     state,
-    openDialog: vi.fn(),
+    chooseFolder: vi.fn(),
     preview: vi.fn(),
     apply: vi.fn(),
   };
 });
 
-vi.mock("@tauri-apps/plugin-dialog", () => ({ open: mocks.openDialog }));
 vi.mock("../../engine/commands/tauri", () => ({
   formatBytes: (bytes: number) => `${bytes} B`,
   tauri: {
     items: { revealInFinder: vi.fn(async () => {}) },
-    rootMap: { preview: mocks.preview, apply: mocks.apply },
+    rootMap: {
+      chooseFolder: mocks.chooseFolder,
+      preview: mocks.preview,
+      apply: mocks.apply,
+    },
   },
 }));
 vi.mock("../../engine/stores", () => {
@@ -47,7 +50,7 @@ describe("SourcesManager Locate…", () => {
   });
 
   it("points a missing source at the folder the user picks", async () => {
-    mocks.openDialog.mockResolvedValue("/Volumes/New/Photos");
+    mocks.chooseFolder.mockResolvedValue("/Volumes/New/Photos");
     mocks.preview.mockResolvedValue({ conflictingPaths: [], itemCount: 12 });
     mocks.apply.mockResolvedValue({ updatedItemCount: 12 });
     render(<SourcesManager />);
@@ -63,7 +66,7 @@ describe("SourcesManager Locate…", () => {
   });
 
   it("changes nothing when the new folder conflicts with the catalog", async () => {
-    mocks.openDialog.mockResolvedValue("/Volumes/New/Photos");
+    mocks.chooseFolder.mockResolvedValue("/Volumes/New/Photos");
     mocks.preview.mockResolvedValue({ conflictingPaths: ["/Volumes/New/Photos/a.jpg"] });
     render(<SourcesManager />);
 
