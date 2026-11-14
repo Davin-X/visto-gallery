@@ -1,6 +1,8 @@
-# These are supporting people and organizations that receive a portion of
-# donations made via GitHub Sponsors to VistoGallery.
-# https://docs.github.com/en/repositories/sponsoring-open-source-projects/managing-your-github-sponsors-donations#displaying-a-sponsor-button-in-your-repository
-
-:ga:
-  - Davin-X
+# GitHub renders the "Sponsor" button from this file. The previous content used
+# `:ga:`, which is not a valid key and is ignored, so no button appeared.
+#
+# The account is not enrolled in GitHub Sponsors yet. Once it is, uncomment the
+# line below; `github` takes one handle or a list of handles.
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+#
+# github: [Davin-X]

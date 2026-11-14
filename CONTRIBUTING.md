@@ -4,7 +4,9 @@ Thanks for helping. VistoGallery is a local-first macOS photo and video gallery 
 
 ## Setup
 
-You need macOS, [Node.js](https://nodejs.org/) LTS, the [Rust toolchain](https://www.rust-lang.org/tools/install) and the Xcode Command Line Tools (`xcode-select --install`).
+You need macOS 13 or newer, Node.js 22.22 or newer (see `engines` in `package.json`), the [Rust toolchain](https://www.rust-lang.org/tools/install) and the Xcode Command Line Tools (`xcode-select --install`).
+
+Fork the repository on GitHub, then clone your fork:
 
 ```bash
 git clone https://github.com/<your-username>/visto-gallery.git
@@ -128,7 +130,7 @@ README screenshots live in `docs/screenshots/` as `<screen>-light.jpg` and `<scr
 
 ## Code of conduct
 
-Please follow the [Code of Conduct](./CODE_OF_CONDUCT.md).
+Please follow the [Code of Conduct](./CODE_OF_CONDUCT.md). A conduct problem is reported privately to the maintainer, as that file describes; please do not open a public issue about one.
 
 ## Maintainers: issue labels
 
@@ -136,4 +138,4 @@ Dependabot pull requests expect the labels `dependencies`, `npm` and `rust` to e
 
 ## Questions
 
-Open a [discussion](https://github.com/Davin-X/visto-gallery/discussions) or an issue.
+Open a [discussion](https://github.com/Davin-X/visto-gallery/discussions) or an issue. [SUPPORT.md](./SUPPORT.md) says where each kind of report belongs and what to include.
