@@ -1,0 +1,142 @@
+# Demo library credits
+
+The screenshots and videos in `docs/screenshots` and `docs/media` show a demo library built from openly licensed media. Thumbnails and frames of these works appear in the images.
+
+- **NASA** images and video: public domain ([NASA media guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/)).
+- **rawpixel / Openverse** photos: CC0.
+- **Wikimedia Commons** photos and video: licenses listed below, each linked to its file page.
+
+## Wikimedia Commons
+
+- [01-พระที่นั่งคูหาคฤหาสน์.jpg](https://commons.wikimedia.org/wiki/File:01-พระที่นั่งคูหาคฤหาสน์.jpg) — BerryJ, CC BY-SA 4.0
+- [2013 Cogden Bridge.jpg](https://commons.wikimedia.org/wiki/File:2013_Cogden_Bridge.jpg) — Kreuzschnabel, CC BY-SA 3.0
+- [2014 Track on Fremington Edge.jpg](https://commons.wikimedia.org/wiki/File:2014_Track_on_Fremington_Edge.jpg) — Kreuzschnabel, CC BY-SA 3.0
+- [2015 Ribblehead Viaduct 1.jpg](https://commons.wikimedia.org/wiki/File:2015_Ribblehead_Viaduct_1.jpg) — Kreuzschnabel, CC BY-SA 3.0
+- [2015 Swaledale from Kisdon Hill.jpg](https://commons.wikimedia.org/wiki/File:2015_Swaledale_from_Kisdon_Hill.jpg) — Kreuzschnabel, CC BY-SA 3.0
+- [2019 - Parc national des Pyrenees - Vallée de Gavarnie.jpg](https://commons.wikimedia.org/wiki/File:2019_-_Parc_national_des_Pyrenees_-_Vallée_de_Gavarnie.jpg) — Moahim, CC BY-SA 4.0
+- [2909 vallon moy res.jpg](https://commons.wikimedia.org/wiki/File:2909_vallon_moy_res.jpg) — Berrucomons, CC BY-SA 3.0
+- [AB BDe 4-4 Jakobsbad - Urnäsch.jpg](https://commons.wikimedia.org/wiki/File:AB_BDe_4-4_Jakobsbad_-_Urnäsch.jpg) — Kabelleger / David Gubler (http://www.bahnbilder.ch), CC BY-SA 3.0
+- [AchenseeWinter01.JPG](https://commons.wikimedia.org/wiki/File:AchenseeWinter01.JPG) — friedrich, CC BY-SA 2.5
+- [Aguarales de Valpalmas, Zaragoza, España, 2015-01-06, DD 26.JPG](https://commons.wikimedia.org/wiki/File:Aguarales_de_Valpalmas,_Zaragoza,_España,_2015-01-06,_DD_26.JPG) — Diego Delso, CC BY-SA 4.0
+- [Albeck Benesirnitz Leonhard-Kapelle 06052015 3266.jpg](https://commons.wikimedia.org/wiki/File:Albeck_Benesirnitz_Leonhard-Kapelle_06052015_3266.jpg) — Johann Jaritz, CC BY-SA 4.0
+- [Albeck Seebachern Fahrweg zum Weissen Kreuz 22112017 2052.jpg](https://commons.wikimedia.org/wiki/File:Albeck_Seebachern_Fahrweg_zum_Weissen_Kreuz_22112017_2052.jpg) — Johann Jaritz, CC BY-SA 4.0
+- [Algar do Carvao, isla de Terceira, Azores, Portugal, 2020-07-25, DD 68-70 HDR.jpg](https://commons.wikimedia.org/wiki/File:Algar_do_Carvao,_isla_de_Terceira,_Azores,_Portugal,_2020-07-25,_DD_68-70_HDR.jpg) — Diego Delso, CC BY-SA 4.0
+- [Alone in the unspoilt wilderness (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Alone_in_the_unspoilt_wilderness_(Unsplash).jpg) — David Marcu davidmarcu, CC0
+- [Amanhecer no Hercules --.jpg](https://commons.wikimedia.org/wiki/File:Amanhecer_no_Hercules_--.jpg) — Carlos Perez Couto, CC BY-SA 3.0
+- [Araucárias ao fundo Parque Nacional da Serra da Bocaina - denoise.jpg](https://commons.wikimedia.org/wiki/File:Araucárias_ao_fundo_Parque_Nacional_da_Serra_da_Bocaina_-_denoise.jpg) — Heris Luiz Cordeiro Rocha, CC BY-SA 3.0
+- [ARG-2016-Aerial-Tierra del Fuego (Ushuaia)–Valle Carbajal 01.jpg](https://commons.wikimedia.org/wiki/File:ARG-2016-Aerial-Tierra_del_Fuego_(Ushuaia)–Valle_Carbajal_01.jpg) — Godot13, CC BY-SA 4.0
+- [Barranco Valle de la Fuente - Fuerteventura.jpg](https://commons.wikimedia.org/wiki/File:Barranco_Valle_de_la_Fuente_-_Fuerteventura.jpg) — H. Zell, CC BY 3.0
+- [Ganado, Imehejek, Sudán del Sur, 2024-01-21, DD 10.jpg](https://commons.wikimedia.org/wiki/File:Ganado,_Imehejek,_Sudán_del_Sur,_2024-01-21,_DD_10.jpg) — Diego Delso, CC BY-SA 4.0
+- [Stranded mules during the Uttarakhand Floods of 2013 as encountered by People for Animals during a rescue operation.jpg](https://commons.wikimedia.org/wiki/File:Stranded_mules_during_the_Uttarakhand_Floods_of_2013_as_encountered_by_People_for_Animals_during_a_rescue_operation.jpg) — Pulakit Singh, CC BY-SA 4.0
+- [Dülmen, Umland, Sonnenaufgang -- 2012 -- 8084.jpg](https://commons.wikimedia.org/wiki/File:Dülmen,_Umland,_Sonnenaufgang_--_2012_--_8084.jpg) — Dietmar Rabich, CC BY-SA 4.0
+- [Erfurt - Thüringer Zoopark - Rhea americana 01.jpg](https://commons.wikimedia.org/wiki/File:Erfurt_-_Thüringer_Zoopark_-_Rhea_americana_01.jpg) — H. Zell, CC BY-SA 3.0
+- [Ganzenveer bedekt met dauw. (d.j.b.) 02.jpg](https://commons.wikimedia.org/wiki/File:Ganzenveer_bedekt_met_dauw._(d.j.b.)_02.jpg) — Dominicus Johannes Bergsma, CC BY-SA 4.0
+- [2014.03.09.-23-Kaefertaler Wald-Mannheim-Fruehlings-Scharbockskraut.jpg](https://commons.wikimedia.org/wiki/File:2014.03.09.-23-Kaefertaler_Wald-Mannheim-Fruehlings-Scharbockskraut.jpg) — Andreas Eichler, CC BY-SA 4.0
+- [2014.03.29.-08-Mannheim Neckarau Waldpark-Wiesen-Schaumkraut.jpg](https://commons.wikimedia.org/wiki/File:2014.03.29.-08-Mannheim_Neckarau_Waldpark-Wiesen-Schaumkraut.jpg) — Andreas Eichler, CC BY-SA 4.0
+- [2014.03.29.-19-Mannheim Neckarau Waldpark--Wald-Veilchen.jpg](https://commons.wikimedia.org/wiki/File:2014.03.29.-19-Mannheim_Neckarau_Waldpark--Wald-Veilchen.jpg) — Andreas Eichler, CC BY-SA 4.0
+- [2014.07.14.-15-Machern--Schornsteinfeger.jpg](https://commons.wikimedia.org/wiki/File:2014.07.14.-15-Machern--Schornsteinfeger.jpg) — Andreas Eichler, CC BY-SA 4.0
+- [2015 Kwiatostan gruszy pospolitej.jpg](https://commons.wikimedia.org/wiki/File:2015_Kwiatostan_gruszy_pospolitej.jpg) — Jacek Halicki, CC BY-SA 4.0
+- [2016 Kwiat grzybieni białych 2.jpg](https://commons.wikimedia.org/wiki/File:2016_Kwiat_grzybieni_białych_2.jpg) — Jacek Halicki, CC BY-SA 4.0
+- [2017.06.05.-32-Anglerteiche-Rimbach--Wiesen-Storchschnabel.jpg](https://commons.wikimedia.org/wiki/File:2017.06.05.-32-Anglerteiche-Rimbach--Wiesen-Storchschnabel.jpg) — Andreas Eichler, CC BY-SA 4.0
+- [2017.06.17.-16-Reinheimer Teich-Reinheim--Sumpf-Storchschnabel.jpg](https://commons.wikimedia.org/wiki/File:2017.06.17.-16-Reinheimer_Teich-Reinheim--Sumpf-Storchschnabel.jpg) — Andreas Eichler, CC BY-SA 4.0
+- [2017.07.03.-22-Glubig-Melang-Fliess Wendisch Rietz--Weisse Seerose.jpg](https://commons.wikimedia.org/wiki/File:2017.07.03.-22-Glubig-Melang-Fliess_Wendisch_Rietz--Weisse_Seerose.jpg) — Andreas Eichler, CC BY-SA 4.0
+- [2017.10.15.-14-Kirschgartshaeuser Schlaege Mannheim--Gewoehnlicher Loewenzahn-Pusteblume.jpg](https://commons.wikimedia.org/wiki/File:2017.10.15.-14-Kirschgartshaeuser_Schlaege_Mannheim--Gewoehnlicher_Loewenzahn-Pusteblume.jpg) — Andreas Eichler, CC BY-SA 4.0
+- [Abeja (Bombus terrestris) en un Ptilotus exaltatus, jardín botánico de Tallin, Estonia, 2012-08-12, DD 01.JPG](https://commons.wikimedia.org/wiki/File:Abeja_(Bombus_terrestris)_en_un_Ptilotus_exaltatus,_jardín_botánico_de_Tallin,_Estonia,_2012-08-12,_DD_01.JPG) — Diego Delso, CC BY-SA 3.0
+- [Aceras anthropophora (detail).jpg](https://commons.wikimedia.org/wiki/File:Aceras_anthropophora_(detail).jpg) — Hans Hillewaert, CC BY-SA 4.0
+- [Adarga (Nymphaea alba), Ciudad Ho Chi Minh, Vietnam, 2013-08-14, DD 01.jpg](https://commons.wikimedia.org/wiki/File:Adarga_(Nymphaea_alba),_Ciudad_Ho_Chi_Minh,_Vietnam,_2013-08-14,_DD_01.jpg) — Diego Delso, CC BY-SA 3.0
+- [African Cape Daisy (Osteospermum barberiae).jpg](https://commons.wikimedia.org/wiki/File:African_Cape_Daisy_(Osteospermum_barberiae).jpg) — AntanO, CC BY-SA 4.0
+- [Agapanthus 'White Heaven', ingetogen schoonheid van de ontluikende bloemknop. Locatie, Tuinreservaat Jonkervallei 03.jpg](https://commons.wikimedia.org/wiki/File:Agapanthus_'White_Heaven',_ingetogen_schoonheid_van_de_ontluikende_bloemknop._Locatie,_Tuinreservaat_Jonkervallei_03.jpg) — Dominicus Johannes Bergsma, CC BY-SA 4.0
+- [Agapanthus -- 2021 -- 3928.jpg](https://commons.wikimedia.org/wiki/File:Agapanthus_--_2021_--_3928.jpg) — Dietmar Rabich, CC BY-SA 4.0
+- [Alcea rosea 2022 G1.jpg](https://commons.wikimedia.org/wiki/File:Alcea_rosea_2022_G1.jpg) — George Chernilevsky, CC BY-SA 4.0
+- [Alcea rosea 2025 G1.jpg](https://commons.wikimedia.org/wiki/File:Alcea_rosea_2025_G1.jpg) — George Chernilevsky, CC BY 4.0
+- [Allium 'Lucy Ball' Pink Flower Head 2236px.jpg](https://commons.wikimedia.org/wiki/File:Allium_'Lucy_Ball'_Pink_Flower_Head_2236px.jpg) — Photo by and (c)2008 Derek Ramsey (Ram-Man).  Co-attribution must be given to th, CC BY-SA 3.0
+- [Allium rothii 1.jpg](https://commons.wikimedia.org/wiki/File:Allium_rothii_1.jpg) — Gideon Pisanty (Gidip) גדעון פיזנטי, CC BY 3.0
+- [Anemone pulsatilla subsp. grandis ÖBG Bayreuth.jpg](https://commons.wikimedia.org/wiki/File:Anemone_pulsatilla_subsp._grandis_ÖBG_Bayreuth.jpg) — El Grafo, CC BY-SA 4.0
+- [Anemone tomentosa 'Albadura' 01.JPG](https://commons.wikimedia.org/wiki/File:Anemone_tomentosa_'Albadura'_01.JPG) — Dominicus Johannes Bergsma, CC BY-SA 3.0
+- [Anthophora bimaculata - Jasione montana - Tallinn.jpg](https://commons.wikimedia.org/wiki/File:Anthophora_bimaculata_-_Jasione_montana_-_Tallinn.jpg) — Ivar Leidus, CC BY-SA 4.0
+- [Apis mellifera - Prunus padus - Keila.jpg](https://commons.wikimedia.org/wiki/File:Apis_mellifera_-_Prunus_padus_-_Keila.jpg) — Ivar Leidus, CC BY-SA 4.0
+- [Apis mellifera - Senecio paludosus - Keila.jpg](https://commons.wikimedia.org/wiki/File:Apis_mellifera_-_Senecio_paludosus_-_Keila.jpg) — Ivar Leidus, CC BY-SA 4.0
+- [Apple-tree blossoms 2017 G3.jpg](https://commons.wikimedia.org/wiki/File:Apple-tree_blossoms_2017_G3.jpg) — George Chernilevsky, Public domain
+- [Argynnis adippe auf Centaurea jacea 01.jpg](https://commons.wikimedia.org/wiki/File:Argynnis_adippe_auf_Centaurea_jacea_01.jpg) — Uoaei1, CC BY-SA 4.0
+- [Asteracea poster 3.jpg](https://commons.wikimedia.org/wiki/File:Asteracea_poster_3.jpg) — Alvesgaspar, Tony Wills (10), CC BY-SA 3.0
+- [Astern IMG 3343.jpg](https://commons.wikimedia.org/wiki/File:Astern_IMG_3343.jpg) — Fischer.H, CC BY-SA 4.0
+- [Astragalus alpinus LC0319.jpg](https://commons.wikimedia.org/wiki/File:Astragalus_alpinus_LC0319.jpg) — Jörg Hempel, CC BY-SA 3.0 de
+- [Astrantia major Mitterbach 01.JPG](https://commons.wikimedia.org/wiki/File:Astrantia_major_Mitterbach_01.JPG) — Uoaei1, CC BY-SA 4.0
+- [Autumn leaf (Doleschallia bisaltide) Bali I.jpg](https://commons.wikimedia.org/wiki/File:Autumn_leaf_(Doleschallia_bisaltide)_Bali_I.jpg) — Charles J. Sharp, CC BY-SA 4.0
+- [Beilstein - Schmidhausen - Müller-Thurgau-Weg - gelb-rote Tulpenblüten mit Regentropfen (RQCD2782).jpg](https://commons.wikimedia.org/wiki/File:Beilstein_-_Schmidhausen_-_Müller-Thurgau-Weg_-_gelb-rote_Tulpenblüten_mit_Regentropfen_(RQCD2782).jpg) — Roman Eisele, CC BY-SA 4.0
+- [Berger's Clouded Yellow - Colias sareptensis 03.jpg](https://commons.wikimedia.org/wiki/File:Berger's_Clouded_Yellow_-_Colias_sareptensis_03.jpg) — Zeynel Cebeci, CC BY-SA 4.0
+- [Bistorta officinalis 01.JPG](https://commons.wikimedia.org/wiki/File:Bistorta_officinalis_01.JPG) — Uoaei1, CC BY-SA 3.0
+- [Bloeiwijze van een Doronicum orientale. 28-05-2026. (d.j.b).jpg](https://commons.wikimedia.org/wiki/File:Bloeiwijze_van_een_Doronicum_orientale._28-05-2026._(d.j.b).jpg) — Dominicus Johannes Bergsma., CC BY-SA 4.0
+- [Bloeiwijze van een Kruisdistel (Eryngium). 21-07-2023. (actm.) 01.jpg](https://commons.wikimedia.org/wiki/File:Bloeiwijze_van_een_Kruisdistel_(Eryngium)._21-07-2023._(actm.)_01.jpg) — Agnes Monkelbaan, CC BY-SA 4.0
+- [Bloemen van adderwortel (Persicaria bistorta, synoniem, Polygonum bistorta) 06-06-2021. (d.j.b).jpg](https://commons.wikimedia.org/wiki/File:Bloemen_van_adderwortel_(Persicaria_bistorta,_synoniem,_Polygonum_bistorta)_06-06-2021._(d.j.b).jpg) — Dominicus Johannes Bergsma, CC BY-SA 4.0
+- [Bloemen van de Boerenjasmijn (Philadelphus microphyllus). Locatie, Tuinreservaat Jonkervallei 02.jpg](https://commons.wikimedia.org/wiki/File:Bloemen_van_de_Boerenjasmijn_(Philadelphus_microphyllus)._Locatie,_Tuinreservaat_Jonkervallei_02.jpg) — Dominicus Johannes Bergsma, CC BY-SA 4.0
+- [Bloemen van een Chaenomeles x superba 'nicolina' (chinese kwee). 20-04-2021 (actm.) 01.jpg](https://commons.wikimedia.org/wiki/File:Bloemen_van_een_Chaenomeles_x_superba_'nicolina'_(chinese_kwee)._20-04-2021_(actm.)_01.jpg) — Agnes Monkelbaan, CC BY-SA 4.0
+- [Bloemen van een meidoorn (Crataegus) 08-05-2022. (d.j.b).jpg](https://commons.wikimedia.org/wiki/File:Bloemen_van_een_meidoorn_(Crataegus)_08-05-2022._(d.j.b).jpg) — Dominicus Johannes Bergsma, CC BY-SA 4.0
+- [Blueten 002 2021 08 23.jpg](https://commons.wikimedia.org/wiki/File:Blueten_002_2021_08_23.jpg) — Friedrich Haag, CC BY-SA 4.0
+- [Bolkar Blue - Polyommatus molleti.jpg](https://commons.wikimedia.org/wiki/File:Bolkar_Blue_-_Polyommatus_molleti.jpg) — Zeynel Cebeci, CC BY-SA 4.0
+- [Bombus cryptarum - Solidago virgaurea - Keila.jpg](https://commons.wikimedia.org/wiki/File:Bombus_cryptarum_-_Solidago_virgaurea_-_Keila.jpg) — Ivar Leidus, CC BY-SA 4.0
+- [Bombus lapidarius - Sonchus asper - Keila.jpg](https://commons.wikimedia.org/wiki/File:Bombus_lapidarius_-_Sonchus_asper_-_Keila.jpg) — Ivar Leidus, CC BY-SA 4.0
+- [Bombus veteranus - Cirsium vulgare - Keila1.jpg](https://commons.wikimedia.org/wiki/File:Bombus_veteranus_-_Cirsium_vulgare_-_Keila1.jpg) — Ivar Leidus, CC BY-SA 4.0
+- [Bloemen in een terracotta vaas., Albertus Jonas Brandt, Eelke Jelles Eelkema, 1810 - 1824 - Zoeken - Rijksmuseum.jpg](https://commons.wikimedia.org/wiki/File:Bloemen_in_een_terracotta_vaas.,_Albertus_Jonas_Brandt,_Eelke_Jelles_Eelkema,_1810_-_1824_-_Zoeken_-_Rijksmuseum.jpg) — Albertus Jonas Brandt / Eelke Jelles Eelkema, Public domain
+- [Bumblebee on Lavender Blossom.JPG](https://commons.wikimedia.org/wiki/File:Bumblebee_on_Lavender_Blossom.JPG) — Martin Falbisoner, CC BY-SA 4.0
+- [2012-03-14 21-42-55-file-etoiles-14f-2min-3d.jpg](https://commons.wikimedia.org/wiki/File:2012-03-14_21-42-55-file-etoiles-14f-2min-3d.jpg) — Thomas Bresson, CC BY 3.0
+- [2017-04 Circumpolar trails sunset at La Hague lighthouse.jpg](https://commons.wikimedia.org/wiki/File:2017-04_Circumpolar_trails_sunset_at_La_Hague_lighthouse.jpg) — Antoine Lamielle, CC BY-SA 4.0
+- [Agence Rol, L’éclipse, gare Saint-Lazare, 1921.jpg](https://commons.wikimedia.org/wiki/File:Agence_Rol,_L’éclipse,_gare_Saint-Lazare,_1921.jpg) — Agence Rol, Public domain
+- [Artist's impression of an ultra-short-period planet.jpg](https://commons.wikimedia.org/wiki/File:Artist's_impression_of_an_ultra-short-period_planet.jpg) — NASA, ESA and A. Schaller, CC BY 4.0
+- [Bartolomeu Velho 1568.jpg](https://commons.wikimedia.org/wiki/File:Bartolomeu_Velho_1568.jpg) — Bartolomeu Velho, Public domain
+- [Black hole - Messier 87.jpg](https://commons.wikimedia.org/wiki/File:Black_hole_-_Messier_87.jpg) — Event Horizon Telescope, CC BY 4.0
+- [Cellarius ptolemaic system.jpg](https://commons.wikimedia.org/wiki/File:Cellarius_ptolemaic_system.jpg) — Jan van Loon, Public domain
+- [Comet Tsuchinshan–ATLAS over Ohio (Composite).jpg](https://commons.wikimedia.org/wiki/File:Comet_Tsuchinshan–ATLAS_over_Ohio_(Composite).jpg) — Jim Vajda, CC BY 2.0
+- [Comet Tsuchinshan–ATLAS, in the night sky over Tuntorp 3.jpg](https://commons.wikimedia.org/wiki/File:Comet_Tsuchinshan–ATLAS,_in_the_night_sky_over_Tuntorp_3.jpg) — W.carter, CC BY-SA 4.0
+- [Comet-Hale-Bopp-29-03-1997 hires adj.jpg](https://commons.wikimedia.org/wiki/File:Comet-Hale-Bopp-29-03-1997_hires_adj.jpg) — Philipp Salzgeber, CC BY-SA 2.0 at
+- [CSIRO ScienceImage 3881 Five Antennas at Narrabri.jpg](https://commons.wikimedia.org/wiki/File:CSIRO_ScienceImage_3881_Five_Antennas_at_Narrabri.jpg) — John Masterson, CSIRO, CC BY 3.0
+- [In the photo there is one Perseid, Milky Way and Andromega galaxy and light pollution on the horizon - Luhasoo bog in Estonia.jpg](https://commons.wikimedia.org/wiki/File:In_the_photo_there_is_one_Perseid,_Milky_Way_and_Andromega_galaxy_and_light_pollution_on_the_horizon_-_Luhasoo_bog_in_Estonia.jpg) — Martin Mark, CC BY-SA 4.0
+- [Kométa C-2020 F3 (NEOWISE).jpg](https://commons.wikimedia.org/wiki/File:Kométa_C-2020_F3_(NEOWISE).jpg) — Palonitor, CC BY-SA 4.0
+- [Mercury, Venus and the Moon Align.jpg](https://commons.wikimedia.org/wiki/File:Mercury,_Venus_and_the_Moon_Align.jpg) — ESO/Y. Beletsky, CC BY 4.0
+- [Star-sizes.jpg](https://commons.wikimedia.org/wiki/File:Star-sizes.jpg) — Dave Jarvis (https://dave.autonoma.ca/), CC BY-SA 3.0
+- [William Herschel Telescope and Comet Tsuchinshan–ATLAS.jpg](https://commons.wikimedia.org/wiki/File:William_Herschel_Telescope_and_Comet_Tsuchinshan–ATLAS.jpg) — Whyistheskyblue1, CC BY-SA 4.0
+- [07-17-2012 - Emborio - Emporio - Santorini - Greece - 11.jpg](https://commons.wikimedia.org/wiki/File:07-17-2012_-_Emborio_-_Emporio_-_Santorini_-_Greece_-_11.jpg) — Norbert Nagel, CC BY-SA 3.0
+- [2014 Scar House Reservoir Dam.jpg](https://commons.wikimedia.org/wiki/File:2014_Scar_House_Reservoir_Dam.jpg) — Kreuzschnabel, CC BY-SA 3.0
+- [2018 01 (Blue) - Chaouen.jpg](https://commons.wikimedia.org/wiki/File:2018_01_(Blue)_-_Chaouen.jpg) — Fbrandao.1963, CC BY-SA 4.0
+- [Amboy (California, USA) -- 2012 -- 4.jpg](https://commons.wikimedia.org/wiki/File:Amboy_(California,_USA)_--_2012_--_4.jpg) — Dietmar Rabich, CC BY-SA 4.0
+- [Antwerp Central Station full size.jpg](https://commons.wikimedia.org/wiki/File:Antwerp_Central_Station_full_size.jpg) — Laurent-Jonathan Meyvaert, CC BY-SA 3.0
+- [Arabs Baths of Alhama de Granada in Andalusia, Spain.jpg](https://commons.wikimedia.org/wiki/File:Arabs_Baths_of_Alhama_de_Granada_in_Andalusia,_Spain.jpg) — SuperCar-RoadTrip.fr from Bordeaux, France, CC BY 2.0
+- [Atomium sphere (DSCF1211).jpg](https://commons.wikimedia.org/wiki/File:Atomium_sphere_(DSCF1211).jpg) — Trougnouf (Benoit Brummer), CC BY-SA 4.0
+- [Brazil Belém Las Docas 02.jpg](https://commons.wikimedia.org/wiki/File:Brazil_Belém_Las_Docas_02.jpg) — Cayambe, CC BY-SA 3.0
+- [Brighton MMB 34 West Pier.jpg](https://commons.wikimedia.org/wiki/File:Brighton_MMB_34_West_Pier.jpg) — mattbuck (category), CC BY-SA 4.0
+- [Brooklyn Botanic Garden New York May 2015 003.jpg](https://commons.wikimedia.org/wiki/File:Brooklyn_Botanic_Garden_New_York_May_2015_003.jpg) — King of Hearts, CC BY-SA 3.0
+- [Busskur i Riisskov natfoto version 2.jpg](https://commons.wikimedia.org/wiki/File:Busskur_i_Riisskov_natfoto_version_2.jpg) — Villy Fink Isaksen, CC BY-SA 4.0
+- [Bydgoszcz, Przystań Bydgoszcz, okna.jpg](https://commons.wikimedia.org/wiki/File:Bydgoszcz,_Przystań_Bydgoszcz,_okna.jpg) — 1bumer, CC BY-SA 4.0
+- [Carls stoll Bergslagssafari.jpg](https://commons.wikimedia.org/wiki/File:Carls_stoll_Bergslagssafari.jpg) — Calle Eklund/Vivo, CC BY-SA 4.0
+- [Carrelet, Esnandes, Charente-Maritime, august 2015.jpg](https://commons.wikimedia.org/wiki/File:Carrelet,_Esnandes,_Charente-Maritime,_august_2015.jpg) — Jebulon, CC0
+- [Carved wooden bench furniture and crafts at Heuan Chan heritage house in Luang Prabang Laos.jpg](https://commons.wikimedia.org/wiki/File:Carved_wooden_bench_furniture_and_crafts_at_Heuan_Chan_heritage_house_in_Luang_Prabang_Laos.jpg) — Basile Morin, CC BY-SA 4.0
+- [Centro histórico, Baku, Azerbaiyán, 2016-09-26, DD 221-223 HDR.jpg](https://commons.wikimedia.org/wiki/File:Centro_histórico,_Baku,_Azerbaiyán,_2016-09-26,_DD_221-223_HDR.jpg) — Diego Delso, CC BY-SA 4.0
+- [Ciechanów, wieżowy zbiornik wyrównawczy (3).jpg](https://commons.wikimedia.org/wiki/File:Ciechanów,_wieżowy_zbiornik_wyrównawczy_(3).jpg) — 1bumer, CC BY-SA 4.0
+- [Cloud Forest, Gardens by the Bay, Singapore.jpg](https://commons.wikimedia.org/wiki/File:Cloud_Forest,_Gardens_by_the_Bay,_Singapore.jpg) — Basile Morin, CC BY-SA 4.0
+- [Courtyard Zappeion Athens, Greece.jpg](https://commons.wikimedia.org/wiki/File:Courtyard_Zappeion_Athens,_Greece.jpg) — Jebulon, CC0
+- [Czech-2013-Prague-Astronomical clock face.jpg](https://commons.wikimedia.org/wiki/File:Czech-2013-Prague-Astronomical_clock_face.jpg) — Godot13, CC BY-SA 4.0
+- [Dam at Jalpa de Canovas 2.jpg](https://commons.wikimedia.org/wiki/File:Dam_at_Jalpa_de_Canovas_2.jpg) — Tomascastelazo, CC BY-SA 4.0
+- [Gobi, Klasztor Chamaryn (07).jpg](https://commons.wikimedia.org/wiki/File:Gobi,_Klasztor_Chamaryn_(07).jpg) — Marcin Konsek, CC BY-SA 4.0
+- [Gröna Lund June 2015.jpg](https://commons.wikimedia.org/wiki/File:Gröna_Lund_June_2015.jpg) — Arild Vågen, CC BY-SA 4.0
+- [Hrad Pernštejn (Pernstein) - brána (5. nádvoří).JPG](https://commons.wikimedia.org/wiki/File:Hrad_Pernštejn_(Pernstein)_-_brána_(5._nádvoří).JPG) — Pudelek, CC BY-SA 4.0
+- [Infinity Edge Pool, Mauritius.JPG](https://commons.wikimedia.org/wiki/File:Infinity_Edge_Pool,_Mauritius.JPG) — Martin Falbisoner, CC BY-SA 4.0
+- [Kimono Forest at night, Arashiyama Station, Arashiyama, Kyoto, Japan.jpg](https://commons.wikimedia.org/wiki/File:Kimono_Forest_at_night,_Arashiyama_Station,_Arashiyama,_Kyoto,_Japan.jpg) — Yasumichi Morita (designer)  Basile Morin (photographer), CC BY-SA 4.0
+- [Klagenfurt Viktring Quellenstrasse Strom-Verbundnetz 13022010 1580.jpg](https://commons.wikimedia.org/wiki/File:Klagenfurt_Viktring_Quellenstrasse_Strom-Verbundnetz_13022010_1580.jpg) — Johann Jaritz, CC BY-SA 4.0
+- [L'Umbracle, Valencia, Spain - Jan 2007.jpg](https://commons.wikimedia.org/wiki/File:L'Umbracle,_Valencia,_Spain_-_Jan_2007.jpg) — Diliff, CC BY-SA 3.0
+- [Los Angeles (California, USA), South Olive Street -- 2012 -- 4847.jpg](https://commons.wikimedia.org/wiki/File:Los_Angeles_(California,_USA),_South_Olive_Street_--_2012_--_4847.jpg) — Dietmar Rabich, CC BY-SA 4.0
+- [Luxembourg City Hall (54540726309).jpg](https://commons.wikimedia.org/wiki/File:Luxembourg_City_Hall_(54540726309).jpg) — Pierre Blaché from Paris, France, CC0
+- [Myeongjeongjeon seen through the wooden Gate Hyehwamun at Changgyeonggung Palace in Seoul.jpg](https://commons.wikimedia.org/wiki/File:Myeongjeongjeon_seen_through_the_wooden_Gate_Hyehwamun_at_Changgyeonggung_Palace_in_Seoul.jpg) — Basile Morin, CC BY-SA 4.0
+- [Partal pavilion bassin detail 1 edit.jpg](https://commons.wikimedia.org/wiki/File:Partal_pavilion_bassin_detail_1_edit.jpg) — Jebulon, CC0
+- [Patio de los Arrayanes detail Alhambra Granada Spain.jpg](https://commons.wikimedia.org/wiki/File:Patio_de_los_Arrayanes_detail_Alhambra_Granada_Spain.jpg) — Jebulon, CC0
+- [Pavillon Cour des Lions Alhambra Granada Spain.jpg](https://commons.wikimedia.org/wiki/File:Pavillon_Cour_des_Lions_Alhambra_Granada_Spain.jpg) — Jebulon, CC0
+- [Persépolis, Irán, 2016-09-24, DD 53.jpg](https://commons.wikimedia.org/wiki/File:Persépolis,_Irán,_2016-09-24,_DD_53.jpg) — Diego Delso, CC BY-SA 4.0
+- [Portico gallery perspective École Militaire Cour d'Honneur Paris.jpg](https://commons.wikimedia.org/wiki/File:Portico_gallery_perspective_École_Militaire_Cour_d'Honneur_Paris.jpg) — Jebulon, CC0
+- [Poertschach Johannes-Brahms-Promenade Promenadenbad Rutschenturm 25122015 9840 169crop.jpg](https://commons.wikimedia.org/wiki/File:Poertschach_Johannes-Brahms-Promenade_Promenadenbad_Rutschenturm_25122015_9840_169crop.jpg) — Johann Jaritz, CC BY-SA 3.0 at
+- [Presa de El Atazar - 01.jpg](https://commons.wikimedia.org/wiki/File:Presa_de_El_Atazar_-_01.jpg) — Carlos Delgado, CC BY-SA 3.0
+- [Regietów Wyżny (Рeґєтiв) - dzwonnica 01.jpg](https://commons.wikimedia.org/wiki/File:Regietów_Wyżny_(Рeґєтiв)_-_dzwonnica_01.jpg) — Pudelek, CC BY-SA 4.0
+- [Stockholm Schärengarten.jpg](https://commons.wikimedia.org/wiki/File:Stockholm_Schärengarten.jpg) — Christof46, CC BY-SA 4.0
+- [Water reflection of Hyangwonjeong Pavilion at Gyeongbokgung Palace in Seoul.jpg](https://commons.wikimedia.org/wiki/File:Water_reflection_of_Hyangwonjeong_Pavilion_at_Gyeongbokgung_Palace_in_Seoul.jpg) — Basile Morin, CC BY-SA 4.0
+- [Wind turbines along North Middle Road, Essex County, Ontario, 2025-06-29.jpg](https://commons.wikimedia.org/wiki/File:Wind_turbines_along_North_Middle_Road,_Essex_County,_Ontario,_2025-06-29.jpg) — Crisco 1492, CC BY-SA 4.0
+- [Селение Ний.jpg](https://commons.wikimedia.org/wiki/File:Селение_Ний.jpg) — Altushkin, CC BY-SA 4.0
+- [Karkloof Falls.webm](https://commons.wikimedia.org/wiki/File:Karkloof_Falls.webm) — https://www.flickr.com/photos/flowcomm/, CC BY 2.0
+- [Kullaojan putous 7.webm](https://commons.wikimedia.org/wiki/File:Kullaojan_putous_7.webm) — MKFI, Public domain
