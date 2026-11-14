@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **Storage in Settings → Advanced**: see how much space thumbnails, converted videos, the catalog and edit originals take, and clear the thumbnail or converted-video cache. Videos used in the last three hours are kept so nothing stops mid-play.
+
+### Changed
+- The **Maximum cache size** setting now also limits the converted-video cache (it was a fixed 4 GB).
+
+### Fixed
+- Scrolling a large library could hold gigabytes of thumbnails in memory, because the in-memory cache used the disk budget (5 GB by default). It is now capped at 192 MB.
+- When a scan dropped an item whose file was deleted or moved outside VistoGallery, the original saved before an in-place edit stayed in app data forever. It is now deleted with the item.
+- The thumbnail and converted-video caches evicted the oldest file written, even if you used it every day. Using a cached file now marks it as recent, and a video that may still be playing is never evicted.
+
 ## [0.4.0] - 2026-11-14
 
 ### Added

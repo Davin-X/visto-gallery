@@ -44,6 +44,9 @@ export type {
   UpdateCheck,
   AppSettings,
   PartialSettings,
+  StorageUsage,
+  CacheKind,
+  ClearCacheResult,
 } from "./generated/ipc";
 
 export type { UpdateCheck as UpdateCheckResult } from "./generated/ipc";

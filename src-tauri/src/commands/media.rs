@@ -347,11 +347,7 @@ where
     let mut catalog_error = None;
     if !trashed.is_empty() {
         match remove_trashed_rows(db, &trashed).await {
-            Ok(backup_files) => {
-                for backup in backup_files {
-                    let _ = std::fs::remove_file(backup);
-                }
-            }
+            Ok(backup_files) => remove_edit_backup_files(&backup_files),
             Err(error) => catalog_error = Some(error.message),
         }
     }
@@ -1246,6 +1242,25 @@ async fn ensure_edit_backup_in_dir(
     Ok(backup_path)
 }
 
+/// Folder (under app data) that holds the original bytes of in-place edits.
+pub(crate) const EDIT_ORIGINALS_DIR: &str = "edit-originals";
+
+/// Delete journaled originals whose catalog rows are gone. Only files directly
+/// inside an `edit-originals` folder are touched, so a corrupted or crafted
+/// `backup_path` can never delete anything else.
+pub(crate) fn remove_edit_backup_files(paths: &[String]) {
+    for path in paths {
+        let path = std::path::Path::new(path);
+        let in_originals = path
+            .parent()
+            .and_then(|parent| parent.file_name())
+            .is_some_and(|name| name == EDIT_ORIGINALS_DIR);
+        if in_originals {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
 async fn ensure_edit_backup(
     app: &tauri::AppHandle,
     db: &sqlx::SqlitePool,
@@ -1256,7 +1271,7 @@ async fn ensure_edit_backup(
         .path()
         .app_data_dir()
         .map_err(|e| CommandError::io(format!("Could not locate the app data folder: {e}")))?;
-    ensure_edit_backup_in_dir(db, &app_dir.join("edit-originals"), media_id, source_path).await
+    ensure_edit_backup_in_dir(db, &app_dir.join(EDIT_ORIGINALS_DIR), media_id, source_path).await
 }
 
 #[tauri::command]
@@ -2724,7 +2739,10 @@ mod trash_restore_tests {
 
 #[cfg(test)]
 mod trash_flow_tests {
-    use super::{execute_trash, resolve_trash_targets, TrashSink};
+    use super::{
+        execute_trash, remove_edit_backup_files, resolve_trash_targets, TrashSink,
+        EDIT_ORIGINALS_DIR,
+    };
     use crate::errors::CommandError;
     use std::collections::HashSet;
     use std::path::{Path, PathBuf};
@@ -2900,6 +2918,28 @@ mod trash_flow_tests {
 
     /// Full flow: trash the files, delete only the trashed catalog rows, and
     /// remove journaled originals that belonged to them.
+    #[test]
+    fn edit_backup_cleanup_only_touches_the_originals_folder() {
+        let dir = temp_dir("backup-guard");
+        let originals = dir.join(EDIT_ORIGINALS_DIR);
+        std::fs::create_dir_all(&originals).expect("create originals dir");
+        let journaled = originals.join("x.jpg");
+        let elsewhere = dir.join("photo.jpg");
+        write_file(&journaled);
+        write_file(&elsewhere);
+
+        remove_edit_backup_files(&[
+            journaled.to_string_lossy().into_owned(),
+            elsewhere.to_string_lossy().into_owned(),
+        ]);
+
+        assert!(!journaled.exists(), "journaled original is removed");
+        assert!(
+            elsewhere.exists(),
+            "a path outside edit-originals is never deleted"
+        );
+    }
+
     #[tokio::test]
     async fn successful_trash_removes_rows_and_edit_backups() {
         let db = test_db().await;
@@ -2914,7 +2954,9 @@ mod trash_flow_tests {
         insert_item(&db, "b", &b).await;
         insert_item(&db, "keep", &keep).await;
 
-        let backup = dir.join("a-original.jpg");
+        let originals = dir.join(EDIT_ORIGINALS_DIR);
+        std::fs::create_dir_all(&originals).expect("create originals dir");
+        let backup = originals.join("a-original.jpg");
         write_file(&backup);
         sqlx::query(
             "INSERT INTO edit_backups (media_id, original_path, backup_path, size, sha256, created_at) VALUES ('a', ?, ?, 4, NULL, 1)",

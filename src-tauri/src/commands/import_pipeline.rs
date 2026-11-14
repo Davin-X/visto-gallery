@@ -228,8 +228,25 @@ pub(crate) async fn prune_missing_items_from(
     // one transaction so a partial prune cannot leave orphaned album/tag rows.
     const DELETE_CHUNK: usize = 500;
     let mut removed: usize = 0;
+    let mut backup_files: Vec<String> = Vec::new();
     let mut transaction = db.begin().await?;
     for chunk in missing.chunks(DELETE_CHUNK) {
+        // Collect journaled originals before the FK cascade drops their rows;
+        // once the item is gone nothing can restore from them, and a full-size
+        // copy would otherwise sit in app data forever.
+        let mut query =
+            QueryBuilder::<Sqlite>::new("SELECT backup_path FROM edit_backups WHERE media_id IN (");
+        let mut values = query.separated(", ");
+        for id in chunk.iter().copied() {
+            values.push_bind(id);
+        }
+        values.push_unseparated(")");
+        let paths: Vec<String> = query
+            .build_query_scalar()
+            .fetch_all(&mut *transaction)
+            .await?;
+        backup_files.extend(paths);
+
         for table in ["media_tags", "album_items"] {
             let mut query =
                 QueryBuilder::<Sqlite>::new(format!("DELETE FROM {table} WHERE media_id IN ("));
@@ -256,6 +273,7 @@ pub(crate) async fn prune_missing_items_from(
             .rows_affected() as usize;
     }
     transaction.commit().await?;
+    super::media::remove_edit_backup_files(&backup_files);
 
     Ok(removed)
 }

@@ -207,6 +207,12 @@ mod thumbnail_cache_tests {
         .execute(&db)
         .await
         .expect("create album_items");
+        sqlx::query(
+            "CREATE TABLE edit_backups (media_id TEXT PRIMARY KEY, original_path TEXT NOT NULL, backup_path TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT, created_at INTEGER NOT NULL)",
+        )
+        .execute(&db)
+        .await
+        .expect("create edit_backups");
 
         let root =
             std::env::temp_dir().join(format!("visto-gallery-prune-test-{}", Uuid::new_v4()));
@@ -266,6 +272,20 @@ mod thumbnail_cache_tests {
             .execute(&db)
             .await
             .expect("insert album");
+        // ...and a journaled original from an earlier in-place edit.
+        let originals = root.join("edit-originals");
+        fs::create_dir_all(&originals).expect("create originals dir");
+        let journaled = originals.join("deleted-original.jpg");
+        fs::write(&journaled, b"original bytes").unwrap();
+        sqlx::query(
+            "INSERT INTO edit_backups (media_id, original_path, backup_path, size, sha256, created_at) VALUES (?, ?, ?, 14, NULL, 1)",
+        )
+        .bind(&item3.id)
+        .bind(&deleted_path)
+        .bind(journaled.to_string_lossy().into_owned())
+        .execute(&db)
+        .await
+        .expect("insert edit backup");
 
         // Prune with only file1 and file2 in seen_paths
         let mut seen = HashSet::new();
@@ -276,6 +296,10 @@ mod thumbnail_cache_tests {
             .await
             .expect("prune should succeed");
         assert_eq!(removed, 1, "should have removed the deleted file's row");
+        assert!(
+            !journaled.exists(),
+            "the pruned item's journaled original is deleted, not orphaned"
+        );
 
         // Verify item3 is gone from media_items
         let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_items WHERE id = ?")
@@ -325,7 +349,7 @@ mod thumbnail_cache_tests {
             "CREATE TABLE media_tags (media_id TEXT NOT NULL REFERENCES media_items (id) ON DELETE CASCADE, tag_id TEXT NOT NULL, PRIMARY KEY (media_id, tag_id))",
             "CREATE TABLE album_items (media_id TEXT NOT NULL REFERENCES media_items (id) ON DELETE CASCADE, album_id TEXT NOT NULL, PRIMARY KEY (media_id, album_id))",
             "CREATE TABLE edit_recipes (media_id TEXT PRIMARY KEY REFERENCES media_items (id) ON DELETE CASCADE, recipe TEXT, updated_at INTEGER)",
-            "CREATE TABLE edit_backups (media_id TEXT PRIMARY KEY REFERENCES media_items (id) ON DELETE CASCADE, path TEXT, updated_at INTEGER)",
+            "CREATE TABLE edit_backups (media_id TEXT PRIMARY KEY REFERENCES media_items (id) ON DELETE CASCADE, original_path TEXT NOT NULL, backup_path TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT, created_at INTEGER NOT NULL)",
         ] {
             sqlx::query(statement)
                 .execute(&db)

@@ -287,3 +287,21 @@ checkForUpdatesOnLaunch?: boolean,
  */
 maxCacheSizeGB?: number, thumbnailQuality?: number, enableDebugLogging?: boolean, showNativeLimitWarnings?: boolean, };
 
+export type StorageUsage = { 
+/**
+ * Catalog database including its write-ahead log.
+ */
+catalogBytes: number, thumbnailBytes: number, thumbnailFiles: number, playbackBytes: number, playbackFiles: number, 
+/**
+ * Originals saved before in-place edits, kept so edits can be reverted.
+ */
+editOriginalBytes: number, editOriginalFiles: number, };
+
+export type CacheKind = "thumbnails" | "playback";
+
+export type ClearCacheResult = { removedFiles: number, freedBytes: number, 
+/**
+ * Files left in place because they were in use.
+ */
+keptFiles: number, };
+

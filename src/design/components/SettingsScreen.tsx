@@ -132,8 +132,7 @@ export function SettingsScreen(props: {
     }
   }, [loadLibrary, showErrorNotice, showNotice]);
 
-  // Re-scan every registered source through the existing scan path. There is no
-  // thumbnail cache yet, so this is the honest replacement for "Clear Cache".
+  // Re-scan every registered source through the existing scan path.
   const handleRebuildLibrary = useCallback(async () => {
     setRebuilding(true);
     try {

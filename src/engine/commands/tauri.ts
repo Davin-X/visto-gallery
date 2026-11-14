@@ -39,6 +39,9 @@ import type {
   LibraryStats,
   ExternalPlayer,
   PreparedPlayback,
+  StorageUsage,
+  CacheKind,
+  ClearCacheResult,
 } from "../types/commands";
 
 // Type-safe command wrappers
@@ -252,6 +255,14 @@ export const tauri = {
     /** Merge app tags into existing Finder tags without deleting any. */
     mergeTags: (path: string, tags: string[]): Promise<string[]> =>
       invoke("merge_finder_tags", { path, tags }),
+  },
+
+  storage: {
+    /** Bytes used by the catalog, caches and saved edit originals. */
+    usage: (): Promise<StorageUsage> => invoke("get_storage_usage"),
+
+    /** Delete a cache's files; videos that may still be playing are kept. */
+    clear: (kind: CacheKind): Promise<ClearCacheResult> => invoke("clear_cache", { kind }),
   },
 
   settings: {

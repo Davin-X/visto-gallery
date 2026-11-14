@@ -176,6 +176,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // Storage
+            get_storage_usage,
+            clear_cache,
             // Library
             scan_library,
             pick_source_folders,
