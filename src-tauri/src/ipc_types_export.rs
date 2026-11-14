@@ -22,9 +22,9 @@ mod tests {
         LibraryFilterDTO, LibraryFolder, LibraryItemsPage, LibraryStats, MediaProbe,
         PartialSettings, PlaybackStrategy, PreparedPlayback, RenderRequest, RestoreResult,
         RootPathMappingPreview, RootPathMappingResult, ScanResult, SmartAlbum, SmartAlbumFilter,
-        StartupView, StorageUsage, ThumbnailRequest, ThumbnailResponse, ThumbnailSize, TrashError,
-        TrashRestoreFailure, TrashRestoreItem, TrashRestoreResult, TrashResult, UpdateCheck,
-        ViewerZoomBehavior,
+        StartupView, StorageUsage, ThumbnailRequest, ThumbnailResponse, ThumbnailSize,
+        TimelineMonth, TrashError, TrashRestoreFailure, TrashRestoreItem, TrashRestoreResult,
+        TrashResult, UpdateCheck, ViewerZoomBehavior,
     };
     use crate::errors::{CommandError, ErrorCode};
     use crate::media_kind::MediaKind;
@@ -108,6 +108,7 @@ mod tests {
             UpdateCheck,
             AppSettings,
             PartialSettings,
+            TimelineMonth,
             StorageUsage,
             CacheKind,
             ClearCacheResult,

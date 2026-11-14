@@ -633,6 +633,163 @@
   background: var(--surface-2);
 }
 
+/* Jump bar: years one click away, every month in the menu. Sticks to the top
+   of the scroller so it is reachable anywhere in a long Timeline. */
+.gallery-grid.layout-timeline .timeline-jump {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin: 0 -2px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  /* Cover the scroller's top padding so tiles never peek above the bar. */
+  box-shadow: 0 -32px 0 var(--bg);
+}
+
+/* One row, scrolling sideways when a library spans many years. */
+.timeline-jump-years {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.timeline-jump-years::-webkit-scrollbar {
+  display: none;
+}
+
+.timeline-jump-year {
+  flex: none;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.timeline-jump-year:hover,
+.timeline-jump-year:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.timeline-jump-month {
+  flex: none;
+  min-height: 28px;
+  padding: 0 26px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background-color: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.gallery-grid.layout-timeline .timeline-year {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: baseline;
+  gap: 10px;
+  margin: 18px 0 -4px;
+  scroll-margin-top: 56px;
+}
+
+.timeline-year-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+}
+
+.timeline-year-toggle svg,
+.timeline-month-toggle svg {
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.timeline-year-toggle[aria-expanded="false"] svg,
+.timeline-month-toggle[aria-expanded="false"] svg {
+  transform: rotate(-90deg);
+}
+
+.gallery-grid.layout-timeline .timeline-group {
+  scroll-margin-top: 56px;
+}
+
+.gallery-grid.layout-timeline .timeline-month-toggle {
+  padding: 0;
+  cursor: pointer;
+}
+
+.gallery-grid.layout-timeline .timeline-month-toggle:hover,
+.gallery-grid.layout-timeline .timeline-month-toggle:focus-visible {
+  border-color: var(--accent);
+}
+
+/* A folded month keeps a strip of its newest covers. */
+.gallery-grid.layout-timeline .timeline-covers {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.timeline-cover {
+  display: block;
+  width: 72px;
+  height: 54px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-3);
+}
+
+.timeline-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.timeline-cover-more {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-covers:hover .timeline-cover,
+.timeline-covers:focus-visible .timeline-cover {
+  border-color: var(--accent);
+}
+
 .gallery-grid.layout-timeline .timeline-date-marker span {
   width: 7px;
   height: 7px;

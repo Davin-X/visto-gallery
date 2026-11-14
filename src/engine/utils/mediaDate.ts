@@ -61,11 +61,24 @@ export function formatFileDate(ms: number): string {
   return format(ms, DAY, false);
 }
 
-/** Stable year-month key and "July 2026" label for timeline grouping. */
+/**
+ * Stable `YYYY-MM` key and "July 2026" label for timeline grouping. The key
+ * matches the backend's `TIMELINE_MONTH_SQL`, so loaded items line up with
+ * `get_timeline_months`.
+ */
 export function itemMonth(item: DatedItem): { key: string; label: string } {
   const { ms, wallClock } = itemTimestamp(item);
   const date = new Date(ms);
   const year = wallClock ? date.getUTCFullYear() : date.getFullYear();
   const month = wallClock ? date.getUTCMonth() : date.getMonth();
-  return { key: `${year}-${month}`, label: format(ms, MONTH, wallClock) };
+  return {
+    key: `${year}-${String(month + 1).padStart(2, "0")}`,
+    label: format(ms, MONTH, wallClock),
+  };
+}
+
+/** "July 2026" for a `YYYY-MM` timeline key. */
+export function monthLabel(key: string): string {
+  const [year, month] = key.split("-").map(Number);
+  return format(Date.UTC(year, (month || 1) - 1, 15), MONTH, true);
 }

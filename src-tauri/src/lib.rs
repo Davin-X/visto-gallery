@@ -189,6 +189,7 @@ pub fn run() {
             import_files,
             get_library_items,
             get_matching_ids,
+            get_timeline_months,
             get_hidden_items,
             get_hidden_stats,
             get_items_by_ids,

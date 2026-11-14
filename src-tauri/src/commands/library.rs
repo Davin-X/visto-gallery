@@ -585,6 +585,86 @@ fn escape_like(term: &str) -> String {
     out
 }
 
+/// The `YYYY-MM` an item is grouped under in the Timeline, matching the
+/// frontend's `itemMonth`: a capture time is camera wall-clock stored as if it
+/// were UTC, so its month is read in UTC; a modification time is a real instant,
+/// so its month is read in local time.
+pub(crate) const TIMELINE_MONTH_SQL: &str = "(CASE WHEN captured_at IS NOT NULL \
+     THEN strftime('%Y-%m', captured_at / 1000, 'unixepoch') \
+     ELSE strftime('%Y-%m', modified_at / 1000, 'unixepoch', 'localtime') END)";
+
+/// Cover thumbnails shown on a collapsed Timeline month.
+const TIMELINE_COVERS_PER_MONTH: i64 = 4;
+
+/// One Timeline month for the current filter: its real item count, whatever
+/// pages are loaded, and the newest few items as covers.
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineMonth {
+    /// `YYYY-MM`.
+    pub key: String,
+    pub count: i64,
+    pub cover_ids: Vec<String>,
+}
+
+/// Every month that has items under `filter`, newest first.
+#[tauri::command]
+pub async fn get_timeline_months(
+    filter: Option<super::LibraryFilterDTO>,
+    catalog: State<'_, crate::Catalog>,
+) -> Result<Vec<TimelineMonth>, CommandError> {
+    let db = super::get_db(&catalog)?;
+    timeline_months(&db, filter.unwrap_or_default()).await
+}
+
+pub(crate) async fn timeline_months(
+    db: &SqlitePool,
+    mut f: super::LibraryFilterDTO,
+) -> Result<Vec<TimelineMonth>, CommandError> {
+    f.hidden.get_or_insert(false);
+    // Paging and a single-month restriction would describe a slice, not the
+    // whole Timeline.
+    f.limit = None;
+    f.cursor = None;
+    f.month = None;
+
+    let mut counts: QueryBuilder<Sqlite> = QueryBuilder::new("SELECT ");
+    counts
+        .push(TIMELINE_MONTH_SQL)
+        .push(" AS ym, COUNT(*) FROM media_items WHERE 1=1");
+    push_library_filters(&mut counts, &f);
+    counts.push(" GROUP BY ym ORDER BY ym DESC");
+    let rows: Vec<(String, i64)> = counts.build_query_as().fetch_all(db).await?;
+
+    let mut covers: QueryBuilder<Sqlite> = QueryBuilder::new(
+        "SELECT ym, id FROM (SELECT id, ym, ROW_NUMBER() OVER (PARTITION BY ym \
+         ORDER BY ts DESC, id) AS rn FROM (SELECT id, ",
+    );
+    covers
+        .push(TIMELINE_MONTH_SQL)
+        .push(" AS ym, COALESCE(captured_at, modified_at) AS ts FROM media_items WHERE 1=1");
+    push_library_filters(&mut covers, &f);
+    covers
+        .push(")) WHERE rn <= ")
+        .push_bind(TIMELINE_COVERS_PER_MONTH)
+        .push(" ORDER BY ym DESC, rn");
+    let cover_rows: Vec<(String, String)> = covers.build_query_as().fetch_all(db).await?;
+
+    let mut by_month: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    for (month, id) in cover_rows {
+        by_month.entry(month).or_default().push(id);
+    }
+    Ok(rows
+        .into_iter()
+        .map(|(key, count)| TimelineMonth {
+            cover_ids: by_month.remove(&key).unwrap_or_default(),
+            key,
+            count,
+        })
+        .collect())
+}
+
 fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterDTO) {
     if let Some(kind) = &f.kind {
         qb.push(" AND kind = ").push_bind(kind.clone());
@@ -647,6 +727,12 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
     if let Some(to) = f.date_to {
         qb.push(" AND COALESCE(captured_at, modified_at) <= ")
             .push_bind(to);
+    }
+    if let Some(month) = &f.month {
+        qb.push(" AND ")
+            .push(TIMELINE_MONTH_SQL)
+            .push(" = ")
+            .push_bind(month.clone());
     }
     if let Some(source_path) = &f.source_path {
         let prefix = format!("{}/", source_path.trim_end_matches('/'));
@@ -2571,7 +2657,9 @@ mod tag_tests {
 
 #[cfg(test)]
 mod pagination_tests {
-    use super::{cursor_value, get_library_items_page, matching_ids, LibraryCursor};
+    use super::{
+        cursor_value, get_library_items_page, matching_ids, timeline_months, LibraryCursor,
+    };
     use crate::{commands::LibraryFilterDTO, models::MediaItem};
     use sqlx::sqlite::SqlitePoolOptions;
 
@@ -2686,6 +2774,90 @@ mod pagination_tests {
         );
         assert!(!second.has_more);
         assert_eq!(second.total_count, None);
+    }
+
+    #[tokio::test]
+    async fn timeline_months_count_every_matching_item_and_pick_newest_covers() {
+        let db = page_db().await;
+        // Mid-month instants, so the local-time fallback lands in the same
+        // month in every time zone.
+        let mar_10 = 1_741_608_000_000_i64; // 2025-03-10 12:00 UTC
+        let mar_20 = 1_742_472_000_000_i64; // 2025-03-20 12:00 UTC
+        let jan_15 = 1_736_942_400_000_i64; // 2025-01-15 12:00 UTC
+                                            // (id, captured_at, modified_at, hidden, kind)
+        let rows: [(&str, Option<i64>, i64, i32, &str); 8] = [
+            ("m1", Some(mar_20), jan_15, 0, "photo"),
+            ("m2", Some(mar_20 - 1), jan_15, 0, "photo"),
+            ("m3", Some(mar_10), jan_15, 0, "photo"),
+            ("m4", Some(mar_10 - 1), jan_15, 0, "video"),
+            ("m5", None, mar_10 - 2, 0, "photo"),
+            ("j1", None, jan_15, 0, "photo"),
+            ("h1", Some(mar_20 + 1), jan_15, 1, "photo"),
+            ("j2", Some(jan_15 - 1), mar_20, 0, "video"),
+        ];
+        for (id, captured_at, modified_at, hidden, kind) in rows {
+            sqlx::query("INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, created_at, updated_at, hidden) VALUES (?, ?, ?, 'jpg', ?, 1, ?, ?, 1, 1, ?)")
+                .bind(id)
+                .bind(format!("/tmp/{id}.jpg"))
+                .bind(format!("{id}.jpg"))
+                .bind(kind)
+                .bind(modified_at)
+                .bind(captured_at)
+                .bind(hidden)
+                .execute(&db)
+                .await
+                .expect("insert media row");
+        }
+
+        let months = timeline_months(
+            &db,
+            LibraryFilterDTO {
+                // Paging fields must not shrink the Timeline.
+                limit: Some(1),
+                month: Some("2025-01".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("timeline months");
+        let summary: Vec<(&str, i64)> = months.iter().map(|m| (m.key.as_str(), m.count)).collect();
+        assert_eq!(
+            summary,
+            vec![("2025-03", 5), ("2025-01", 2)],
+            "hidden items are left out"
+        );
+        assert_eq!(
+            months[0].cover_ids,
+            vec!["m1", "m2", "m3", "m4"],
+            "newest four"
+        );
+        assert_eq!(months[1].cover_ids, vec!["j1", "j2"]);
+
+        // Filters narrow the months exactly like the library view.
+        let videos = timeline_months(
+            &db,
+            LibraryFilterDTO {
+                kind: Some("video".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("video months");
+        let summary: Vec<(&str, i64)> = videos.iter().map(|m| (m.key.as_str(), m.count)).collect();
+        assert_eq!(summary, vec![("2025-03", 1), ("2025-01", 1)]);
+
+        // Select all on a month: the month filter returns the whole month.
+        let mut ids = matching_ids(
+            &db,
+            LibraryFilterDTO {
+                month: Some("2025-03".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("month ids");
+        ids.sort();
+        assert_eq!(ids, vec!["m1", "m2", "m3", "m4", "m5"]);
     }
 
     #[tokio::test]

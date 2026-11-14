@@ -47,6 +47,7 @@ export type {
   StorageUsage,
   CacheKind,
   ClearCacheResult,
+  TimelineMonth,
 } from "./generated/ipc";
 
 export type { UpdateCheck as UpdateCheckResult } from "./generated/ipc";

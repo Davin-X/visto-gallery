@@ -1,5 +1,11 @@
 /// <reference types="vitest/globals" />
-import { formatCapturedDateTime, formatItemDate, itemMonth, itemTimestamp } from "./mediaDate";
+import {
+  formatCapturedDateTime,
+  formatItemDate,
+  itemMonth,
+  itemTimestamp,
+  monthLabel,
+} from "./mediaDate";
 
 // 2026-07-11 23:30 as recorded by a camera (wall clock, stored as if UTC).
 const LATE_CAPTURE = Date.UTC(2026, 6, 11, 23, 30);
@@ -26,6 +32,11 @@ test("capture date wins over modification date", () => {
 test("timeline months for captures do not shift with the local time zone", () => {
   // Late on the last day of a month must stay in that month.
   const endOfJuly = Date.UTC(2026, 6, 31, 23, 59);
-  expect(itemMonth({ capturedAt: endOfJuly, modifiedAt: 0 }).key).toBe("2026-6");
+  expect(itemMonth({ capturedAt: endOfJuly, modifiedAt: 0 }).key).toBe("2026-07");
   expect(itemMonth({ capturedAt: endOfJuly, modifiedAt: 0 }).label).toMatch(/July 2026/);
+});
+
+test("month labels come from the backend's YYYY-MM keys", () => {
+  expect(monthLabel("2026-07")).toMatch(/July 2026/);
+  expect(monthLabel("2025-01")).toMatch(/January 2025/);
 });

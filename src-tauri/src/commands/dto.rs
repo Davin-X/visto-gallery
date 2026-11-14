@@ -47,6 +47,8 @@ pub struct LibraryFilterDTO {
     pub tags: Option<Vec<String>>,
     pub date_from: Option<i64>,
     pub date_to: Option<i64>,
+    /// `YYYY-MM`: only items in that Timeline month (see `TIMELINE_MONTH_SQL`).
+    pub month: Option<String>,
     pub source_path: Option<String>,
     pub rating: Option<i32>,
     pub color_label: Option<String>,

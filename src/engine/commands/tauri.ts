@@ -42,6 +42,7 @@ import type {
   StorageUsage,
   CacheKind,
   ClearCacheResult,
+  TimelineMonth,
 } from "../types/commands";
 
 // Type-safe command wrappers
@@ -65,6 +66,10 @@ export const tauri = {
 
     getMatchingIds: (filter?: LibraryFilterDTO): Promise<string[]> =>
       invoke("get_matching_ids", { filter }),
+
+    /** Every Timeline month under `filter`, newest first, with real counts. */
+    getTimelineMonths: (filter?: LibraryFilterDTO): Promise<TimelineMonth[]> =>
+      invoke("get_timeline_months", { filter }),
 
     getHiddenItems: (filter?: LibraryFilterDTO): Promise<LibraryItemsPage> =>
       invoke("get_hidden_items", { filter }),
