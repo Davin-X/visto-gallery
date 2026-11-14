@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **Pinch to zoom in the viewer**: pinch on a trackpad or ⌘-scroll to zoom into the point under your fingers or pointer, up to 800%, and two-finger scroll to move around a zoomed photo. The +/− buttons and ↑/↓ keys step more finely (…, 75%, 100%, 125%, 150%, …).
 - **Timeline by month**: every month shows its real item count from the catalog, however far you have scrolled, and **Select all** on a month selects the whole month. Months and years fold to a strip of covers (older years start folded; Option-click folds or unfolds everything), and the choice is remembered. A bar at the top jumps to any year in one click, or to any month from its menu. The Timeline always sorts by date, newest first.
 - **Storage in Settings → Advanced**: see how much space thumbnails, converted videos, the catalog and edit originals take, and clear the thumbnail or converted-video cache. Videos used in the last three hours are kept so nothing stops mid-play.
 
@@ -14,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The **Maximum cache size** setting now also limits the converted-video cache (it was a fixed 4 GB).
 
 ### Fixed
+- A zoomed photo that still fit the stage sideways could be dragged off-centre, showing an empty band. Panning now follows the photo's fitted size, so it stays centred until it overflows.
 - Scrolling a large library could hold gigabytes of thumbnails in memory, because the in-memory cache used the disk budget (5 GB by default). It is now capped at 192 MB.
 - When a scan dropped an item whose file was deleted or moved outside VistoGallery, the original saved before an in-place edit stayed in app data forever. It is now deleted with the item.
 - The thumbnail and converted-video caches evicted the oldest file written, even if you used it every day. Using a cached file now marks it as recent, and a video that may still be playing is never evicted.

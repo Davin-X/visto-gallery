@@ -27,6 +27,14 @@ import { formatDuration } from "../engine/utils/time";
 import { draftImageStyle } from "../engine/utils/draftImage";
 import type { MediaItem } from "../engine/types/media";
 import { formatItemDate } from "../engine/utils/mediaDate";
+import {
+  anchoredPan,
+  clampPan,
+  clampZoom,
+  fittedSize,
+  stepZoom,
+  wheelZoomFactor,
+} from "../engine/utils/zoom";
 
 interface ViewerScreenProps {
   active: boolean;
@@ -182,20 +190,124 @@ function ViewerScreen(props: ViewerScreenProps) {
     setPanning(false);
   }, [selected?.id]);
 
+  // The photo's displayed aspect (after rotation) when it is fitted, so pan
+  // limits follow the photo rather than the letterboxed stage box. "Actual"
+  // and "fill" sizes are not letterboxed by the same rule; they use the box.
+  const fittedAspect =
+    props.fitMode === "fit" && selected?.width && selected?.height
+      ? imageRotation % 180
+        ? selected.height / selected.width
+        : selected.width / selected.height
+      : null;
+  const fittedAspectRef = useRef(fittedAspect);
+  fittedAspectRef.current = fittedAspect;
+  const clampPanTo = useCallback((next: { x: number; y: number }, zoom: number) => {
+    const stage = stageRef.current;
+    if (!stage) return next;
+    const rect = stage.getBoundingClientRect();
+    return clampPan(next, zoom, rect, fittedSize(rect, fittedAspectRef.current));
+  }, []);
+
   // Whenever zoom changes, clamp the current pan back inside the new image
   // box so the photo never gets stranded off-stage.
   useEffect(() => {
+    setPan((current) => clampPanTo(current, props.zoom));
+  }, [props.zoom, props.fitMode, fittedAspect, clampPanTo]);
+
+  // Trackpad pinch, Ctrl/⌘-scroll and two-finger panning. The listeners are
+  // native and non-passive so they can stop the web view from scrolling or
+  // magnifying itself; refs keep them current without re-registering.
+  const zoomRef = useRef(props.zoom);
+  zoomRef.current = props.zoom;
+  const panRef = useRef(pan);
+  panRef.current = pan;
+  const setZoomRef = useRef(props.onSetZoom);
+  setZoomRef.current = props.onSetZoom;
+  const zoomable = selected?.kind === "photo" || selected?.kind === "raw";
+  useEffect(() => {
     const stage = stageRef.current;
-    if (!stage) return;
-    const scale = props.zoom / 100;
-    const rect = stage.getBoundingClientRect();
-    const limitX = Math.max(0, ((scale - 1) * rect.width) / 2);
-    const limitY = Math.max(0, ((scale - 1) * rect.height) / 2);
-    setPan((current) => ({
-      x: Math.min(limitX, Math.max(-limitX, current.x)),
-      y: Math.min(limitY, Math.max(-limitY, current.y)),
-    }));
-  }, [props.zoom, props.fitMode]);
+    if (!stage || !zoomable) return;
+    let settleTimer: number | undefined;
+    // Transforms animate for buttons and keys, but follow a gesture directly.
+    const gesturing = () => {
+      setPanning(true);
+      window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(() => setPanning(false), 160);
+    };
+    const zoomAt = (target: number, clientX: number, clientY: number) => {
+      const rect = stage.getBoundingClientRect();
+      const from = zoomRef.current;
+      const to = clampZoom(target);
+      if (Math.abs(to - from) < 0.01) return;
+      const anchor = {
+        x: clientX - (rect.left + rect.width / 2),
+        y: clientY - (rect.top + rect.height / 2),
+      };
+      const next =
+        to <= 100 ? { x: 0, y: 0 } : clampPanTo(anchoredPan(panRef.current, anchor, from, to), to);
+      zoomRef.current = to;
+      panRef.current = next;
+      setPan(next);
+      setZoomRef.current(to);
+    };
+
+    // WebKit reports a trackpad pinch as gesture events with a running scale.
+    let pinchBase: number | null = null;
+    type GestureEventLike = Event & { scale: number; clientX: number; clientY: number };
+    const onGestureStart = (event: Event) => {
+      event.preventDefault();
+      pinchBase = zoomRef.current;
+    };
+    const onGestureChange = (event: Event) => {
+      event.preventDefault();
+      if (pinchBase === null) return;
+      const gesture = event as GestureEventLike;
+      gesturing();
+      zoomAt(pinchBase * gesture.scale, gesture.clientX, gesture.clientY);
+    };
+    const onGestureEnd = (event: Event) => {
+      event.preventDefault();
+      pinchBase = null;
+    };
+
+    const onWheel = (event: WheelEvent) => {
+      // Chromium reports a pinch as Ctrl+wheel; ⌘-scroll zooms with a mouse.
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        if (pinchBase !== null) return;
+        gesturing();
+        zoomAt(
+          zoomRef.current * wheelZoomFactor(event.deltaY, event.deltaMode),
+          event.clientX,
+          event.clientY,
+        );
+        return;
+      }
+      // Two-finger scroll moves around a zoomed photo.
+      if (zoomRef.current > 100) {
+        event.preventDefault();
+        gesturing();
+        const next = clampPanTo(
+          { x: panRef.current.x - event.deltaX, y: panRef.current.y - event.deltaY },
+          zoomRef.current,
+        );
+        panRef.current = next;
+        setPan(next);
+      }
+    };
+
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    stage.addEventListener("gesturestart", onGestureStart);
+    stage.addEventListener("gesturechange", onGestureChange);
+    stage.addEventListener("gestureend", onGestureEnd);
+    return () => {
+      window.clearTimeout(settleTimer);
+      stage.removeEventListener("wheel", onWheel);
+      stage.removeEventListener("gesturestart", onGestureStart);
+      stage.removeEventListener("gesturechange", onGestureChange);
+      stage.removeEventListener("gestureend", onGestureEnd);
+    };
+  }, [zoomable, selected?.id, clampPanTo]);
 
   const handleStagePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (props.zoom <= 100 || !selected) return;
@@ -219,14 +331,7 @@ function ViewerScreen(props: ViewerScreenProps) {
     if (!stage) return;
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
-    const scale = props.zoom / 100;
-    const rect = stage.getBoundingClientRect();
-    const limitX = Math.max(0, ((scale - 1) * rect.width) / 2);
-    const limitY = Math.max(0, ((scale - 1) * rect.height) / 2);
-    setPan({
-      x: Math.min(limitX, Math.max(-limitX, drag.originX + dx)),
-      y: Math.min(limitY, Math.max(-limitY, drag.originY + dy)),
-    });
+    setPan(clampPanTo({ x: drag.originX + dx, y: drag.originY + dy }, props.zoom));
   };
 
   const handleStagePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -351,13 +456,13 @@ function ViewerScreen(props: ViewerScreenProps) {
         case "ArrowUp":
           if (selected.kind === "photo" || selected.kind === "raw") {
             e.preventDefault();
-            props.onSetZoom(Math.min(300, props.zoom + 25));
+            props.onSetZoom(stepZoom(props.zoom, 1));
           }
           break;
         case "ArrowDown":
           if (selected.kind === "photo" || selected.kind === "raw") {
             e.preventDefault();
-            props.onSetZoom(Math.max(25, props.zoom - 25));
+            props.onSetZoom(stepZoom(props.zoom, -1));
           }
           break;
         case "r":
@@ -786,7 +891,7 @@ function ViewerScreen(props: ViewerScreenProps) {
                     between the two controls that change it. */}
                 <button
                   type="button"
-                  onClick={() => props.onSetZoom(Math.max(25, props.zoom - 25))}
+                  onClick={() => props.onSetZoom(stepZoom(props.zoom, -1))}
                   aria-label="Zoom out"
                   title="Zoom out (↓)"
                 >
@@ -799,11 +904,11 @@ function ViewerScreen(props: ViewerScreenProps) {
                   aria-label="Reset zoom"
                   title="Reset zoom"
                 >
-                  {props.zoom}%
+                  {Math.round(props.zoom)}%
                 </button>
                 <button
                   type="button"
-                  onClick={() => props.onSetZoom(Math.min(300, props.zoom + 25))}
+                  onClick={() => props.onSetZoom(stepZoom(props.zoom, 1))}
                   aria-label="Zoom in"
                   title="Zoom in (↑)"
                 >
