@@ -2,7 +2,9 @@
    A context-scoped mode launched from Library, an album or the Viewer — not a
    navigation destination. The stage stays dark in both themes so photos read
    the same way, and the HUD fades out while the show plays.
-   Top offset clears the 56px app topbar (which hosts macOS traffic lights). */
+   While the show is open the app frame is marked `slideshow-open`: the top bar
+   hides and the stage starts at the very top of the window, so no app chrome
+   sits above the photo. Only the native macOS traffic lights remain. */
 .slideshow-overlay:focus {
   outline: none;
 }
@@ -32,6 +34,24 @@
 
 .slideshow-overlay.hud-visible .slideshow-media {
   cursor: default;
+}
+
+/* Immersive mode: the top bar is chrome, not content, so it steps aside and
+   the stage starts at the window's top edge. visibility keeps the frame's
+   layout unchanged, so closing the show does not reflow the library. */
+.app-frame.slideshow-open .topbar {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.app-frame.slideshow-open .slideshow-overlay {
+  top: 0;
+}
+
+/* The native traffic lights sit in the top-left at every window size; nudge
+   the position pill past them now that the top bar no longer does it. */
+.app-frame.slideshow-open .slideshow-position {
+  left: 96px;
 }
 
 .slideshow-media img,
@@ -207,6 +227,13 @@
   min-width: 0;
   max-width: 400px;
   text-align: center;
+}
+
+/* `align-items: center` gives each line its max-content width, so a long
+   filename used to spill out of the caption and over the right-hand controls.
+   Clamp both lines to the caption's width; the name then ellipsizes. */
+.slideshow-caption > div {
+  max-width: 100%;
 }
 
 .slideshow-caption > div:first-child {
@@ -388,4 +415,3 @@
   font-size: 12px;
   font-weight: 600;
 }
-
