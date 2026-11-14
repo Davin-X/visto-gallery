@@ -158,11 +158,14 @@ function App() {
   // Apply the saved library layout once settings are ready, and whenever the
   // user returns to the whole library. Avoid changing the current view while
   // they are actively browsing it.
+  // The store object is a fresh value on every render, so the effect depends on
+  // the two members it actually uses rather than on the object itself.
+  const { activeAlbum: libraryActiveAlbum, setLayout: setLibraryLayout } = library;
   useEffect(() => {
-    if (settingsHydrated && screen === "Library" && !library.activeAlbum) {
-      library.setLayout(defaultLayout);
+    if (settingsHydrated && screen === "Library" && !libraryActiveAlbum) {
+      setLibraryLayout(defaultLayout);
     }
-  }, [settingsHydrated, screen, defaultLayout, library.activeAlbum, library.setLayout]);
+  }, [settingsHydrated, screen, defaultLayout, libraryActiveAlbum, setLibraryLayout]);
 
   // ── Background services ──────────────────────────────────────────────────
   const { libraryStats, refreshLibraryStats } = useLibraryStats(showNotice);
@@ -200,17 +203,24 @@ function App() {
   const photoViewerHasMore = library.hasMore && library.viewerScope === "library";
   const loadMorePhotos = useCallback(() => useLibraryStore.getState().loadNextPage(), []);
 
+  // Same reason as the layout effect: depend on the members, not the object.
+  const {
+    isOpen: viewerIsOpen,
+    open: openViewerStore,
+    resetTransform: resetViewerTransform,
+  } = viewer;
+
   // Ensure screen state matches viewer state on mount/hydration.
   useEffect(() => {
-    if (screen === "Viewer" && !viewer.isOpen) viewer.open();
-  }, [screen, viewer.isOpen, viewer.open]);
+    if (screen === "Viewer" && !viewerIsOpen) openViewerStore();
+  }, [screen, viewerIsOpen, openViewerStore]);
 
   const navigateViewer = useCallback(
     async (delta: number) => {
       const navigated = await useLibraryStore.getState().navigateViewerPhoto(delta);
-      if (navigated) viewer.resetTransform();
+      if (navigated) resetViewerTransform();
     },
-    [viewer.resetTransform],
+    [resetViewerTransform],
   );
 
   const selectViewerItem = useCallback((id: string) => {

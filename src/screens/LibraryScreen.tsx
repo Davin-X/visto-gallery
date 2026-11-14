@@ -1,13 +1,5 @@
 import type { CSSProperties, RefObject } from "react";
-import React, {
-  useState,
-  useMemo,
-  useEffect,
-  useLayoutEffect,
-  useCallback,
-  useRef,
-  useDeferredValue,
-} from "react";
+import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
 import {
   AlbumsIcon,
@@ -789,6 +781,8 @@ function LibraryScreen(props: LibraryScreenProps) {
     }
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 800) loadMore();
   };
+  // Destructuring keeps the callback's dependency list to the one prop it uses.
+  const { onInspectItem } = props;
   const handleGridKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       const rawTarget = (e.target as HTMLElement) || (document.activeElement as HTMLElement);
@@ -821,9 +815,9 @@ function LibraryScreen(props: LibraryScreenProps) {
       const nextButton = buttons[nextIndex];
       nextButton.focus();
       const itemId = nextButton.getAttribute("data-item-id");
-      if (itemId) props.onInspectItem?.(itemId);
+      if (itemId) onInspectItem?.(itemId);
     },
-    [props.onInspectItem],
+    [onInspectItem],
   );
 
   // Grid arrow-key navigation shares the single window listener via useKeyboard.
@@ -897,7 +891,13 @@ function LibraryScreen(props: LibraryScreenProps) {
     if (height && (measuredTileHeight === null || Math.abs(measuredTileHeight - height) > 1)) {
       setMeasuredTileHeight(height);
     }
-  }, [props.layout, thumbnailSize, gridViewport.width, supportsGridVirtualization]);
+  }, [
+    props.layout,
+    thumbnailSize,
+    gridViewport.width,
+    supportsGridVirtualization,
+    measuredTileHeight,
+  ]);
   const selectedIdSet = useMemo(() => new Set(props.selectedIds), [props.selectedIds]);
 
   // Timeline groups use the photo's capture date when available, with file
@@ -1037,7 +1037,7 @@ function LibraryScreen(props: LibraryScreenProps) {
   const itemContextMenu = (item: MediaItem) =>
     buildItemContextMenu(item, {
       onOpen: (id) => props.onOpenViewer(id),
-      onPlayBackground: props.onPlayBackground ? (id) => toggleBackground(item) : undefined,
+      onPlayBackground: props.onPlayBackground ? () => toggleBackground(item) : undefined,
       onEdit: (target) => props.onOpenEdit?.(target),
       onCopyTagsToFinder: (ids) => props.onCopyTagsToFinder?.(ids),
       onOpenAlbumPicker: (ids) => props.onOpenAlbumPicker?.(ids),

@@ -9,8 +9,6 @@ import {
   makeMediaItem,
   makeTag,
 } from "./fixtures";
-import type { MediaItem } from "../engine/types/media";
-import type { LibraryStats } from "../engine/types/commands";
 
 describe("makeMediaItem", () => {
   it("returns a full MediaItem with sensible defaults", () => {

@@ -659,6 +659,11 @@ function VideoPlayer({
     };
     // `failed` is a dependency because the guards below short-circuit on it;
     // reading it from an older render made them permanently false.
+    // `itemId` is deliberately omitted: re-running this setup when the queue
+    // advances to the next video with the same resolved source throws away the
+    // duration and loop state that is already correct. The queue-advance test
+    // in VideoPlayer.test.tsx covers it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedSrc, syncPlayback, failed]);
 
   useEffect(() => {

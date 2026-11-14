@@ -162,7 +162,7 @@ export function useVideoQueue() {
         pagingRef.current = libraryPaging();
       }
     }
-  }, [playbackItemId, viewerItems, videoQueue, backgroundVideo]);
+  }, [playbackItemId, viewerItems, videoQueue, backgroundVideo, queueAutoPlayId]);
 
   useEffect(() => {
     if (queueAutoPlayId && playbackItemId === queueAutoPlayId && playing) {

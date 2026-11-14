@@ -436,7 +436,6 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     const expanded = expandedGroups.has(group.sha256);
     const visible = expanded ? view.ordered : view.ordered.slice(0, INLINE_COPIES);
     const hiddenCount = view.ordered.length - visible.length;
-    const stackItems = view.ordered.slice(0, 3);
     const copyIds = view.copies.map((item) => item.id);
     const allCopiesSelected = copyIds.length > 0 && copyIds.every((id) => selected.has(id));
     const groupFullySelected = view.ordered.every((item) => selected.has(item.id));

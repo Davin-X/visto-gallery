@@ -640,7 +640,6 @@ function EditScreen(props: EditScreenProps) {
   const fallbackH = 3;
   const effectiveWidth = isRotatedSideways ? rawHeight || fallbackH : rawWidth || fallbackW;
   const effectiveHeight = isRotatedSideways ? rawWidth || fallbackW : rawHeight || fallbackH;
-  const photoAspectRatio = effectiveWidth / effectiveHeight;
 
   // Accurately fit the stage container within the measured viewport
   const fittedStageSize = useMemo(() => {

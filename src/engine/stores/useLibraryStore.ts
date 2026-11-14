@@ -5,7 +5,6 @@ import type {
   MediaItem,
   Album,
   Tag,
-  ImportSession,
   LibraryFilter,
   DuplicateGroup,
   Filter,
@@ -25,7 +24,6 @@ import type {
 import { describeError } from "../../app/utils/describeError";
 import { errorCode } from "../types/errors";
 import { tauri } from "../commands/tauri";
-import { formatBytes } from "../commands/tauri";
 import { debugLog } from "./useSettingsStore";
 
 /** Mirror the server's `ORDER BY name COLLATE NOCASE` so a newly created or
@@ -659,6 +657,7 @@ export const useLibraryStore = create<LibraryState>()(
             ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
           if (!isTauri) {
             if (import.meta.env.DEV)
+              // eslint-disable-next-line no-console
               console.warn("Tauri IPC is not available in browser preview mode.");
             set({ refreshingLibrary: false, loadedViewKey: viewKey });
             get().refreshDerived();
@@ -1332,6 +1331,7 @@ export const useLibraryStore = create<LibraryState>()(
         try {
           await tauri.items.setRating(id, rating);
         } catch (error) {
+          // eslint-disable-next-line no-console
           console.error(`Failed to set rating for ${id}:`, error);
           set((s) => ({
             items: s.items.map((i) => (i.id === id ? { ...prev } : i)),
@@ -1351,6 +1351,7 @@ export const useLibraryStore = create<LibraryState>()(
         try {
           await tauri.items.setColorLabel(id, colorLabel);
         } catch (error) {
+          // eslint-disable-next-line no-console
           console.error(`Failed to set color label for ${id}:`, error);
           set((s) => ({
             items: s.items.map((i) => (i.id === id ? { ...prev } : i)),
@@ -1370,6 +1371,7 @@ export const useLibraryStore = create<LibraryState>()(
         try {
           await Promise.all(targets.map((i) => tauri.items.setRating(i.id, rating)));
         } catch (error) {
+          // eslint-disable-next-line no-console
           console.error(`Failed to set rating for ${ids.length} items:`, error);
           set((s) => ({
             items: s.items.map((i) => (ids.includes(i.id) ? { ...prevs.get(i.id)! } : i)),
@@ -1391,6 +1393,7 @@ export const useLibraryStore = create<LibraryState>()(
         try {
           await Promise.all(targets.map((i) => tauri.items.setColorLabel(i.id, colorLabel)));
         } catch (error) {
+          // eslint-disable-next-line no-console
           console.error(`Failed to set color label for ${ids.length} items:`, error);
           set((s) => ({
             items: s.items.map((i) => (ids.includes(i.id) ? { ...prevs.get(i.id)! } : i)),

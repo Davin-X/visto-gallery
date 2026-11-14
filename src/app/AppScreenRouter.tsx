@@ -486,6 +486,7 @@ export function AppScreenRouter({
               .catch((error) => {
                 // Dismissing the native folder dialog is not an error.
                 if (errorCode(error) !== "cancelled") {
+                  // eslint-disable-next-line no-console
                   console.error("Could not choose an export folder", error);
                 }
               });

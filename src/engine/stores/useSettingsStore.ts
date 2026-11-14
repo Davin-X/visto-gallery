@@ -385,7 +385,7 @@ export function useSystemDark(): boolean {
 // Listen for system theme changes so a "system" choice follows the OS.
 if (typeof window !== "undefined") {
   const osThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
-  const osThemeHandler = (e: MediaQueryListEvent) => {
+  const osThemeHandler = () => {
     const settings = useSettingsStore.getState();
     if (settings.appearance === "system") {
       applyTheme(settings);
@@ -420,5 +420,6 @@ export function shouldLogDebug(debugEnabled: boolean): boolean {
 export function debugLog(...args: unknown[]): void {
   if (typeof window === "undefined") return;
   if (!shouldLogDebug(useSettingsStore.getState().enableDebugLogging)) return;
+  // eslint-disable-next-line no-console
   console.debug("[VistoGallery]", ...args);
 }
