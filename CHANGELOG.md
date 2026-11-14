@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The **Maximum cache size** setting now also limits the converted-video cache (it was a fixed 4 GB).
 
 ### Fixed
+- Thumbnails of hidden items were kept unencrypted in the app's cache folder, readable by anyone browsing it even with Hidden locked. They are now rendered for display only and never stored; hiding an item deletes its cached thumbnails and converted video, and a sweep at launch clears any already there.
 - A zoomed photo that still fit the stage sideways could be dragged off-centre, showing an empty band. Panning now follows the photo's fitted size, so it stays centred until it overflows.
 - Scrolling a large library could hold gigabytes of thumbnails in memory, because the in-memory cache used the disk budget (5 GB by default). It is now capped at 192 MB.
 - When a scan dropped an item whose file was deleted or moved outside VistoGallery, the original saved before an in-place edit stayed in app data forever. It is now deleted with the item.

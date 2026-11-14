@@ -16,7 +16,7 @@ mod roots;
 mod scan_jobs;
 mod settings;
 mod smart_albums;
-mod storage;
+pub(crate) mod storage;
 mod system;
 mod temp_files;
 mod update;

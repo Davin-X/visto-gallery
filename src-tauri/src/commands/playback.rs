@@ -378,6 +378,22 @@ fn prune_cache(root: &Path, max_bytes: u64) {
     }
 }
 
+/// Delete the converted copy of `source`, if one is cached. Used when an item
+/// is hidden, so its video does not stay readable in the cache folder.
+pub(crate) fn remove_cached_remux(cache_root: &Path, source: &Path) -> bool {
+    let Ok(metadata) = std::fs::metadata(source) else {
+        return false;
+    };
+    let modified_ms = metadata
+        .modified()
+        .ok()
+        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|elapsed| elapsed.as_millis())
+        .unwrap_or(0);
+    let key = cache_key(source, metadata.len(), modified_ms);
+    std::fs::remove_file(cache_root.join(format!("{key}.mp4"))).is_ok()
+}
+
 /// Cache identity: the source plus everything that changes its bytes.
 fn cache_key(source: &Path, length: u64, modified_ms: u128) -> String {
     let identity = format!(

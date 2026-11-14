@@ -1022,13 +1022,15 @@ pub async fn get_item_thumbnail(
     }
 
     let db = super::get_db(&catalog)?;
-    let item = sqlx::query_as::<_, (String, String, i64, i64)>(
-        "SELECT path, kind, modified_at, size FROM media_items WHERE id = ?",
-    )
-    .bind(&request.item_id)
-    .fetch_optional(&db)
-    .await?
-    .ok_or_else(|| "Item not found in library".to_string())?;
+    let (path, kind, modified_at, size, hidden) =
+        sqlx::query_as::<_, (String, String, i64, i64, i64)>(
+            "SELECT path, kind, modified_at, size, hidden FROM media_items WHERE id = ?",
+        )
+        .bind(&request.item_id)
+        .fetch_optional(&db)
+        .await?
+        .ok_or_else(|| "Item not found in library".to_string())?;
+    let item = (path, kind, modified_at, size);
 
     let quality = request.quality.unwrap_or(78).clamp(1, 100);
     let max_cache_bytes = request.max_cache_bytes.unwrap_or(512 * 1024 * 1024);
@@ -1047,7 +1049,30 @@ pub async fn get_item_thumbnail(
         quality,
     );
     let digest = ring::digest::digest(&ring::digest::SHA256, cache_key.as_bytes());
-    let cache_path = cache_root.join(format!("{}.jpg", hex::encode(digest.as_ref())));
+    let cache_path = cache_root.join(super::storage::thumbnail_file_name(
+        &request.item_id,
+        &hex::encode(digest.as_ref()),
+    ));
+
+    // A hidden item's thumbnail is rendered for this response only and never
+    // kept in the cache folder, where anyone could browse it.
+    if hidden != 0 {
+        let item_id = request.item_id.clone();
+        let size = request.size;
+        let rendered = tokio::task::spawn_blocking(move || {
+            super::storage::remove_item_thumbnails(&cache_root, &item_id);
+            render_uncached_thumbnail(&item.0, size, item.3, quality, &item.1)
+        })
+        .await
+        .map_err(|error| CommandError::internal(format!("Thumbnail worker failed: {error}")))??;
+        let (bytes, width, height) = rendered;
+        return Ok(ThumbnailResponse {
+            item_id: request.item_id,
+            data_url: format!("data:image/jpeg;base64,{}", BASE64.encode(bytes)),
+            width,
+            height,
+        });
+    }
 
     // A cache hit reads the file once and takes its dimensions from the bytes
     // already in memory; a miss reuses the bytes the generator just wrote.
@@ -1089,6 +1114,28 @@ pub async fn get_item_thumbnail(
         width,
         height,
     })
+}
+
+/// Render a thumbnail without keeping it: the generators write a file, so it
+/// goes to a private per-user temp folder and is deleted as soon as it is read.
+fn render_uncached_thumbnail(
+    source: &str,
+    size: u32,
+    source_size: i64,
+    quality: u8,
+    kind: &str,
+) -> Result<(Vec<u8>, u32, u32), CommandError> {
+    let scratch = std::env::temp_dir().join("visto-uncached-thumbnails");
+    std::fs::create_dir_all(&scratch)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&scratch, std::fs::Permissions::from_mode(0o700));
+    }
+    let target = scratch.join(format!("{}.jpg", Uuid::new_v4()));
+    let result = generate_cached_thumbnail(source, &target, size, source_size, quality, kind);
+    let _ = std::fs::remove_file(&target);
+    result
 }
 
 /// Cache identity must include every input that changes the rendered image.
@@ -2307,6 +2354,27 @@ pub async fn toggle_hidden(
     .execute(&db)
     .await?
     .rows_affected();
+    // A newly hidden item must not stay readable in the cache folder.
+    if hidden && changed > 0 {
+        let row: Option<(String,)> = sqlx::query_as("SELECT path FROM media_items WHERE id = ?")
+            .bind(&item_id)
+            .fetch_optional(&db)
+            .await?;
+        if let (Some((path,)), Ok(cache)) = (row, app.path().app_cache_dir()) {
+            let id = item_id.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                super::storage::remove_item_thumbnails(
+                    &cache.join(super::storage::THUMBNAILS_DIR),
+                    &id,
+                );
+                super::playback::remove_cached_remux(
+                    &cache.join(super::storage::PLAYBACK_DIR),
+                    std::path::Path::new(&path),
+                );
+            })
+            .await;
+        }
+    }
     // Hiding changes every catalog-wide count (the stats query ignores hidden
     // rows), so refresh them here rather than waiting for the next scan.
     if changed > 0 {
