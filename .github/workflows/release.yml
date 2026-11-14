@@ -174,11 +174,26 @@ jobs:
             echo "::error::CHANGELOG.md has no section for $version"
             exit 1
           fi
-          cat >> "$notes" <<'EOF'
+          # Describe what this build actually ships: an ad-hoc signed app needs
+          # the Gatekeeper workaround, and the GPG step is skipped without a key.
+          if [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
+            cat >> "$notes" <<'EOF'
 
-          ### Verifying this release
+          ### Opening the app
 
-          See [docs/VERIFYING_RELEASES.md](https://github.com/Davin-X/visto-gallery/blob/main/docs/VERIFYING_RELEASES.md) for the checksums, the GPG fingerprint, and the provenance check.
+          This build is not notarized yet, so macOS blocks it the first time. Right-click VistoGallery in Applications, choose **Open**, then **Open** again, or run `xattr -dr com.apple.quarantine /Applications/VistoGallery.app`. See [Gatekeeper](https://github.com/Davin-X/visto-gallery#macos-gatekeeper-unsigned-build) in the README.
           EOF
+          fi
+          if ls release-assets/*.asc >/dev/null 2>&1; then
+            verify="the checksums, the GPG signature, and the provenance check"
+          else
+            verify="the checksums and the provenance check (this build has no GPG signature)"
+          fi
+          {
+            echo
+            echo "### Verifying this release"
+            echo
+            echo "See [docs/VERIFYING_RELEASES.md](https://github.com/Davin-X/visto-gallery/blob/main/docs/VERIFYING_RELEASES.md) for $verify."
+          } >> "$notes"
           gh release create "$tag" --verify-tag --title "VistoGallery $version" --notes-file "$notes" release-assets/* \
             || gh release upload "$tag" release-assets/* --clobber

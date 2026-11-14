@@ -12,11 +12,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Animations filter**: a new `Animations` type chip in the library shows items the catalog treats as animated content. It is a filter over a new `is_animated` catalog flag, not a new media kind — animated items are still `photo`, so Photos counts, the viewer, compare, and edit open them exactly as before.
 - **Content-based animation detection**: `is_animated` is decided by reading container headers, never by filename and never by decoding pixels — GIF block walk (a second image descriptor), WebP `VP8X` animation flag / `ANIM` chunk, PNG `acTL` before the first `IDAT` (APNG), and `avis`/`msf1` brands in an AVIF/HEIF `ftyp` box. A still GIF is therefore *not* animated, while an animated WebP/APNG/AVIF *is*.
 - Catalog migration `008_add_is_animated` adds `media_items.is_animated` (default 0) and seeds existing `.gif` rows; a one-time `backfill_animation_flags` startup pass then probes every candidate row so upgraded libraries get the real answer, not the filename guess.
+- **In-app playback for more videos**: VistoGallery ships its own `ffmpeg`/`ffprobe`. Each video is probed first; containers WebKit can't open (such as MKV, or HEVC tagged `hev1`) are remuxed losslessly into a playback cache, and audio is converted to AAC only when needed. Anything that still can't play offers an external player. Video posters fall back to `ffmpeg` when QuickLook can't decode them.
+- **One right-click menu everywhere**: the grid, Hidden, the photo viewer and the video player share the same item menu (rating, colour label, albums, hide, move to Trash). Right-clicking inside a selection acts on every selected item and says how many.
+- **Viewer filmstrip, drag-to-pan and shortcuts**: the viewer has a filmstrip that pages through the library, zoomed photos pan by dragging, and the viewer and player gain keyboard shortcuts (`Space`/`J`/`K`/`L`, `↑`/`↓` zoom, `R` rotate, `X` flip, `0` reset). RAW files show previews in the grid, compare and viewer.
+- **Duplicates**: the compare view shows only the fields that differ, deleting copies shows a summary first, and the notice offers **Undo** to bring trashed copies back.
+- **Albums**: create and edit Smart Albums from the Albums screen, reorder albums by dragging or with Move earlier/later, switch to a table list view, and see when each album was last updated.
+- **Back and Forward** that remember where you were, including the album you had open: the sidebar's Back button, `⌘[` / `⌘]`, and a mouse's back/forward buttons.
+- **Locate… a missing source**: a source folder that moved or was renamed can be pointed at its new location, and every item keeps its albums, tags and edits.
+- **Inspector**: a Location row shows the folder (click it to show the file in Finder), and GPS coordinates open Apple Maps.
+- Resizable sidebar and Inspector, and each library view remembers its scroll position.
+- Hidden is filtered on the server like the library, and the Inspector shows why an item is hidden.
 
 ### Changed
 - The Inspector starts closed and remembers your choice, so the grid gets the whole window until you open it (⌘⌥I or the toolbar button).
 - Batch exports keep capture date, EXIF, camera and GPS data by default; "Strip metadata" is now the opt-in.
 - A slideshow hides the top bar and fills the window, and long filenames ellipsize instead of running over the controls.
+- **Move to Trash, not Delete**: menus and dialogs say "Move to Trash…" for anything that goes to the Trash, the confirmation names the files ("“a.jpg”, “b.jpg” and 10 more"), and Finder actions are called "Show in Finder" everywhere. "Delete Library Database…" is now **Reset Library…**, and says your files stay on disk.
+- Right-click menus are sized and highlighted like native macOS menus; dialogs share one set of widths; the Filters panel and other popovers take keyboard focus when they open.
+- The Viewer is no longer a sidebar destination; it opens from what you select or double-click.
+- Settings confirm destructive actions by typing a word.
+- The appearance and accent controls are back in the top bar, and the app has a new icon.
+- Large duplicate cleanups move files to the Trash 200 at a time instead of 50, and one file that can't be moved no longer makes every file in its batch be retried separately.
 
 ### Fixed
 - **Moves and renames keep the item**: a file moved or renamed inside a source folder used to be pruned and re-imported under a new id, quietly dropping its favourite flag, rating, tags and album membership. The scan now matches vanished rows against newly appeared files by a content fingerprint (migration `010_add_content_signature`: size plus the first and last 64 KiB, never a full read) and re-keys the surviving row, along with its tags, albums and edit records, to the new path. Matching is only applied when it is unambiguous: a copy next to the original, or two vanished files with the same fingerprint, go through the ordinary import path.
@@ -35,10 +51,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The sidebar drops the always-zero "Uncategorized" row and the static "Storage Healthy" badge.
 - "Smart Albums" heading is readable in dark mode.
 - The compare dialog says "1 field differs" instead of "1 fields differ".
+- **Edit lists every saved draft**: the Saved drafts list only showed drafts among the photos already loaded in the library (0, 3 or 11 instead of all of them).
+- **Undo after a duplicate cleanup works on external drives**: it only looked in your home Trash, while macOS keeps trashed files on their own drive.
+- **Notices no longer cut each other short**: a quick "Importing…" notice could clear the 10-second Undo toast early.
+- **Rescan no longer cancels other scans**, such as auto-import or the cleanup scan at launch.
+- **Settings that did nothing now work**: Restore window size and position, Open on launch → Last, and Enable debug logging.
+- Hidden's type chips keep their counts when one type is selected, and the sidebar's library stats add up to their total.
+- A deleted or disconnected source folder is shown as missing instead of failing.
+- Exports, reverts and in-place edits can no longer leave half-written or damaged files, and temporary export files are cleaned up.
+- Tag filters no longer produce invalid SQL that emptied the lists; counts, hidden paging and sort order are consistent across pages.
+- The native menu's Zoom, Full Screen, Settings and Shortcuts items work.
+- The remove-draft badge, album names on narrow cards, and the slideshow caption are laid out correctly.
 
 ### Security
 - Saving an edited copy no longer accepts a source or destination path from the interface: the backend shows the save dialog and only moves files it rendered.
 - Scanning and importing only accept folders and files you picked in a dialog, dropped on the window, or already added as a source.
+- Library sources can only be registered from folders you pick: root mapping and backup restore no longer accept a path from the interface, and backups are opened from an isolated copy.
+- Video playback only remuxes files that are in your catalog.
+- Undo from the Trash only puts files back inside your library sources, under their own name.
 
 ### Performance
 - Scans and imports read files off the main async runtime, so large libraries no longer stall other actions.
