@@ -143,7 +143,11 @@ pub fn run() {
                     }
                     let background = db.handle();
                     catalog.set(Ok(db.pool().clone()));
+                    let sweep_app = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
+                        // Nothing hidden may sit readable in the cache folder.
+                        commands::storage::purge_hidden_from_caches(&sweep_app, background.pool())
+                            .await;
                         if let Err(error) = background.run_backfills().await {
                             tracing::warn!("catalog backfill failed: {error:#}");
                         }

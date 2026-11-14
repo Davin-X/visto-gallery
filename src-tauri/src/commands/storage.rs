@@ -56,6 +56,113 @@ pub(crate) fn recently_used(modified: SystemTime, grace: Duration) -> bool {
         .unwrap_or(true)
 }
 
+/// Item ids that are safe to put in a file name (catalog ids are UUIDs).
+fn file_safe_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 64
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// Cache file name for one rendering of an item: `<item id>.<digest>.jpg`,
+/// so every rendering of an item can be found (and removed when it is
+/// hidden). An id that is unsafe in a file name falls back to the digest.
+pub(crate) fn thumbnail_file_name(item_id: &str, digest_hex: &str) -> String {
+    if file_safe_id(item_id) {
+        format!("{item_id}.{digest_hex}.jpg")
+    } else {
+        format!("{digest_hex}.jpg")
+    }
+}
+
+/// The item id a cache file belongs to, or `None` for a file named only by
+/// its digest (the layout before item ids were part of the name).
+fn thumbnail_owner(file_name: &str) -> Option<&str> {
+    let first = file_name.split('.').next()?;
+    let legacy = first.len() == 64 && first.chars().all(|c| c.is_ascii_hexdigit());
+    (!legacy && file_safe_id(first)).then_some(first)
+}
+
+/// Delete every cached rendering of `item_id`, temp files included.
+pub(crate) fn remove_item_thumbnails(dir: &Path, item_id: &str) -> usize {
+    if !file_safe_id(item_id) {
+        return 0;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut removed = 0;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if thumbnail_owner(name) == Some(item_id) && std::fs::remove_file(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
+/// Remove cached thumbnails that must not stay on disk: those of hidden items,
+/// and any file named by digest alone (from before the owner was recorded, so
+/// it may show a hidden item). Returns how many files were removed.
+pub(crate) fn sweep_thumbnail_cache(
+    dir: &Path,
+    hidden_ids: &std::collections::HashSet<String>,
+) -> usize {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut removed = 0;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        let drop = match thumbnail_owner(name) {
+            Some(owner) => hidden_ids.contains(owner),
+            None => true,
+        };
+        if drop && entry.path().is_file() && std::fs::remove_file(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
+/// Once per launch: purge cached thumbnails and converted videos of hidden
+/// items (and digest-only thumbnails), so nothing hidden sits readable in
+/// the cache folder.
+pub(crate) async fn purge_hidden_from_caches(app: &AppHandle, db: &sqlx::SqlitePool) {
+    let Ok(cache) = app.path().app_cache_dir() else {
+        return;
+    };
+    let rows: Vec<(String, String, String)> =
+        sqlx::query_as("SELECT id, kind, path FROM media_items WHERE hidden = 1")
+            .fetch_all(db)
+            .await
+            .unwrap_or_default();
+    let hidden: std::collections::HashSet<String> =
+        rows.iter().map(|(id, _, _)| id.clone()).collect();
+    let videos: Vec<String> = rows
+        .into_iter()
+        .filter(|(_, kind, _)| kind == "video")
+        .map(|(_, _, path)| path)
+        .collect();
+    let _ = tokio::task::spawn_blocking(move || {
+        let thumbnails = sweep_thumbnail_cache(&cache.join(THUMBNAILS_DIR), &hidden);
+        let playback = cache.join(PLAYBACK_DIR);
+        let remuxes = videos
+            .iter()
+            .filter(|path| super::playback::remove_cached_remux(&playback, Path::new(path)))
+            .count();
+        if thumbnails + remuxes > 0 {
+            tracing::info!(
+                "removed {thumbnails} cached thumbnail(s) and {remuxes} converted video(s) of hidden items"
+            );
+        }
+    })
+    .await;
+}
+
 #[derive(Debug, Clone, Default, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct StorageUsage {
@@ -258,6 +365,51 @@ mod tests {
             (usage.edit_original_bytes, usage.edit_original_files),
             (7, 1)
         );
+    }
+
+    #[test]
+    fn hidden_items_and_digest_only_files_are_swept_from_the_thumbnail_cache() {
+        let dir = temp_dir("sweep");
+        let digest = "a".repeat(64);
+        let visible = "11111111-2222-3333-4444-555555555555";
+        let hidden = "66666666-7777-8888-9999-000000000000";
+        let keep = dir.join(thumbnail_file_name(visible, &digest));
+        let secret = dir.join(thumbnail_file_name(hidden, &digest));
+        let secret_temp = dir.join(format!("{hidden}.{digest}.abcd.tmp.jpg"));
+        let legacy = dir.join(format!("{digest}.jpg"));
+        for path in [&keep, &secret, &secret_temp, &legacy] {
+            std::fs::write(path, b"jpeg").unwrap();
+        }
+
+        let hidden_ids = std::collections::HashSet::from([hidden.to_string()]);
+        assert_eq!(sweep_thumbnail_cache(&dir, &hidden_ids), 3);
+        assert!(keep.exists(), "a visible item's thumbnail stays");
+        assert!(
+            !secret.exists() && !secret_temp.exists(),
+            "hidden renderings go"
+        );
+        assert!(
+            !legacy.exists(),
+            "a file with no recorded owner may be hidden"
+        );
+    }
+
+    #[test]
+    fn hiding_one_item_removes_only_its_renderings() {
+        let dir = temp_dir("remove-item");
+        let a = "item-a";
+        let b = "item-b";
+        let small = dir.join(thumbnail_file_name(a, &"1".repeat(64)));
+        let large = dir.join(thumbnail_file_name(a, &"2".repeat(64)));
+        let other = dir.join(thumbnail_file_name(b, &"1".repeat(64)));
+        for path in [&small, &large, &other] {
+            std::fs::write(path, b"jpeg").unwrap();
+        }
+        assert_eq!(remove_item_thumbnails(&dir, a), 2);
+        assert!(other.exists());
+        // An id unsafe in a file name never matches anything.
+        assert_eq!(remove_item_thumbnails(&dir, "../item-b"), 0);
+        assert_eq!(thumbnail_file_name("../x", "ff"), "ff.jpg");
     }
 
     #[test]
