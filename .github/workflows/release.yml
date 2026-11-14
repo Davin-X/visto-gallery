@@ -165,35 +165,47 @@ jobs:
           tag="${TAG_NAME}"
           version="${tag#v}"
           echo "Publishing $tag ($version)"
-          notes="$(mktemp)"
+          # The page leads with the download so the DMG under Assets is in view;
+          # the changelog section and verification steps are folded away.
+          changes="$(mktemp)"
           awk -v ver="$version" '
             /^## \[/ { if (index($0, "[" ver "]") > 0) { found = 1; next } else if (found) { exit } }
             found { print }
-          ' CHANGELOG.md > "$notes"
-          if [ ! -s "$notes" ]; then
+          ' CHANGELOG.md > "$changes"
+          if [ ! -s "$changes" ]; then
             echo "::error::CHANGELOG.md has no section for $version"
             exit 1
           fi
+          dmg="$(basename "$(ls release-assets/*.dmg | head -n 1)")"
           # Describe what this build actually ships: an ad-hoc signed app needs
           # the Gatekeeper workaround, and the GPG step is skipped without a key.
           if [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
-            cat >> "$notes" <<'EOF'
-
-          ### Opening the app
-
-          This build is not notarized yet, so macOS blocks it the first time. Right-click VistoGallery in Applications, choose **Open**, then **Open** again, or run `xattr -dr com.apple.quarantine /Applications/VistoGallery.app`. See [Gatekeeper](https://github.com/Davin-X/visto-gallery#macos-gatekeeper-unsigned-build) in the README.
-          EOF
+            open_tip=" Not notarized yet: the first time, right-click the app and choose **Open** ([help](https://github.com/Davin-X/visto-gallery#macos-gatekeeper-unsigned-build))."
+          else
+            open_tip=""
           fi
           if ls release-assets/*.asc >/dev/null 2>&1; then
-            verify="the checksums, the GPG signature, and the provenance check"
+            gpg_note="and the GPG signature (\`.asc\`)"
           else
-            verify="the checksums and the provenance check (this build has no GPG signature)"
+            gpg_note="(this build has no GPG signature)"
           fi
+          notes="$(mktemp)"
           {
+            echo "**Download \`$dmg\` from Assets below** (Apple Silicon).$open_tip"
             echo
-            echo "### Verifying this release"
+            echo "<details>"
+            echo "<summary><b>What's new in $version</b></summary>"
             echo
-            echo "See [docs/VERIFYING_RELEASES.md](https://github.com/Davin-X/visto-gallery/blob/main/docs/VERIFYING_RELEASES.md) for $verify."
-          } >> "$notes"
+            cat "$changes"
+            echo
+            echo "</details>"
+            echo
+            echo "<details>"
+            echo "<summary><b>Verify the download</b></summary>"
+            echo
+            echo "Check the SHA-256 in \`SHA256SUMS.txt\`, the build provenance attestation $gpg_note as described in [VERIFYING_RELEASES.md](https://github.com/Davin-X/visto-gallery/blob/main/docs/VERIFYING_RELEASES.md)."
+            echo
+            echo "</details>"
+          } > "$notes"
           gh release create "$tag" --verify-tag --title "VistoGallery $version" --notes-file "$notes" release-assets/* \
             || gh release upload "$tag" release-assets/* --clobber
