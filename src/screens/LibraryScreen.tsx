@@ -151,6 +151,11 @@ interface LibraryScreenProps {
   hasItems?: boolean;
   hiddenCount: number;
   hiddenView?: boolean;
+  /**
+   * Veil hidden thumbnails behind hold-to-reveal. On by default in the hidden
+   * view; Hidden turns it off once Touch ID or the password unlocked it.
+   */
+  veilHidden?: boolean;
   inspectedId: string | null;
   items: MediaItem[];
   layout: LayoutMode;
@@ -387,8 +392,9 @@ function LibraryScreen(props: LibraryScreenProps) {
   useEffect(() => {
     concealAll();
   }, [props.hiddenView, props.filter, props.query, props.layout, concealAll]);
+  const veiled = Boolean(props.hiddenView) && props.veilHidden !== false;
   useEffect(() => {
-    if (!props.hiddenView) return;
+    if (!veiled) return;
     // A pointer released outside the tile still ends the reveal. Window blur
     // covers alt-tab, which should never leave hidden media exposed.
     window.addEventListener("pointerup", concealAll);
@@ -397,11 +403,11 @@ function LibraryScreen(props: LibraryScreenProps) {
       window.removeEventListener("pointerup", concealAll);
       window.removeEventListener("blur", concealAll);
     };
-  }, [props.hiddenView, concealAll]);
-  const masked = (item: MediaItem) => Boolean(props.hiddenView) && !revealedIds.has(item.id);
+  }, [veiled, concealAll]);
+  const masked = (item: MediaItem) => veiled && !revealedIds.has(item.id);
   const tileAlt = (item: MediaItem) => (masked(item) ? "Hidden item" : item.name);
   const holdHandlers = (id: string) =>
-    props.hiddenView
+    veiled
       ? {
           onPointerDown: () => revealItem(id),
           onPointerUp: () => concealItem(id),

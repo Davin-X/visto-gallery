@@ -142,7 +142,8 @@
         }
         if (command === "get_hidden_items") {
           if (!hiddenVisible()) throw { code: "locked", message: "Hidden is locked." };
-          return { items: [], hasMore: false, totalCount: 0 };
+          const hiddenItems = items.slice(0, 3).map((item) => ({ ...item, hidden: true }));
+          return { items: hiddenItems, hasMore: false, totalCount: hiddenItems.length };
         }
         if (command === "get_library_stats") {
           return {

@@ -32,6 +32,11 @@ test("a locked Hidden asks for Touch ID and keeps its count out of the sidebar",
   await expect(hiddenStat(page)).toBeVisible();
   await expect(hiddenStat(page)).toContainText("7");
 
+  // Unlocked by its owner, Hidden shows its items plainly: no veil and no
+  // hold-to-reveal on top of Touch ID.
+  await expect(page.locator(".gallery-tile")).toHaveCount(3);
+  await expect(page.locator(".gallery-tile.hidden-obscured")).toHaveCount(0);
+
   expect(pageErrors).toEqual([]);
 });
 
@@ -40,4 +45,7 @@ test("Hidden opens directly when the lock is off", async ({ page }) => {
   await expect(hiddenStat(page)).toBeVisible();
   await hiddenNav(page).click();
   await expect(page.getByRole("region", { name: "Hidden is locked" })).toHaveCount(0);
+  // Without the lock, hidden items stay veiled behind hold-to-reveal.
+  await expect(page.locator(".gallery-tile")).toHaveCount(3);
+  await expect(page.locator(".gallery-tile.hidden-obscured")).toHaveCount(3);
 });

@@ -116,10 +116,12 @@ function HiddenScreen(props: HiddenScreenProps) {
   // paged cursor) since 2026-11; nothing is filtered again here.
   const items = library.hiddenItems;
 
+  // Set below once `reveal` exists; the listener is registered only once.
+  const openHiddenRef = useRef<(id?: string) => void>(() => {});
   useEffect(() => {
     const onOpenHidden = (event: Event) => {
       const id = (event as CustomEvent<{ id?: string }>).detail?.id;
-      setPendingReveal({ kind: "viewer", id });
+      openHiddenRef.current(id);
     };
     window.addEventListener("mac-gallery:open-hidden", onOpenHidden);
     return () => window.removeEventListener("mac-gallery:open-hidden", onOpenHidden);
@@ -138,9 +140,19 @@ function HiddenScreen(props: HiddenScreenProps) {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [pendingReveal]);
 
-  const requestViewer = (id?: string) => setPendingReveal({ kind: "viewer", id });
-  const requestBackground = (id: string) => setPendingReveal({ kind: "background", id });
-  const requestEdit = (item: MediaItem) => setPendingReveal({ kind: "edit", item });
+  // With the Touch ID / password lock on, this screen only renders once its
+  // owner has unlocked it, so the veil and the "show this item?" step would
+  // ask twice. They stay for when the lock is turned off.
+  const unlockedByOwner = useHiddenLockStore(
+    (s) => s.status?.required === true && s.status.unlocked,
+  );
+  type RevealRequest = NonNullable<typeof pendingReveal>;
+  const reveal = (request: RevealRequest) =>
+    unlockedByOwner ? runReveal(request) : setPendingReveal(request);
+  const requestViewer = (id?: string) => reveal({ kind: "viewer", id });
+  openHiddenRef.current = requestViewer;
+  const requestBackground = (id: string) => reveal({ kind: "background", id });
+  const requestEdit = (item: MediaItem) => reveal({ kind: "edit", item });
 
   const requestSlideshow = (ids?: string[]) => {
     const selection = ids && ids.length ? new Set(ids) : null;
@@ -149,13 +161,17 @@ function HiddenScreen(props: HiddenScreenProps) {
       library.showNotice("Add photos or videos to start a slideshow.");
       return;
     }
-    setPendingReveal({ kind: "slideshow", ids: scope.map((item) => item.id) });
+    reveal({ kind: "slideshow", ids: scope.map((item) => item.id) });
   };
 
   const confirmReveal = () => {
     const request = pendingReveal;
     if (!request) return;
     setPendingReveal(null);
+    runReveal(request);
+  };
+
+  function runReveal(request: RevealRequest) {
     if (request.kind === "slideshow") {
       const ids = new Set(request.ids);
       const scope = library.hiddenItems.filter((item) => ids.has(item.id));
@@ -171,7 +187,7 @@ function HiddenScreen(props: HiddenScreenProps) {
       return;
     }
     props.onOpenViewer(request.id);
-  };
+  }
 
   const revealCopy = (() => {
     if (!pendingReveal) return { title: "", body: "", action: "Show" };
@@ -315,6 +331,7 @@ function HiddenScreen(props: HiddenScreenProps) {
     <>
       <LibraryScreen
         hiddenView
+        veilHidden={!unlockedByOwner}
         items={items}
         inspectedId={library.inspectedId}
         selectedIds={library.selectedIds}
