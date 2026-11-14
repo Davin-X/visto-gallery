@@ -46,9 +46,10 @@ export function StorageSection(props: { showNotice: (text: string, code?: ErrorC
         if (kind === "thumbnails") clearThumbnailMemoryCache();
         const kept =
           result.keptFiles > 0
-            ? ` ${files(result.keptFiles)} still in use ${result.keptFiles === 1 ? "was" : "were"} kept.`
+            ? `${files(result.keptFiles)} still in use ${result.keptFiles === 1 ? "was" : "were"} kept.`
             : "";
-        showNotice(`Freed ${formatBytes(result.freedBytes)}.${kept}`);
+        const freed = result.freedBytes > 0 ? `Freed ${formatBytes(result.freedBytes)}.` : "";
+        showNotice([freed, kept].filter(Boolean).join(" ") || "Nothing to clear.");
       } catch (error) {
         showNotice(`Could not clear the cache: ${describe(error)}`, errorCode(error) ?? "io");
       } finally {
@@ -70,8 +71,13 @@ export function StorageSection(props: { showNotice: (text: string, code?: ErrorC
         <b>{label}</b>
         <span className="settings-row-desc">{desc}</span>
       </div>
-      <div className="settings-row-control" style={{ alignItems: "center" }}>
-        <span className="settings-slider-value">{value}</span>
+      <div
+        className="settings-row-control"
+        style={{ display: "flex", flexWrap: "nowrap", alignItems: "center" }}
+      >
+        <span className="settings-slider-value" style={{ whiteSpace: "nowrap" }}>
+          {value}
+        </span>
         {action && (
           <button
             className="quiet-button"
