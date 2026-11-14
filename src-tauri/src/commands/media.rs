@@ -567,6 +567,20 @@ pub fn external_video_players() -> Vec<ExternalPlayer> {
         .collect()
 }
 
+/// True when `player` resolves to one of the installed players the list command
+/// returned. Canonicalizing both sides means a symlink cannot point somewhere
+/// else, and anything the webview invents is rejected.
+fn player_is_installed(player: &str, installed: &[ExternalPlayer]) -> bool {
+    let Ok(candidate) = Path::new(player).canonicalize() else {
+        return false;
+    };
+    installed.iter().any(|allowed| {
+        Path::new(&allowed.path)
+            .canonicalize()
+            .is_ok_and(|path| path == candidate)
+    })
+}
+
 /// Open a cataloged item in a specific installed player (e.g. a `.mkv` in VLC).
 #[tauri::command]
 pub async fn open_with_player(
@@ -585,13 +599,13 @@ pub async fn open_with_player(
         ));
     }
 
-    let player_path = PathBuf::from(&player);
-    if player_path.extension().and_then(|ext| ext.to_str()) != Some("app") || !player_path.is_dir()
-    {
-        return Err(CommandError::invalid(
-            "Requested player is not an installed application.".to_string(),
+    let installed = external_video_players();
+    if !player_is_installed(&player, &installed) {
+        return Err(CommandError::path(
+            "Requested player is not one of the installed players the app offers.".to_string(),
         ));
     }
+    let player_path = PathBuf::from(&player);
 
     std::process::Command::new("open")
         .arg("-a")
@@ -617,6 +631,52 @@ pub async fn open_folder(path: String) -> Result<(), CommandError> {
         .status()
         .map_err(|e| CommandError::io(format!("Could not open {}: {}", path, e)))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod player_allowlist_tests {
+    use super::{player_is_installed, ExternalPlayer};
+    use std::fs;
+
+    fn app_dir(root: &std::path::Path, name: &str) -> std::path::PathBuf {
+        let app = root.join(name);
+        fs::create_dir_all(&app).unwrap();
+        app
+    }
+
+    fn player(path: &std::path::Path) -> ExternalPlayer {
+        ExternalPlayer {
+            name: "Allowed".to_string(),
+            path: path.to_string_lossy().into_owned(),
+        }
+    }
+
+    #[test]
+    fn only_listed_players_are_accepted() {
+        let root = std::env::temp_dir().join(format!("visto-player-{}", uuid::Uuid::new_v4()));
+        let allowed = app_dir(&root, "Allowed.app");
+        let other = app_dir(&root, "Other.app");
+        let installed = vec![player(&allowed)];
+
+        assert!(player_is_installed(&allowed.to_string_lossy(), &installed));
+        assert!(!player_is_installed(&other.to_string_lossy(), &installed));
+        assert!(!player_is_installed("/nonexistent/Evil.app", &installed));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_resolves_to_the_same_app() {
+        let root = std::env::temp_dir().join(format!("visto-player-{}", uuid::Uuid::new_v4()));
+        let allowed = app_dir(&root, "Allowed.app");
+        let link = root.join("LooksAllowed.app");
+        std::os::unix::fs::symlink(&allowed, &link).unwrap();
+        let installed = vec![player(&allowed)];
+
+        // A symlink back to the allowed app is the same app.
+        assert!(player_is_installed(&link.to_string_lossy(), &installed));
+        let _ = fs::remove_dir_all(&root);
+    }
 }
 
 /// One item the caller wants pulled out of the Trash and put back. The

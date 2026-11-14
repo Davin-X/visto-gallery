@@ -49,6 +49,36 @@ pub(crate) fn canonical_path(path: &str) -> Option<PathBuf> {
     None
 }
 
+/// Roots that may be granted to the asset protocol.
+///
+/// A catalog restored from a backup can list any folder, so a granted root has
+/// to pass a sanity check before it widens the `asset://` scope: it must be an
+/// existing folder under the user's home or a mounted volume, and never `/`.
+/// Rows that fail stay in `library_folders` so the user can re-locate or remove
+/// them; they simply do not get file access.
+pub(crate) fn grantable_root(folder: &str, home: &Path) -> Result<PathBuf, String> {
+    let path = Path::new(folder);
+    if !path.is_absolute() {
+        return Err("not an absolute path".to_string());
+    }
+    let canonical = path
+        .canonicalize()
+        .map_err(|error| format!("does not exist or cannot be read: {error}"))?;
+    if canonical == Path::new("/") {
+        return Err("refuses the filesystem root".to_string());
+    }
+    if !canonical.is_dir() {
+        return Err("not a folder".to_string());
+    }
+    let home = home.canonicalize().unwrap_or_else(|_| home.to_path_buf());
+    let under_home = canonical.starts_with(&home);
+    let under_volume = canonical.starts_with("/Volumes") && canonical != Path::new("/Volumes");
+    if !under_home && !under_volume {
+        return Err("outside the user's home folder and mounted volumes".to_string());
+    }
+    Ok(canonical)
+}
+
 /// True when `path` sits inside `root`. Uses a real directory-boundary check so
 /// `/Photos2/a.jpg` is never counted as part of `/Photos`.
 pub(crate) fn path_is_inside(path: &str, root: &str) -> bool {
@@ -218,7 +248,7 @@ pub async fn pick_media_files(
 
 #[cfg(test)]
 mod tests {
-    use super::GrantedPaths;
+    use super::{grantable_root, GrantedPaths};
     use std::fs;
 
     fn temp_tree() -> std::path::PathBuf {
@@ -255,6 +285,25 @@ mod tests {
     fn nothing_is_covered_by_default() {
         let root = temp_tree();
         assert!(!GrantedPaths::default().covers(&root));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn only_home_and_mounted_volumes_are_grantable() {
+        let root = temp_tree();
+        let home = root.join("home");
+        let pictures = home.join("Pictures");
+        fs::create_dir_all(&pictures).unwrap();
+
+        assert_eq!(
+            grantable_root(&pictures.to_string_lossy(), &home).unwrap(),
+            pictures.canonicalize().unwrap()
+        );
+        assert!(grantable_root("/", &home).is_err());
+        assert!(grantable_root("/Users", &home).is_err());
+        assert!(grantable_root("/Volumes", &home).is_err());
+        assert!(grantable_root(&root.join("granted").to_string_lossy(), &home).is_err());
+        assert!(grantable_root(&home.join("missing").to_string_lossy(), &home).is_err());
         let _ = fs::remove_dir_all(&root);
     }
 }

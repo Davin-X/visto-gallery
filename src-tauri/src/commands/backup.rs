@@ -20,6 +20,55 @@ const REQUIRED_TABLES: &[&str] = &[
     "library_folders",
 ];
 
+/// Paths the user picked in the native dialogs.
+///
+/// Recorded server-side so create, validate and restore accept the renderer's
+/// claimed path only when the user actually chose it, the same pattern batch
+/// export uses for its destination.
+static BACKUP_FILE_PICK: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+static BACKUP_DESTINATION_PICK: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
+fn store_pick(slot: &std::sync::Mutex<Option<PathBuf>>, path: PathBuf) {
+    // Canonicalize before storing so macOS's /tmp → /private/tmp symlink (and
+    // user-picked symlinked folders) compare equal to the renderer's claim.
+    let path =
+        crate::commands::security::paths::canonical_path(&path.to_string_lossy()).unwrap_or(path);
+    let mut current = slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    *current = Some(path);
+}
+
+fn required_pick(
+    slot: &std::sync::Mutex<Option<PathBuf>>,
+    claimed: &str,
+    what: &str,
+) -> Result<PathBuf, CommandError> {
+    let granted = slot
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+    let claimed = crate::commands::security::paths::canonical_path(claimed);
+    match (granted, claimed) {
+        (Some(granted), Some(claimed)) if granted == claimed => Ok(granted),
+        _ => Err(CommandError::new(
+            ErrorCode::PathNotAllowed,
+            format!("{what} must be chosen with the native dialog."),
+        )),
+    }
+}
+
+fn backup_file_name(suggested: &str) -> String {
+    let name = std::path::Path::new(suggested)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or("VistoGallery-Catalog.db");
+    if name.to_ascii_lowercase().ends_with(".db") {
+        name.to_string()
+    } else {
+        format!("{name}.db")
+    }
+}
+
 #[derive(Debug, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupInfo {
@@ -41,6 +90,9 @@ pub struct RestoreResult {
     pub missing_item_count: i64,
     pub missing_paths: Vec<String>,
     pub missing_roots: Vec<String>,
+    /// Restored roots that stay in the catalog but were not given asset access
+    /// because they failed the grant check (for example `/`).
+    pub ungranted_roots: Vec<String>,
 }
 
 async fn open_read_only(path: &str) -> Result<SqliteConnection, CommandError> {
@@ -242,14 +294,87 @@ async fn annotate_snapshot(path: &str) -> Result<(), CommandError> {
     Ok(())
 }
 
+/// Native save dialog for a catalog backup. Returns the chosen destination,
+/// which is the only path `create_catalog_backup` will accept.
+#[tauri::command]
+pub async fn choose_backup_destination(
+    app: tauri::AppHandle,
+    suggested_name: String,
+) -> Result<Option<String>, CommandError> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let Some(picked) = app
+        .dialog()
+        .file()
+        .set_title("Save VistoGallery catalog backup")
+        .set_file_name(backup_file_name(&suggested_name))
+        .add_filter("VistoGallery catalog backup", &["db"])
+        .blocking_save_file()
+    else {
+        return Ok(None);
+    };
+    let path = picked
+        .into_path()
+        .map_err(|error| CommandError::new(ErrorCode::Dialog, error.to_string()))?;
+    let canonical = crate::commands::security::paths::canonical_path(&path.to_string_lossy())
+        .ok_or_else(|| {
+            CommandError::new(
+                ErrorCode::Dialog,
+                format!(
+                    "Could not resolve the chosen backup path: {}",
+                    path.display()
+                ),
+            )
+        })?;
+    store_pick(&BACKUP_DESTINATION_PICK, canonical.clone());
+    Ok(Some(canonical.to_string_lossy().into_owned()))
+}
+
+/// Native open dialog for a catalog backup. Returns the chosen file, which is
+/// the only path `validate_catalog_backup` and `restore_catalog_backup` accept.
+#[tauri::command]
+pub async fn choose_backup_file(app: tauri::AppHandle) -> Result<Option<String>, CommandError> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let Some(picked) = app
+        .dialog()
+        .file()
+        .set_title("Choose a VistoGallery catalog backup")
+        .add_filter("VistoGallery catalog backup", &["db"])
+        .blocking_pick_file()
+    else {
+        return Ok(None);
+    };
+    let path = picked
+        .into_path()
+        .map_err(|error| CommandError::new(ErrorCode::Dialog, error.to_string()))?;
+    let canonical = crate::commands::security::paths::canonical_path(&path.to_string_lossy())
+        .ok_or_else(|| {
+            CommandError::new(
+                ErrorCode::Dialog,
+                format!(
+                    "Could not resolve the chosen backup file: {}",
+                    path.display()
+                ),
+            )
+        })?;
+    store_pick(&BACKUP_FILE_PICK, canonical.clone());
+    Ok(Some(canonical.to_string_lossy().into_owned()))
+}
+
 /// Write a versioned catalog backup to a user-chosen path.
 #[tauri::command]
 pub async fn create_catalog_backup(
     destination_path: String,
     catalog: State<'_, crate::Catalog>,
 ) -> Result<BackupInfo, CommandError> {
+    let destination = required_pick(
+        &BACKUP_DESTINATION_PICK,
+        &destination_path,
+        "The backup destination",
+    )?;
+    let destination_path = destination.to_string_lossy().into_owned();
     let db = super::get_db(&catalog)?;
-    let destination = PathBuf::from(&destination_path);
     snapshot_to(&db, &destination).await?;
     if let Err(error) = annotate_snapshot(&destination_path).await {
         let _ = std::fs::remove_file(&destination);
@@ -261,7 +386,8 @@ pub async fn create_catalog_backup(
 /// Validate a path the user picked before showing a destructive confirmation.
 #[tauri::command]
 pub async fn validate_catalog_backup(path: String) -> Result<BackupInfo, CommandError> {
-    let isolated = isolated_db_copy(&path)?;
+    let path = required_pick(&BACKUP_FILE_PICK, &path, "The backup file")?;
+    let isolated = isolated_db_copy(&path.to_string_lossy())?;
     inspect_backup(&isolated.path_str()).await
 }
 
@@ -461,18 +587,30 @@ async fn restore_backup_into_catalog(db: &SqlitePool, path: &str) -> Result<(), 
 /// is already committed.
 async fn grant_restored_folders<F>(
     db: &SqlitePool,
+    home: &Path,
     mut grant: F,
 ) -> Result<Vec<String>, sqlx::Error>
 where
-    F: FnMut(&str) -> Result<(), String>,
+    F: FnMut(&Path) -> Result<(), String>,
 {
     let folders: Vec<String> = sqlx::query_scalar("SELECT path FROM library_folders ORDER BY path")
         .fetch_all(db)
         .await?;
-    Ok(folders
-        .into_iter()
-        .filter(|folder| grant(folder).is_err())
-        .collect())
+    let mut refused = Vec::new();
+    for folder in folders {
+        match crate::commands::security::paths::grantable_root(&folder, home) {
+            Ok(path) => {
+                if grant(&path).is_err() {
+                    refused.push(folder);
+                }
+            }
+            Err(reason) => {
+                tracing::warn!("restored root '{folder}' was not granted: {reason}");
+                refused.push(folder);
+            }
+        }
+    }
+    Ok(refused)
 }
 
 struct MissingPathReport {
@@ -527,6 +665,8 @@ pub async fn restore_catalog_backup(
     app: tauri::AppHandle,
     catalog: State<'_, crate::Catalog>,
 ) -> Result<RestoreResult, CommandError> {
+    let path = required_pick(&BACKUP_FILE_PICK, &path, "The backup file")?;
+    let path = path.to_string_lossy().into_owned();
     // Open/attach only an isolated copy of the user-picked backup so a crafted
     // sibling -wal file cannot be read (RUSTSEC-2026-0459).
     // The guard deletes the copy and its side files however this returns.
@@ -554,21 +694,32 @@ pub async fn restore_catalog_backup(
 
     // The restore replaced `library_folders`, so replay those paths into the
     // asset scope before returning a catalog whose media the UI cannot render.
-    match grant_restored_folders(&db, |folder| {
+    // A backup can list any folder, so only roots that pass the same sanity
+    // check as a user pick are granted; the rest keep their rows and are
+    // reported so the user can re-locate or remove them.
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|e| CommandError::io(format!("Could not locate the home folder: {e}")))?;
+    let ungranted_roots = match grant_restored_folders(&db, &home, |folder| {
         app.asset_protocol_scope()
             .allow_directory(folder, true)
             .map_err(|error| error.to_string())
     })
     .await
     {
-        Ok(failed) if failed.is_empty() => {}
-        Ok(failed) => tracing::error!(
-            "restored folders could not be granted to the asset protocol scope: {failed:?}"
-        ),
-        Err(error) => {
-            tracing::error!("could not read restored folders to grant asset scope: {error}")
+        Ok(refused) if refused.is_empty() => Vec::new(),
+        Ok(refused) => {
+            tracing::error!(
+                "restored folders could not be granted to the asset protocol scope: {refused:?}"
+            );
+            refused
         }
-    }
+        Err(error) => {
+            tracing::error!("could not read restored folders to grant asset scope: {error}");
+            Vec::new()
+        }
+    };
 
     // The snapshot just taken is the newest, so it always survives pruning.
     prune_pre_restore_snapshots(&backup_dir, PRE_RESTORE_SNAPSHOTS_KEPT);
@@ -580,6 +731,7 @@ pub async fn restore_catalog_backup(
         missing_item_count: missing.missing_item_count,
         missing_paths: missing.missing_paths,
         missing_roots: missing.missing_roots,
+        ungranted_roots,
     })
 }
 
@@ -875,9 +1027,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn grant_restored_folders_grants_each_folder_and_reports_failures() {
+    async fn grant_restored_folders_grants_safe_folders_and_reports_refusals() {
         let (db, catalog_path) = catalog_db().await;
-        for folder in ["/library/one", "/library/two", "/library/three"] {
+        let home = std::env::temp_dir().join(format!("visto-home-{}", uuid::Uuid::new_v4()));
+        let one = home.join("one");
+        let two = home.join("two");
+        let three = home.join("three");
+        for folder in [&one, &two, &three] {
+            std::fs::create_dir_all(folder).unwrap();
+        }
+        for folder in [
+            "/".to_string(),
+            one.to_string_lossy().into_owned(),
+            two.to_string_lossy().into_owned(),
+            three.to_string_lossy().into_owned(),
+        ] {
             sqlx::query("INSERT INTO library_folders (path, added_at) VALUES (?, 0)")
                 .bind(folder)
                 .execute(&db)
@@ -886,9 +1050,9 @@ mod tests {
         }
 
         let mut granted = Vec::new();
-        let failed = grant_restored_folders(&db, |folder| {
-            granted.push(folder.to_string());
-            if folder == "/library/two" {
+        let refused = grant_restored_folders(&db, &home, |folder| {
+            granted.push(folder.to_string_lossy().into_owned());
+            if folder == two.canonicalize().unwrap() {
                 Err("scope refused".to_string())
             } else {
                 Ok(())
@@ -899,17 +1063,22 @@ mod tests {
 
         assert_eq!(
             granted,
-            ["/library/one", "/library/three", "/library/two"],
-            "every restored folder is offered to the scope, not just the first"
+            [
+                one.canonicalize().unwrap().to_string_lossy().into_owned(),
+                three.canonicalize().unwrap().to_string_lossy().into_owned(),
+                two.canonicalize().unwrap().to_string_lossy().into_owned(),
+            ],
+            "safe folders are offered to the scope; `/` never is"
         );
         assert_eq!(
-            failed,
-            ["/library/two".to_string()],
-            "a refused folder is reported so it can be logged"
+            refused,
+            ["/".to_string(), two.to_string_lossy().into_owned(),],
+            "the filesystem root and a refused folder are reported"
         );
 
         db.close().await;
         let _ = std::fs::remove_file(catalog_path);
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
@@ -1002,5 +1171,37 @@ mod tests {
             ["my-backup.db", "pre-restore-400.db", "pre-restore-500.db"]
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn backup_picks_reject_any_other_path() {
+        let chosen = temp_backup("chosen");
+        let slot = std::sync::Mutex::new(None);
+        store_pick(&slot, chosen.clone());
+
+        assert_eq!(
+            required_pick(&slot, &chosen.to_string_lossy(), "The backup file").unwrap(),
+            crate::commands::security::paths::canonical_path(&chosen.to_string_lossy()).unwrap()
+        );
+        let other = temp_backup("other");
+        assert!(required_pick(&slot, &other.to_string_lossy(), "The backup file").is_err());
+        assert!(required_pick(
+            &std::sync::Mutex::new(None),
+            &chosen.to_string_lossy(),
+            "The backup file"
+        )
+        .is_err());
+
+        // A newer pick replaces the previous one; the stale file is refused.
+        store_pick(&slot, other.clone());
+        assert!(required_pick(&slot, &chosen.to_string_lossy(), "The backup file").is_err());
+        assert!(required_pick(&slot, &other.to_string_lossy(), "The backup file").is_ok());
+    }
+
+    #[test]
+    fn backup_default_name_cannot_leave_the_chosen_folder() {
+        assert_eq!(backup_file_name("../../etc/evil.db"), "evil.db");
+        assert_eq!(backup_file_name("catalog"), "catalog.db");
+        assert_eq!(backup_file_name("   "), "VistoGallery-Catalog.db");
     }
 }

@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import type { ErrorCode } from "../../../engine/types/commands";
 import { errorCode } from "../../../engine/types/errors";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { FolderIcon, ShieldIcon } from "../icons";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { tauri } from "../../../engine/commands/tauri";
@@ -51,12 +50,8 @@ export function RootPathMapping(props: {
 
   const browse = async () => {
     try {
-      const selected = await openDialog({
-        title: "Choose the folder that now contains the moved library",
-        directory: true,
-        multiple: false,
-      });
-      if (!selected || Array.isArray(selected)) return;
+      const selected = await tauri.rootMap.chooseFolder(oldRoot);
+      if (!selected) return;
       setNewRoot(selected);
       resetPreview();
     } catch (error) {
@@ -154,14 +149,16 @@ export function RootPathMapping(props: {
             type="text"
             className="settings-text-input"
             value={newRoot}
-            placeholder="/Volumes/New/Photos"
+            placeholder="Choose the folder that now contains the library"
             aria-label="New source root"
-            onChange={(e) => {
-              setNewRoot(e.target.value);
-              resetPreview();
-            }}
+            readOnly
           />
-          <button type="button" className="quiet-button" onClick={browse} disabled={busy}>
+          <button
+            type="button"
+            className="quiet-button"
+            onClick={browse}
+            disabled={busy || !oldRoot.trim()}
+          >
             Choose…
           </button>
         </div>

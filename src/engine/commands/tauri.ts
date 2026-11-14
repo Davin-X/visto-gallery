@@ -189,6 +189,11 @@ export const tauri = {
   },
 
   rootMap: {
+    // The new root must come from this native picker; preview and apply only
+    // accept a folder the user picked in the current mapping.
+    chooseFolder: (oldRoot: string): Promise<string | null> =>
+      invoke("choose_root_mapping_folder", { oldRoot }),
+
     preview: (oldRoot: string, newRoot: string): Promise<RootPathMappingPreview> =>
       invoke("preview_root_path_mapping", { oldRoot, newRoot }),
 
@@ -197,6 +202,13 @@ export const tauri = {
   },
 
   backup: {
+    // Both paths come from native dialogs in Rust; the commands reject any
+    // other path.
+    chooseDestination: (suggestedName: string): Promise<string | null> =>
+      invoke("choose_backup_destination", { suggestedName }),
+
+    chooseFile: (): Promise<string | null> => invoke("choose_backup_file"),
+
     create: (destinationPath: string): Promise<BackupInfo> =>
       invoke("create_catalog_backup", { destinationPath }),
 
