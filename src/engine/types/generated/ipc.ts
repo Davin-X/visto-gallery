@@ -299,6 +299,20 @@ requireHiddenUnlock?: boolean,
  */
 maxCacheSizeGB?: number, thumbnailQuality?: number, enableDebugLogging?: boolean, showNativeLimitWarnings?: boolean, };
 
+export type DisplayPreview = { 
+/**
+ * Cached file to load through the asset protocol.
+ */
+path: string | null, 
+/**
+ * Inline JPEG for a hidden item, whose preview is never cached.
+ */
+dataUrl: string | null, width: number, height: number, 
+/**
+ * The preview is the full decoded size of the original.
+ */
+full: boolean, };
+
 export type HiddenLockStatus = { 
 /**
  * The setting is on.

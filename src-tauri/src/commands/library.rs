@@ -1765,7 +1765,7 @@ fn commit_thumbnail_file(temporary: &Path, destination: &Path) -> Result<(), Com
 /// `sips` is a thin wrapper over macOS ImageIO, which downsamples during
 /// decode. That keeps memory flat for large photos and handles HEIC/HEIF.
 #[cfg(target_os = "macos")]
-fn generate_with_macos_sips(
+pub(crate) fn generate_with_macos_sips(
     source: &str,
     destination: &Path,
     size: u32,
@@ -1775,17 +1775,22 @@ fn generate_with_macos_sips(
     use std::process::Command;
 
     let temporary = destination.with_extension(format!("{}.tmp.jpg", Uuid::new_v4()));
+    let quality = quality.to_string();
+    let edge = size.to_string();
+    let mut args = vec![
+        "-s",
+        "format",
+        "jpeg",
+        "-s",
+        "formatOptions",
+        quality.as_str(),
+    ];
+    // `size` 0 keeps the full decoded size (the viewer's Actual Size).
+    if size > 0 {
+        args.extend(["-Z", edge.as_str()]);
+    }
     let output = Command::new("/usr/bin/sips")
-        .args([
-            "-s",
-            "format",
-            "jpeg",
-            "-s",
-            "formatOptions",
-            &quality.to_string(),
-            "-Z",
-            &size.to_string(),
-        ])
+        .args(&args)
         .arg(source)
         .arg("--out")
         .arg(&temporary)
@@ -1820,7 +1825,7 @@ fn generate_with_macos_sips(
 }
 
 #[cfg(not(target_os = "macos"))]
-fn generate_with_macos_sips(
+pub(crate) fn generate_with_macos_sips(
     _source: &str,
     _destination: &Path,
     _size: u32,
@@ -2363,10 +2368,9 @@ pub async fn toggle_hidden(
         if let (Some((path,)), Ok(cache)) = (row, app.path().app_cache_dir()) {
             let id = item_id.clone();
             let _ = tokio::task::spawn_blocking(move || {
-                super::storage::remove_item_thumbnails(
-                    &cache.join(super::storage::THUMBNAILS_DIR),
-                    &id,
-                );
+                for dir in [super::storage::THUMBNAILS_DIR, super::storage::PREVIEWS_DIR] {
+                    super::storage::remove_item_thumbnails(&cache.join(dir), &id);
+                }
                 super::playback::remove_cached_remux(
                     &cache.join(super::storage::PLAYBACK_DIR),
                     std::path::Path::new(&path),

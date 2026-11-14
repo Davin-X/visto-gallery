@@ -202,6 +202,7 @@ pub fn run() {
             import_files,
             get_library_items,
             get_matching_ids,
+            get_display_preview,
             hidden_lock_status,
             unlock_hidden,
             keep_hidden_unlocked,

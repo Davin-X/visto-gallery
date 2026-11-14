@@ -18,13 +18,13 @@ mod tests {
         AccentColor, AlbumOverview, AlbumsView, AppSettings, Appearance, BackupInfo,
         BatchExportError, BatchExportItem, BatchExportProgress, BatchExportRequest,
         BatchExportResult, CacheKind, ClearCacheResult, CropRect, CropState, DefaultLayout,
-        DuplicateGroup, EditPreset, EditRecipe, EditValues, ExifData, ExportResult, ExternalPlayer,
-        HiddenLockStatus, LibraryFilterDTO, LibraryFolder, LibraryItemsPage, LibraryStats,
-        MediaProbe, PartialSettings, PlaybackStrategy, PreparedPlayback, RenderRequest,
-        RestoreResult, RootPathMappingPreview, RootPathMappingResult, ScanResult, SmartAlbum,
-        SmartAlbumFilter, StartupView, StorageUsage, ThumbnailRequest, ThumbnailResponse,
-        ThumbnailSize, TimelineMonth, TrashError, TrashRestoreFailure, TrashRestoreItem,
-        TrashRestoreResult, TrashResult, UpdateCheck, ViewerZoomBehavior,
+        DisplayPreview, DuplicateGroup, EditPreset, EditRecipe, EditValues, ExifData, ExportResult,
+        ExternalPlayer, HiddenLockStatus, LibraryFilterDTO, LibraryFolder, LibraryItemsPage,
+        LibraryStats, MediaProbe, PartialSettings, PlaybackStrategy, PreparedPlayback,
+        RenderRequest, RestoreResult, RootPathMappingPreview, RootPathMappingResult, ScanResult,
+        SmartAlbum, SmartAlbumFilter, StartupView, StorageUsage, ThumbnailRequest,
+        ThumbnailResponse, ThumbnailSize, TimelineMonth, TrashError, TrashRestoreFailure,
+        TrashRestoreItem, TrashRestoreResult, TrashResult, UpdateCheck, ViewerZoomBehavior,
     };
     use crate::errors::{CommandError, ErrorCode};
     use crate::media_kind::MediaKind;
@@ -108,6 +108,7 @@ mod tests {
             UpdateCheck,
             AppSettings,
             PartialSettings,
+            DisplayPreview,
             HiddenLockStatus,
             TimelineMonth,
             StorageUsage,
