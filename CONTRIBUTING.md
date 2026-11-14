@@ -128,6 +128,16 @@ CI also runs `cargo audit` on `src-tauri/Cargo.lock` and `npm audit --omit=dev -
 
 README screenshots live in `docs/screenshots/` as `<screen>-light.jpg` and `<screen>-dark.jpg`, captured at 1600 px wide from a demo library with no personal files. The README shows each pair with a `<picture>` element, so GitHub picks the one that matches the reader's theme.
 
+`npm run screenshots` captures every screen in both themes from the running app (it needs Screen Recording and Accessibility permission for your terminal). Capture from a demo library, never your own photos: point the app at a separate catalog by launching it with another home directory, then run the script with the same one.
+
+```bash
+open -n -a VistoGallery --env HOME=/Users/Shared/.visto-showcase-home --env CFFIXED_USER_HOME=/Users/Shared/.visto-showcase-home
+HOME=/Users/Shared/.visto-showcase-home npm run screenshots          # every screen
+HOME=/Users/Shared/.visto-showcase-home npm run screenshots -- --only viewer,player
+```
+
+Only use media you may redistribute (public domain, CC0, CC BY, CC BY-SA), and list anything that needs credit in `docs/screenshots/CREDITS.md`.
+
 ## Code of conduct
 
 Please follow the [Code of Conduct](./CODE_OF_CONDUCT.md). A conduct problem is reported privately to the maintainer, as that file describes; please do not open a public issue about one.
