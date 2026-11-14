@@ -112,15 +112,25 @@ jobs:
             spctl -a -vvv -t exec "$app"
           fi
 
+      # Not `dist`: vite already owns that directory for the frontend bundle.
       - name: Collect the artifacts
         run: |
           set -euo pipefail
-          mkdir -p dist
-          cp src-tauri/target/release/bundle/dmg/*.dmg dist/
-          test -s dist/*.dmg || { echo "::error::no DMG was produced"; exit 1; }
-          cd dist
+          mkdir -p release-assets
+          cp src-tauri/target/release/bundle/dmg/*.dmg release-assets/
+          test -s release-assets/*.dmg || { echo "::error::no DMG was produced"; exit 1; }
+          cd release-assets
           shasum -a 256 ./*.dmg > SHA256SUMS.txt
           cat SHA256SUMS.txt
+
+      # Kept so a publish failure does not lose the built binaries.
+      - name: Keep the artifacts for this run
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-assets
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
 
       # Optional: a detached signature lets anyone verify the DMG against the GPG
       # key in docs/VERIFYING_RELEASES.md, even before the Apple certificate exists.
@@ -136,16 +146,16 @@ jobs:
           command -v gpg >/dev/null || brew install --quiet gnupg
           printf '%s' "$RELEASE_GPG_PRIVATE_KEY" | gpg --batch --import
           fingerprint="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/{print $10; exit}')"
-          for dmg in dist/*.dmg; do
+          for dmg in release-assets/*.dmg; do
             gpg --batch --yes --armor --local-user "$fingerprint" --detach-sign "$dmg"
           done
           echo "Signed with $fingerprint"
-          ls -l dist
+          ls -l release-assets
 
       - name: Attest the build provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: "dist/*.dmg"
+          subject-path: "release-assets/*.dmg"
 
       - name: Publish the release
         env:
@@ -170,4 +180,5 @@ jobs:
 
           See [docs/VERIFYING_RELEASES.md](https://github.com/Davin-X/visto-gallery/blob/main/docs/VERIFYING_RELEASES.md) for the checksums, the GPG fingerprint, and the provenance check.
           EOF
-          gh release create "$tag" --verify-tag --title "VistoGallery $version" --notes-file "$notes" dist/*
+          gh release create "$tag" --verify-tag --title "VistoGallery $version" --notes-file "$notes" release-assets/* \
+            || gh release upload "$tag" release-assets/* --clobber
