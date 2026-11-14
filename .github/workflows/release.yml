@@ -5,7 +5,13 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Recovery path: re-publish an existing tag after the workflow itself is fixed.
+  # The tag is never created or moved here; it must already exist.
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to publish, e.g. v0.4.0
+        required: true
 
 permissions:
   contents: write # gh release create/upload
@@ -42,8 +48,12 @@ jobs:
   release:
     runs-on: macos-latest
     needs: sidecars
+    env:
+      TAG_NAME: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-node@v7
         with:
@@ -57,26 +67,43 @@ jobs:
       - name: Make the sidecars executable
         run: chmod +x src-tauri/binaries/*
 
-      # Tauri signs and notarizes natively when these are present. Without them
-      # the build is ad-hoc signed and Gatekeeper will block it, so the step
-      # below records which of the two happened.
+      # Tauri signs and notarizes natively when these are present, but an empty
+      # APPLE_SIGNING_IDENTITY still turns signing on and then fails with
+      # `no identity found`. Only export the variables when a certificate exists.
+      - name: Configure Apple signing
+        env:
+          IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID_VALUE: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD_VALUE: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID_VALUE: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${IDENTITY:-}" ]; then
+            echo "::warning::No Developer ID certificate configured. The DMG will be ad-hoc signed and Gatekeeper will block it on first launch."
+            exit 0
+          fi
+          {
+            echo "APPLE_SIGNING_IDENTITY=$IDENTITY"
+            echo "APPLE_ID=$APPLE_ID_VALUE"
+            echo "APPLE_PASSWORD=$APPLE_PASSWORD_VALUE"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID_VALUE"
+          } >> "$GITHUB_ENV"
+          echo "Signing and notarizing with: $IDENTITY"
+
       - name: Build the DMG
         run: npm run tauri build -- --bundles dmg
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      # Records which of the two possible states shipped. Neither check fails the
+      # job: an ad-hoc build is a known, documented state, not a build error.
       - name: Report the signature state
         run: |
           set -euo pipefail
           app="src-tauri/target/release/bundle/macos/VistoGallery.app"
           codesign -dv --verbose=2 "$app" 2>&1 | tee /tmp/codesign.txt || true
-          codesign --verify --deep --strict "$app"
           if grep -q 'adhoc' /tmp/codesign.txt; then
             echo "::warning::The app is ad-hoc signed. Set APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_PASSWORD and APPLE_TEAM_ID so Gatekeeper accepts it."
           else
+            codesign --verify --deep --strict "$app"
             spctl -a -vvv -t exec "$app"
           fi
 
@@ -119,8 +146,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME}"
+          tag="${TAG_NAME}"
           version="${tag#v}"
+          echo "Publishing $tag ($version)"
           notes="$(mktemp)"
           awk -v ver="$version" '
             /^## \[/ { if (index($0, "[" ver "]") > 0) { found = 1; next } else if (found) { exit } }
