@@ -1,8 +1,11 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Questions & ideas
+  - name: Questions, ideas and setups
     url: https://github.com/Davin-X/visto-gallery/discussions
-    about: Ask questions, share ideas, or start a discussion before opening an issue.
+    about: Ask a question or start a discussion before opening an issue.
   - name: Security vulnerability
-    url: https://github.com/Davin-X/visto-gallery/security/policy
-    about: Please report security issues privately following SECURITY.md.
+    url: https://github.com/Davin-X/visto-gallery/security/advisories/new
+    about: Report security problems privately, following SECURITY.md. Never in a public issue.
+  - name: Support and reporting guide
+    url: https://github.com/Davin-X/visto-gallery/blob/main/SUPPORT.md
+    about: Where to ask, what to include, and what to expect.

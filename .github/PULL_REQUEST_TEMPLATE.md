@@ -1,33 +1,49 @@
-## Description
+## What and why
 
-Briefly describe what this PR does and why.
+What does this change, and why is it needed? Link the discussion or issue if there is one.
 
 ## Related issue
 
-- Closes #
+Closes #
 
 ## Type of change
 
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to change)
-- [ ] Documentation / docs
-- [ ] Chore / maintenance
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Breaking change (existing behaviour or data changes)
+- [ ] Documentation
+- [ ] Chore / refactor / CI
 
 ## How it was tested
 
-- [ ] `npm run typecheck` passes
-- [ ] `npm run build` passes
-- [ ] Manually tested in the browser prototype
-- [ ] Manually tested in the native desktop app (if backend changes)
+Frontend:
 
-## Screenshots (for UI changes)
+- [ ] `npm run typecheck`
+- [ ] `npm run lint`
+- [ ] `npm test`
+- [ ] `npm run build`
 
-Add before/after screenshots if the change affects the user interface.
+Backend (if `src-tauri/` changed):
+
+- [ ] `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`
+- [ ] `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`
+- [ ] `cargo test --manifest-path src-tauri/Cargo.toml`
+
+Manual:
+
+- [ ] Ran the app (`npm run dev` and `npm run tauri dev`) and exercised the change
+- [ ] Checked native behaviour against [docs/MAC_NATIVE_VALIDATION.md](https://github.com/Davin-X/visto-gallery/blob/main/docs/MAC_NATIVE_VALIDATION.md) (Trash, Finder tags, dialogs, drag and drop)
+
+## Screenshots (UI changes)
+
+Before and after, in light and dark mode.
 
 ## Checklist
 
-- [ ] My code follows the project's style and conventions
-- [ ] I have updated the documentation where needed
-- [ ] New UI uses the shared design tokens and icon contract
-- [ ] I have linked the related issue
+- [ ] Commits follow [Conventional Commits](https://www.conventionalcommits.org/) and each one explains why
+- [ ] New UI uses the design tokens in `src/design/styles/global.css` and works in light and dark mode
+- [ ] New icons use the shared `Svg` component in `src/design/components/icons.tsx`
+- [ ] [CHANGELOG.md](https://github.com/Davin-X/visto-gallery/blob/main/CHANGELOG.md) has a line under **Unreleased** for anything a user would notice
+- [ ] New backend commands are in `generate_handler!` and wrapped in `src/engine/commands/tauri.ts`
+- [ ] Migrations are added as new numbered files, never edited
+- [ ] Documentation updated where behaviour or setup changed

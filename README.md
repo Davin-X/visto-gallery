@@ -245,11 +245,11 @@ VistoGallery is a [Tauri 2](https://tauri.app/) app: a React and TypeScript inte
 - **`npm run tauri dev` shows a blank window.** Start `npm run dev` first; the app loads its interface from `http://localhost:5173`.
 - **`npm run tauri dev` fails to compile.** Install Rust and the Xcode Command Line Tools, then try again.
 - **`npm install` fails.** Use a current Node.js LTS. If it still fails, delete `node_modules` and reinstall.
-- **Still stuck?** Open an [issue](https://github.com/Davin-X/visto-gallery/issues) or start a [discussion](https://github.com/Davin-X/visto-gallery/discussions).
+- **Still stuck?** Open an [issue](https://github.com/Davin-X/visto-gallery/issues) or start a [discussion](https://github.com/Davin-X/visto-gallery/discussions). [SUPPORT.md](./SUPPORT.md) says what to include and what to expect.
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, checks and pull request guidelines, and [SECURITY.md](./SECURITY.md) to report a vulnerability privately.
+Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, checks and pull request guidelines, [SECURITY.md](./SECURITY.md) to report a vulnerability privately, and [SUPPORT.md](./SUPPORT.md) for questions and bug reports.
 
 ## License
 
