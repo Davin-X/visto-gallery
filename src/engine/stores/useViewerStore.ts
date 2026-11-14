@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { useLibraryStore } from "./useLibraryStore";
 import { debugLog, useSettingsStore } from "./useSettingsStore";
+import { clampZoom, stepZoom } from "../utils/zoom";
 
 export interface ViewerState {
   // State
@@ -70,11 +71,11 @@ export const useViewerStore = create<ViewerState>()(
         set({ rotation: 0, flipX: false });
       },
 
-      setZoom: (zoom) => set({ zoom: Math.max(25, Math.min(300, zoom)) }),
+      setZoom: (zoom) => set({ zoom: clampZoom(zoom) }),
 
-      zoomIn: () => set((s) => ({ zoom: Math.min(300, s.zoom + 25) })),
+      zoomIn: () => set((s) => ({ zoom: stepZoom(s.zoom, 1) })),
 
-      zoomOut: () => set((s) => ({ zoom: Math.max(25, s.zoom - 25) })),
+      zoomOut: () => set((s) => ({ zoom: stepZoom(s.zoom, -1) })),
 
       resetZoom: () => set({ zoom: 100, fitMode: "fit" }),
 
