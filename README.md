@@ -18,8 +18,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/library-dark.jpg">
-    <img src="docs/screenshots/library-light.jpg" alt="The VistoGallery library: a sidebar with sources and library totals, the All Photos grid with type filters and search, and an inspector showing the selected photo's details" width="900">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/library-selected-dark.jpg">
+    <img src="docs/screenshots/library-selected-light.jpg" alt="The VistoGallery library: a sidebar with sources and library totals, the All Media grid of landscape, architecture and space photos with ratings and favorite badges, and the Inspector showing the selected photo's rating, camera, lens, exposure and GPS" width="900">
   </picture>
 </p>
 <p align="center"><sub>Shown in your GitHub theme. Every screen in the <a href="#tour">tour</a> appears in both light and dark.</sub></p>
@@ -54,6 +54,10 @@ VistoGallery points at the folders you already have. It never copies, moves or u
 
 ## Tour
 
+<p align="center">
+  <img src="docs/media/vistogallery-tour.gif" alt="A 20-second tour: the library with the Inspector, the photo viewer, the video player, albums, the timeline, the duplicate compare dialog and the editor" width="720">
+</p>
+
 ### Albums and Smart Albums
 
 <table>
@@ -77,12 +81,12 @@ Smart Albums are saved filters (for example "5-star picks" or "Sunsets") that st
     <th>Dark</th>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/album-view-light.jpg" alt="An album's photos in the library grid, with the inspector open on a selected photo (light theme)" width="440"></td>
-    <td><img src="docs/screenshots/album-view-dark.jpg" alt="An album's photos in the library grid, with the inspector open on a selected photo (dark theme)" width="440"></td>
+    <td><img src="docs/screenshots/album-view-light.jpg" alt="The Alpine Weekend album in the library grid, with the sidebar collapsed to icons (light theme)" width="440"></td>
+    <td><img src="docs/screenshots/album-view-dark.jpg" alt="The Alpine Weekend album in the library grid, with the sidebar collapsed to icons (dark theme)" width="440"></td>
   </tr>
 </table>
 
-Open an album to see just its photos. The inspector follows the selected item and shows its file details, tags and actions.
+Open an album to see just its photos, with the same filters, sorting and layouts as the library. Collapse the sidebar to icons when you want more room.
 
 ### Viewer
 
@@ -92,12 +96,27 @@ Open an album to see just its photos. The inspector follows the selected item an
     <th>Dark</th>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/viewer-light.jpg" alt="Full-size photo viewer with zoom, rotate, favorite and slideshow controls and a filmstrip of the folder (light theme)" width="440"></td>
-    <td><img src="docs/screenshots/viewer-dark.jpg" alt="Full-size photo viewer with zoom, rotate, favorite and slideshow controls and a filmstrip of the folder (dark theme)" width="440"></td>
+    <td><img src="docs/screenshots/viewer-light.jpg" alt="Photo viewer showing a mountain valley, with capture date, size, camera and lens above it, zoom and favorite controls below, and a filmstrip of the library (light theme)" width="440"></td>
+    <td><img src="docs/screenshots/viewer-dark.jpg" alt="Photo viewer showing a mountain valley, with capture date, size, camera and lens above it, zoom and favorite controls below, and a filmstrip of the library (dark theme)" width="440"></td>
   </tr>
 </table>
 
-Zoom, rotate, favorite and hide without leaving the photo. The filmstrip shows the rest of the folder.
+Zoom, pan, favorite and hide without leaving the photo. The filmstrip pages through the library, and the camera, lens and capture date sit above the photo.
+
+### Video player
+
+<table>
+  <tr>
+    <th>Light</th>
+    <th>Dark</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/player-light.jpg" alt="Video player with an Earth-from-orbit clip, playback time, and a queue of five videos below (light theme)" width="440"></td>
+    <td><img src="docs/screenshots/player-dark.jpg" alt="Video player with an Earth-from-orbit clip, playback time, and a queue of five videos below (dark theme)" width="440"></td>
+  </tr>
+</table>
+
+Videos play in the app, including MKV and HEVC files that the system web view can't open: the bundled ffmpeg repackages them for playback without re-encoding or touching the original. Keep a video playing in the background while you browse.
 
 ### Edit
 
@@ -107,12 +126,12 @@ Zoom, rotate, favorite and hide without leaving the photo. The filmstrip shows t
     <th>Dark</th>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/edit-light.jpg" alt="Editor with light and color sliders, crop tools, and save draft, save copy and restore original actions (light theme)" width="440"></td>
-    <td><img src="docs/screenshots/edit-dark.jpg" alt="Editor with light and color sliders, crop tools, and save draft, save copy and restore original actions (dark theme)" width="440"></td>
+    <td><img src="docs/screenshots/edit-editor-light.jpg" alt="Editor with light and color sliders, crop tools, and save draft, save copy and restore original actions (light theme)" width="440"></td>
+    <td><img src="docs/screenshots/edit-editor-dark.jpg" alt="Editor with light and color sliders, crop tools, and save draft, save copy and restore original actions (dark theme)" width="440"></td>
   </tr>
 </table>
 
-Adjustments are saved as drafts. Save a copy, or replace the file knowing the original is kept and can be restored.
+Adjustments are saved as drafts, and the Edit screen lists every saved draft so you can pick up where you left off. Save a copy, or replace the file knowing the original is kept and can be restored.
 
 ### Duplicates
 
@@ -122,12 +141,27 @@ Adjustments are saved as drafts. Save a copy, or replace the file knowing the or
     <th>Dark</th>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/duplicates-light.jpg" alt="Compare dialog showing a keeper and a copy side by side with a table of differing metadata (light theme)" width="440"></td>
-    <td><img src="docs/screenshots/duplicates-dark.jpg" alt="Compare dialog showing a keeper and a copy side by side with a table of differing metadata (dark theme)" width="440"></td>
+    <td><img src="docs/screenshots/duplicates-compare-light.jpg" alt="Compare dialog showing a keeper and a copy side by side with a table of differing metadata (light theme)" width="440"></td>
+    <td><img src="docs/screenshots/duplicates-compare-dark.jpg" alt="Compare dialog showing a keeper and a copy side by side with a table of differing metadata (dark theme)" width="440"></td>
   </tr>
 </table>
 
-Compare a keeper and its copies side by side, with synced zoom and a field-by-field diff, before moving copies to the Trash.
+Compare a keeper and its copies side by side, with synced zoom and only the fields that differ, before moving copies to the Trash. Undo puts them back, even from an external drive.
+
+### Timeline and Details
+
+<table>
+  <tr>
+    <th>Timeline</th>
+    <th>Details</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/library-timeline-dark.jpg" alt="Library timeline grouped by month, November and October 2025, with ratings and favorite badges on each photo" width="440"></td>
+    <td><img src="docs/screenshots/library-list-dark.jpg" alt="Library Details view: a sortable table of names, dates, sizes and types" width="440"></td>
+  </tr>
+</table>
+
+Group the library by month, or switch to a sortable table. Each view remembers where you were.
 
 ### Sources
 
@@ -142,11 +176,13 @@ Compare a keeper and its copies side by side, with synced zoom and a field-by-fi
   </tr>
 </table>
 
-Add, rescan or remove folders. Removing a source only removes it from the catalog; your files stay on disk.
+Add, rescan or remove folders. Removing a source only removes it from the catalog; your files stay on disk. If a folder moves, **Locate…** points the source at its new place and everything keeps its albums, tags and edits.
+
+<sub>The screenshots show a demo library of openly licensed photos and videos from Wikimedia Commons, NASA and rawpixel. Credits are in [docs/screenshots/CREDITS.md](docs/screenshots/CREDITS.md).</sub>
 
 ## Install
 
-1. Download the latest `.dmg` from [GitHub Releases](https://github.com/Davin-X/visto-gallery/releases).
+1. Download the latest `.dmg` from [GitHub Releases](https://github.com/Davin-X/visto-gallery/releases). It runs on Apple Silicon Macs (M1 or later).
 2. Open it and drag **VistoGallery.app** into **Applications**.
 3. Eject the disk image and open the app.
 
@@ -158,7 +194,7 @@ VistoGallery is not notarized yet, so macOS may say the app is "damaged" or from
 xattr -dr com.apple.quarantine /Applications/VistoGallery.app
 ```
 
-Every release publishes checksums, a GPG signature of the `.dmg` and a build provenance attestation; [docs/VERIFYING_RELEASES.md](docs/VERIFYING_RELEASES.md) shows how to check them.
+Every release publishes checksums and a build provenance attestation, and a GPG signature of the `.dmg` when the release key is configured (0.4.0 has none). [docs/VERIFYING_RELEASES.md](docs/VERIFYING_RELEASES.md) shows how to check them.
 
 ## Supported formats
 
