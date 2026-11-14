@@ -249,7 +249,7 @@ VistoGallery is a [Tauri 2](https://tauri.app/) app: a React and TypeScript inte
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, checks and pull request guidelines, [SECURITY.md](./SECURITY.md) to report a vulnerability privately, and [SUPPORT.md](./SUPPORT.md) for questions and bug reports.
+Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, checks and pull request guidelines, [SECURITY.md](./SECURITY.md) to report a vulnerability privately, and [SUPPORT.md](./SUPPORT.md) for questions and bug reports. [ACCESSIBILITY.md](./ACCESSIBILITY.md) describes keyboard and screen reader support and how to report a barrier.
 
 ## License
 
