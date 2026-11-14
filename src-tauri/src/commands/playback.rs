@@ -30,12 +30,9 @@ use ts_rs::TS;
 
 use crate::errors::CommandError;
 
-/// Remuxed media kept in the cache before the oldest entries are removed.
-///
-/// A copied 4K music video is over 100 MB, so this holds a few dozen of them —
-/// enough that re-opening something you watched recently is instant, small
-/// enough that nobody finds a multi-gigabyte folder they never asked for.
-const PLAYBACK_CACHE_BUDGET_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+/// Fallback budget for remuxed media when settings cannot be read. Normally
+/// the "Maximum cache size" setting applies, as it does to thumbnails.
+const PLAYBACK_CACHE_FALLBACK_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
 /// Containers `prepare_playback` may hand straight to `<video>` when no probe
 /// is available. Mirrors `IN_APP_VIDEO_EXTENSIONS` on the frontend.
@@ -366,9 +363,14 @@ fn prune_cache(root: &Path, max_bytes: u64) {
         return;
     }
     files.sort_by_key(|(modified, _, _)| *modified);
-    for (_, size, path) in files {
+    for (modified, size, path) in files {
         if total <= max_bytes {
             break;
+        }
+        // The player re-opens the file for every range request, so a copy
+        // that may still be streaming is never deleted, even over budget.
+        if super::storage::recently_used(modified, super::storage::PLAYBACK_IN_USE_GRACE) {
+            continue;
         }
         if std::fs::remove_file(&path).is_ok() {
             total = total.saturating_sub(size);
@@ -505,7 +507,10 @@ pub async fn prepare_playback(
         }
     }
 
-    let cache_root = app.path().app_cache_dir()?.join("playback");
+    let cache_root = app
+        .path()
+        .app_cache_dir()?
+        .join(super::storage::PLAYBACK_DIR);
     tokio::fs::create_dir_all(&cache_root).await?;
 
     let metadata = tokio::fs::metadata(&source).await?;
@@ -556,8 +561,17 @@ pub async fn prepare_playback(
             });
         }
         tokio::fs::rename(&partial, &target).await?;
+        let budget = super::settings::load_persisted_settings(&db)
+            .await
+            .map(|settings| settings.max_cache_size_gb.max(1) as u64 * 1024 * 1024 * 1024)
+            .unwrap_or(PLAYBACK_CACHE_FALLBACK_BYTES);
         let prune_root = cache_root.clone();
-        tokio::task::spawn_blocking(move || prune_cache(&prune_root, PLAYBACK_CACHE_BUDGET_BYTES));
+        tokio::task::spawn_blocking(move || prune_cache(&prune_root, budget));
+    } else {
+        // A hit: mark it used so it is evicted last and, while it streams,
+        // not at all (see `PLAYBACK_IN_USE_GRACE`).
+        let touched = target.clone();
+        tokio::task::spawn_blocking(move || super::storage::touch_if_stale(&touched));
     }
 
     release_gate(&key, &gate);
@@ -826,6 +840,35 @@ mod tests {
             "a partial that may still be in flight stays"
         );
         assert!(cached.exists(), "finished remuxes are untouched");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn prune_over_budget_never_deletes_a_video_that_may_be_playing() {
+        let dir = std::env::temp_dir().join(format!(
+            "visto-gallery-remux-inuse-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create cache dir");
+        let idle = dir.join("idle.mp4");
+        let playing = dir.join("playing.mp4");
+        std::fs::write(&idle, [0_u8; 8]).expect("write idle remux");
+        std::fs::write(&playing, [0_u8; 8]).expect("write playing remux");
+        let old = std::time::SystemTime::now()
+            - super::super::storage::PLAYBACK_IN_USE_GRACE
+            - std::time::Duration::from_secs(60);
+        filetime::set_file_mtime(&idle, filetime::FileTime::from_system_time(old))
+            .expect("age the idle remux");
+
+        // A 1-byte budget would delete both if recency were ignored.
+        prune_cache(&dir, 1);
+
+        assert!(!idle.exists(), "the least recently used copy goes first");
+        assert!(
+            playing.exists(),
+            "a copy used within the grace period stays"
+        );
 
         std::fs::remove_dir_all(&dir).ok();
     }

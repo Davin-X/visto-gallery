@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { CpuIcon, TrashIcon } from "../icons";
 import type { ErrorCode } from "../../../engine/types/commands";
 import { RootPathMapping } from "./RootPathMapping";
+import { StorageSection } from "./StorageSection";
 import type { SettingsChange } from "./types";
 
 export function AdvancedPanel(props: {
@@ -34,7 +35,9 @@ export function AdvancedPanel(props: {
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Maximum cache size</b>
-            <span className="settings-row-desc">Disk space for thumbnails and previews</span>
+            <span className="settings-row-desc">
+              Limit for each cache: thumbnails, and videos converted for playback
+            </span>
           </div>
           <div className="settings-row-control" style={{ alignItems: "center" }}>
             <input
@@ -100,6 +103,8 @@ export function AdvancedPanel(props: {
           </div>
         </div>
       </section>
+
+      <StorageSection showNotice={props.showNotice} />
 
       <section className="settings-section">
         <h2 className="settings-section-title">

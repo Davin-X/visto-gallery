@@ -945,7 +945,10 @@ pub async fn get_item_thumbnail(
     let quality = request.quality.unwrap_or(78).clamp(1, 100);
     let max_cache_bytes = request.max_cache_bytes.unwrap_or(512 * 1024 * 1024);
 
-    let cache_root = app.path().app_cache_dir()?.join("thumbnails");
+    let cache_root = app
+        .path()
+        .app_cache_dir()?
+        .join(super::storage::THUMBNAILS_DIR);
     tokio::fs::create_dir_all(&cache_root).await?;
     let cache_key = thumbnail_cache_key(
         &request.item_id,
@@ -965,6 +968,9 @@ pub async fn get_item_thumbnail(
         Err(_) => None,
     };
     let (bytes, width, height) = if let Some(cached) = cached {
+        // Mark the hit so budget pruning evicts the least recently used file.
+        let touched = cache_path.clone();
+        tokio::task::spawn_blocking(move || super::storage::touch_if_stale(&touched));
         cached
     } else {
         let _ = tokio::fs::remove_file(&cache_path).await;
@@ -1106,7 +1112,8 @@ pub(crate) fn prune_thumbnail_cache(root: &Path, max_bytes: u64) -> (usize, u64,
         return (deleted, bytes_freed, failed);
     }
 
-    // Cache files are written once, so modified time is a good proxy for age.
+    // Hits refresh the modified time (`touch_if_stale`), so oldest-first is
+    // least-recently-used first.
     files.sort_by_key(|(_, _, modified)| *modified);
 
     for (path, size, _) in files {

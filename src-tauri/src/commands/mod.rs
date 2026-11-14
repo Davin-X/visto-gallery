@@ -15,6 +15,7 @@ mod roots;
 mod scan_jobs;
 mod settings;
 mod smart_albums;
+mod storage;
 mod system;
 mod temp_files;
 mod update;
@@ -55,6 +56,10 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+pub use storage::{clear_cache, get_storage_usage};
+// The DTOs are only named outside `storage` by the IPC type export.
+#[cfg(test)]
+pub use storage::{CacheKind, ClearCacheResult, StorageUsage};
 pub use system::{get_version, open_external};
 use tauri::{AppHandle, Emitter, Manager, State};
 pub use temp_files::*;

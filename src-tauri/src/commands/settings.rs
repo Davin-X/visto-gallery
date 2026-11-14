@@ -14,7 +14,7 @@ pub async fn get_settings(catalog: State<'_, crate::Catalog>) -> Result<AppSetti
 /// yet stored. Shared by `get_settings` and `save_settings` so the read contract
 /// lives in one place and a partial save can merge onto the *real* persisted
 /// state instead of `AppSettings::default()`.
-async fn load_persisted_settings(db: &SqlitePool) -> Result<AppSettings, CommandError> {
+pub(crate) async fn load_persisted_settings(db: &SqlitePool) -> Result<AppSettings, CommandError> {
     let rows = sqlx::query("SELECT key, value FROM settings")
         .fetch_all(db)
         .await?;

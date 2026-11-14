@@ -6,7 +6,8 @@ import { useSettingsStore } from "../../engine/stores/useSettingsStore";
 // the library grid used to request multi-megabyte originals; cached JPEGs make
 // scrolling a large library cheap. Keys include the size and quality because
 // the backend caches each rendering separately. Byte-based eviction keeps the
-// in-memory cache within maxCacheSizeGB.
+// in-memory cache within MEMORY_CACHE_BYTES; maxCacheSizeGB is the on-disk
+// budget only (gigabytes of data URLs held in the web view would exhaust RAM).
 const thumbnailCache = new Map<string, string>();
 const thumbnailByteSizes = new Map<string, number>();
 const thumbnailRequests = new Map<string, Promise<string>>();
@@ -16,6 +17,15 @@ type CachedThumbnailSize = 64 | 128 | 256 | 512 | 1024;
 let activeThumbnailRequests = 0;
 let cachedBytes = 0;
 
+/** In-memory data URLs: enough for several screens of large tiles. */
+export const MEMORY_CACHE_BYTES = 192 * 1024 * 1024;
+
+/** Memory never holds more than the disk cache is allowed to. */
+function memoryBudgetBytes(): number {
+  return Math.min(MEMORY_CACHE_BYTES, maxCacheBytes());
+}
+
+/** On-disk thumbnail budget the backend prunes to. */
 function maxCacheBytes(): number {
   return useSettingsStore.getState().maxCacheSizeGB * 1024 * 1024 * 1024;
 }
@@ -43,6 +53,13 @@ export function invalidateThumbnailCache(itemId: string): void {
       cachedBytes -= bytes;
     }
   }
+}
+
+/** Forget every in-memory rendering, e.g. after the disk cache is cleared. */
+export function clearThumbnailMemoryCache(): void {
+  thumbnailCache.clear();
+  thumbnailByteSizes.clear();
+  cachedBytes = 0;
 }
 
 function clearCacheForQuality(quality: number): void {
@@ -102,7 +119,7 @@ function loadThumbnail(itemId: string, size: CachedThumbnailSize): Promise<strin
           thumbnailByteSizes.set(key, byteSize);
           cachedBytes += byteSize;
           // Evict by byte size (LRU).
-          evictByBytes(maxCacheBytes() * 0.9);
+          evictByBytes(memoryBudgetBytes() * 0.9);
           resolve(url);
         })
         .catch(reject)
