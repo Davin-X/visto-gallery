@@ -158,6 +158,8 @@ VistoGallery is not notarized yet, so macOS may say the app is "damaged" or from
 xattr -dr com.apple.quarantine /Applications/VistoGallery.app
 ```
 
+Every release publishes checksums, a GPG signature of the `.dmg` and a build provenance attestation; [docs/VERIFYING_RELEASES.md](docs/VERIFYING_RELEASES.md) shows how to check them.
+
 ## Supported formats
 
 | Type | Extensions |

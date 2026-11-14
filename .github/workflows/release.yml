@@ -1,0 +1,139 @@
+name: Release
+
+# Tag pushes only. The tag itself is created locally with `git tag -s`, so GitHub
+# shows it as Verified; this workflow never creates or moves a tag.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # gh release create/upload
+  id-token: write # provenance attestation
+  attestations: write
+
+jobs:
+  # ffmpeg and ffprobe ship as Tauri sidecars, and `tauri-build` fails when the
+  # files listed in `externalBin` are missing. Same build as CI uses.
+  sidecars:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache the ffmpeg source and built sidecars
+        uses: actions/cache@v6
+        with:
+          path: |
+            .ffmpeg-work
+            src-tauri/binaries
+          key: ffmpeg-src-${{ hashFiles('scripts/build-ffmpeg.sh') }}
+          restore-keys: ffmpeg-src-
+      - name: Build the static sidecars
+        run: bash scripts/build-ffmpeg.sh
+        env:
+          VISTO_FFMPEG_WORK: ${{ github.workspace }}/.ffmpeg-work
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ffmpeg-sidecars
+          path: src-tauri/binaries/*
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    runs-on: macos-latest
+    needs: sidecars
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v8
+        with:
+          name: ffmpeg-sidecars
+          path: src-tauri/binaries
+      - name: Make the sidecars executable
+        run: chmod +x src-tauri/binaries/*
+
+      # Tauri signs and notarizes natively when these are present. Without them
+      # the build is ad-hoc signed and Gatekeeper will block it, so the step
+      # below records which of the two happened.
+      - name: Build the DMG
+        run: npm run tauri build -- --bundles dmg
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Report the signature state
+        run: |
+          set -euo pipefail
+          app="src-tauri/target/release/bundle/macos/VistoGallery.app"
+          codesign -dv --verbose=2 "$app" 2>&1 | tee /tmp/codesign.txt || true
+          codesign --verify --deep --strict "$app"
+          if grep -q 'adhoc' /tmp/codesign.txt; then
+            echo "::warning::The app is ad-hoc signed. Set APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_PASSWORD and APPLE_TEAM_ID so Gatekeeper accepts it."
+          else
+            spctl -a -vvv -t exec "$app"
+          fi
+
+      - name: Collect the artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp src-tauri/target/release/bundle/dmg/*.dmg dist/
+          cd dist
+          shasum -a 256 ./*.dmg > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      # Optional: a detached signature lets anyone verify the DMG against the GPG
+      # key in docs/VERIFYING_RELEASES.md, even before the Apple certificate exists.
+      - name: Sign the DMG with the release key
+        env:
+          RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RELEASE_GPG_PRIVATE_KEY:-}" ]; then
+            echo "::warning::RELEASE_GPG_PRIVATE_KEY is not set; the DMG has no detached signature."
+            exit 0
+          fi
+          command -v gpg >/dev/null || brew install --quiet gnupg
+          printf '%s' "$RELEASE_GPG_PRIVATE_KEY" | gpg --batch --import
+          fingerprint="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/{print $10; exit}')"
+          for dmg in dist/*.dmg; do
+            gpg --batch --yes --armor --local-user "$fingerprint" --detach-sign "$dmg"
+          done
+          echo "Signed with $fingerprint"
+          ls -l dist
+
+      - name: Attest the build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/*.dmg"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          notes="$(mktemp)"
+          awk -v ver="$version" '
+            /^## \[/ { if (index($0, "[" ver "]") > 0) { found = 1; next } else if (found) { exit } }
+            found { print }
+          ' CHANGELOG.md > "$notes"
+          if [ ! -s "$notes" ]; then
+            echo "::error::CHANGELOG.md has no section for $version"
+            exit 1
+          fi
+          cat >> "$notes" <<'EOF'
+
+          ### Verifying this release
+
+          See [docs/VERIFYING_RELEASES.md](https://github.com/Davin-X/visto-gallery/blob/main/docs/VERIFYING_RELEASES.md) for the checksums, the GPG fingerprint, and the provenance check.
+          EOF
+          gh release create "$tag" --verify-tag --title "VistoGallery $version" --notes-file "$notes" dist/*
