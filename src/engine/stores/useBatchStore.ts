@@ -41,7 +41,9 @@ const defaultConfig = {
   pattern: "{name}_{number}",
   format: "jpeg" as BatchFormat,
   quality: 88,
-  stripMetadata: true,
+  // Keeping capture date, camera and GPS data is what most people expect from
+  // a batch export; stripping is the deliberate opt-in.
+  stripMetadata: false,
   maxDimension: null,
 };
 
