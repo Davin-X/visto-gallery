@@ -639,8 +639,8 @@ function BatchScreen(props: BatchScreenProps) {
                 <span className="batch-toggle-copy">
                   <b>Strip metadata</b>
                   <small>
-                    Removes EXIF, GPS, and camera information when a file is re-encoded. Copies that
-                    need no changes keep their metadata.
+                    Off by default, so exports keep their capture date, EXIF, GPS, and camera data.
+                    Turn this on to remove it whenever a file is re-encoded.
                   </small>
                 </span>
               </label>

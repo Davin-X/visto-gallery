@@ -89,6 +89,9 @@ function App() {
   const edit = useEditStore();
   const batch = useBatchStore();
   const settings = useSettingsStore();
+  // The slideshow is a full-window mode: while it is open the app chrome steps
+  // aside so the photo, not the top bar, owns the screen.
+  const slideshowOpen = useSlideshowStore((s) => s.isOpen);
 
   // ── Appearance ────────────────────────────────────────────────────────────
   const systemDark = useSystemDark();
@@ -514,6 +517,7 @@ function App() {
       sidebarWidth={sidebarWidth}
       sidebarOpen={library.sidebarOpen}
       sidebarCollapsed={library.sidebarCollapsed}
+      slideshowOpen={slideshowOpen}
       topbar={
         <AppTopBar
           screen={screen}

@@ -10,6 +10,9 @@ interface AppShellProps {
   sidebarWidth: number;
   sidebarOpen: boolean;
   sidebarCollapsed: boolean;
+  // A slideshow covers the whole window, so the top bar and its traffic-light
+  // gutter stand down until it closes.
+  slideshowOpen?: boolean;
   topbar: ReactNode;
   sidebar: ReactNode;
   overlays?: ReactNode;
@@ -22,6 +25,7 @@ export function AppShell({
   sidebarWidth,
   sidebarOpen,
   sidebarCollapsed,
+  slideshowOpen = false,
   topbar,
   sidebar,
   overlays,
@@ -34,7 +38,9 @@ export function AppShell({
     <ErrorBoundary>
       <div
         ref={frameRef}
-        className={`app-frame ${dark ? "dark" : ""}${!animateTransitions ? " no-transitions" : ""}`}
+        className={`app-frame ${dark ? "dark" : ""}${!animateTransitions ? " no-transitions" : ""}${
+          slideshowOpen ? " slideshow-open" : ""
+        }`}
         style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
       >
         <a className="skip-to-content" href="#main-content">

@@ -11,6 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Content-based animation detection**: `is_animated` is decided by reading container headers, never by filename and never by decoding pixels — GIF block walk (a second image descriptor), WebP `VP8X` animation flag / `ANIM` chunk, PNG `acTL` before the first `IDAT` (APNG), and `avis`/`msf1` brands in an AVIF/HEIF `ftyp` box. A still GIF is therefore *not* animated, while an animated WebP/APNG/AVIF *is*.
 - Catalog migration `008_add_is_animated` adds `media_items.is_animated` (default 0) and seeds existing `.gif` rows; a one-time `backfill_animation_flags` startup pass then probes every candidate row so upgraded libraries get the real answer, not the filename guess.
 
+### Changed
+- The Inspector starts closed and remembers your choice, so the grid gets the whole window until you open it (⌘⌥I or the toolbar button).
+- Batch exports keep capture date, EXIF, camera and GPS data by default; "Strip metadata" is now the opt-in.
+- A slideshow hides the top bar and fills the window, and long filenames ellipsize instead of running over the controls.
+
 ### Fixed
 - **Moves and renames keep the item**: a file moved or renamed inside a source folder used to be pruned and re-imported under a new id, quietly dropping its favourite flag, rating, tags and album membership. The scan now matches vanished rows against newly appeared files by a content fingerprint (migration `010_add_content_signature`: size plus the first and last 64 KiB, never a full read) and re-keys the surviving row, along with its tags, albums and edit records, to the new path. Matching is only applied when it is unambiguous: a copy next to the original, or two vanished files with the same fingerprint, go through the ordinary import path.
 - **Hidden items stayed visible in Smart Albums**: Smart Album grids and cover images included hidden items while their counts left them out. Hidden items are now excluded everywhere unless you're on the Hidden screen.
