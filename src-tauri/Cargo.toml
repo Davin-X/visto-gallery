@@ -1,6 +1,6 @@
 [package]
 name = "visto-gallery"
-version = "0.3.3"
+version = "0.4.0"
 description = "A fast, local-first photo & video gallery app for macOS"
 authors = ["Devendra Kumar"]
 edition = "2021"
