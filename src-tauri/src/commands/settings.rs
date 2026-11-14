@@ -157,6 +157,9 @@ async fn save_settings_into(
     if let Some(v) = patch.check_for_updates_on_launch {
         settings.check_for_updates_on_launch = v;
     }
+    if let Some(v) = patch.require_hidden_unlock {
+        settings.require_hidden_unlock = v;
+    }
     if let Some(v) = patch.max_cache_size_gb {
         settings.max_cache_size_gb = v;
     }
@@ -214,6 +217,10 @@ async fn save_settings_into(
         (
             "check_for_updates_on_launch",
             settings.check_for_updates_on_launch.to_string(),
+        ),
+        (
+            "require_hidden_unlock",
+            settings.require_hidden_unlock.to_string(),
         ),
         ("max_cache_size_gb", settings.max_cache_size_gb.to_string()),
         ("thumbnail_quality", settings.thumbnail_quality.to_string()),

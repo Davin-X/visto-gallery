@@ -522,8 +522,10 @@ pub async fn get_matching_ids(
 pub async fn get_hidden_items(
     filter: Option<super::LibraryFilterDTO>,
     catalog: State<'_, crate::Catalog>,
+    lock: State<'_, super::HiddenLock>,
 ) -> Result<LibraryItemsPage, CommandError> {
     let db = super::get_db(&catalog)?;
+    super::hidden_lock::require_hidden_access(&db, &lock).await?;
     let mut f = filter.unwrap_or_default();
     f.hidden = Some(true);
     get_library_items_page(&db, f).await
@@ -1997,9 +1999,16 @@ pub struct LibraryStats {
 #[tauri::command]
 pub async fn get_library_stats(
     catalog: State<'_, crate::Catalog>,
+    lock: State<'_, super::HiddenLock>,
 ) -> Result<LibraryStats, CommandError> {
     let db = super::get_db(&catalog)?;
-    library_stats(&db).await
+    let mut stats = library_stats(&db).await?;
+    // While Hidden is locked, its count and size are not shown either.
+    if !super::hidden_lock::hidden_visible(&db, &lock).await {
+        stats.hidden = 0;
+        stats.hidden_size = 0;
+    }
+    Ok(stats)
 }
 
 pub(crate) async fn library_stats(db: &SqlitePool) -> Result<LibraryStats, CommandError> {
@@ -2012,8 +2021,10 @@ pub(crate) async fn library_stats(db: &SqlitePool) -> Result<LibraryStats, Comma
 #[tauri::command]
 pub async fn get_hidden_stats(
     catalog: State<'_, crate::Catalog>,
+    lock: State<'_, super::HiddenLock>,
 ) -> Result<LibraryStats, CommandError> {
     let db = super::get_db(&catalog)?;
+    super::hidden_lock::require_hidden_access(&db, &lock).await?;
     library_stats_scoped(&db, true).await
 }
 

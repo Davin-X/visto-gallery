@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { isHiddenLocked, useHiddenLockStore } from "../engine/stores/useHiddenLockStore";
 import { tauri } from "../engine/commands/tauri";
 import {
   useLibraryStore,
@@ -455,7 +456,9 @@ function App() {
       library.setViewerScope("library");
       library.clearSelection();
       library.inspectItem(null);
-      await library.loadHiddenItems();
+      // A locked Hidden shows its unlock panel and loads nothing until then.
+      const lockStatus = await useHiddenLockStore.getState().refresh();
+      if (!isHiddenLocked(lockStatus)) await library.loadHiddenItems();
     } else if (screen === "Hidden") {
       // Leaving Hidden drops the hidden selection and any hidden inspector
       // focus, so the next screen cannot show an item it cannot display.

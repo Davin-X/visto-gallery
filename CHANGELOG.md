@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **Touch ID lock for Hidden**: Hidden asks for Touch ID or your Mac password before it shows anything, and the sidebar leaves out its count and size while it is locked. It locks again when the screen locks, when the window closes, and 5 minutes after you leave Hidden. Turn it off in Settings → Privacy (which asks to unlock first). Hidden files are not encrypted and stay in their folders.
 - **Pinch to zoom in the viewer**: pinch on a trackpad or ⌘-scroll to zoom into the point under your fingers or pointer, up to 800%, and two-finger scroll to move around a zoomed photo. The +/− buttons and ↑/↓ keys step more finely (…, 75%, 100%, 125%, 150%, …).
 - **Timeline by month**: every month shows its real item count from the catalog, however far you have scrolled, and **Select all** on a month selects the whole month. Months and years fold to a strip of covers (older years start folded; Option-click folds or unfolds everything), and the choice is remembered. A bar at the top jumps to any year in one click, or to any month from its menu. The Timeline always sorts by date, newest first.
 - **Storage in Settings → Advanced**: see how much space thumbnails, converted videos, the catalog and edit originals take, and clear the thumbnail or converted-video cache. Videos used in the last three hours are kept so nothing stops mid-play.

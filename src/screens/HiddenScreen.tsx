@@ -3,6 +3,8 @@ import LibraryScreen from "./LibraryScreen";
 import { useFocusTrap } from "../design/hooks/useFocusTrap";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
 import { useLibraryStore } from "../engine/stores/useLibraryStore";
+import { isHiddenLocked, useHiddenLockStore } from "../engine/stores/useHiddenLockStore";
+import { LockIcon } from "../design/components/icons";
 import { tauri } from "../engine/commands/tauri";
 import { useShallow } from "zustand/react/shallow";
 import type { MediaItem } from "../engine/types/media";
@@ -245,6 +247,69 @@ function HiddenScreen(props: HiddenScreenProps) {
       [pendingReveal],
     ),
   ]);
+
+  // Touch ID / password lock. The backend refuses hidden items while locked;
+  // this keeps the screen honest about it and keeps an unlock alive while
+  // the screen is in use.
+  const lockStatus = useHiddenLockStore((s) => s.status);
+  const unlocking = useHiddenLockStore((s) => s.unlocking);
+  const locked = isHiddenLocked(lockStatus);
+  const lockRequired = lockStatus?.required === true;
+  useEffect(() => {
+    if (!lockRequired) return;
+    const refresh = () => void useHiddenLockStore.getState().refresh();
+    window.addEventListener("focus", refresh);
+    if (locked) return () => window.removeEventListener("focus", refresh);
+    const timer = window.setInterval(() => void useHiddenLockStore.getState().keepAlive(), 60_000);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [locked, lockRequired]);
+  useEffect(() => {
+    if (!locked) return;
+    // Nothing hidden may stay selected or inspected behind the lock.
+    const state = useLibraryStore.getState();
+    state.clearSelection();
+    state.inspectItem(null);
+    setPendingReveal(null);
+  }, [locked]);
+
+  if (locked) {
+    const touchId = lockStatus?.method === "touchId";
+    const unlock = async () => {
+      if (await useHiddenLockStore.getState().unlock()) {
+        await useLibraryStore.getState().loadHiddenItems();
+      }
+    };
+    return (
+      <section className="hidden-locked" aria-labelledby="hidden-locked-title">
+        <div className="empty-state">
+          <span>
+            <LockIcon size={30} />
+          </span>
+          <b id="hidden-locked-title">Hidden is locked</b>
+          <p>
+            {lockStatus?.available === false
+              ? "Set a login password for this Mac in System Settings to unlock Hidden."
+              : `Use ${touchId ? "Touch ID or your Mac password" : "your Mac password"} to see your hidden photos and videos.`}
+          </p>
+          <div className="empty-state-actions">
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => void unlock()}
+              disabled={unlocking || lockStatus?.available === false}
+              autoFocus
+            >
+              <LockIcon size={13} />{" "}
+              {unlocking ? "Waiting…" : touchId ? "Unlock with Touch ID" : "Unlock"}
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <>

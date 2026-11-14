@@ -68,6 +68,13 @@ dirs = "7"
 reqwest = { version = "0.13", default-features = false, features = ["json", "native-tls"] }
 semver = "1"
 
+# Touch ID / Mac password for the Hidden lock
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSError", "NSDistributedNotificationCenter", "NSNotification", "NSOperation"] }
+objc2-local-authentication = { version = "0.3", default-features = false, features = ["std", "block2", "LAContext", "LAError", "LABiometryType"] }
+
 [dev-dependencies]
 filetime = "0.2"
 

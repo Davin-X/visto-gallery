@@ -30,6 +30,7 @@ import { ACCENT_PALETTE } from "../engine/stores";
 import type { Appearance } from "../engine/types/generated/ipc";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { LibraryFolder, LibraryStats } from "../engine/types/commands";
+import { isHiddenLocked, useHiddenLockStore } from "../engine/stores/useHiddenLockStore";
 import type { Screen } from "./screen";
 import { usePopoverFocus } from "../design/hooks/usePopoverFocus";
 
@@ -268,6 +269,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const folderCount = folders.length;
   const folderItems = folders.reduce((total, folder) => total + folder.itemCount, 0);
+  const hiddenLocked = useHiddenLockStore((s) => isHiddenLocked(s.status));
   const [statsOpen, setStatsOpen] = useState(false);
   const [statsPos, setStatsPos] = useState({ top: 0, left: 0 });
   const statsWrapRef = useRef<HTMLDivElement>(null);
@@ -419,14 +421,17 @@ export function AppSidebar({
           <span className="stat-size">· {formatBytesSimple(stats.favoriteSize)}</span>
         </span>
       </div>
-      <div className="stat-row hidden" title="Not counted in the total">
-        <EyeOffIcon className="stat-icon" size={13} strokeWidth={1.7} />
-        <span className="stat-label">Hidden</span>
-        <span className="stat-value">
-          {stats.hidden.toLocaleString()}
-          <span className="stat-size">· {formatBytesSimple(stats.hiddenSize)}</span>
-        </span>
-      </div>
+      {/* While Hidden is locked its count and size are not shown at all. */}
+      {!hiddenLocked && (
+        <div className="stat-row hidden" title="Not counted in the total">
+          <EyeOffIcon className="stat-icon" size={13} strokeWidth={1.7} />
+          <span className="stat-label">Hidden</span>
+          <span className="stat-value">
+            {stats.hidden.toLocaleString()}
+            <span className="stat-size">· {formatBytesSimple(stats.hiddenSize)}</span>
+          </span>
+        </div>
+      )}
     </>
   );
 
