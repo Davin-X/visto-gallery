@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useCallback } from "react";
 import {
   useSettingsStore,
   useAppearance,
@@ -101,7 +101,6 @@ export function SettingsScreen(props: {
   const checkForUpdatesOnLaunch = useSettingsStore((s) => s.checkForUpdatesOnLaunch);
 
   const update = useSettingsStore((s) => s.update);
-  const updateMany = useSettingsStore((s) => s.updateMany);
   const resetSettings = useSettingsStore((s) => s.reset);
   const loadLibrary = useLibraryStore((s) => s.loadLibrary);
   const showNotice = useLibraryStore((s) => s.showNotice);

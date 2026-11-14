@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import type { MediaItem } from "../types/media";
 import { useLibraryStore } from "./useLibraryStore";
 import { debugLog, useSettingsStore } from "./useSettingsStore";
 
@@ -39,7 +38,7 @@ export const useViewerStore = create<ViewerState>()(
       flipX: false,
 
       open: (itemId) => {
-        const { inspectedId, viewerItems, viewerSelected } = useLibraryStore.getState();
+        const { inspectedId, viewerSelected } = useLibraryStore.getState();
         const targetId = itemId || inspectedId || viewerSelected?.id;
         if (targetId) {
           // Opening the viewer moves inspection only - the user's

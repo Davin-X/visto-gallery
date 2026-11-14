@@ -42,7 +42,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "gen:types": "cargo test --manifest-path src-tauri/Cargo.toml --lib export_ipc_types",
-    "lint": "eslint src --ext .ts,.tsx",
+    "lint": "eslint src --ext .ts,.tsx --max-warnings 0",
     "screenshots": "node scripts/capture-all-screenshots.mjs",
     "prepare": "sh scripts/setup-hooks.sh"
   },

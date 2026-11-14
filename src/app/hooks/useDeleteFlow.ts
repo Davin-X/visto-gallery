@@ -88,6 +88,7 @@ export function useDeleteFlow({
             result.failures[0]?.code ?? "internal",
           );
           if (result.failures.length > 1) {
+            // eslint-disable-next-line no-console
             console.warn("Trash refusals", result.failures);
           }
         } else if (moved > 0) {
@@ -113,6 +114,7 @@ export function useDeleteFlow({
           } else {
             showNotice(message);
           }
+          // eslint-disable-next-line no-console
           if (result.failures.length > 0) console.warn("Trash refusals", result.failures);
         }
       } catch (error) {

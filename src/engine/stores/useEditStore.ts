@@ -67,12 +67,9 @@ export function pruneDrafts() {
   setDraftOrder(order.slice(order.length - MAX_DRAFTS));
 }
 
-// Revision counter used to signal draft changes to subscribers.
-let draftRevision = 0;
 const draftListeners = new Set<() => void>();
 
 function notifyDraftChanged() {
-  draftRevision += 1;
   draftListeners.forEach((listener) => listener());
 }
 
@@ -127,6 +124,7 @@ async function persistDraft(
         setDraftOrder([...getDraftOrder().filter((id) => id !== itemId), itemId]);
         pruneDrafts();
       } else {
+        // eslint-disable-next-line no-console
         console.warn(
           `Local draft for ${itemId} was not stored: browser storage is full or unavailable.`,
         );
@@ -142,13 +140,15 @@ async function persistDraft(
       historyIndex,
     });
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error(`Failed to persist draft for ${itemId}:`, error);
   }
   notifyDraftChanged();
 }
 
+// Kept as the test and reset hook after the revision counter was removed: the
+// only observable effect was always notifying subscribers.
 export function resetDraftRevision(): void {
-  draftRevision = 0;
   notifyDraftChanged();
 }
 
@@ -376,6 +376,7 @@ export const useEditStore = create<EditState>()(
             loadedFromSqlite = true;
           }
         } catch (error) {
+          // eslint-disable-next-line no-console
           console.error(`Failed to load draft from SQLite for ${item.id}:`, error);
         }
 

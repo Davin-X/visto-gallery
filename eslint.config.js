@@ -47,6 +47,15 @@ export default [
     },
   },
   {
+    // Tests build loose doubles on purpose: a partial item or a fake event is
+    // easier to read than a fully typed stand-in, and the type checker still
+    // covers the code under test.
+    files: ["**/*.test.ts", "**/*.test.tsx"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+  {
     ignores: ["dist/", "node_modules/", ".kilo/", "untracked/", "src-tauri/target/", "src/engine/types/generated/", "*.config.js", "*.config.mjs"],
   },
 ];

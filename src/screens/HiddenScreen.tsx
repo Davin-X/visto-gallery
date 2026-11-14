@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { EyeOffIcon, ImageOffIcon } from "../design/components/icons";
-import { BrandMark } from "../design/components/BrandMark";
 import LibraryScreen from "./LibraryScreen";
 import { useFocusTrap } from "../design/hooks/useFocusTrap";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
