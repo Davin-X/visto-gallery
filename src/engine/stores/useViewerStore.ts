@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import type { MediaItem } from "../types/media";
 import { useLibraryStore } from "./useLibraryStore";
-import { useSettingsStore } from "./useSettingsStore";
+import { debugLog, useSettingsStore } from "./useSettingsStore";
 
 export interface ViewerState {
   // State
@@ -102,7 +102,7 @@ export const useViewerStore = create<ViewerState>()(
             await document.querySelector(".viewer-stage")?.requestFullscreen();
           }
         } catch {
-          if (import.meta.env.DEV) console.warn("Fullscreen not available");
+          debugLog("Fullscreen not available");
         }
       },
     }),

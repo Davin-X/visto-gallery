@@ -26,6 +26,7 @@ import { describeError } from "../../app/utils/describeError";
 import { errorCode } from "../types/errors";
 import { tauri } from "../commands/tauri";
 import { formatBytes } from "../commands/tauri";
+import { debugLog } from "./useSettingsStore";
 
 /** Mirror the server's `ORDER BY name COLLATE NOCASE` so a newly created or
  *  renamed album lands where a reload would put it. */
@@ -366,7 +367,7 @@ function selectAllMatching() {
         .showNotice(`Selected all ${ids.length.toLocaleString()} matching items.`);
     })
     .catch((error) => {
-      if (import.meta.env.DEV) console.error("Select all failed:", error);
+      debugLog("Select all failed:", error);
       useLibraryStore.getState().showErrorNotice(error, "Could not select all matching items");
     })
     .finally(() => {
@@ -659,7 +660,7 @@ export const useLibraryStore = create<LibraryState>()(
           get().refreshDerived();
         } catch (e) {
           if (generation !== libraryLoadGeneration) return;
-          if (import.meta.env.DEV) console.error("loadItemsPage failed:", e);
+          debugLog("loadItemsPage failed:", e);
           set({ refreshingLibrary: false, loadedViewKey: null });
           get().showErrorNotice(e, "Failed to load library");
         }
@@ -708,7 +709,7 @@ export const useLibraryStore = create<LibraryState>()(
         ].filter(([, result]) => (result as PromiseSettledResult<unknown>).status === "rejected");
         if (failures.length > 0) {
           const first = failures[0][1] as PromiseRejectedResult;
-          if (import.meta.env.DEV) console.error("loadCatalogMetadata failed:", failures);
+          debugLog("loadCatalogMetadata failed:", failures);
           get().showErrorNotice(
             first.reason,
             `Could not load ${failures.map(([label]) => label).join(", ")}`,
@@ -767,7 +768,7 @@ export const useLibraryStore = create<LibraryState>()(
             releaseIfOwner();
             return;
           }
-          if (import.meta.env.DEV) console.error("loadHiddenItems failed:", e);
+          debugLog("loadHiddenItems failed:", e);
           set({
             hiddenItems: [],
             hiddenCount: 0,
@@ -877,7 +878,7 @@ export const useLibraryStore = create<LibraryState>()(
           const folders = await tauri.library.getFolders();
           set({ folders });
         } catch (e) {
-          if (import.meta.env.DEV) console.error("loadFolders failed:", e);
+          debugLog("loadFolders failed:", e);
         }
       },
 

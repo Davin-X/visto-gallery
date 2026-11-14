@@ -5,14 +5,90 @@ import {
   getCurrentWindow,
   LogicalSize,
   PhysicalPosition,
+  PhysicalSize,
 } from "@tauri-apps/api/window";
+
+/** Where the last window frame is kept between launches. */
+export const WINDOW_FRAME_KEY = "visto:windowFrame";
+
+export type WindowFrame = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type WorkArea = {
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+};
+
+/** Read the frame saved by a previous session, ignoring malformed data. */
+export function readStoredWindowFrame(
+  storage: Pick<Storage, "getItem"> | undefined = typeof localStorage === "undefined"
+    ? undefined
+    : localStorage,
+): WindowFrame | null {
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(WINDOW_FRAME_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<WindowFrame>;
+    const values = [parsed.x, parsed.y, parsed.width, parsed.height];
+    if (
+      values.every((value) => typeof value === "number" && Number.isFinite(value)) &&
+      (parsed.width ?? 0) > 0 &&
+      (parsed.height ?? 0) > 0
+    ) {
+      return parsed as WindowFrame;
+    }
+  } catch {
+    // A cleared or corrupted entry just means "no saved frame".
+  }
+  return null;
+}
+
+/**
+ * Keep a restored frame on screen: clamp its origin so a monitor that is no
+ * longer attached cannot leave the window out of reach, while keeping some of
+ * the titlebar visible.
+ */
+export function clampFrameToWorkArea(frame: WindowFrame, work: WorkArea): WindowFrame {
+  const minVisibleX = Math.min(120, frame.width);
+  const minVisibleY = Math.min(80, frame.height);
+  return {
+    width: frame.width,
+    height: frame.height,
+    x: Math.min(
+      Math.max(frame.x, work.position.x),
+      work.position.x + work.size.width - minVisibleX,
+    ),
+    y: Math.min(
+      Math.max(frame.y, work.position.y),
+      work.position.y + work.size.height - minVisibleY,
+    ),
+  };
+}
+
+function saveStoredWindowFrame(frame: WindowFrame): void {
+  try {
+    localStorage.setItem(WINDOW_FRAME_KEY, JSON.stringify(frame));
+  } catch {
+    // Storage can be unavailable in preview builds; persistence is best effort.
+  }
+}
 
 /**
  * Native window behavior owned by the custom topbar: dragging, the
  * double-click fill/restore toggle, keeping a system-filled window fully on
  * screen, and nudging WebKit to relayout during live resizes.
+ *
+ * It also persists the window frame and restores it on launch when the
+ * `restoreWindowState` setting is on.
  */
-export function useWindowState() {
+export function useWindowState(options?: { restoreFrame?: boolean; settingsHydrated?: boolean }) {
+  const restoreFrame = options?.restoreFrame ?? false;
+  const settingsHydrated = options?.settingsHydrated ?? false;
   // The topbar is our own drag region. Drag after a few pixels of movement
   // (not on mousedown) so a double-click is not mistaken for a drag, then use
   // double-click to toggle fill / centered small window. preventDefault keeps
@@ -212,6 +288,90 @@ export function useWindowState() {
       if (raf !== null) cancelAnimationFrame(raf);
     };
   }, []);
+
+  // Restore the saved frame once settings are hydrated. This stays separate
+  // from the save listeners so toggling the setting does not unregister them.
+  const didRestoreFrame = useRef(false);
+  useEffect(() => {
+    if (!settingsHydrated || didRestoreFrame.current) return;
+    didRestoreFrame.current = true;
+    if (!restoreFrame) return;
+
+    const stored = readStoredWindowFrame();
+    if (!stored) return;
+
+    void (async () => {
+      try {
+        const win = getCurrentWindow();
+        const monitor = await currentMonitor();
+        const frame = monitor
+          ? clampFrameToWorkArea(
+              stored,
+              monitor.workArea ?? {
+                position: monitor.position,
+                size: monitor.size,
+              },
+            )
+          : stored;
+        await win.setSize(new PhysicalSize(frame.width, frame.height));
+        await win.setPosition(new PhysicalPosition(frame.x, frame.y));
+      } catch {
+        // Ignore: a disconnected monitor or preview build has no frame to restore.
+      }
+    })();
+  }, [restoreFrame, settingsHydrated]);
+
+  // Keep the saved frame in step with user moves and resizes. Runs whenever the
+  // app is ready, even while the restore setting is off, so enabling it later
+  // has a recent frame to restore.
+  useEffect(() => {
+    if (!settingsHydrated) return;
+
+    let win: ReturnType<typeof getCurrentWindow>;
+    try {
+      win = getCurrentWindow();
+    } catch {
+      return;
+    }
+
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unlisteners: Array<() => void> = [];
+
+    const scheduleSave = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(async () => {
+        try {
+          const [position, size] = await Promise.all([win.outerPosition(), win.outerSize()]);
+          if (!disposed) {
+            saveStoredWindowFrame({
+              x: position.x,
+              y: position.y,
+              width: size.width,
+              height: size.height,
+            });
+          }
+        } catch {
+          // Ignore: the preview build has no native window.
+        }
+      }, 400);
+    };
+
+    win
+      .onMoved(scheduleSave)
+      .then((un) => (disposed ? un() : unlisteners.push(un)))
+      .catch(() => {});
+    win
+      .onResized(scheduleSave)
+      .then((un) => (disposed ? un() : unlisteners.push(un)))
+      .catch(() => {});
+
+    return () => {
+      disposed = true;
+      if (timer) clearTimeout(timer);
+      unlisteners.forEach((un) => un());
+    };
+  }, [settingsHydrated]);
 
   return { beginTopbarDrag, handleTopbarDoubleClick };
 }

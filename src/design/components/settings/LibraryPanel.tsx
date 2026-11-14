@@ -16,11 +16,11 @@ export function LibraryPanel(props: {
     <>
       <section className="settings-section">
         <h2 className="settings-section-title">
-          <FolderIcon size={14} /> Import & Organization
+          <FolderIcon size={14} /> Import & organization
         </h2>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Auto-import New Files</b>
+            <b>Auto-import new files</b>
             <span className="settings-row-desc">
               Automatically add files when dropped or saved to watched folders
             </span>

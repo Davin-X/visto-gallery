@@ -121,6 +121,7 @@ function App() {
 
   // ── Startup ───────────────────────────────────────────────────────────────
   const settingsHydrated = useSettingsStore((s) => s._hydrated);
+  const restoreWindowState = useSettingsStore((s) => s.restoreWindowState);
   const hydrateSettings = useSettingsStore((s) => s.hydrate);
   useEffect(() => {
     // Opening the saved catalog is cheap; source scans are always user-started.
@@ -164,7 +165,10 @@ function App() {
   const { libraryStats, refreshLibraryStats } = useLibraryStats(showNotice);
   useImportProgress();
   useAutoImport({ settingsHydrated, showNotice, showErrorNotice });
-  const { beginTopbarDrag, handleTopbarDoubleClick } = useWindowState();
+  const { beginTopbarDrag, handleTopbarDoubleClick } = useWindowState({
+    restoreFrame: restoreWindowState,
+    settingsHydrated,
+  });
   const { contextMenu, openContextMenu, closeContextMenu } = useContextMenu();
 
   const [aboutOpen, setAboutOpen] = useState(false);

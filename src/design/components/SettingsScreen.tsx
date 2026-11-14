@@ -484,7 +484,7 @@ export function SettingsScreen(props: {
                 onClick={handleConfirmRestore}
                 disabled={restoring}
               >
-                {restoring ? "Restoring…" : "Restore Catalog"}
+                {restoring ? "Restoring…" : "Restore catalog"}
               </button>
             </div>
           </div>
@@ -494,7 +494,7 @@ export function SettingsScreen(props: {
         <TypedConfirmDialog
           open
           eyebrow="RESET"
-          title="Reset Library?"
+          title="Reset library?"
           description={
             <>
               This removes every item, album, tag and rating from VistoGallery.{" "}
@@ -503,7 +503,7 @@ export function SettingsScreen(props: {
             </>
           }
           requiredPhrase="RESET"
-          confirmLabel="Reset Library"
+          confirmLabel="Reset library"
           onClose={() => setShowDeleteConfirm(false)}
           onConfirm={handleDeleteLibrary}
           titleId="settings-delete-title"

@@ -42,7 +42,7 @@ export function GeneralPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Accent Color</b>
+            <b>Accent color</b>
           </div>
           <div className="settings-row-control">
             {props.renderAccentPicker(props.accentColor, (v: string) =>
@@ -52,7 +52,7 @@ export function GeneralPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Sidebar Width</b>
+            <b>Sidebar width</b>
             <span className="settings-row-desc">Adjust the navigation sidebar size</span>
           </div>
           <div className="settings-row-control" style={{ alignItems: "center" }}>
@@ -76,7 +76,7 @@ export function GeneralPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Show File Extensions</b>
+            <b>Show file extensions</b>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
@@ -92,7 +92,7 @@ export function GeneralPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Animate Transitions</b>
+            <b>Animate transitions</b>
             <span className="settings-row-desc">Smooth animations for navigation and zoom</span>
           </div>
           <div className="settings-row-control">
@@ -115,7 +115,7 @@ export function GeneralPanel(props: {
         </h2>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Open On Launch</b>
+            <b>Open on launch</b>
           </div>
           <div className="settings-row-control">
             <span className="settings-select-wrap">
@@ -137,28 +137,30 @@ export function GeneralPanel(props: {
             </span>
           </div>
         </div>
+        {props.startupView === "last" && (
+          <div className="settings-row">
+            <div className="settings-row-label">
+              <b>Open last library folder</b>
+              <span className="settings-row-desc">Automatically load the last opened folder</span>
+            </div>
+            <div className="settings-row-control">
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  aria-label="Open last library folder"
+                  checked={props.openLastFolder}
+                  onChange={(e) => props.onChange("openLastFolder", e.target.checked)}
+                />
+                <span className="toggle-track" />
+              </label>
+            </div>
+          </div>
+        )}
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Open Last Library Folder</b>
-            <span className="settings-row-desc">Automatically load the last opened folder</span>
-          </div>
-          <div className="settings-row-control">
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                aria-label="Open last library folder"
-                checked={props.openLastFolder}
-                onChange={(e) => props.onChange("openLastFolder", e.target.checked)}
-              />
-              <span className="toggle-track" />
-            </label>
-          </div>
-        </div>
-        <div className="settings-row">
-          <div className="settings-row-label">
-            <b>Restore Window State</b>
+            <b>Restore window state</b>
             <span className="settings-row-desc">
-              Remember window size, position, and sidebar width
+              Remember window size and position between launches
             </span>
           </div>
           <div className="settings-row-control">
@@ -180,5 +182,5 @@ export function GeneralPanel(props: {
 
 const STARTUP_VIEWS = [
   { id: "library", label: "Library" },
-  { id: "last", label: "Last View" },
+  { id: "last", label: "Last view" },
 ] as const;

@@ -29,11 +29,11 @@ export function AdvancedPanel(props: {
     <>
       <section className="settings-section">
         <h2 className="settings-section-title">
-          <CpuIcon size={14} /> Cache & Performance
+          <CpuIcon size={14} /> Cache & performance
         </h2>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Maximum Cache Size</b>
+            <b>Maximum cache size</b>
             <span className="settings-row-desc">Disk space for thumbnails and previews</span>
           </div>
           <div className="settings-row-control" style={{ alignItems: "center" }}>
@@ -57,7 +57,7 @@ export function AdvancedPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Thumbnail Quality</b>
+            <b>Thumbnail quality</b>
             <span className="settings-row-desc">
               JPEG quality for generated thumbnails (higher = larger files)
             </span>
@@ -83,7 +83,7 @@ export function AdvancedPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Rebuild Library</b>
+            <b>Rebuild library</b>
             <span className="settings-row-desc">
               Re-scan every source folder and refresh the catalog
             </span>
@@ -95,7 +95,7 @@ export function AdvancedPanel(props: {
               onClick={props.onRebuild}
               disabled={props.rebuilding}
             >
-              {props.rebuilding ? "Rebuilding…" : "Rebuild Library"}
+              {props.rebuilding ? "Rebuilding…" : "Rebuild library"}
             </button>
           </div>
         </div>
@@ -103,7 +103,7 @@ export function AdvancedPanel(props: {
 
       <section className="settings-section">
         <h2 className="settings-section-title">
-          <CpuIcon size={14} /> Catalog Backup
+          <CpuIcon size={14} /> Catalog backup
         </h2>
         <p className="settings-section-desc">
           Back up albums, tags, ratings, Smart Albums, and library settings in one versioned SQLite
@@ -111,7 +111,7 @@ export function AdvancedPanel(props: {
         </p>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Save Catalog Backup…</b>
+            <b>Save catalog backup…</b>
             <span className="settings-row-desc">
               Writes a validated snapshot that can be restored later
             </span>
@@ -123,13 +123,13 @@ export function AdvancedPanel(props: {
               onClick={props.onCreateBackup}
               disabled={props.backupBusy || props.restoring}
             >
-              {props.backupBusy ? "Saving…" : "Save Backup…"}
+              {props.backupBusy ? "Saving…" : "Save backup…"}
             </button>
           </div>
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Restore Catalog Backup…</b>
+            <b>Restore catalog backup…</b>
             <span className="settings-row-desc">
               Validates first, creates a pre-restore snapshot, and reports files that are no longer
               at their saved paths
@@ -142,13 +142,13 @@ export function AdvancedPanel(props: {
               onClick={props.onChooseRestore}
               disabled={props.backupBusy || props.restoring}
             >
-              {props.restoring ? "Restoring…" : "Restore Backup…"}
+              {props.restoring ? "Restoring…" : "Restore backup…"}
             </button>
           </div>
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Vacuum Catalog</b>
+            <b>Vacuum catalog</b>
             <span className="settings-row-desc">
               Reclaims disk space by defragmenting the catalog database
             </span>
@@ -178,9 +178,9 @@ export function AdvancedPanel(props: {
         </h2>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Debug Logging</b>
+            <b>Debug logging</b>
             <span className="settings-row-desc">
-              Verbose logs in Console.app for troubleshooting
+              Verbose logs in the developer console and Console.app for troubleshooting
             </span>
           </div>
           <div className="settings-row-control">
@@ -197,7 +197,7 @@ export function AdvancedPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Show Native Limit Warnings</b>
+            <b>Show native limit warnings</b>
             <span className="settings-row-desc">
               Display notices when browser preview lacks native features
             </span>
@@ -218,7 +218,7 @@ export function AdvancedPanel(props: {
 
       <section className="settings-section settings-danger-zone">
         <h2 className="settings-section-title">
-          <TrashIcon size={14} /> Danger Zone
+          <TrashIcon size={14} /> Danger zone
         </h2>
         <p className="settings-section-desc">
           These actions change VistoGallery preferences or its catalog. Original media files are
@@ -226,7 +226,7 @@ export function AdvancedPanel(props: {
         </p>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Reset All Settings</b>
+            <b>Reset all settings</b>
             <span className="settings-row-desc">Restores all settings to defaults</span>
           </div>
           <div className="settings-row-control">
@@ -235,13 +235,13 @@ export function AdvancedPanel(props: {
               type="button"
               onClick={() => props.setShowResetConfirm(true)}
             >
-              Reset All Settings…
+              Reset all settings…
             </button>
           </div>
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Reset Library</b>
+            <b>Reset library</b>
             <span className="settings-row-desc">
               Removes every item, album and tag from VistoGallery. Your files stay on disk.
             </span>
@@ -253,7 +253,7 @@ export function AdvancedPanel(props: {
               onClick={() => props.setShowDeleteConfirm(true)}
               disabled={props.deleting}
             >
-              {props.deleting ? "Resetting…" : "Reset Library…"}
+              {props.deleting ? "Resetting…" : "Reset library…"}
             </button>
           </div>
         </div>

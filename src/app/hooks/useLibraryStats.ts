@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tauri, events } from "../../engine/commands/tauri";
-import { refreshDraftMeta, useSettingsStore } from "../../engine/stores";
+import { debugLog, refreshDraftMeta, useSettingsStore } from "../../engine/stores";
 import type { LibraryStats } from "../../engine/types/commands";
 
 const EMPTY_STATS: LibraryStats = {
@@ -52,7 +52,7 @@ export function useLibraryStats(showNotice: (text: string) => void) {
         if (!cancelled) setLibraryStats(stats);
       })
       .catch((e) => {
-        if (import.meta.env.DEV) console.error("get_library_stats failed:", e);
+        debugLog("get_library_stats failed:", e);
       });
 
     // Removals arrive as `library-changed`; scans and imports as

@@ -8,6 +8,8 @@ export {
   useSystemDark,
   applyTheme,
   ACCENT_PALETTE,
+  debugLog,
+  shouldLogDebug,
 } from "./useSettingsStore";
 export {
   useLibraryStore,

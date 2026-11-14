@@ -3,6 +3,7 @@ import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import VideoPlayer from "../design/components/VideoPlayer";
 import { ChevronLeftIcon, FilmstripIcon } from "../design/components/icons";
 import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
+import { debugLog } from "../engine/stores";
 import { formatDuration } from "../engine/utils/time";
 import type { MediaItem } from "../engine/types/media";
 
@@ -116,7 +117,7 @@ export default function VideoPlayerScreen({
         await stageRef.current?.requestFullscreen();
       }
     } catch (error) {
-      if (import.meta.env.DEV) console.warn("Unable to toggle video fullscreen", error);
+      debugLog("Unable to toggle video fullscreen", error);
     }
   }, []);
 

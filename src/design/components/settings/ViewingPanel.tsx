@@ -18,11 +18,11 @@ export function ViewingPanel(props: {
     <>
       <section className="settings-section">
         <h2 className="settings-section-title">
-          <EyeIcon size={14} /> Grid & Layout
+          <EyeIcon size={14} /> Grid & layout
         </h2>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Default Layout</b>
+            <b>Default layout</b>
             <span className="settings-row-desc">Starting layout when opening the library</span>
           </div>
           <div className="settings-row-control">
@@ -33,7 +33,7 @@ export function ViewingPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Thumbnail Size</b>
+            <b>Thumbnail size</b>
             <span className="settings-row-desc">Default thumbnail dimensions in grid view</span>
           </div>
           <div className="settings-row-control">
@@ -121,7 +121,7 @@ export function ViewingPanel(props: {
 
       <section className="settings-section">
         <h2 className="settings-section-title">
-          <EyeIcon size={14} /> Video Playback
+          <EyeIcon size={14} /> Video playback
         </h2>
         <div className="settings-row">
           <div className="settings-row-label">
@@ -142,7 +142,7 @@ export function ViewingPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Loop Videos</b>
+            <b>Loop videos</b>
             <span className="settings-row-desc">Restart video when it ends</span>
           </div>
           <div className="settings-row-control">

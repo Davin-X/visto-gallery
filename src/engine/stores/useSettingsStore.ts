@@ -37,7 +37,7 @@ function scheduleSave(patch: Partial<AppSettings>): void {
     try {
       await tauri.settings.save(toSave);
     } catch (e) {
-      if (import.meta.env.DEV) console.error("Failed to save settings:", e);
+      debugLog("Failed to save settings:", e);
     }
   }, SAVE_DEBOUNCE_MS);
 }
@@ -141,7 +141,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     try {
       await tauri.settings.save(defaultSettings);
     } catch (e) {
-      if (import.meta.env.DEV) console.error("Failed to reset settings:", e);
+      debugLog("Failed to reset settings:", e);
     }
   },
 }));
@@ -413,10 +413,12 @@ if (typeof window !== "undefined") {
 
 // Conditional debug logging — only emits when enableDebugLogging is true.
 // Use this instead of console.log for diagnostics that should be opt-in.
+export function shouldLogDebug(debugEnabled: boolean): boolean {
+  return debugEnabled;
+}
+
 export function debugLog(...args: unknown[]): void {
   if (typeof window === "undefined") return;
-  const settings = useSettingsStore.getState();
-  if (settings.enableDebugLogging) {
-    console.log("[VistoGallery]", ...args);
-  }
+  if (!shouldLogDebug(useSettingsStore.getState().enableDebugLogging)) return;
+  console.debug("[VistoGallery]", ...args);
 }

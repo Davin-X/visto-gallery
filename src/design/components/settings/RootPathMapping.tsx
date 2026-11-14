@@ -254,7 +254,7 @@ export function RootPathMapping(props: {
                 Cancel
               </button>
               <button type="button" className="danger-button" onClick={apply} disabled={busy}>
-                {busy ? "Remapping…" : "Apply Mapping"}
+                {busy ? "Remapping…" : "Apply mapping"}
               </button>
             </div>
           </div>
