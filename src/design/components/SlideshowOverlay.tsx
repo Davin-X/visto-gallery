@@ -3,6 +3,7 @@ import {
   useSlideshowStore,
   useDraftTransforms,
   draftTransformStyle,
+  debugLog,
   type SlideshowTransition,
 } from "../../engine/stores";
 import {
@@ -150,7 +151,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
     try {
       await togglePictureInPicture(video);
     } catch (err) {
-      if (import.meta.env.DEV) console.warn("Picture-in-picture unavailable", err);
+      debugLog("Picture-in-picture unavailable", err);
     }
   };
 

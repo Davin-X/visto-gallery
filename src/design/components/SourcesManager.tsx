@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { formatBytes, tauri } from "../../engine/commands/tauri";
-import { useLibraryStore } from "../../engine/stores";
+import { debugLog, useLibraryStore } from "../../engine/stores";
 import type { LibraryFolder } from "../../engine/types/commands";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { FolderIcon, InfoIcon, MoreIcon, PlusIcon } from "./icons";
@@ -47,7 +47,7 @@ export function SourcesManager(props: {
 
   const reveal = (folder: LibraryFolder) => {
     void tauri.items.revealInFinder(folder.path).catch((error: unknown) => {
-      if (import.meta.env.DEV) console.error("reveal_in_finder failed:", error);
+      debugLog("reveal_in_finder failed:", error);
     });
   };
 
@@ -111,7 +111,7 @@ export function SourcesManager(props: {
       },
       { label: "", divider: true },
       {
-        label: "Remove Source…",
+        label: "Remove source…",
         danger: true,
         disabled: !onRemoveFolder,
         onClick: () => onRemoveFolder?.(folder),
@@ -153,7 +153,7 @@ export function SourcesManager(props: {
             title="Select multiple folders with ⌘-click or ⌘A"
           >
             <PlusIcon size={14} />
-            Add Source
+            Add source
           </button>
           {onRescan && (
             <button
@@ -163,7 +163,7 @@ export function SourcesManager(props: {
               disabled={libraryBusy || folders.length === 0}
               title={folders.length === 0 ? "Add a source before rescanning" : undefined}
             >
-              {libraryBusy ? "Working…" : "Rescan Sources"}
+              {libraryBusy ? "Working…" : "Rescan sources"}
             </button>
           )}
           {onRemoveAllSources && folders.length > 0 && (
@@ -173,7 +173,7 @@ export function SourcesManager(props: {
               onClick={() => onRemoveAllSources()}
               disabled={libraryBusy}
             >
-              Remove All Sources…
+              Remove all sources…
             </button>
           )}
         </div>

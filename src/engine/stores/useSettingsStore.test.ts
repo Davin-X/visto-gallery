@@ -21,6 +21,8 @@ import {
   useSettingsStore,
   resetPendingSettingsSave,
   flushSettingsSaves,
+  debugLog,
+  shouldLogDebug,
 } from "../../engine/stores/useSettingsStore";
 
 test("settings hydrate and update", async () => {
@@ -45,4 +47,23 @@ test("automatic update checks are opt-in by default", async () => {
     await useSettingsStore.getState().hydrate();
   });
   expect(useSettingsStore.getState().checkForUpdatesOnLaunch).toBe(false);
+});
+
+test("debug logging stays quiet unless the setting is on", () => {
+  const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+  try {
+    expect(shouldLogDebug(false)).toBe(false);
+    expect(shouldLogDebug(true)).toBe(true);
+
+    useSettingsStore.setState({ enableDebugLogging: false });
+    debugLog("hidden diagnostic");
+    expect(debug).not.toHaveBeenCalled();
+
+    useSettingsStore.setState({ enableDebugLogging: true });
+    debugLog("visible diagnostic", { attempts: 2 });
+    expect(debug).toHaveBeenCalledWith("[VistoGallery]", "visible diagnostic", { attempts: 2 });
+  } finally {
+    debug.mockRestore();
+    useSettingsStore.setState({ enableDebugLogging: false });
+  }
 });

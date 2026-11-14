@@ -813,7 +813,7 @@ function SourcesSheet({
             disabled={library.busy || library.folders.length === 0}
             onClick={onRequestRemoveAll}
           >
-            Remove All Sources…
+            Remove all sources…
           </button>
           <div style={{ flex: 1 }} />
           <button type="button" className="quiet-button" onClick={onClose}>
@@ -843,7 +843,7 @@ function RemoveAllSourcesDialog({
     <TypedConfirmDialog
       open={open}
       eyebrow="LIBRARY"
-      title="Remove All Sources?"
+      title="Remove all sources?"
       description={
         <>
           Unlinks all{" "}
@@ -901,7 +901,7 @@ function RemoveFolderDialog({
       >
         <DialogHeader
           eyebrow="FOLDER"
-          title="Remove Folder?"
+          title="Remove folder?"
           titleId="remove-folder-title"
           onClose={onClose}
           disabled={removing}
@@ -928,7 +928,7 @@ function RemoveFolderDialog({
             Cancel
           </button>
           <button type="button" className="danger-button" onClick={onConfirm} disabled={removing}>
-            {removing ? "Removing…" : "Remove Folder"}
+            {removing ? "Removing…" : "Remove folder"}
           </button>
         </div>
       </div>
