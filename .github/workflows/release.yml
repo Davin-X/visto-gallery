@@ -54,6 +54,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+          fetch-tags: true
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-node@v7
         with:
@@ -90,8 +92,10 @@ jobs:
           } >> "$GITHUB_ENV"
           echo "Signing and notarizing with: $IDENTITY"
 
-      - name: Build the DMG
-        run: npm run tauri build -- --bundles dmg
+      # `--bundles dmg` alone makes tauri delete the intermediate .app after the
+      # image is written, so ask for both and keep the bundle to inspect.
+      - name: Build the app and the DMG
+        run: npm run tauri build -- --bundles app,dmg
 
       # Records which of the two possible states shipped. Neither check fails the
       # job: an ad-hoc build is a known, documented state, not a build error.
@@ -99,6 +103,7 @@ jobs:
         run: |
           set -euo pipefail
           app="src-tauri/target/release/bundle/macos/VistoGallery.app"
+          test -d "$app" || { echo "::error::$app was not built"; exit 1; }
           codesign -dv --verbose=2 "$app" 2>&1 | tee /tmp/codesign.txt || true
           if grep -q 'adhoc' /tmp/codesign.txt; then
             echo "::warning::The app is ad-hoc signed. Set APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_PASSWORD and APPLE_TEAM_ID so Gatekeeper accepts it."
@@ -112,6 +117,7 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           cp src-tauri/target/release/bundle/dmg/*.dmg dist/
+          test -s dist/*.dmg || { echo "::error::no DMG was produced"; exit 1; }
           cd dist
           shasum -a 256 ./*.dmg > SHA256SUMS.txt
           cat SHA256SUMS.txt
