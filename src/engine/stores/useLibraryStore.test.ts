@@ -1267,3 +1267,28 @@ test("reorderAlbums reverts both derived lists when the backend rejects the orde
   expect(useLibraryStore.getState().albums.map((a) => a.id)).toEqual(["one", "two"]);
   expect(useLibraryStore.getState().albumOverviews.map((a) => a.id)).toEqual(["one", "two"]);
 });
+
+test("the inspector starts closed and remembers the choice", () => {
+  // This file's store instance was created with empty local storage, which is
+  // exactly what a first launch looks like.
+  expect(useLibraryStore.getInitialState().showInspector).toBe(false);
+
+  useLibraryStore.getState().toggleInspector();
+  expect(useLibraryStore.getState().showInspector).toBe(true);
+  expect(localStorage.getItem("visto:inspectorOpen")).toBe("1");
+
+  useLibraryStore.getState().toggleInspector();
+  expect(useLibraryStore.getState().showInspector).toBe(false);
+  expect(localStorage.getItem("visto:inspectorOpen")).toBe("0");
+});
+
+test("a remembered open inspector is restored on the next launch", async () => {
+  localStorage.setItem("visto:inspectorOpen", "1");
+  vi.resetModules();
+  try {
+    const fresh = await import("./useLibraryStore");
+    expect(fresh.useLibraryStore.getInitialState().showInspector).toBe(true);
+  } finally {
+    localStorage.removeItem("visto:inspectorOpen");
+  }
+});

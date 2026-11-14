@@ -325,6 +325,27 @@ function writeSidebarCollapsed(collapsed: boolean) {
     // Not remembered this time; the toggle itself still works.
   }
 }
+
+// The Inspector is remembered the same way, but starts closed: at about a
+// quarter of the window it was dead space next to the grid until a file was
+// selected, and most people browse without it.
+const INSPECTOR_OPEN_KEY = "visto:inspectorOpen";
+
+function readInspectorOpen(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(INSPECTOR_OPEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeInspectorOpen(open: boolean) {
+  try {
+    globalThis.localStorage?.setItem(INSPECTOR_OPEN_KEY, open ? "1" : "0");
+  } catch {
+    // Not remembered this time; the toggle itself still works.
+  }
+}
 let hiddenQueryReloadTimer: ReturnType<typeof setTimeout> | null = null;
 let queryReloadTimer: ReturnType<typeof setTimeout> | null = null;
 // Debounce for free-text camera/lens filters so typing doesn't reload the
@@ -560,7 +581,7 @@ export const useLibraryStore = create<LibraryState>()(
       layout: "grid",
       sortBy: "capturedAt",
       sortOrder: "desc",
-      showInspector: true,
+      showInspector: readInspectorOpen(),
       sidebarOpen: true,
       sidebarCollapsed: readSidebarCollapsed(),
       activeAlbum: null,
@@ -1169,7 +1190,12 @@ export const useLibraryStore = create<LibraryState>()(
       },
 
       getCurrentLibraryFilter: () => currentLibraryFilter(get()),
-      toggleInspector: () => set((s) => ({ showInspector: !s.showInspector })),
+      toggleInspector: () =>
+        set((s) => {
+          const showInspector = !s.showInspector;
+          writeInspectorOpen(showInspector);
+          return { showInspector };
+        }),
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
       toggleSidebarCollapsed: () =>
         set((s) => {
