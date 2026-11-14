@@ -9,6 +9,7 @@ VistoGallery is a small, local-first macOS app maintained in the open. There is 
 | Ask a question, share a setup, or float an idea | [Discussions](https://github.com/Davin-X/visto-gallery/discussions) |
 | Report something broken | [Open a bug report](https://github.com/Davin-X/visto-gallery/issues/new?template=bug_report.md) |
 | Request a feature | [Open a feature request](https://github.com/Davin-X/visto-gallery/issues/new?template=feature_request.md) |
+| Report an accessibility barrier | [ACCESSIBILITY.md](./ACCESSIBILITY.md#reporting-a-barrier) — filed as an issue with the `accessibility` label |
 | Report a security problem | [SECURITY.md](./SECURITY.md) — never a public issue |
 
 ## Before you ask
