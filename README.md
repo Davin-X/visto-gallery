@@ -18,8 +18,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/library-dark.jpg">
-    <img src="docs/screenshots/library-light.jpg" alt="The VistoGallery library: a sidebar with sources and library totals, and the All Media grid of landscapes, architecture and space photos with type filters, ratings and favorite badges" width="900">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/library-selected-dark.jpg">
+    <img src="docs/screenshots/library-selected-light.jpg" alt="The VistoGallery library: a sidebar with sources and library totals, the All Media grid of landscape, architecture and space photos with ratings and favorite badges, and the Inspector showing the selected photo's rating, camera, lens, exposure and GPS" width="900">
   </picture>
 </p>
 <p align="center"><sub>Shown in your GitHub theme. Every screen in the <a href="#tour">tour</a> appears in both light and dark.</sub></p>
