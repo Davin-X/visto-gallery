@@ -242,6 +242,9 @@
 
 .middle-truncate-head {
   min-width: 0;
+  /* Each half is a flex item, and a flex item drops its leading and trailing
+     spaces; "Spring Garden" split at the space would render "SpringGarden". */
+  white-space: pre;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -252,6 +255,7 @@
    metadata cluster) instead of ellipsizing. */
 .middle-truncate-tail {
   flex: 0 0 auto;
+  white-space: pre;
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
