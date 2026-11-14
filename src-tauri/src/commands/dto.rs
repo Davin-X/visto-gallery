@@ -389,6 +389,11 @@ define_settings! {
     check_for_updates_on_launch: bool = false,
     /// Ask for Touch ID or the Mac password before showing Hidden.
     require_hidden_unlock: bool = true,
+    /// Minutes an unlock of Hidden lasts after you leave it: 0 locks as soon
+    /// as you leave, -1 keeps it until the screen locks or the window closes.
+    hidden_auto_lock_minutes: i32 = 5,
+    /// Lock Hidden whenever VistoGallery goes to the background.
+    lock_hidden_in_background: bool = false,
     /// Thumbnail cache budget in gigabytes.
     // Serialized with the acronym the UI has always used.
     #[serde(rename = "maxCacheSizeGB")]

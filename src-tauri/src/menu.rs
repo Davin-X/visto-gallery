@@ -9,6 +9,7 @@ const MENU_EVENTS: &[(&str, &str)] = &[
     ("file_export", "menu-export"),
     ("view_toggle_sidebar", "menu-toggle-sidebar"),
     ("view_toggle_inspector", "menu-toggle-inspector"),
+    ("view_lock_hidden", "menu-lock-hidden"),
     ("view_zoom_in", "menu-zoom-in"),
     ("view_zoom_out", "menu-zoom-out"),
     ("help_about", "menu-about"),
@@ -120,6 +121,11 @@ pub fn create_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         .accelerator("CmdOrCtrl+Alt+I")
         .build(app)?;
 
+    let lock_hidden = MenuItemBuilder::new("Lock Hidden")
+        .id("view_lock_hidden")
+        .accelerator("Ctrl+Cmd+L")
+        .build(app)?;
+
     let zoom_in = MenuItemBuilder::new("Zoom In")
         .id("view_zoom_in")
         .accelerator("CmdOrCtrl+=")
@@ -136,6 +142,8 @@ pub fn create_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         .items(&[
             &toggle_sidebar,
             &toggle_inspector,
+            &PredefinedMenuItem::separator(app)?,
+            &lock_hidden,
             &PredefinedMenuItem::separator(app)?,
             &zoom_in,
             &zoom_out,

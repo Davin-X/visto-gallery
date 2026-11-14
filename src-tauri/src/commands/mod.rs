@@ -153,6 +153,12 @@ pub(crate) fn apply_setting(settings: &mut AppSettings, key: &str, value: &str) 
             settings.check_for_updates_on_launch = value.parse().unwrap_or(false)
         }
         "require_hidden_unlock" => settings.require_hidden_unlock = value.parse().unwrap_or(true),
+        "hidden_auto_lock_minutes" => {
+            settings.hidden_auto_lock_minutes = value.parse().unwrap_or(5)
+        }
+        "lock_hidden_in_background" => {
+            settings.lock_hidden_in_background = value.parse().unwrap_or(false)
+        }
         "max_cache_size_gb" => settings.max_cache_size_gb = value.parse().unwrap_or(5),
         "thumbnail_quality" => settings.thumbnail_quality = value.parse().unwrap_or(80),
         "enable_debug_logging" => settings.enable_debug_logging = value.parse().unwrap_or(false),

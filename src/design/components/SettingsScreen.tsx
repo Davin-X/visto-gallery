@@ -100,6 +100,8 @@ export function SettingsScreen(props: {
   const showNativeWarnings = useSettingsStore((s) => s.showNativeLimitWarnings);
   const checkForUpdatesOnLaunch = useSettingsStore((s) => s.checkForUpdatesOnLaunch);
   const requireHiddenUnlock = useSettingsStore((s) => s.requireHiddenUnlock);
+  const hiddenAutoLockMinutes = useSettingsStore((s) => s.hiddenAutoLockMinutes);
+  const lockHiddenInBackground = useSettingsStore((s) => s.lockHiddenInBackground);
 
   const update = useSettingsStore((s) => s.update);
   const resetSettings = useSettingsStore((s) => s.reset);
@@ -401,7 +403,10 @@ export function SettingsScreen(props: {
           <PrivacyPanel
             checkForUpdatesOnLaunch={checkForUpdatesOnLaunch}
             requireHiddenUnlock={requireHiddenUnlock}
+            hiddenAutoLockMinutes={hiddenAutoLockMinutes}
+            lockHiddenInBackground={lockHiddenInBackground}
             onChange={update}
+            onChangeAutoLock={(minutes) => update("hiddenAutoLockMinutes", minutes)}
           />
         )}
         {activeTab === "advanced" && (

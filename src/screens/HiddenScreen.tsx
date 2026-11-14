@@ -332,6 +332,18 @@ function HiddenScreen(props: HiddenScreenProps) {
       <LibraryScreen
         hiddenView
         veilHidden={!unlockedByOwner}
+        hiddenHeaderAction={
+          unlockedByOwner ? (
+            <button
+              type="button"
+              className="secondary-button hidden-lock-now"
+              onClick={() => void useHiddenLockStore.getState().lock()}
+              title="Lock Hidden now (⌃⌘L)"
+            >
+              <LockIcon size={13} /> Lock
+            </button>
+          ) : null
+        }
         items={items}
         inspectedId={library.inspectedId}
         selectedIds={library.selectedIds}

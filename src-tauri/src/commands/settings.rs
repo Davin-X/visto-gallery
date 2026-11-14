@@ -34,6 +34,10 @@ pub(crate) async fn load_persisted_settings(db: &SqlitePool) -> Result<AppSettin
 fn normalize_settings(settings: &mut AppSettings) {
     // 0 GB would make every thumbnail miss and immediately prune the cache.
     settings.max_cache_size_gb = settings.max_cache_size_gb.clamp(1, 50);
+    // Only the choices Settings offers; anything else falls back to 5 minutes.
+    if ![-1, 0, 1, 5, 15].contains(&settings.hidden_auto_lock_minutes) {
+        settings.hidden_auto_lock_minutes = 5;
+    }
     settings.thumbnail_quality = settings.thumbnail_quality.clamp(1, 100);
     settings.slideshow_interval = settings.slideshow_interval.clamp(1, 3600);
     // A watched folder must be absolute: a relative path resolves against an
@@ -160,6 +164,12 @@ async fn save_settings_into(
     if let Some(v) = patch.require_hidden_unlock {
         settings.require_hidden_unlock = v;
     }
+    if let Some(v) = patch.hidden_auto_lock_minutes {
+        settings.hidden_auto_lock_minutes = v;
+    }
+    if let Some(v) = patch.lock_hidden_in_background {
+        settings.lock_hidden_in_background = v;
+    }
     if let Some(v) = patch.max_cache_size_gb {
         settings.max_cache_size_gb = v;
     }
@@ -221,6 +231,14 @@ async fn save_settings_into(
         (
             "require_hidden_unlock",
             settings.require_hidden_unlock.to_string(),
+        ),
+        (
+            "hidden_auto_lock_minutes",
+            settings.hidden_auto_lock_minutes.to_string(),
+        ),
+        (
+            "lock_hidden_in_background",
+            settings.lock_hidden_in_background.to_string(),
         ),
         ("max_cache_size_gb", settings.max_cache_size_gb.to_string()),
         ("thumbnail_quality", settings.thumbnail_quality.to_string()),

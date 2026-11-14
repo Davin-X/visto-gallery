@@ -460,6 +460,10 @@ function App() {
       const lockStatus = await useHiddenLockStore.getState().refresh();
       if (!isHiddenLocked(lockStatus)) await library.loadHiddenItems();
     } else if (screen === "Hidden") {
+      // "Lock Hidden again: as soon as you leave it".
+      if (useSettingsStore.getState().hiddenAutoLockMinutes === 0) {
+        void useHiddenLockStore.getState().lock();
+      }
       // Leaving Hidden drops the hidden selection and any hidden inspector
       // focus, so the next screen cannot show an item it cannot display.
       library.clearSelection();
@@ -505,12 +509,26 @@ function App() {
     navigateViewer,
     openViewer: (id) => openViewer(id),
   });
+  // "Lock Hidden when VistoGallery goes to the background". The system
+  // unlock prompt also takes focus, but Hidden is still locked while it is
+  // up, so this cannot undo an unlock in progress.
+  useEffect(() => {
+    const onBlur = () => {
+      if (!useSettingsStore.getState().lockHiddenInBackground) return;
+      const lock = useHiddenLockStore.getState();
+      if (lock.status?.required && lock.status.unlocked && !lock.unlocking) void lock.lock();
+    };
+    window.addEventListener("blur", onBlur);
+    return () => window.removeEventListener("blur", onBlur);
+  }, []);
+
   useNativeMenu({
     importFolder: sources.importFolder,
     importFiles: sources.importFiles,
     exportToBatch,
     toggleSidebar: () => useLibraryStore.getState().toggleSidebar(),
     toggleInspector: () => useLibraryStore.getState().toggleInspector(),
+    lockHidden: () => void useHiddenLockStore.getState().lock(),
     zoomIn: () => useViewerStore.getState().zoomIn(),
     zoomOut: () => useViewerStore.getState().zoomOut(),
     showAbout: () => setAboutOpen(true),
