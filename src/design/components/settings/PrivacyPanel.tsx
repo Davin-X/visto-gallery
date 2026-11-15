@@ -5,7 +5,13 @@ import { tauri } from "../../../engine/commands/tauri";
 export function PrivacyPanel(props: {
   checkForUpdatesOnLaunch: boolean;
   requireHiddenUnlock: boolean;
-  onChange: (key: "checkForUpdatesOnLaunch" | "requireHiddenUnlock", value: boolean) => void;
+  hiddenAutoLockMinutes: number;
+  lockHiddenInBackground: boolean;
+  onChange: (
+    key: "checkForUpdatesOnLaunch" | "requireHiddenUnlock" | "lockHiddenInBackground",
+    value: boolean,
+  ) => void;
+  onChangeAutoLock: (minutes: number) => void;
 }) {
   const unlocking = useHiddenLockStore((s) => s.unlocking);
   // Turning the lock off is itself protected: otherwise anyone at the Mac
@@ -84,6 +90,53 @@ export function PrivacyPanel(props: {
           </label>
         </div>
       </div>
+
+      {props.requireHiddenUnlock && (
+        <>
+          <div className="settings-row">
+            <div className="settings-row-label">
+              <b>Lock Hidden again</b>
+              <span className="settings-row-desc">
+                After you leave Hidden. It always locks when the screen locks or the window closes,
+                and View → Lock Hidden (⌃⌘L) locks it at any time.
+              </span>
+            </div>
+            <div className="settings-row-control">
+              <select
+                aria-label="Lock Hidden again"
+                value={props.hiddenAutoLockMinutes}
+                onChange={(e) => props.onChangeAutoLock(Number(e.target.value))}
+              >
+                <option value={0}>As soon as I leave it</option>
+                <option value={1}>After 1 minute</option>
+                <option value={5}>After 5 minutes</option>
+                <option value={15}>After 15 minutes</option>
+                <option value={-1}>Only when the screen locks</option>
+              </select>
+            </div>
+          </div>
+          <div className="settings-row">
+            <div className="settings-row-label">
+              <b>Lock when VistoGallery is in the background</b>
+              <span className="settings-row-desc">
+                Locks Hidden whenever you switch to another app, for screen sharing or stepping
+                away.
+              </span>
+            </div>
+            <div className="settings-row-control">
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  aria-label="Lock Hidden when VistoGallery is in the background"
+                  checked={props.lockHiddenInBackground}
+                  onChange={(e) => props.onChange("lockHiddenInBackground", e.target.checked)}
+                />
+                <span className="toggle-track" />
+              </label>
+            </div>
+          </div>
+        </>
+      )}
 
       <div className="privacy-facts" aria-label="How VistoGallery handles your data">
         <div>

@@ -37,6 +37,12 @@ test("a locked Hidden asks for Touch ID and keeps its count out of the sidebar",
   await expect(page.locator(".gallery-tile")).toHaveCount(3);
   await expect(page.locator(".gallery-tile.hidden-obscured")).toHaveCount(0);
 
+  // Lock now: the header button locks at once, and the count goes too.
+  await page.getByRole("button", { name: "Lock", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Hidden is locked" })).toBeVisible();
+  await expect(page.locator(".gallery-tile")).toHaveCount(0);
+  await expect(hiddenStat(page)).toHaveCount(0);
+
   expect(pageErrors).toEqual([]);
 });
 

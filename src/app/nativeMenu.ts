@@ -11,6 +11,7 @@ export type NativeMenuEvent =
   | "menu-export"
   | "menu-toggle-sidebar"
   | "menu-toggle-inspector"
+  | "menu-lock-hidden"
   | "menu-zoom-in"
   | "menu-zoom-out"
   | "menu-about"
@@ -24,6 +25,7 @@ export interface NativeMenuHandlers {
   exportToBatch: () => void;
   toggleSidebar: () => void;
   toggleInspector: () => void;
+  lockHidden: () => void;
   zoomIn: () => void;
   zoomOut: () => void;
   showAbout: () => void;
@@ -52,6 +54,9 @@ export function dispatchNativeMenuEvent(event: string, handlers: NativeMenuHandl
       return true;
     case "menu-toggle-inspector":
       handlers.toggleInspector();
+      return true;
+    case "menu-lock-hidden":
+      handlers.lockHidden();
       return true;
     case "menu-zoom-in":
       handlers.zoomIn();

@@ -171,6 +171,10 @@ pub fn run() {
             // Handle menu events
             app.on_menu_event(|app, event| {
                 let id = event.id().as_ref();
+                // Lock natively first, so it holds even if the page is busy.
+                if id == "view_lock_hidden" {
+                    app.state::<commands::HiddenLock>().lock();
+                }
                 if dispatch_menu_event(app, id) {
                     return;
                 }

@@ -18,8 +18,21 @@ use ts_rs::TS;
 
 use crate::errors::{CommandError, ErrorCode};
 
-/// How long an unlock survives without activity in Hidden.
+/// How long an unlock survives without activity in Hidden, by default.
 pub(crate) const UNLOCK_GRACE: Duration = Duration::from_secs(5 * 60);
+
+/// The unlock lifetime for the "Lock Hidden again" setting. "As soon as you
+/// leave" (0) keeps a short lifetime that the screen's keep-alive renews; the
+/// app locks explicitly when Hidden is left. "Only when the screen locks"
+/// (-1) lasts until the screen locks or the window closes.
+pub(crate) fn grace_for(minutes: i32) -> Duration {
+    match minutes {
+        -1 => Duration::from_secs(30 * 24 * 60 * 60),
+        0 => Duration::from_secs(2 * 60),
+        n if n > 0 => Duration::from_secs(n as u64 * 60),
+        _ => UNLOCK_GRACE,
+    }
+}
 
 #[derive(Default)]
 pub struct HiddenLock {
@@ -38,19 +51,19 @@ impl HiddenLock {
         self.is_unlocked_at(SystemTime::now())
     }
 
-    /// Start or extend an unlock from `now`.
-    pub(crate) fn grant_at(&self, now: SystemTime) {
+    /// Start or extend an unlock from `now`, lasting `grace`.
+    pub(crate) fn grant_at(&self, now: SystemTime, grace: Duration) {
         if let Ok(mut until) = self.unlocked_until.lock() {
-            *until = Some(now + UNLOCK_GRACE);
+            *until = Some(now + grace);
         }
     }
 
     /// Extend a live unlock; an expired one stays locked.
-    pub(crate) fn extend_at(&self, now: SystemTime) -> bool {
+    pub(crate) fn extend_at(&self, now: SystemTime, grace: Duration) -> bool {
         if !self.is_unlocked_at(now) {
             return false;
         }
-        self.grant_at(now);
+        self.grant_at(now, grace);
         true
     }
 
@@ -63,10 +76,20 @@ impl HiddenLock {
 
 /// Whether the "Require Touch ID or password for Hidden" setting is on.
 pub(crate) async fn unlock_required(db: &sqlx::SqlitePool) -> bool {
+    lock_settings(db).await.0
+}
+
+/// (unlock required, how long an unlock lasts).
+async fn lock_settings(db: &sqlx::SqlitePool) -> (bool, Duration) {
     super::settings::load_persisted_settings(db)
         .await
-        .map(|settings| settings.require_hidden_unlock)
-        .unwrap_or(true)
+        .map(|settings| {
+            (
+                settings.require_hidden_unlock,
+                grace_for(settings.hidden_auto_lock_minutes),
+            )
+        })
+        .unwrap_or((true, UNLOCK_GRACE))
 }
 
 /// May hidden items, or their count, be shown right now?
@@ -80,10 +103,11 @@ pub(crate) async fn require_hidden_access(
     db: &sqlx::SqlitePool,
     lock: &HiddenLock,
 ) -> Result<(), CommandError> {
-    if !unlock_required(db).await {
+    let (required, grace) = lock_settings(db).await;
+    if !required {
         return Ok(());
     }
-    if lock.extend_at(SystemTime::now()) {
+    if lock.extend_at(SystemTime::now(), grace) {
         Ok(())
     } else {
         Err(CommandError::new(
@@ -131,20 +155,26 @@ pub async fn unlock_hidden(
     lock: State<'_, HiddenLock>,
 ) -> Result<bool, CommandError> {
     let db = super::get_db(&catalog)?;
-    if !unlock_required(&db).await || lock.is_unlocked() {
+    let (required, grace) = lock_settings(&db).await;
+    if !required || lock.is_unlocked() {
         return Ok(true);
     }
     let passed = native::authenticate("show your hidden photos and videos").await?;
     if passed {
-        lock.grant_at(SystemTime::now());
+        lock.grant_at(SystemTime::now(), grace);
     }
     Ok(passed)
 }
 
 /// Activity in Hidden keeps an unlock alive.
 #[tauri::command]
-pub async fn keep_hidden_unlocked(lock: State<'_, HiddenLock>) -> Result<bool, CommandError> {
-    Ok(lock.extend_at(SystemTime::now()))
+pub async fn keep_hidden_unlocked(
+    catalog: State<'_, crate::Catalog>,
+    lock: State<'_, HiddenLock>,
+) -> Result<bool, CommandError> {
+    let db = super::get_db(&catalog)?;
+    let (_, grace) = lock_settings(&db).await;
+    Ok(lock.extend_at(SystemTime::now(), grace))
 }
 
 #[tauri::command]
@@ -273,9 +303,12 @@ mod tests {
         let lock = HiddenLock::default();
         let start = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
         assert!(!lock.is_unlocked_at(start), "starts locked");
-        assert!(!lock.extend_at(start), "activity cannot unlock");
+        assert!(
+            !lock.extend_at(start, UNLOCK_GRACE),
+            "activity cannot unlock"
+        );
 
-        lock.grant_at(start);
+        lock.grant_at(start, UNLOCK_GRACE);
         assert!(lock.is_unlocked_at(start + UNLOCK_GRACE - Duration::from_secs(1)));
         assert!(
             !lock.is_unlocked_at(start + UNLOCK_GRACE),
@@ -284,19 +317,40 @@ mod tests {
 
         // Activity four minutes in pushes expiry to nine minutes.
         let active = start + Duration::from_secs(4 * 60);
-        assert!(lock.extend_at(active));
+        assert!(lock.extend_at(active, UNLOCK_GRACE));
         assert!(lock.is_unlocked_at(start + Duration::from_secs(8 * 60)));
         assert!(!lock.is_unlocked_at(active + UNLOCK_GRACE));
+    }
+
+    #[test]
+    fn the_auto_lock_setting_sets_how_long_an_unlock_lasts() {
+        assert_eq!(grace_for(1), Duration::from_secs(60));
+        assert_eq!(grace_for(15), Duration::from_secs(15 * 60));
+        assert_eq!(grace_for(5), UNLOCK_GRACE);
+        // "As soon as you leave": short, renewed while Hidden is on screen.
+        assert_eq!(grace_for(0), Duration::from_secs(2 * 60));
+        // "Only when the screen locks": effectively until then.
+        assert!(grace_for(-1) >= Duration::from_secs(7 * 24 * 60 * 60));
+        assert_eq!(grace_for(-7), UNLOCK_GRACE);
+
+        let lock = HiddenLock::default();
+        let start = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        lock.grant_at(start, grace_for(1));
+        assert!(lock.is_unlocked_at(start + Duration::from_secs(59)));
+        assert!(!lock.is_unlocked_at(start + Duration::from_secs(60)));
     }
 
     #[test]
     fn locking_ends_an_unlock_at_once() {
         let lock = HiddenLock::default();
         let now = SystemTime::now();
-        lock.grant_at(now);
+        lock.grant_at(now, UNLOCK_GRACE);
         assert!(lock.is_unlocked_at(now));
         lock.lock();
         assert!(!lock.is_unlocked_at(now));
-        assert!(!lock.extend_at(now), "an ended unlock cannot be extended");
+        assert!(
+            !lock.extend_at(now, UNLOCK_GRACE),
+            "an ended unlock cannot be extended"
+        );
     }
 }

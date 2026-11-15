@@ -261,6 +261,15 @@ checkForUpdatesOnLaunch: boolean,
  */
 requireHiddenUnlock: boolean, 
 /**
+ * Minutes an unlock of Hidden lasts after you leave it: 0 locks as soon
+ * as you leave, -1 keeps it until the screen locks or the window closes.
+ */
+hiddenAutoLockMinutes: number, 
+/**
+ * Lock Hidden whenever VistoGallery goes to the background.
+ */
+lockHiddenInBackground: boolean, 
+/**
  * Thumbnail cache budget in gigabytes.
  */
 maxCacheSizeGB: number, thumbnailQuality: number, enableDebugLogging: boolean, showNativeLimitWarnings: boolean, };
@@ -294,6 +303,15 @@ checkForUpdatesOnLaunch?: boolean,
  * Ask for Touch ID or the Mac password before showing Hidden.
  */
 requireHiddenUnlock?: boolean, 
+/**
+ * Minutes an unlock of Hidden lasts after you leave it: 0 locks as soon
+ * as you leave, -1 keeps it until the screen locks or the window closes.
+ */
+hiddenAutoLockMinutes?: number, 
+/**
+ * Lock Hidden whenever VistoGallery goes to the background.
+ */
+lockHiddenInBackground?: boolean, 
 /**
  * Thumbnail cache budget in gigabytes.
  */

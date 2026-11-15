@@ -156,6 +156,8 @@ interface LibraryScreenProps {
    * view; Hidden turns it off once Touch ID or the password unlocked it.
    */
   veilHidden?: boolean;
+  /** Extra header control for the hidden view (Hidden's Lock button). */
+  hiddenHeaderAction?: React.ReactNode;
   inspectedId: string | null;
   items: MediaItem[];
   layout: LayoutMode;
@@ -1323,6 +1325,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                 )}
               </div>
               <div className="header-actions">
+                {props.hiddenView && props.hiddenHeaderAction}
                 {!props.hiddenView && (
                   <>
                     <label

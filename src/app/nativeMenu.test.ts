@@ -10,6 +10,7 @@ function handlers() {
     exportToBatch: vi.fn(),
     toggleSidebar: vi.fn(),
     toggleInspector: vi.fn(),
+    lockHidden: vi.fn(),
     zoomIn: vi.fn(),
     zoomOut: vi.fn(),
     showAbout: vi.fn(),
@@ -35,6 +36,12 @@ describe("native menu dispatch", () => {
 
     expect(dispatchNativeMenuEvent("menu-shortcuts", actions)).toBe(true);
     expect(actions.showShortcuts).toHaveBeenCalledTimes(1);
+  });
+
+  test("View > Lock Hidden (⌃⌘L) reaches the lock action", () => {
+    const actions = handlers();
+    expect(dispatchNativeMenuEvent("menu-lock-hidden", actions)).toBe(true);
+    expect(actions.lockHidden).toHaveBeenCalledTimes(1);
   });
 
   test("unknown events are ignored for forward compatibility", () => {

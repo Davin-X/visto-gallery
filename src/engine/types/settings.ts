@@ -28,6 +28,8 @@ export const defaultSettings: AppSettings = {
   stackLivePhotos: true,
   checkForUpdatesOnLaunch: false,
   requireHiddenUnlock: true,
+  hiddenAutoLockMinutes: 5,
+  lockHiddenInBackground: false,
   maxCacheSizeGB: 5,
   thumbnailQuality: 80,
   enableDebugLogging: false,
