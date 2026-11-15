@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-15
+
 ### Added
 - **Video that used to be unplayable**: WMV, VC-1, Xvid/DivX AVI, MPEG-2 and 10-bit H.264 files are converted once to H.264 with VideoToolbox — with a progress bar and **Cancel** — instead of being handed to another app. The copy is kept in the playback cache and counts toward its size limit. Matroska files keep **every audio track** and their subtitles, and the player now has audio-track and subtitle menus (subtitles are carried into the MP4 as `mov_text`; bitmap subtitles such as PGS are not offered, since macOS cannot draw them in a web view).
 - **Hidden lock options**: lock Hidden at any time with the **Lock** button in its header or View → Lock Hidden (⌃⌘L). Settings → Privacy chooses when it locks again after you leave it (as soon as you leave, after 1, 5 or 15 minutes, or only when the screen locks) and can lock it whenever VistoGallery goes to the background.
