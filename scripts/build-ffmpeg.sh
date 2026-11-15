@@ -9,9 +9,13 @@
 #
 # The feature list below is exactly what the app does:
 #   * probe   — read container and stream headers (demuxers, no decoders)
-#   * remux   — copy the video stream into MP4, re-encode audio to AAC-LC
-#   * fixtures — VP9 and AC-3 encoders exist only so the Rust tests can build
-#                sample files; the app itself never encodes video
+#   * remux   — copy the video stream into MP4, re-encode audio to AAC-LC,
+#               and carry text subtitles over as mov_text
+#   * convert — re-encode codecs a remux cannot fix (WMV/VC-1, MPEG-2,
+#               MPEG-4 Part 2, H.263, 10-bit H.264) to H.264 with VideoToolbox
+#   * fixtures — MPEG-4, WMV2, AC-3 and mov_text encoders exist only so the
+#                Rust tests can build sample files; the app itself never
+#                encodes anything but H.264/AAC during a conversion
 #
 # Anything missing here shows up as a specific failure, not a silent one: a
 # missing decoder means "ffmpeg could not extract a frame", a missing muxer
@@ -53,9 +57,10 @@ cd "$SRC"
 
 # Every codec the library can hold, so a poster is never refused for a format
 # the player accepts.
-DEMUXERS="mov,matroska,avi,asf,flv,mpegts,mpegps,ogg,wav,mp3,aac,flac,image2,apng"
+DEMUXERS="mov,matroska,avi,asf,flv,mpegts,mpegps,ogg,wav,mp3,aac,flac,image2,apng,srt"
 VIDEO_DECODERS="h264,hevc,vp8,vp9,av1,mpeg4,mpeg2video,mpeg1video,mjpeg,png,prores,theora,wmv1,wmv2,wmv3,vc1,dvvideo,h263,rawvideo"
 AUDIO_DECODERS="aac,ac3,eac3,dts,truehd,mlp,flac,opus,vorbis,mp2,mp3,alac,wmav1,wmav2,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_s16be,pcm_s24be,pcm_u8"
+SUBTITLE_DECODERS="subrip,ass,ssa,webvtt,movtext,text"
 PARSERS="h264,hevc,vp9,av1,mpeg4video,mpegaudio,aac,ac3,dts,opus,vorbis,png,mjpeg"
 BSFS="aac_adtstoasc,h264_mp4toannexb,hevc_mp4toannexb,extract_extradata"
 
@@ -68,11 +73,12 @@ echo "==> configuring ffmpeg $VERSION"
   --disable-network \
   --disable-debug \
   --enable-static --disable-shared \
+  --enable-videotoolbox \
   --enable-protocol=file,pipe \
   --enable-demuxer="$DEMUXERS" \
-  --enable-muxer=mp4,mov,image2 \
-  --enable-decoder="$VIDEO_DECODERS,$AUDIO_DECODERS" \
-  --enable-encoder=aac,ac3,vp9,mjpeg,png \
+  --enable-muxer=mp4,mov,matroska,asf,image2 \
+  --enable-decoder="$VIDEO_DECODERS,$AUDIO_DECODERS,$SUBTITLE_DECODERS" \
+  --enable-encoder=aac,ac3,mjpeg,movtext,wmv2,mpeg4,h264_videotoolbox \
   --enable-parser="$PARSERS" \
   --enable-bsf="$BSFS" \
   --enable-filter=scale,format,crop,pad,setsar,aresample,anull,null,transpose,fps \

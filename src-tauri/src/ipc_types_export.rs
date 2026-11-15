@@ -15,16 +15,17 @@ mod tests {
     use ts_rs::{Config, TS};
 
     use crate::commands::{
-        AccentColor, AlbumOverview, AlbumsView, AppSettings, Appearance, BackupInfo,
-        BatchExportError, BatchExportItem, BatchExportProgress, BatchExportRequest,
+        AccentColor, AlbumOverview, AlbumsView, AppSettings, Appearance, AudioTrackInfo,
+        BackupInfo, BatchExportError, BatchExportItem, BatchExportProgress, BatchExportRequest,
         BatchExportResult, CacheKind, ClearCacheResult, CropRect, CropState, DefaultLayout,
         DisplayPreview, DuplicateGroup, EditPreset, EditRecipe, EditValues, ExifData, ExportResult,
         ExternalPlayer, HiddenLockStatus, LibraryFilterDTO, LibraryFolder, LibraryItemsPage,
-        LibraryStats, MediaProbe, PartialSettings, PlaybackStrategy, PreparedPlayback,
-        RenderRequest, RestoreResult, RootPathMappingPreview, RootPathMappingResult, ScanResult,
-        SmartAlbum, SmartAlbumFilter, StartupView, StorageUsage, ThumbnailRequest,
-        ThumbnailResponse, ThumbnailSize, TimelineMonth, TrashError, TrashRestoreFailure,
-        TrashRestoreItem, TrashRestoreResult, TrashResult, UpdateCheck, ViewerZoomBehavior,
+        LibraryStats, MediaProbe, PartialSettings, PlaybackConversionProgress, PlaybackStrategy,
+        PreparedPlayback, RenderRequest, RestoreResult, RootPathMappingPreview,
+        RootPathMappingResult, ScanResult, SmartAlbum, SmartAlbumFilter, StartupView, StorageUsage,
+        SubtitleTrackInfo, ThumbnailRequest, ThumbnailResponse, ThumbnailSize, TimelineMonth,
+        TrashError, TrashRestoreFailure, TrashRestoreItem, TrashRestoreResult, TrashResult,
+        UpdateCheck, ViewerZoomBehavior,
     };
     use crate::errors::{CommandError, ErrorCode};
     use crate::media_kind::MediaKind;
@@ -103,8 +104,11 @@ mod tests {
             EditPreset,
             ExternalPlayer,
             MediaProbe,
+            AudioTrackInfo,
+            SubtitleTrackInfo,
             PlaybackStrategy,
             PreparedPlayback,
+            PlaybackConversionProgress,
             UpdateCheck,
             AppSettings,
             PartialSettings,

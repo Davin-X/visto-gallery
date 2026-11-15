@@ -240,6 +240,8 @@ pub fn run() {
             open_with_player,
             external_video_players,
             prepare_playback,
+            convert_playback,
+            cancel_playback_conversion,
             log_playback_diagnostic,
             open_folder,
             // Albums

@@ -146,6 +146,14 @@ export const tauri = {
     preparePlayback: (path: string, forceRemux = false): Promise<PreparedPlayback> =>
       invoke("prepare_playback", { path, forceRemux }),
 
+    // Re-encode a file a remux cannot fix. Long-running: progress arrives on
+    // the `playback-conversion` event, and cancel stops ffmpeg.
+    convertPlayback: (path: string): Promise<PreparedPlayback> =>
+      invoke("convert_playback", { path }),
+
+    cancelPlaybackConversion: (path: string): Promise<boolean> =>
+      invoke("cancel_playback_conversion", { path }),
+
     // The webview console is invisible in a Tauri window, so playback problems
     // are relayed to the app log instead.
     logPlaybackDiagnostic: (label: string, payload: string): Promise<void> =>

@@ -11,6 +11,16 @@
       // `videos=N` renders the first N synthetic items as videos so the tile's
       // play-in-background action can be exercised.
       const videoCount = Math.max(0, Math.floor(Number(params.get("videos") || 0)));
+      // `wmv=N` turns the first N videos into .wmv files whose probe cannot be
+      // remuxed, so the player offers "Convert to play here".
+      const wmvCount = Math.min(
+        videoCount,
+        Math.max(0, Math.floor(Number(params.get("wmv") || 0))),
+      );
+      // `tracks=1` makes the first video a Matroska whose probe carries two
+      // audio tracks and a subtitle, so the player's track menus are driven by
+      // real probe data rather than by a hand-crafted component state.
+      const trackProbe = params.get("tracks") === "1";
       // `longNames=1` stretches every fixture name so the list tables' name
       // truncation and column floors can be exercised end to end.
       const longNames = params.get("longNames") === "1";
@@ -49,11 +59,27 @@
         Array.from({ length: totalItems }, (_, index) => {
           const capturedAt = now - index * itemStepMs;
           const isVideo = index < videoCount;
+          const isWmv = index < wmvCount;
+          const isTracked = trackProbe && isVideo && !isWmv && index === 0;
           const isRaw = !isVideo && index < videoCount + rawCount;
-          const extension = isVideo ? "mp4" : isRaw ? "dng" : "jpg";
+          const extension = isWmv
+            ? "wmv"
+            : isTracked
+              ? "mkv"
+              : isVideo
+                ? "mp4"
+                : isRaw
+                  ? "dng"
+                  : "jpg";
           return {
             id: `benchmark-${index}`,
-            path: isVideo ? tinyVideoData : `/synthetic/benchmark-${index}.${extension}`,
+            // A WMV has no in-app source until it is converted; every other
+            // video plays the tiny clip so the controls mount.
+            path: isWmv
+              ? `/synthetic/benchmark-${index}.wmv`
+              : isVideo
+                ? tinyVideoData
+                : `/synthetic/benchmark-${index}.${extension}`,
             name: longNames
               ? `this-is-a-very-long-camera-generated-filename-with-a-shared-prefix-${index}-and-a-distinguishing-tail-0042.${extension}`
               : `benchmark-${index}.${extension}`,
@@ -98,6 +124,53 @@
         height: 1,
       };
 
+      // The probe ffprobe would return for a synthetic video. `tracks=1` gives
+      // it two audio tracks (English AAC, French AC-3) and two subtitles:
+      // SubRip, which becomes `mov_text`, and bitmap PGS, which cannot and is
+      // therefore not offered in the player.
+      const playbackProbe = (convertible) => ({
+        videoCodec: convertible ? "wmv2" : "h264",
+        pixelFormat: "yuv420p",
+        codecTag: convertible ? null : "avc1",
+        audioCodec: convertible ? "wmav2" : "aac",
+        audioProfile: convertible ? null : "LC",
+        audioTracks: trackProbe
+          ? [
+              { index: 1, codec: "aac", language: "eng", title: "Main", channels: 2 },
+              { index: 2, codec: "ac3", language: "fra", title: null, channels: 6 },
+            ]
+          : [{ index: 1, codec: "aac", language: "eng", title: null, channels: 2 }],
+        subtitleTracks: trackProbe
+          ? [
+              { index: 3, codec: "subrip", language: "eng", title: null },
+              { index: 4, codec: "hdmv_pgs_subtitle", language: "fra", title: null },
+            ]
+          : [],
+        durationMs: 1000,
+        width: 16,
+        height: 16,
+        bitDepth: 8,
+      });
+
+      // A conversion stays pending until the test finishes or cancels it, so
+      // progress and the cancel button are driven without a race.
+      let pendingConversion = null;
+      window.__finishPlaybackConversion = () => {
+        const pending = pendingConversion;
+        pendingConversion = null;
+        pending?.resolve();
+      };
+      // The player listens on `playback-conversion`; this delivers a tick
+      // through the same handler the Tauri event plugin would call.
+      const eventHandlers = new Map();
+      window.__emitPlaybackProgress = (path, progress) => {
+        eventHandlers.get("playback-conversion")?.({
+          event: "playback-conversion",
+          id: 0,
+          payload: { path, progress },
+        });
+      };
+
       // Smart albums are mutable so the Albums screen's create/edit/delete
       // affordances can be driven end to end, not just rendered.
       // `smartAlbums=N` seeds N of them (default 8, `0` for the empty state).
@@ -133,6 +206,41 @@
         if (command === "get_version") return "0.2.2";
         if (command === "get_vault_status") {
           return { configured: false, locked: true, itemCount: 0 };
+        }
+        if (command === "external_video_players") return [];
+        if (command === "log_playback_diagnostic") return null;
+        if (command === "prepare_playback") {
+          const path = args?.path || "";
+          // Only a WMV resists a remux; the tracked Matroska is reported as
+          // remuxed, which is the strategy the real backend picks for it.
+          const convertible = /\.wmv$/i.test(path);
+          return {
+            strategy: convertible ? "unsupported" : trackProbe ? "remuxed" : "native",
+            path,
+            probe: playbackProbe(convertible),
+            detail: convertible
+              ? "This file uses wmv2, which the in-app player cannot decode."
+              : null,
+            canConvert: convertible,
+          };
+        }
+        if (command === "convert_playback") {
+          const converted = {
+            strategy: "converted",
+            path: tinyVideoData,
+            probe: playbackProbe(false),
+            detail: null,
+            canConvert: false,
+          };
+          return new Promise((resolve, reject) => {
+            pendingConversion = { resolve: () => resolve(converted), reject };
+          });
+        }
+        if (command === "cancel_playback_conversion") {
+          const pending = pendingConversion;
+          pendingConversion = null;
+          pending?.reject({ code: "cancelled", message: "Conversion cancelled." });
+          return true;
         }
         if (command === "hidden_lock_status") {
           return {
@@ -340,10 +448,31 @@
         return [];
       };
 
+      // `listen()` registers its handler through `transformCallback`, then
+      // hands the id to the event plugin. Keeping the callbacks lets a test
+      // emit an event the way the backend does.
+      const callbacks = new Map();
+      let callbackCounter = 0;
+
       window.__TAURI_INTERNALS__ = {
         convertFileSrc: (p) => p,
-        transformCallback: () => 1,
-        invoke: isBenchmark ? syntheticInvoke : noop,
+        transformCallback: (callback) => {
+          callbackCounter += 1;
+          callbacks.set(callbackCounter, callback);
+          return callbackCounter;
+        },
+        invoke: async (command, args) => {
+          if (command === "plugin:event|listen") {
+            const handler = callbacks.get(args?.handler);
+            if (handler) eventHandlers.set(args.event, handler);
+            return args?.handler ?? 0;
+          }
+          if (command === "plugin:event|unlisten") {
+            eventHandlers.delete(args?.event);
+            return null;
+          }
+          return isBenchmark ? syntheticInvoke(command, args) : noop(command, args);
+        },
         metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
         plugins: {},
       };

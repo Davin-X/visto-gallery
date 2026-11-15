@@ -129,6 +129,43 @@
   color: var(--red, #e5484d);
 }
 
+.viewer-video-converting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.viewer-video-convert-bar {
+  width: 180px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.viewer-video-convert-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.viewer-video-converting button {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
 /* The transport bar. Every box declaration lives here. A second block scoped to
    .video-player-stage used to override the width, padding, border, radius,
    background and shadow, so the bar was a different size depending on which
