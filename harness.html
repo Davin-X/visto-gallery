@@ -75,6 +75,12 @@
           };
         });
       const items = makeItems();
+      // The hidden set spans months and has its own ids, so the Hidden
+      // Timeline's month counts and whole-month Select all can be told apart
+      // from the Library's.
+      const hiddenItems = [items[0], items[7], items[14]]
+        .filter(Boolean)
+        .map((item, index) => ({ ...item, id: `hidden-${index}`, hidden: true }));
       const benchmark = {
         calls: Object.create(null),
         activeThumbnails: 0,
@@ -147,7 +153,6 @@
         }
         if (command === "get_hidden_items") {
           if (!hiddenVisible()) throw { code: "locked", message: "Hidden is locked." };
-          const hiddenItems = items.slice(0, 3).map((item) => ({ ...item, hidden: true }));
           return { items: hiddenItems, hasMore: false, totalCount: hiddenItems.length };
         }
         if (command === "get_library_stats") {
@@ -257,9 +262,21 @@
         }
         // Capture times are wall-clock stored as UTC, so months are UTC.
         const monthOf = (item) => new Date(item.capturedAt).toISOString().slice(0, 7);
+        // The same scope rules the real query applies, so the Hidden Timeline
+        // gets hidden months and the Library gets visible ones.
+        const scopeFor = (filter) =>
+          filter.hidden === true ? hiddenItems : filter.hidden === false ? items : [...items, ...hiddenItems];
+        const inScope = (item, filter) => {
+          if (filter.kind && item.kind !== filter.kind) return false;
+          if (filter.favorite === true && !item.favorite) return false;
+          if (filter.animated === true && !/\.gif$/i.test(item.name)) return false;
+          return true;
+        };
         if (command === "get_timeline_months") {
+          const filter = args?.filter || {};
           const months = new Map();
-          for (const item of items) {
+          for (const item of scopeFor(filter)) {
+            if (!inScope(item, filter)) continue;
             const key = monthOf(item);
             const month = months.get(key) ?? { key, count: 0, coverIds: [] };
             month.count += 1;
@@ -269,8 +286,12 @@
           return [...months.values()];
         }
         if (command === "get_matching_ids") {
-          const month = args?.filter?.month;
-          return items.filter((item) => !month || monthOf(item) === month).map((item) => item.id);
+          const filter = args?.filter || {};
+          const month = filter.month;
+          return scopeFor(filter)
+            .filter((item) => inScope(item, filter))
+            .filter((item) => !month || monthOf(item) === month)
+            .map((item) => item.id);
         }
         if (command === "get_display_preview") {
           window.__previewCalls.push({ itemId: args?.itemId, full: !!args?.full });
@@ -279,7 +300,7 @@
           return { path: null, dataUrl: tinyImage, width: 1, height: 1, full: !!args?.full };
         }
         if (command === "get_items_by_ids") {
-          const byId = new Map(items.map((item) => [item.id, item]));
+          const byId = new Map([...items, ...hiddenItems].map((item) => [item.id, item]));
           return (args?.ids || []).map((id) => byId.get(id)).filter(Boolean);
         }
         if (command === "get_library_items") {

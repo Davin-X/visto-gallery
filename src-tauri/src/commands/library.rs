@@ -614,9 +614,17 @@ pub struct TimelineMonth {
 pub async fn get_timeline_months(
     filter: Option<super::LibraryFilterDTO>,
     catalog: State<'_, crate::Catalog>,
+    lock: State<'_, super::HiddenLock>,
 ) -> Result<Vec<TimelineMonth>, CommandError> {
     let db = super::get_db(&catalog)?;
-    timeline_months(&db, filter.unwrap_or_default()).await
+    let filter = filter.unwrap_or_default();
+    // Months for the Hidden screen describe hidden items, so they need the
+    // same proof of access as listing them. The visible Timeline (`hidden`
+    // false or unset) needs none.
+    if filter.hidden == Some(true) {
+        super::hidden_lock::require_hidden_access(&db, &lock).await?;
+    }
+    timeline_months(&db, filter).await
 }
 
 pub(crate) async fn timeline_months(
@@ -2928,6 +2936,36 @@ mod pagination_tests {
         .expect("video months");
         let summary: Vec<(&str, i64)> = videos.iter().map(|m| (m.key.as_str(), m.count)).collect();
         assert_eq!(summary, vec![("2025-03", 1), ("2025-01", 1)]);
+
+        // Hidden is its own scope: months and whole-month selection there
+        // must count hidden items only, never the visible library.
+        let hidden_months = timeline_months(
+            &db,
+            LibraryFilterDTO {
+                hidden: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("hidden months");
+        let summary: Vec<(&str, i64)> = hidden_months
+            .iter()
+            .map(|m| (m.key.as_str(), m.count))
+            .collect();
+        assert_eq!(summary, vec![("2025-03", 1)]);
+
+        let mut hidden_ids = matching_ids(
+            &db,
+            LibraryFilterDTO {
+                hidden: Some(true),
+                month: Some("2025-03".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("hidden month ids");
+        hidden_ids.sort();
+        assert_eq!(hidden_ids, vec!["h1"]);
 
         // Select all on a month: the month filter returns the whole month.
         let mut ids = matching_ids(
