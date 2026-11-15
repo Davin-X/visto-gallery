@@ -17,7 +17,7 @@ The tag and the commits behind it are GPG-signed, so GitHub shows them as **Veri
 shasum -a 256 -c SHA256SUMS.txt
 ```
 
-`VistoGallery_0.4.0_aarch64.dmg: OK` means the file matches what was published.
+`VistoGallery_0.5.0_aarch64.dmg: OK` means the file matches what was published.
 
 ## 2. GPG signature
 
@@ -30,7 +30,7 @@ gpg --recv-keys 08927A313C150351DBC5BF647B53E554392899D0
 Then:
 
 ```bash
-gpg --verify VistoGallery_0.4.0_aarch64.dmg.asc VistoGallery_0.4.0_aarch64.dmg
+gpg --verify VistoGallery_0.5.0_aarch64.dmg.asc VistoGallery_0.5.0_aarch64.dmg
 ```
 
 The expected key is `Devendra Kumar <davink.in1@gmail.com>`, fingerprint:
@@ -46,7 +46,7 @@ A signature made by any other key is not ours, whatever the filename says.
 With the [GitHub CLI](https://cli.github.com) installed:
 
 ```bash
-gh attestation verify VistoGallery_0.4.0_aarch64.dmg --repo Davin-X/visto-gallery
+gh attestation verify VistoGallery_0.5.0_aarch64.dmg --repo Davin-X/visto-gallery
 ```
 
 This checks the attestation the release workflow produced: the artifact came from a run of `.github/workflows/release.yml` on a tag in this repository.
