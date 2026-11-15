@@ -215,9 +215,26 @@ codecTag: string | null, audioCodec: string | null,
  * `ffprobe`'s audio profile (`LC`, `HE-AAC`, ...). Informational only:
  * WebKit plays HE-AAC, so the profile never blocks in-app playback.
  */
-audioProfile: string | null, width: number, height: number, bitDepth: number, };
+audioProfile: string | null, 
+/**
+ * Every audio stream, in source order.
+ */
+audioTracks: Array<AudioTrackInfo>, 
+/**
+ * Every subtitle stream. Bitmap subtitles (PGS, VobSub) are listed too,
+ * but only text ones can be carried into an MP4.
+ */
+subtitleTracks: Array<SubtitleTrackInfo>, durationMs: number | null, width: number, height: number, bitDepth: number, };
 
-export type PlaybackStrategy = "native" | "remuxed" | "unsupported";
+export type AudioTrackInfo = { 
+/**
+ * ffprobe's stream index, used to map exactly this track.
+ */
+index: number, codec: string, language: string | null, title: string | null, channels: number | null, };
+
+export type SubtitleTrackInfo = { index: number, codec: string, language: string | null, title: string | null, };
+
+export type PlaybackStrategy = "native" | "remuxed" | "converted" | "unsupported";
 
 export type PreparedPlayback = { strategy: PlaybackStrategy, 
 /**
@@ -227,7 +244,20 @@ path: string, probe: MediaProbe | null,
 /**
  * Why no strategy applied, for the fallback screen.
  */
-detail: string | null, };
+detail: string | null, 
+/**
+ * True when "Convert to play here" can turn this file into an in-app
+ * playable copy: ffmpeg is present, the video codec is one a remux cannot
+ * fix, and this build has the VideoToolbox H.264 encoder.
+ */
+canConvert: boolean, };
+
+export type PlaybackConversionProgress = { path: string, 
+/**
+ * `None` when ffprobe could not report a duration, so the client shows an
+ * indeterminate bar rather than a made-up percentage.
+ */
+progress: number | null, };
 
 export type UpdateCheck = { available: boolean, currentVersion: string, latestVersion: string, notes: string, releaseUrl: string, downloadUrl?: string | null, publishedAt?: string | null, checkedAt: number, };
 

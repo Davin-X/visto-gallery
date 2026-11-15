@@ -269,6 +269,24 @@
   font-size: 11px;
 }
 
+.video-track-select {
+  flex: 0 0 auto;
+  max-width: 132px;
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+.video-track-select option {
+  background: #171a20;
+  color: #fff;
+}
+
 .video-playback-rate option {
   background: #171a20;
   color: #fff;

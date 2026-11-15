@@ -1,5 +1,6 @@
-import React, { useRef, useState, useEffect, useCallback } from "react";
+import React, { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useSettingsStore } from "../../engine/stores/useSettingsStore";
 import { usePlaybackStore } from "../../engine/stores/usePlaybackStore";
 import {
@@ -14,7 +15,11 @@ import {
   InfoIcon,
 } from "./icons";
 import { tauri } from "../../engine/commands/tauri";
-import type { ExternalPlayer } from "../../engine/types/commands";
+import type {
+  AudioTrackInfo,
+  ExternalPlayer,
+  SubtitleTrackInfo,
+} from "../../engine/types/commands";
 import { formatDuration } from "../../engine/utils/time";
 import {
   canPlayVideoInApp,
@@ -28,6 +33,64 @@ import {
 } from "../../engine/utils/pictureInPicture";
 
 type PlaybackSnapshot = ReturnType<typeof usePlaybackStore.getState>;
+
+/** WKWebView exposes per-file audio tracks even though lib.dom does not. */
+type WebkitAudioTrack = { enabled: boolean };
+type WebkitAudioTrackList = { length: number; [index: number]: WebkitAudioTrack };
+
+/** Subtitle codecs the backend can carry into an MP4 as `mov_text`. */
+const TEXT_SUBTITLE_CODECS = new Set([
+  "subrip",
+  "srt",
+  "ass",
+  "ssa",
+  "webvtt",
+  "mov_text",
+  "text",
+  "microdvd",
+  "subviewer",
+  "subviewer1",
+  "sami",
+  "realtext",
+  "jacosub",
+  "mpl2",
+  "pjs",
+  "vplayer",
+  "stl",
+  "eia_608",
+]);
+
+function languageLabel(language: string | null): string | null {
+  if (!language || language === "und") return null;
+  try {
+    if (typeof Intl.DisplayNames === "function") {
+      return new Intl.DisplayNames(undefined, { type: "language" }).of(language) ?? null;
+    }
+  } catch {
+    // Older WebKit or an unknown tag: fall back to the tag itself.
+  }
+  return language.toUpperCase();
+}
+
+function trackLabel(
+  track: { language: string | null; title: string | null },
+  fallback: string,
+): string {
+  return track.title ?? languageLabel(track.language) ?? fallback;
+}
+
+function audioTrackLabel(track: AudioTrackInfo, position: number): string {
+  const label = trackLabel(track, `Audio ${position + 1}`);
+  return track.channels && track.channels > 1 ? `${label} · ${track.channels} ch` : label;
+}
+
+function readableError(error: unknown): string {
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object" && "message" in error) {
+    return String((error as { message: unknown }).message);
+  }
+  return String(error);
+}
 
 // WKWebView can decode MP4/MOV (H.264/HEVC) and WebM, but not Matroska or AVI.
 // Files outside the supported list never reach the <video> element: WebKit
@@ -114,6 +177,21 @@ function VideoPlayer({
   const [videoError, setVideoError] = useState<MediaError | null>(null);
   const [players, setPlayers] = useState<ExternalPlayer[]>([]);
   const [openError, setOpenError] = useState<string | null>(null);
+  // Track menus come from ffprobe, which sees every stream whether or not the
+  // container reached WebKit untouched. Selecting one maps back to the media
+  // element's tracks by position.
+  const [probeTracks, setProbeTracks] = useState<{
+    audio: AudioTrackInfo[];
+    subtitles: SubtitleTrackInfo[];
+  }>({ audio: [], subtitles: [] });
+  const [audioTrack, setAudioTrack] = useState<number | null>(null);
+  const [subtitleTrack, setSubtitleTrack] = useState<number | "off">("off");
+  // "Convert to play here": a one-time VideoToolbox encode for codecs a remux
+  // cannot fix. Progress arrives from the backend event; cancel stops ffmpeg.
+  const [canConvert, setCanConvert] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [conversionProgress, setConversionProgress] = useState<number | null>(null);
+  const [conversionError, setConversionError] = useState<string | null>(null);
 
   const scheduleControlsHide = useCallback(() => {
     if (controlsTimerRef.current) window.clearTimeout(controlsTimerRef.current);
@@ -219,6 +297,13 @@ function VideoPlayer({
     setOpenError(null);
     setVideoError(null);
     setFailed(false);
+    setCanConvert(false);
+    setConverting(false);
+    setConversionProgress(null);
+    setConversionError(null);
+    setProbeTracks({ audio: [], subtitles: [] });
+    setAudioTrack(null);
+    setSubtitleTrack("off");
     const nativeByExtension = canPlayVideoInApp(path, name);
     setResolvedSrc(nativeByExtension ? src : "");
     setPreparing(Boolean(path) && !nativeByExtension);
@@ -232,8 +317,15 @@ function VideoPlayer({
         setResolvedSrc(src);
         return;
       }
+      const audio = plan.probe?.audioTracks ?? [];
+      const subtitles = plan.probe?.subtitleTracks ?? [];
+      setProbeTracks({ audio, subtitles });
+      // Default to the first audio track; subtitles start off the way a
+      // desktop player does.
+      setAudioTrack(audio[0]?.index ?? null);
       if (plan.strategy === "unsupported") {
         setFailureDetail(plan.detail ?? null);
+        setCanConvert(plan.canConvert);
         setFailed(true);
         return;
       }
@@ -305,7 +397,7 @@ function VideoPlayer({
     void tauri.items
       .externalVideoPlayers()
       .then((list) => {
-        if (!cancelled) setPlayers(list);
+        if (!cancelled) setPlayers(Array.isArray(list) ? list : []);
       })
       .catch(() => {
         if (!cancelled) setPlayers([]);
@@ -325,6 +417,98 @@ function VideoPlayer({
       setOpenError(String(error));
     }
   };
+
+  /** Progress for this file only: the backend emits for every running convert. */
+  useEffect(() => {
+    if (!path) return;
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+    void listen<{ path: string; progress: number | null }>("playback-conversion", (event) => {
+      if (event.payload.path === path) setConversionProgress(event.payload.progress);
+    })
+      .then((stop) => {
+        if (disposed) stop();
+        else unlisten = stop;
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [path]);
+
+  const startConversion = async () => {
+    if (!path || converting) return;
+    setConverting(true);
+    setConversionProgress(null);
+    setConversionError(null);
+    try {
+      const converted = await tauri.items.convertPlayback(path);
+      setProbeTracks({
+        audio: converted.probe?.audioTracks ?? [],
+        subtitles: converted.probe?.subtitleTracks ?? [],
+      });
+      setAudioTrack(converted.probe?.audioTracks[0]?.index ?? null);
+      setCanConvert(false);
+      setFailureDetail(null);
+      setVideoError(null);
+      setFailed(false);
+      setResolvedSrc(convertFileSrc(converted.path));
+    } catch (error) {
+      // Cancelling is a user action, not a failure to explain.
+      if ((error as { code?: string } | null)?.code !== "cancelled") {
+        setConversionError(readableError(error));
+      }
+    } finally {
+      setConverting(false);
+      setConversionProgress(null);
+    }
+  };
+
+  const cancelConversion = async () => {
+    if (!path) return;
+    try {
+      await tauri.items.cancelPlaybackConversion(path);
+    } catch {
+      // The conversion may have finished between the click and the call.
+    }
+  };
+
+  const textSubtitles = useMemo(
+    () => probeTracks.subtitles.filter((track) => TEXT_SUBTITLE_CODECS.has(track.codec)),
+    [probeTracks.subtitles],
+  );
+
+  // Apply the chosen audio and subtitle tracks to the media element. The
+  // backend maps tracks in source order, so a probe track's position is the
+  // element's track index. Runs again when metadata arrives (duration changes)
+  // because WebKit fills its track lists only after that.
+  const applyTrackSelection = useCallback(() => {
+    const video = ref.current as (HTMLVideoElement & { audioTracks?: WebkitAudioTrackList }) | null;
+    if (!video) return;
+    if (audioTrack !== null && video.audioTracks) {
+      const position = probeTracks.audio.findIndex((track) => track.index === audioTrack);
+      if (position >= 0) {
+        for (let index = 0; index < video.audioTracks.length; index += 1) {
+          video.audioTracks[index].enabled = index === position;
+        }
+      }
+    }
+    const text = video.textTracks;
+    if (text) {
+      const position =
+        subtitleTrack === "off"
+          ? -1
+          : textSubtitles.findIndex((track) => track.index === subtitleTrack);
+      for (let index = 0; index < text.length; index += 1) {
+        text[index].mode = index === position ? "showing" : "disabled";
+      }
+    }
+  }, [audioTrack, probeTracks.audio, subtitleTrack, textSubtitles]);
+
+  useEffect(() => {
+    applyTrackSelection();
+  }, [applyTrackSelection, resolvedSrc, duration]);
 
   // Expose the single active video element to the audio-only Now Playing card.
   useEffect(() => {
@@ -902,33 +1086,66 @@ function VideoPlayer({
         </div>
         <h3 className="viewer-video-fallback-title">{name || "This video"}</h3>
         <p className="viewer-video-fallback-copy">
-          {isFormatFailure
-            ? `${ext ? `.${ext} files` : "This file"} can't be decoded by macOS's built-in web player. Open it in a desktop player that supports this format.`
-            : "VistoGallery couldn't open this video. The file may have been moved, deleted, or be on a disconnected drive — or its codec may not be playable here. Check the source, then try a desktop player."}
+          {canConvert || converting
+            ? "This file uses a codec the built-in player cannot decode directly. VistoGallery can convert it once to H.264 so it plays here."
+            : isFormatFailure
+              ? `${ext ? `.${ext} files` : "This file"} can't be decoded by macOS's built-in web player. Open it in a desktop player that supports this format.`
+              : "VistoGallery couldn't open this video. The file may have been moved, deleted, or be on a disconnected drive — or its codec may not be playable here. Check the source, then try a desktop player."}
         </p>
-        <div className="viewer-video-fallback-actions">
-          {player ? (
-            <button
-              type="button"
-              className="primary"
-              onClick={() => void openExternally(player.path)}
-            >
-              Open in {player.name}
+        {converting ? (
+          <div className="viewer-video-converting" role="status" aria-live="polite">
+            <div className="viewer-video-convert-bar" aria-hidden="true">
+              <span
+                style={{
+                  width: `${Math.round((conversionProgress ?? 0) * 100)}%`,
+                }}
+              />
+            </div>
+            <span>
+              {conversionProgress == null
+                ? "Converting…"
+                : `Converting… ${Math.round(conversionProgress * 100)}%`}
+            </span>
+            <button type="button" onClick={() => void cancelConversion()}>
+              Cancel
             </button>
-          ) : null}
-          <button type="button" onClick={() => void openExternally()}>
-            Open in default app
-          </button>
-          <button type="button" onClick={() => path && void tauri.items.revealInFinder(path)}>
-            Show in Finder
-          </button>
-        </div>
-        {isFormatFailure && !player && (
+          </div>
+        ) : (
+          <div className="viewer-video-fallback-actions">
+            {canConvert ? (
+              <button type="button" className="primary" onClick={() => void startConversion()}>
+                Convert to play here
+              </button>
+            ) : null}
+            {player ? (
+              <button
+                type="button"
+                className={canConvert ? undefined : "primary"}
+                onClick={() => void openExternally(player.path)}
+              >
+                Open in {player.name}
+              </button>
+            ) : null}
+            <button type="button" onClick={() => void openExternally()}>
+              Open in default app
+            </button>
+            <button type="button" onClick={() => path && void tauri.items.revealInFinder(path)}>
+              Show in Finder
+            </button>
+          </div>
+        )}
+        {canConvert && !converting && (
+          <p className="viewer-video-feedback">
+            The converted copy is kept in the playback cache and counts toward its size limit.
+          </p>
+        )}
+        {isFormatFailure && !player && !canConvert && !converting && (
           <p className="viewer-video-feedback">
             Tip: IINA, VLC, or Elmedia Video Player all play MKV natively.
           </p>
         )}
         {openError && <p className="viewer-video-feedback error">{openError}</p>}
+        {conversionError && <p className="viewer-video-feedback error">{conversionError}</p>}
         {failureDetail && <p className="viewer-video-feedback">{failureDetail}</p>}
       </div>
     );
@@ -1145,6 +1362,40 @@ function VideoPlayer({
               }}
               aria-label="Volume"
             />
+            {textSubtitles.length > 0 && (
+              <select
+                className="video-track-select"
+                value={String(subtitleTrack)}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  setSubtitleTrack(value === "off" ? "off" : Number(value));
+                }}
+                aria-label="Subtitles"
+                title="Subtitles"
+              >
+                <option value="off">Subtitles off</option>
+                {textSubtitles.map((track, position) => (
+                  <option key={track.index} value={track.index}>
+                    {trackLabel(track, `Subtitles ${position + 1}`)}
+                  </option>
+                ))}
+              </select>
+            )}
+            {probeTracks.audio.length > 1 && (
+              <select
+                className="video-track-select"
+                value={audioTrack ?? probeTracks.audio[0]?.index ?? ""}
+                onChange={(event) => setAudioTrack(Number(event.currentTarget.value))}
+                aria-label="Audio track"
+                title="Audio track"
+              >
+                {probeTracks.audio.map((track, position) => (
+                  <option key={track.index} value={track.index}>
+                    {audioTrackLabel(track, position)}
+                  </option>
+                ))}
+              </select>
+            )}
             <select
               className="video-playback-rate"
               value={playbackRate}
