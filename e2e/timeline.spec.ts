@@ -74,3 +74,31 @@ test("timeline collapse state survives a relaunch", async ({ page }) => {
   await expect(toggle(page, "2026-10")).toHaveAttribute("aria-expanded", "false");
   await expect(toggle(page, "2026-11")).toHaveAttribute("aria-expanded", "true");
 });
+
+test("Hidden timeline counts and selects only hidden items", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(err.message));
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await page.goto(URL, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".gallery-tile");
+  await page.locator(".sidebar").getByRole("button", { name: "Hidden", exact: true }).click();
+  await expect(page.locator(".gallery-tile")).toHaveCount(3);
+  await page.getByRole("button", { name: "Timeline view", exact: true }).click();
+
+  // The Hidden Timeline describes the hidden collection (three items across
+  // two months), not the visible library's month counts.
+  await expect(month(page, "2026-11")).toBeVisible();
+  await expect(month(page, "2026-11").locator(".timeline-count")).toHaveText("1 item");
+  await expect(month(page, "2026-10").locator(".timeline-count")).toHaveText("2 items");
+
+  // Select all in a hidden month selects the hidden item only, never the
+  // visible library's items in the same month.
+  const selectNovember = month(page, "2026-11").getByRole("button", {
+    name: /Select all|Selected/,
+  });
+  await selectNovember.click();
+  await expect(page.getByText("1 selected", { exact: true })).toBeVisible();
+  await expect(selectNovember).toHaveAttribute("aria-pressed", "true");
+
+  expect(pageErrors).toEqual([]);
+});

@@ -261,7 +261,7 @@ export interface LibraryState {
 
 /** Map the hidden view's UI filter onto the backend page query, so filtering
  * happens in SQL rather than over whatever subset happened to be loaded. */
-function hiddenPageFilter(state: {
+export function hiddenPageFilter(state: {
   hiddenFilter: Filter;
   hiddenQuery: string;
   sortBy: LibraryState["sortBy"];

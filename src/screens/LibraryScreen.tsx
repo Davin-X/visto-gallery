@@ -37,6 +37,7 @@ import {
   useLibraryStore,
   libraryViewKey,
   currentLibraryFilter,
+  hiddenPageFilter,
   type LibraryState,
 } from "../engine/stores/useLibraryStore";
 import {
@@ -749,9 +750,13 @@ function LibraryScreen(props: LibraryScreenProps) {
     if (props.hiddenView) {
       // The Hidden gallery is its own paginated query (`get_hidden_items`).
       // Use the same near-bottom trigger as the main grid, but route to the
-      // hidden pager instead of the library one.
+      // hidden pager instead of the library one. The Timeline and Details
+      // layouts still render a local window, so grow it before asking for
+      // another page.
       const state = useLibraryStore.getState();
-      if (!state.hiddenLoading && state.hiddenHasMore) {
+      const nextRenderLimit = Math.min(renderLimit + GALLERY_PAGE_SIZE, props.items.length);
+      setRenderLimit(nextRenderLimit);
+      if (!state.hiddenLoading && state.hiddenHasMore && nextRenderLimit >= props.items.length) {
         void state.loadMoreHiddenItems();
       }
       return;
@@ -919,15 +924,18 @@ function LibraryScreen(props: LibraryScreenProps) {
   const selectedIdSet = useMemo(() => new Set(props.selectedIds), [props.selectedIds]);
 
   // Timeline months come from the catalog, so a month's count and its
-  // Select all describe the whole month, not just the loaded pages. Loaded
-  // items are then placed under their month by the same key.
+  // Select all describe the whole month, not just the loaded pages. Hidden is
+  // its own scope: its months, counts and selection use the hidden filter.
   const timelineActive = props.layout === "timeline";
-  const catalogTimeline = timelineActive && !props.hiddenView;
-  const catalogMonths = useTimelineMonths(
-    catalogTimeline,
-    currentLibraryFilter(library),
-    `${viewKey}|${library.totalCount}`,
-  );
+  const catalogTimeline = timelineActive;
+  const timelineFilter = props.hiddenView
+    ? hiddenPageFilter(library)
+    : currentLibraryFilter(library);
+  const timelineRefreshKey = props.hiddenView
+    ? `${viewKey}|${library.hiddenCount}`
+    : `${viewKey}|${library.totalCount}`;
+  const catalogMonths = useTimelineMonths(catalogTimeline, timelineFilter, timelineRefreshKey);
+  const timelineHasMore = props.hiddenView ? library.hiddenHasMore : library.hasMore;
   const timelineMonths = useMemo(
     () => (timelineActive ? (catalogMonths ?? monthsFromItems(props.items)) : []),
     [timelineActive, catalogMonths, props.items],
@@ -956,7 +964,7 @@ function LibraryScreen(props: LibraryScreenProps) {
     }
     // Show months down to the oldest rendered item; older ones appear as
     // scrolling loads them, so the infinite-scroll sentinel stays at the end.
-    const complete = !library.hasMore && renderedItems.length >= props.items.length;
+    const complete = !timelineHasMore && renderedItems.length >= props.items.length;
     const oldest = renderedItems.length
       ? itemMonth(renderedItems[renderedItems.length - 1]).key
       : null;
@@ -972,7 +980,7 @@ function LibraryScreen(props: LibraryScreenProps) {
     timelineMonths,
     renderedItems,
     props.items.length,
-    library.hasMore,
+    timelineHasMore,
     timelineCollapse.overrides,
     newestTimelineYear,
   ]);
@@ -1049,8 +1057,9 @@ function LibraryScreen(props: LibraryScreenProps) {
     let ids = knownMonthIds(month);
     if (!ids) {
       try {
+        const state = useLibraryStore.getState();
         ids = await tauri.library.getMatchingIds({
-          ...currentLibraryFilter(useLibraryStore.getState()),
+          ...(props.hiddenView ? hiddenPageFilter(state) : currentLibraryFilter(state)),
           month: month.key,
           limit: undefined,
           cursor: undefined,
@@ -1096,18 +1105,32 @@ function LibraryScreen(props: LibraryScreenProps) {
   /** Open a month, load pages until it is reached, and scroll to it. */
   const jumpToTimelineMonth = async (key: string, toYear = false) => {
     timelineCollapse.setMonth(key, false);
+    // Hidden has its own paginated query; jumping there must not pull visible
+    // library pages into the hidden list.
+    const currentItems = () => {
+      const state = useLibraryStore.getState();
+      return props.hiddenView ? state.hiddenItems : state.items;
+    };
+    const canLoadMore = () => {
+      const state = useLibraryStore.getState();
+      return props.hiddenView ? state.hiddenHasMore : state.hasMore;
+    };
     const reached = (items: MediaItem[]) =>
       items.length > 0 && itemMonth(items[items.length - 1]).key < key;
     for (let attempt = 0; attempt < 400; attempt += 1) {
       const state = useLibraryStore.getState();
-      if (!state.hasMore || reached(state.items)) break;
-      const before = state.items.length;
-      await state.loadNextPage();
-      if (useLibraryStore.getState().items.length === before) {
+      if (!canLoadMore() || reached(currentItems())) break;
+      const before = currentItems().length;
+      if (props.hiddenView) {
+        await state.loadMoreHiddenItems();
+      } else {
+        await state.loadNextPage();
+      }
+      if (currentItems().length === before) {
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
     }
-    const items = useLibraryStore.getState().items;
+    const items = currentItems();
     let last = -1;
     items.forEach((item, index) => {
       if (itemMonth(item).key === key) last = index;
