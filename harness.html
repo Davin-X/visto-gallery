@@ -14,6 +14,10 @@
       // `longNames=1` stretches every fixture name so the list tables' name
       // truncation and column floors can be exercised end to end.
       const longNames = params.get("longNames") === "1";
+      // `raw=N` makes the N items after the videos RAW files (.dng), whose
+      // viewer image comes from `get_display_preview`.
+      const rawCount = Math.max(0, Math.floor(Number(params.get("raw") || 0)));
+      window.__previewCalls = [];
       // `lock=1` turns on the Hidden lock; the system prompt always succeeds.
       const hiddenLockRequired = params.get("lock") === "1";
       let hiddenUnlocked = false;
@@ -45,7 +49,8 @@
         Array.from({ length: totalItems }, (_, index) => {
           const capturedAt = now - index * itemStepMs;
           const isVideo = index < videoCount;
-          const extension = isVideo ? "mp4" : "jpg";
+          const isRaw = !isVideo && index < videoCount + rawCount;
+          const extension = isVideo ? "mp4" : isRaw ? "dng" : "jpg";
           return {
             id: `benchmark-${index}`,
             path: isVideo ? tinyVideoData : `/synthetic/benchmark-${index}.${extension}`,
@@ -53,7 +58,7 @@
               ? `this-is-a-very-long-camera-generated-filename-with-a-shared-prefix-${index}-and-a-distinguishing-tail-0042.${extension}`
               : `benchmark-${index}.${extension}`,
             extension,
-            kind: isVideo ? "video" : "photo",
+            kind: isVideo ? "video" : isRaw ? "raw" : "photo",
             size: 1024 * 1024,
             modifiedAt: capturedAt,
             capturedAt,
@@ -266,6 +271,12 @@
         if (command === "get_matching_ids") {
           const month = args?.filter?.month;
           return items.filter((item) => !month || monthOf(item) === month).map((item) => item.id);
+        }
+        if (command === "get_display_preview") {
+          window.__previewCalls.push({ itemId: args?.itemId, full: !!args?.full });
+          // Slow enough for the low-resolution badge to be seen first.
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          return { path: null, dataUrl: tinyImage, width: 1, height: 1, full: !!args?.full };
         }
         if (command === "get_items_by_ids") {
           const byId = new Map(items.map((item) => [item.id, item]));

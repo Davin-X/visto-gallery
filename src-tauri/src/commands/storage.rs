@@ -20,6 +20,9 @@ use crate::errors::CommandError;
 
 /// Cache subfolder for rendered thumbnails.
 pub(crate) const THUMBNAILS_DIR: &str = "thumbnails";
+/// Cache subfolder for display-size and full-size photo previews (RAW, and
+/// photos the web view cannot decode). Counted and cleared with thumbnails.
+pub(crate) const PREVIEWS_DIR: &str = "previews";
 /// Cache subfolder for videos remuxed for playback.
 pub(crate) const PLAYBACK_DIR: &str = "playback";
 
@@ -148,7 +151,8 @@ pub(crate) async fn purge_hidden_from_caches(app: &AppHandle, db: &sqlx::SqliteP
         .map(|(_, _, path)| path)
         .collect();
     let _ = tokio::task::spawn_blocking(move || {
-        let thumbnails = sweep_thumbnail_cache(&cache.join(THUMBNAILS_DIR), &hidden);
+        let thumbnails = sweep_thumbnail_cache(&cache.join(THUMBNAILS_DIR), &hidden)
+            + sweep_thumbnail_cache(&cache.join(PREVIEWS_DIR), &hidden);
         let playback = cache.join(PLAYBACK_DIR);
         let remuxes = videos
             .iter()
@@ -220,7 +224,10 @@ fn catalog_usage(app_data: &Path) -> u64 {
 }
 
 pub(crate) fn storage_usage_in(app_data: &Path, app_cache: &Path) -> StorageUsage {
-    let (thumbnail_bytes, thumbnail_files) = dir_usage(&app_cache.join(THUMBNAILS_DIR));
+    let (thumb_bytes, thumb_files) = dir_usage(&app_cache.join(THUMBNAILS_DIR));
+    let (preview_bytes, preview_files) = dir_usage(&app_cache.join(PREVIEWS_DIR));
+    let (thumbnail_bytes, thumbnail_files) =
+        (thumb_bytes + preview_bytes, thumb_files + preview_files);
     let (playback_bytes, playback_files) = dir_usage(&app_cache.join(PLAYBACK_DIR));
     let (edit_original_bytes, edit_original_files) =
         dir_usage(&app_data.join(super::media::EDIT_ORIGINALS_DIR));
@@ -285,13 +292,23 @@ pub async fn clear_cache(
     app: AppHandle,
     kind: CacheKind,
 ) -> Result<ClearCacheResult, CommandError> {
-    let dir = app.path().app_cache_dir()?.join(match kind {
-        CacheKind::Thumbnails => THUMBNAILS_DIR,
-        CacheKind::Playback => PLAYBACK_DIR,
-    });
-    tokio::task::spawn_blocking(move || clear_cache_dir(&dir, kind))
-        .await
-        .map_err(|error| CommandError::internal(format!("Clearing the cache failed: {error}")))
+    let cache = app.path().app_cache_dir()?;
+    let dirs: Vec<std::path::PathBuf> = match kind {
+        CacheKind::Thumbnails => vec![cache.join(THUMBNAILS_DIR), cache.join(PREVIEWS_DIR)],
+        CacheKind::Playback => vec![cache.join(PLAYBACK_DIR)],
+    };
+    tokio::task::spawn_blocking(move || {
+        dirs.iter().map(|dir| clear_cache_dir(dir, kind)).fold(
+            ClearCacheResult::default(),
+            |total, part| ClearCacheResult {
+                removed_files: total.removed_files + part.removed_files,
+                freed_bytes: total.freed_bytes + part.freed_bytes,
+                kept_files: total.kept_files + part.kept_files,
+            },
+        )
+    })
+    .await
+    .map_err(|error| CommandError::internal(format!("Clearing the cache failed: {error}")))
 }
 
 #[cfg(test)]

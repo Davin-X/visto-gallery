@@ -44,6 +44,7 @@ import type {
   ClearCacheResult,
   TimelineMonth,
   HiddenLockStatus,
+  DisplayPreview,
 } from "../types/commands";
 
 // Type-safe command wrappers
@@ -67,6 +68,10 @@ export const tauri = {
 
     getMatchingIds: (filter?: LibraryFilterDTO): Promise<string[]> =>
       invoke("get_matching_ids", { filter }),
+
+    /** A sharp viewer image for a RAW file or a photo the web view can't decode. */
+    getDisplayPreview: (itemId: string, full = false): Promise<DisplayPreview> =>
+      invoke("get_display_preview", { itemId, full }),
 
     /** Every Timeline month under `filter`, newest first, with real counts. */
     getTimelineMonths: (filter?: LibraryFilterDTO): Promise<TimelineMonth[]> =>

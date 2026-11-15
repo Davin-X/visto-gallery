@@ -172,6 +172,60 @@ function ViewerScreen(props: ViewerScreenProps) {
   const stripEnd = Math.min(items.length, stripStart + stripWindowSize);
   const photoStatus =
     photoLoadState && photoLoadState.id === selected?.id ? photoLoadState.status : "loading";
+
+  // Sharp previews for stills the web view cannot show at full quality.
+  const [photoFallbackId, setPhotoFallbackId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{
+    id: string;
+    src: string;
+    full: boolean;
+    lowRes: boolean;
+    /** The full-size render was tried and failed; keep the display preview. */
+    fullFailed?: boolean;
+  } | null>(null);
+  const viaPreview = !!selected && (selected.kind === "raw" || photoFallbackId === selected.id);
+  // Actual Size, or zooming past what the screen-size preview resolves.
+  const wantsFull = props.fitMode === "actual" || props.zoom >= 150;
+  const fallBackToThumbnail = useCallback(async (id: string) => {
+    try {
+      const thumb = await tauri.library.getThumbnail({ itemId: id, size: 1024 });
+      if (thumb?.dataUrl) {
+        setPreview({ id, src: thumb.dataUrl, full: false, lowRes: true });
+        return;
+      }
+    } catch {
+      // Fall through to the failed state.
+    }
+    setPhotoLoadState({ id, status: "failed" });
+  }, []);
+  useEffect(() => {
+    if (!selected || !viaPreview) return;
+    const current = preview?.id === selected.id ? preview : null;
+    const needed =
+      !current || (wantsFull && !current.full && !current.lowRes && !current.fullFailed);
+    if (!needed) return;
+    const id = selected.id;
+    const full = wantsFull;
+    let cancelled = false;
+    tauri.library
+      .getDisplayPreview(id, full)
+      .then((result) => {
+        if (cancelled) return;
+        const src = result.path ? props.assetUrl(result.path) : result.dataUrl;
+        if (!src) throw new Error("empty preview");
+        setPreview({ id, src, full: result.full, lowRes: false });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        if (current) setPreview({ ...current, fullFailed: true });
+        else void fallBackToThumbnail(id);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // `props.assetUrl` is stable; `preview` is read, not reacted to.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id, viaPreview, wantsFull, preview?.id, preview?.full]);
   const imageRotation =
     (props.rotation + (draftTransforms.get(selected?.id ?? "")?.rotation || 0)) % 360;
   const startSlideshow = useCallback(() => {
@@ -702,122 +756,105 @@ function ViewerScreen(props: ViewerScreenProps) {
         )}
         {selected.kind === "photo" || selected.kind === "raw" ? (
           <>
-            {selected.kind === "photo" ? (
-              <>
-                <img
-                  key={`${selected.id}-${selected.size}-${selected.modifiedAt}`}
-                  className={`photo-viewer-image${photoStatus === "loaded" ? " is-loaded" : ""}${panning ? " is-panning" : ""}`}
-                  src={props.assetUrl(selected.path) + `?v=${selected.modifiedAt}-${selected.size}`}
-                  alt={selected.name}
-                  decoding="async"
-                  onLoad={() => setPhotoLoadState({ id: selected.id, status: "loaded" })}
-                  onError={(e) => {
-                    const target = e.currentTarget;
-                    if (target.dataset.fallback === "1") {
-                      setPhotoLoadState({ id: selected.id, status: "failed" });
-                      target.alt = "Preview unavailable";
-                      target.src =
-                        "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
-                      return;
-                    }
-                    target.dataset.fallback = "1";
-                    setPhotoLoadState({ id: selected.id, status: "loading" });
-                    void tauri.library
-                      .getThumbnail({ itemId: selected.id, size: 1024 })
-                      .then((response) => {
-                        if (target.isConnected && response?.dataUrl) {
-                          target.src = response.dataUrl;
-                        } else if (target.isConnected) {
-                          setPhotoLoadState({ id: selected.id, status: "failed" });
+            {(() => {
+              // RAW files, and photos the web view could not decode, show a
+              // preview rendered by macOS ImageIO instead of the original.
+              const viaPreview = selected.kind === "raw" || photoFallbackId === selected.id;
+              const shown = viaPreview && preview?.id === selected.id ? preview : null;
+              const src = viaPreview
+                ? (shown?.src ?? null)
+                : props.assetUrl(selected.path) + `?v=${selected.modifiedAt}-${selected.size}`;
+              const lowRes = viaPreview && (!shown || shown.lowRes);
+              const stillStyle: React.CSSProperties = {
+                aspectRatio:
+                  selected.width && selected.height
+                    ? `auto ${selected.width} / ${selected.height}`
+                    : undefined,
+                width: props.fitMode === "actual" ? undefined : "100%",
+                height: props.fitMode === "actual" ? undefined : "100%",
+                maxWidth:
+                  props.fitMode === "actual"
+                    ? "none"
+                    : imageRotation % 180
+                      ? "min(100%, 100cqh)"
+                      : "100%",
+                maxHeight:
+                  props.fitMode === "actual"
+                    ? "none"
+                    : imageRotation % 180
+                      ? "min(100%, 100cqw)"
+                      : "100%",
+                objectFit: props.fitMode === "fill" ? "cover" : "contain",
+                transform: [
+                  `translate3d(${pan.x}px, ${pan.y}px, 0)`,
+                  `rotate(${props.rotation || 0}deg)`,
+                  `scaleX(${props.flipX ? -1 : 1})`,
+                  selected.kind === "photo"
+                    ? draftTransformStyle(draftTransforms.get(selected.id))
+                    : "",
+                  `scale(${props.zoom / 100})`,
+                ]
+                  .filter(Boolean)
+                  .join(" "),
+              };
+              return (
+                <>
+                  {src ? (
+                    <img
+                      key={`${selected.id}-${selected.size}-${selected.modifiedAt}-${viaPreview ? "preview" : "original"}`}
+                      className={`photo-viewer-image${photoStatus === "loaded" ? " is-loaded" : ""}${panning ? " is-panning" : ""}`}
+                      src={src}
+                      alt={selected.name}
+                      decoding="async"
+                      onLoad={() => setPhotoLoadState({ id: selected.id, status: "loaded" })}
+                      onError={() => {
+                        if (!viaPreview) {
+                          // The web view cannot decode this file: ask ImageIO.
+                          setPhotoLoadState({ id: selected.id, status: "loading" });
+                          setPhotoFallbackId(selected.id);
+                          return;
                         }
-                      })
-                      .catch(() => {
-                        if (target.isConnected) {
-                          setPhotoLoadState({ id: selected.id, status: "failed" });
-                          target.alt = "Preview unavailable";
-                          target.src =
-                            "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+                        if (shown && !shown.lowRes) {
+                          void fallBackToThumbnail(selected.id);
+                          return;
                         }
-                      });
-                  }}
-                  style={{
-                    aspectRatio:
-                      selected.width && selected.height
-                        ? `auto ${selected.width} / ${selected.height}`
-                        : undefined,
-                    width: props.fitMode === "actual" ? undefined : "100%",
-                    height: props.fitMode === "actual" ? undefined : "100%",
-                    maxWidth:
-                      props.fitMode === "actual"
-                        ? "none"
-                        : imageRotation % 180
-                          ? "min(100%, 100cqh)"
-                          : "100%",
-                    maxHeight:
-                      props.fitMode === "actual"
-                        ? "none"
-                        : imageRotation % 180
-                          ? "min(100%, 100cqw)"
-                          : "100%",
-                    objectFit: props.fitMode === "fill" ? "cover" : "contain",
-                    transform: [
-                      `translate3d(${pan.x}px, ${pan.y}px, 0)`,
-                      `rotate(${props.rotation || 0}deg)`,
-                      `scaleX(${props.flipX ? -1 : 1})`,
-                      draftTransformStyle(draftTransforms.get(selected.id)),
-                      `scale(${props.zoom / 100})`,
-                    ]
-                      .filter(Boolean)
-                      .join(" "),
-                  }}
-                />
-                {photoStatus !== "loaded" && (
-                  <div
-                    className={`photo-preview-state${photoStatus === "failed" ? " is-failed" : ""}`}
-                    role={photoStatus === "failed" ? "alert" : "status"}
-                  >
-                    <span className="photo-preview-indicator" aria-hidden="true" />
-                    <span>
-                      {photoStatus === "failed"
-                        ? "Could not load this photo preview"
-                        : "Loading full-resolution photo…"}
+                        setPhotoLoadState({ id: selected.id, status: "failed" });
+                      }}
+                      style={stillStyle}
+                    />
+                  ) : (
+                    <CachedThumbnail
+                      itemId={selected.id}
+                      name={selected.name}
+                      size={1024}
+                      eager
+                      style={{ ...stillStyle, aspectRatio: undefined, objectFit: "contain" }}
+                    />
+                  )}
+                  {lowRes && photoStatus !== "failed" && (
+                    <span
+                      className="viewer-lowres-badge"
+                      title="A lower-resolution preview is on screen while the full image loads, or because it could not be decoded"
+                    >
+                      Preview
                     </span>
-                  </div>
-                )}
-              </>
-            ) : (
-              <CachedThumbnail
-                itemId={selected.id}
-                name={selected.name}
-                size={1024}
-                eager
-                style={{
-                  width: props.fitMode === "actual" ? undefined : "100%",
-                  height: props.fitMode === "actual" ? undefined : "100%",
-                  maxWidth:
-                    props.fitMode === "actual"
-                      ? "none"
-                      : imageRotation % 180
-                        ? "min(100%, 100cqh)"
-                        : "100%",
-                  maxHeight:
-                    props.fitMode === "actual"
-                      ? "none"
-                      : imageRotation % 180
-                        ? "min(100%, 100cqw)"
-                        : "100%",
-                  objectFit: "contain",
-                  transform: [
-                    `translate3d(${pan.x}px, ${pan.y}px, 0)`,
-                    `rotate(${props.rotation || 0}deg)`,
-                    `scaleX(${props.flipX ? -1 : 1})`,
-                    `scale(${props.zoom / 100})`,
-                  ]
-                    .filter(Boolean)
-                    .join(" "),
-                }}
-              />
-            )}
+                  )}
+                  {selected.kind === "photo" && photoStatus !== "loaded" && !lowRes && (
+                    <div
+                      className={`photo-preview-state${photoStatus === "failed" ? " is-failed" : ""}`}
+                      role={photoStatus === "failed" ? "alert" : "status"}
+                    >
+                      <span className="photo-preview-indicator" aria-hidden="true" />
+                      <span>
+                        {photoStatus === "failed"
+                          ? "Could not load this photo preview"
+                          : "Loading full-resolution photo…"}
+                      </span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </>
         ) : null}
         {selected.kind === "video" && (

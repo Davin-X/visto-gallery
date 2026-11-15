@@ -12,6 +12,7 @@ mod import_pipeline;
 mod library;
 mod media;
 mod playback;
+mod preview;
 mod roots;
 mod scan_jobs;
 mod settings;
@@ -53,6 +54,9 @@ pub use library::*;
 pub use media::*;
 use notify::Watcher;
 pub use playback::*;
+pub use preview::get_display_preview;
+#[cfg(test)]
+pub use preview::DisplayPreview;
 pub use roots::*;
 pub use scan_jobs::ScanJobs;
 pub use settings::*;

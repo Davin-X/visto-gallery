@@ -49,6 +49,7 @@ export type {
   ClearCacheResult,
   TimelineMonth,
   HiddenLockStatus,
+  DisplayPreview,
 } from "./generated/ipc";
 
 export type { UpdateCheck as UpdateCheckResult } from "./generated/ipc";
