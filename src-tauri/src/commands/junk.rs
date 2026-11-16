@@ -40,27 +40,35 @@ pub(crate) const INSTALLER_MIN_AGE: Duration = Duration::from_secs(30 * 24 * 60 
 const INSTALLER_EXTENSIONS: &[&str] = &["dmg", "pkg", "mpkg", "iso", "xip"];
 /// How deep below a project folder build artifacts are looked for.
 const PROJECT_SCAN_DEPTH: usize = 6;
-/// Folders below the home folder that are walked for projects. A project is
-/// recognised by its manifest, not by these names; they only bound the walk
-/// so the scan never wanders into `~/Library` or the photo library.
-const PROJECT_ROOTS: &[&str] = &[
-    "Developer",
-    "Projects",
-    "projects",
-    "Code",
-    "code",
-    "src",
-    "dev",
-    "Dev",
-    "repos",
-    "Repos",
-    "GitHub",
-    "git",
-    "Sites",
-    "Workspace",
-    "workspace",
-    "work",
-    "Work",
+/// Top-level home folders that are never walked for projects: system and
+/// media folders, VM and container mounts, and SDK or tool homes whose
+/// contents look like projects but are not the user's.
+const HOME_SKIP: &[&str] = &[
+    "Library",
+    "Applications",
+    "Pictures",
+    "Movies",
+    "Music",
+    "Public",
+    "OrbStack",
+    "Parallels",
+    "VirtualBox VMs",
+    "Virtual Machines.localized",
+    "go",
+    "opt",
+    "flutter",
+    "miniconda3",
+    "anaconda3",
+    "miniforge3",
+];
+/// Cloud-sync folders. Walking them can make the provider fetch files.
+const CLOUD_PREFIXES: &[&str] = &[
+    "Dropbox",
+    "Google Drive",
+    "OneDrive",
+    "iCloud",
+    "Creative Cloud Files",
+    "Box Sync",
 ];
 /// Folders macOS guards with a permission prompt. They are only walked (and
 /// Downloads only scanned for installers) once the user turns this on, so
@@ -865,48 +873,81 @@ fn busy_reason(env: &ScanEnv, names: &[&str]) -> Option<String> {
         .map(|name| format!("{name} is running"))
 }
 
-/// Names of running processes: each executable's file name plus the file
-/// name of its first argument, so `node …/npm-cli.js` and a script like
-/// `brew.sh` are both recognised. `None` when `ps` fails.
-pub(crate) fn running_processes() -> Option<HashSet<String>> {
+/// Package managers and build tools whose script-running subcommands do not
+/// touch their download cache, so a long-running `npm run dev` or `cargo run`
+/// does not block cleaning the npm cache or the Cargo registry.
+const SCRIPT_RUNNERS: &[&str] = &["npm", "yarn", "pnpm", "bun", "cargo"];
+const SCRIPT_SUBCOMMANDS: &[&str] = &[
+    "run",
+    "run-script",
+    "start",
+    "test",
+    "dev",
+    "exec",
+    "serve",
+    "preview",
+    "watch",
+];
+
+fn base_name(token: &str) -> Option<&str> {
+    token.rsplit('/').next().filter(|name| !name.is_empty())
+}
+
+/// Process names from `ps -o pid=,comm=` and `ps -o pid=,args=` output: each
+/// executable's file name plus the file names of its first two arguments, so
+/// `npm` (which sets its process title) and scripts like `brew.sh` are both
+/// recognised. Script runners running a script are left out entirely.
+fn names_from_ps(comm: &str, args: &str) -> HashSet<String> {
+    let split = |line: &str| -> Option<(String, String)> {
+        let (pid, rest) = line.trim_start().split_once(char::is_whitespace)?;
+        Some((pid.to_string(), rest.trim().to_string()))
+    };
+    let by_pid: HashMap<String, String> = args.lines().filter_map(split).collect();
     let mut names = HashSet::new();
-    let comm = Command::new("/bin/ps")
-        .args(["-axo", "comm="])
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    if !comm.status.success() {
-        return None;
-    }
-    for line in String::from_utf8_lossy(&comm.stdout).lines() {
-        if let Some(name) = line
-            .trim()
-            .rsplit('/')
-            .next()
-            .filter(|name| !name.is_empty())
+    for (pid, exe) in comm.lines().filter_map(split) {
+        let Some(exe_name) = base_name(&exe) else {
+            continue;
+        };
+        let arguments = by_pid.get(&pid).map(String::as_str).unwrap_or("");
+        let mut tokens = arguments.split_whitespace();
+        let first = tokens.next().and_then(base_name);
+        let second = tokens.next();
+        let runner = [Some(exe_name), first]
+            .into_iter()
+            .flatten()
+            .any(|name| SCRIPT_RUNNERS.contains(&name));
+        if runner && second.is_some_and(|sub| SCRIPT_SUBCOMMANDS.contains(&sub)) {
+            continue;
+        }
+        names.insert(exe_name.to_string());
+        if let Some(first) = first {
+            names.insert(first.to_string());
+        }
+        if let Some(second) = second
+            .filter(|token| !token.starts_with('-'))
+            .and_then(base_name)
         {
-            names.insert(name.to_string());
+            names.insert(second.to_string());
         }
     }
-    if let Ok(args) = Command::new("/bin/ps")
-        .args(["-axww", "-o", "args="])
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-    {
-        for line in String::from_utf8_lossy(&args.stdout).lines() {
-            for token in line.split_whitespace().take(2) {
-                if token.starts_with('-') {
-                    continue;
-                }
-                if let Some(name) = token.rsplit('/').next().filter(|name| !name.is_empty()) {
-                    names.insert(name.to_string());
-                }
-            }
-        }
-    }
-    Some(names)
+    names
+}
+
+/// Names of running processes, or `None` when `ps` fails.
+pub(crate) fn running_processes() -> Option<HashSet<String>> {
+    let run = |format: &str| {
+        Command::new("/bin/ps")
+            .args(["-axww", "-o", format])
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+    };
+    let comm = run("pid=,comm=")?;
+    let args = run("pid=,args=").unwrap_or_default();
+    Some(names_from_ps(&comm, &args))
 }
 
 /// A Git binary that will not pop the "install command line tools" dialog:
@@ -992,24 +1033,53 @@ fn repository_root(start: &Path, limit: &Path) -> Option<PathBuf> {
 }
 
 fn project_roots(home: &Path, personal_folders: bool) -> Vec<PathBuf> {
-    let mut seen = HashSet::new();
-    let personal: &[&str] = if personal_folders {
-        PERSONAL_ROOTS
-    } else {
-        &[]
+    let Ok(entries) = std::fs::read_dir(home) else {
+        return Vec::new();
     };
-    PROJECT_ROOTS
-        .iter()
-        .chain(personal.iter())
-        .map(|name| home.join(name))
-        .filter(|path| path.is_dir())
-        // Case-insensitive volumes report `Code` and `code` as the same folder.
-        .filter(|path| {
-            path.canonicalize()
-                .map(|real| seen.insert(real))
-                .unwrap_or(false)
+    let home_device = device_of(home);
+    let mut roots: Vec<PathBuf> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().to_str()?.to_string();
+            // `file_type` does not follow symlinks, so a linked folder is never
+            // a root and cannot pull another tree into the walk.
+            if !entry.file_type().ok()?.is_dir() || !is_project_root_name(&name, personal_folders) {
+                return None;
+            }
+            let path = entry.path();
+            // A different device is a mount (OrbStack, a network share).
+            if home_device.is_some() && device_of(&path) != home_device {
+                return None;
+            }
+            Some(path)
         })
-        .collect()
+        .collect();
+    roots.sort();
+    roots
+}
+
+/// Whether a top-level home folder may hold the user's projects.
+fn is_project_root_name(name: &str, personal_folders: bool) -> bool {
+    if name.starts_with('.') || HOME_SKIP.contains(&name) {
+        return false;
+    }
+    if name == "Box" || CLOUD_PREFIXES.iter().any(|prefix| name.starts_with(prefix)) {
+        return false;
+    }
+    personal_folders || !PERSONAL_ROOTS.contains(&name)
+}
+
+#[cfg(unix)]
+fn device_of(path: &Path) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::symlink_metadata(path)
+        .ok()
+        .map(|metadata| metadata.dev())
+}
+
+#[cfg(not(unix))]
+fn device_of(_path: &Path) -> Option<u64> {
+    None
 }
 
 fn artifact_named(name: &str) -> Option<&'static Artifact> {
@@ -2659,6 +2729,54 @@ mod tests {
                 "junk.rs must not call {sink}; use the Trash"
             );
         }
+    }
+
+    #[test]
+    fn project_roots_are_discovered_but_never_system_cloud_or_linked() {
+        let home = TempHome::new("roots");
+        for dir in [
+            "development",
+            "IdeaProjects",
+            "Library",
+            "Pictures",
+            "OrbStack",
+            "Dropbox (Personal)",
+            ".config",
+            "Documents",
+        ] {
+            std::fs::create_dir_all(home.path().join(dir)).unwrap();
+        }
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(home.path().join("development"), home.path().join("linked"))
+            .unwrap();
+        let names = |personal| {
+            project_roots(home.path(), personal)
+                .iter()
+                .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+        };
+        // TempHome always creates Downloads.
+        assert_eq!(names(false), ["IdeaProjects", "development"]);
+        assert_eq!(
+            names(true),
+            ["Documents", "Downloads", "IdeaProjects", "development"]
+        );
+    }
+
+    #[test]
+    fn script_runners_do_not_count_as_busy() {
+        let comm = "  10 /usr/local/bin/node\n  11 /Users/me/.cargo/bin/cargo\n  12 /usr/local/bin/node\n  13 /opt/homebrew/bin/cargo\n  14 /Applications/Xcode.app/Contents/MacOS/Xcode\n  15 /bin/bash\n";
+        let args = "  10 npm run dev\n  11 cargo run --no-default-features\n  12 npm install\n  13 cargo build\n  14 /Applications/Xcode.app/Contents/MacOS/Xcode\n  15 /bin/bash /opt/homebrew/Library/Homebrew/brew.sh update\n";
+        let names = names_from_ps(comm, args);
+        assert!(names.contains("npm"), "npm install is busy");
+        assert!(names.contains("cargo"), "cargo build is busy");
+        assert!(names.contains("Xcode"));
+        assert!(names.contains("brew.sh"));
+        let only_scripts = names_from_ps(
+            "  10 /usr/local/bin/node\n  11 /Users/me/.cargo/bin/cargo\n",
+            "  10 npm run dev\n  11 cargo run\n",
+        );
+        assert!(!only_scripts.contains("npm") && !only_scripts.contains("cargo"));
     }
 
     #[test]

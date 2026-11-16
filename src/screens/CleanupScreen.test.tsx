@@ -299,6 +299,9 @@ describe("CleanupScreen", () => {
     expect(screen.getByText("100.0 GB")).toBeInTheDocument();
     expect(screen.getByText("101.0 GB")).toBeInTheDocument();
     expect(screen.getByText("+1%")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Xcode Archives" }));
+    expect(screen.getByText("+<1%")).toBeInTheDocument();
     expect(screen.getByText("5.0 GB")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /find duplicates/i }));
     expect(onOpenDuplicates).toHaveBeenCalled();
@@ -355,5 +358,45 @@ describe("CleanupScreen", () => {
     await waitFor(() => {
       expect(mocks.scan).toHaveBeenCalledTimes(4);
     });
+  });
+
+  it("shows the largest rows first and folds the rest behind Show more", async () => {
+    const many = Array.from({ length: 12 }, (_, index) => ({
+      ...modules,
+      id: `projects:/Users/dev/Code/app${index}/node_modules`,
+      label: `app${index}/node_modules`,
+      bytes: (12 - index) * 1024,
+    }));
+    reports = { ...full, projects: report("projects", many) };
+    renderScreen();
+    await screen.findByText("app0/node_modules");
+
+    expect(screen.queryByText("app8/node_modules")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all Project build folders" }));
+    const more = screen.getByRole("button", { name: /show 4 more items/i });
+    expect(within(more).getByText("4 selected")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "Cleanup selection" })).getByText("12 items"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(more);
+    expect(screen.getByText("app11/node_modules")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /show fewer/i }));
+    expect(screen.queryByText("app11/node_modules")).not.toBeInTheDocument();
+  });
+
+  it("mounts the confirm dialog inside the themed app frame", async () => {
+    const frame = document.createElement("div");
+    frame.className = "app-frame";
+    document.body.appendChild(frame);
+    try {
+      renderScreen();
+      await screen.findByText("Xcode DerivedData");
+      fireEvent.click(screen.getByRole("checkbox", { name: "Select Xcode Archives" }));
+      fireEvent.click(screen.getByRole("button", { name: /move to trash/i }));
+      expect(frame.contains(screen.getByRole("dialog"))).toBe(true);
+    } finally {
+      frame.remove();
+    }
   });
 });

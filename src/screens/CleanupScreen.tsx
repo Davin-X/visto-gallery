@@ -62,6 +62,42 @@ const IDLE: Scans = {
 const plural = (count: number, one: string, many = `${one}s`) =>
   `${count.toLocaleString()} ${count === 1 ? one : many}`;
 
+/** "+32%", or "<1%" for a gain too small to round up. */
+function growthLabel(gain: number, free: number): string {
+  const share = (gain / free) * 100;
+  return share < 1 ? "+<1%" : `+${Math.round(share)}%`;
+}
+
+/** Rows shown per category before "Show more"; the largest come first. */
+const ROW_LIMIT = 8;
+
+function MoreRowsButton({
+  hidden,
+  open,
+  selected,
+  onToggle,
+}: {
+  hidden: JunkItem[];
+  open: boolean;
+  selected: ReadonlySet<string>;
+  onToggle: () => void;
+}) {
+  const hiddenSelected = hidden.filter((item) => selected.has(item.id)).length;
+  return (
+    <button type="button" className="cleanup-more" onClick={onToggle} aria-expanded={open}>
+      <ChevronDownIcon size={12} className={open ? "is-open" : ""} />
+      {open
+        ? "Show fewer"
+        : `Show ${plural(hidden.length, "more item", "more items")} · ${formatBytesSimple(
+            totalBytes(hidden),
+          )}`}
+      {!open && hiddenSelected > 0 && (
+        <span className="cleanup-more-selected">{hiddenSelected} selected</span>
+      )}
+    </button>
+  );
+}
+
 function errorText(error: unknown): string {
   if (error && typeof error === "object" && "message" in error) {
     const message = (error as { message: unknown }).message;
@@ -120,6 +156,7 @@ export default function CleanupScreen({
   const [cleaning, setCleaning] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [lastResult, setLastResult] = useState<JunkCleanResult | null>(null);
+  const [expanded, setExpanded] = useState<Set<JunkCategory>>(() => new Set());
   const confirmRef = useRef<HTMLDivElement | null>(null);
   const generation = useRef(0);
   const startedRef = useRef(false);
@@ -402,10 +439,9 @@ export default function CleanupScreen({
               <span className="cleanup-disk-change">
                 <b>{formatBytesSimple(disk.availableBytes)}</b>
                 <span aria-hidden="true"> → </span>
-                <span className="visually-hidden"> becomes </span>
                 <b className="is-after">{formatBytesSimple(freeAfter)}</b>
                 {gain > 0 && disk.availableBytes > 0 && (
-                  <em>+{Math.round((gain / disk.availableBytes) * 100)}%</em>
+                  <em>{growthLabel(gain, disk.availableBytes)}</em>
                 )}
               </span>
             </div>
@@ -630,18 +666,36 @@ export default function CleanupScreen({
 
             {groupItems.length > 0 && (
               <ul className="cleanup-list">
-                {groupItems.map((item) => (
-                  <CleanupRow
-                    key={item.id}
-                    item={item}
-                    selected={selected.has(item.id)}
-                    disabled={cleaning}
-                    onToggle={toggle}
-                    onReveal={reveal}
-                    onNeverClean={(row) => void setNeverClean(row.id, row.label, true)}
-                  />
-                ))}
+                {(expanded.has(category) ? groupItems : groupItems.slice(0, ROW_LIMIT)).map(
+                  (item) => (
+                    <CleanupRow
+                      key={item.id}
+                      item={item}
+                      selected={selected.has(item.id)}
+                      disabled={cleaning}
+                      onToggle={toggle}
+                      onReveal={reveal}
+                      onNeverClean={(row) => void setNeverClean(row.id, row.label, true)}
+                    />
+                  ),
+                )}
               </ul>
+            )}
+
+            {groupItems.length > ROW_LIMIT && (
+              <MoreRowsButton
+                hidden={groupItems.slice(ROW_LIMIT)}
+                open={expanded.has(category)}
+                selected={selected}
+                onToggle={() =>
+                  setExpanded((current) => {
+                    const next = new Set(current);
+                    if (next.has(category)) next.delete(category);
+                    else next.add(category);
+                    return next;
+                  })
+                }
+              />
             )}
 
             {skips.length > 0 && (
@@ -839,7 +893,9 @@ export default function CleanupScreen({
               </div>
             </div>
           </div>,
-          document.body,
+          // Inside .app-frame, where the theme tokens live; outside it the
+          // dialog renders without its background and text colours.
+          document.querySelector<HTMLElement>(".app-frame") ?? document.body,
         )}
     </div>
   );
@@ -878,7 +934,7 @@ function CleanupRow({
           <span className={`cleanup-tier-chip is-${item.tier}`} title={tier.hint}>
             {tier.label}
           </span>
-          {recentlyUsed(item) && (
+          {item.category === "projects" && recentlyUsed(item) && (
             <span className="cleanup-tier-chip is-active" title="Used in the last week">
               Active this week
             </span>
