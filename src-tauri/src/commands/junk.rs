@@ -3,7 +3,7 @@
 //! The Cleanup screen answers four questions, in this order of importance:
 //!
 //! 1. **Protection** — what is never offered, whatever the input. Only the
-//!    fixed rules in [`STATIC_JUNK`], build artifacts listed in [`ARTIFACTS`]
+//!    fixed rules in `cleanup_rules.json`, the build artifacts listed there
 //!    next to their project manifest, and old installers directly inside
 //!    Downloads can ever become candidates. Anything inside a registered
 //!    library folder is refused.
@@ -23,7 +23,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::mpsc;
+use std::sync::{mpsc, LazyLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -287,403 +287,237 @@ pub struct CleanupOverview {
     pub history: Vec<CleanupRun>,
 }
 
+/// A fixed junk location. Keys are stable ids: they are what the Clean button
+/// and the Never clean list store, so renaming one is a breaking change.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct StaticJunk {
-    key: &'static str,
+    key: String,
     category: JunkCategory,
-    label: &'static str,
-    detail: &'static str,
+    label: String,
+    detail: String,
     /// Paths relative to the user's home folder.
-    targets: &'static [&'static str],
+    targets: Vec<String>,
     tier: JunkTier,
     /// Process names that mean the tool is in use right now.
-    busy_if: &'static [&'static str],
+    busy_if: Vec<String>,
 }
-
-const XCODE_PROCESSES: &[&str] = &["Xcode", "xcodebuild", "Simulator", "XCBBuildService"];
-
-/// The complete allowlist of fixed junk locations. Keys are stable ids: they
-/// are what the Clean button and the Never clean list store, so renaming one
-/// is a breaking change.
-const STATIC_JUNK: &[StaticJunk] = &[
-    StaticJunk {
-        key: "xcode-derived-data",
-        category: JunkCategory::Xcode,
-        label: "Xcode DerivedData",
-        detail: "Build products and indexes — Xcode rebuilds them on the next build",
-        targets: &["Library/Developer/Xcode/DerivedData"],
-        tier: JunkTier::Regenerable,
-        busy_if: XCODE_PROCESSES,
-    },
-    StaticJunk {
-        key: "xcode-device-support",
-        category: JunkCategory::Xcode,
-        label: "Device support symbols",
-        detail: "Debug symbols Xcode copies again the next time a device connects",
-        targets: &[
-            "Library/Developer/Xcode/iOS DeviceSupport",
-            "Library/Developer/Xcode/watchOS DeviceSupport",
-            "Library/Developer/Xcode/tvOS DeviceSupport",
-            "Library/Developer/Xcode/visionOS DeviceSupport",
-        ],
-        tier: JunkTier::Regenerable,
-        busy_if: XCODE_PROCESSES,
-    },
-    StaticJunk {
-        key: "xcode-previews",
-        category: JunkCategory::Xcode,
-        label: "SwiftUI preview data",
-        detail: "Preview simulators and builds — recreated when a preview runs",
-        targets: &["Library/Developer/Xcode/UserData/Previews"],
-        tier: JunkTier::Regenerable,
-        busy_if: XCODE_PROCESSES,
-    },
-    StaticJunk {
-        key: "simulator-caches",
-        category: JunkCategory::Xcode,
-        label: "Simulator caches",
-        detail: "Dyld and runtime caches the Simulator rebuilds on launch",
-        targets: &["Library/Developer/CoreSimulator/Caches"],
-        tier: JunkTier::Regenerable,
-        busy_if: XCODE_PROCESSES,
-    },
-    StaticJunk {
-        key: "xcode-app-cache",
-        category: JunkCategory::Xcode,
-        label: "Xcode app cache",
-        detail: "Downloaded documentation and download caches",
-        targets: &["Library/Caches/com.apple.dt.Xcode"],
-        tier: JunkTier::Regenerable,
-        busy_if: XCODE_PROCESSES,
-    },
-    StaticJunk {
-        key: "xcode-archives",
-        category: JunkCategory::Xcode,
-        label: "Xcode Archives",
-        detail: "Signed builds and dSYMs — keep them if you symbolicate crash logs",
-        targets: &["Library/Developer/Xcode/Archives"],
-        tier: JunkTier::Rebuildable,
-        busy_if: &["Xcode", "xcodebuild"],
-    },
-    StaticJunk {
-        key: "npm-cache",
-        category: JunkCategory::Packages,
-        label: "npm cache",
-        detail: "Package tarballs npm downloads again when it needs them",
-        targets: &[".npm/_cacache"],
-        tier: JunkTier::Regenerable,
-        busy_if: &["npm", "npx"],
-    },
-    StaticJunk {
-        key: "yarn-cache",
-        category: JunkCategory::Packages,
-        label: "Yarn cache",
-        detail: "Global Yarn package cache",
-        targets: &["Library/Caches/Yarn"],
-        tier: JunkTier::Regenerable,
-        busy_if: &["yarn"],
-    },
-    StaticJunk {
-        key: "pnpm-store",
-        category: JunkCategory::Packages,
-        label: "pnpm store",
-        detail: "Content-addressed store; projects that link into it keep their copies",
-        targets: &["Library/pnpm/store", ".pnpm-store"],
-        tier: JunkTier::Regenerable,
-        busy_if: &["pnpm", "pnpx"],
-    },
-    StaticJunk {
-        key: "bun-cache",
-        category: JunkCategory::Packages,
-        label: "Bun install cache",
-        detail: "Packages Bun downloads again on the next install",
-        targets: &[".bun/install/cache"],
-        tier: JunkTier::Regenerable,
-        busy_if: &["bun"],
-    },
-    StaticJunk {
-        key: "node-gyp-cache",
-        category: JunkCategory::Packages,
-        label: "node-gyp headers",
-        detail: "Node.js headers fetched for native modules",
-        targets: &["Library/Caches/node-gyp"],
-        tier: JunkTier::Regenerable,
-        busy_if: &["node-gyp", "npm"],
-    },
-    StaticJunk {
-        key: "playwright-browsers",
-        category: JunkCategory::Packages,
-        label: "Playwright browsers",
-        detail: "Test browsers — run `npx playwright install` to get them back",
-        targets: &["Library/Caches/ms-playwright"],
-        tier: JunkTier::Rebuildable,
-        busy_if: &["playwright"],
-    },
-    StaticJunk {
-        key: "cocoapods-cache",
-        category: JunkCategory::Packages,
-        label: "CocoaPods cache",
-        detail: "Downloaded pod specs and archives",
-        targets: &["Library/Caches/CocoaPods"],
-        tier: JunkTier::Regenerable,
-        busy_if: &["pod"],
-    },
-    StaticJunk {
-        key: "swiftpm-cache",
-        category: JunkCategory::Packages,
-        label: "Swift Package Manager cache",
-        detail: "Fetched Swift packages and their repositories",
-        targets: &["Library/Caches/org.swift.swiftpm"],
-        tier: JunkTier::Regenerable,
-        busy_if: &["swift-build", "swift-package", "xcodebuild", "Xcode"],
-    },
-    StaticJunk {
-        key: "cargo-cache",
-        category: JunkCategory::Packages,
-        label: "Cargo registry cache",
-        detail: "Crate archives Rust re-downloads when it needs them",
-        targets: &[".cargo/registry/cache"],
-        tier: JunkTier::Regenerable,
-        busy_if: &["cargo", "rustc"],
-    },
-    StaticJunk {
-        key: "go-build-cache",
-        category: JunkCategory::Packages,
-        label: "Go build cache",
-        detail: "Compiled packages Go rebuilds on demand",
-        targets: &["Library/Caches/go-build"],
-        tier: JunkTier::Regenerable,
-        busy_if: &["go", "gopls"],
-    },
-    StaticJunk {
-        key: "pip-cache",
-        category: JunkCategory::Packages,
-        label: "pip cache",
-        detail: "Wheels and downloads pip fetches again",
-        targets: &["Library/Caches/pip"],
-        tier: JunkTier::Regenerable,
-        busy_if: &["pip", "pip3"],
-    },
-    StaticJunk {
-        key: "uv-cache",
-        category: JunkCategory::Packages,
-        label: "uv cache",
-        detail: "Python packages uv downloads again",
-        targets: &[".cache/uv"],
-        tier: JunkTier::Regenerable,
-        busy_if: &["uv", "uvx"],
-    },
-    StaticJunk {
-        key: "gradle-cache",
-        category: JunkCategory::Packages,
-        label: "Gradle caches",
-        detail: "Dependencies and build caches Gradle downloads again",
-        targets: &[".gradle/caches"],
-        tier: JunkTier::Regenerable,
-        busy_if: &["gradle", "gradlew"],
-    },
-    StaticJunk {
-        key: "maven-repository",
-        category: JunkCategory::Packages,
-        label: "Maven repository",
-        detail: "Local copies of Maven dependencies — the next build downloads them",
-        targets: &[".m2/repository"],
-        tier: JunkTier::Rebuildable,
-        busy_if: &["mvn"],
-    },
-    StaticJunk {
-        key: "homebrew-cache",
-        category: JunkCategory::Packages,
-        label: "Homebrew cache",
-        detail: "Downloaded bottles and formula sources",
-        targets: &["Library/Caches/Homebrew"],
-        tier: JunkTier::Regenerable,
-        busy_if: &["brew", "brew.sh", "brew.rb"],
-    },
-];
 
 /// A build artifact inside a project. It is only recognised next to one of
 /// its `manifests`, and, when `marker` is set, only when that file exists
 /// inside it (a `venv` without `pyvenv.cfg` is not a virtual environment).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Artifact {
-    name: &'static str,
-    manifests: &'static [&'static str],
-    marker: Option<&'static str>,
-    tool: &'static str,
-    recover: &'static str,
-    busy_if: &'static [&'static str],
+    name: String,
+    manifests: Vec<String>,
+    marker: Option<String>,
+    tool: String,
+    recover: String,
+    busy_if: Vec<String>,
 }
 
-const JS: &[&str] = &["package.json"];
-const PY: &[&str] = &["pyproject.toml", "requirements.txt", "setup.py", "Pipfile"];
-const GRADLE: &[&str] = &[
-    "build.gradle",
-    "build.gradle.kts",
-    "settings.gradle",
-    "settings.gradle.kts",
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CleanupRules {
+    #[serde(rename = "static")]
+    static_junk: Vec<StaticJunk>,
+    artifacts: Vec<Artifact>,
+}
+
+/// The complete allowlist: every fixed junk location and every project
+/// artifact name. It is data, but it ships inside the signed binary, so it
+/// cannot be changed on disk, and [`validate_rules`] rejects any rule that
+/// could reach outside a tool's own cache.
+const RULES_JSON: &str = include_str!("cleanup_rules.json");
+
+/// Artifact names too ambiguous to clean: they are as often source or
+/// release output as build cache.
+const AMBIGUOUS_ARTIFACTS: &[&str] = &[
+    "dist", "build", "bin", "obj", "out", "vendor", "coverage", "lib", "src",
 ];
 
-const ARTIFACTS: &[Artifact] = &[
-    Artifact {
-        name: "node_modules",
-        manifests: JS,
-        marker: None,
-        tool: "Dependencies",
-        recover: "reinstall with npm, yarn or pnpm install",
-        busy_if: &["npm", "yarn", "pnpm", "bun"],
-    },
-    Artifact {
-        name: "target",
-        manifests: &["Cargo.toml"],
-        marker: None,
-        tool: "Rust build output",
-        recover: "cargo build recreates it",
-        busy_if: &["cargo", "rustc"],
-    },
-    Artifact {
-        name: ".next",
-        manifests: JS,
-        marker: None,
-        tool: "Next.js build",
-        recover: "next build recreates it",
-        busy_if: &[],
-    },
-    Artifact {
-        name: ".nuxt",
-        manifests: JS,
-        marker: None,
-        tool: "Nuxt build",
-        recover: "nuxt build recreates it",
-        busy_if: &[],
-    },
-    Artifact {
-        name: ".svelte-kit",
-        manifests: JS,
-        marker: None,
-        tool: "SvelteKit output",
-        recover: "the next dev or build run recreates it",
-        busy_if: &[],
-    },
-    Artifact {
-        name: ".turbo",
-        manifests: JS,
-        marker: None,
-        tool: "Turborepo cache",
-        recover: "the next turbo run recreates it",
-        busy_if: &["turbo"],
-    },
-    Artifact {
-        name: ".parcel-cache",
-        manifests: JS,
-        marker: None,
-        tool: "Parcel cache",
-        recover: "the next build recreates it",
-        busy_if: &[],
-    },
-    Artifact {
-        name: ".angular",
-        manifests: &["angular.json"],
-        marker: None,
-        tool: "Angular cache",
-        recover: "the next build recreates it",
-        busy_if: &["ng"],
-    },
-    Artifact {
-        name: ".astro",
-        manifests: JS,
-        marker: None,
-        tool: "Astro cache",
-        recover: "the next build recreates it",
-        busy_if: &[],
-    },
-    Artifact {
-        name: ".expo",
-        manifests: JS,
-        marker: None,
-        tool: "Expo cache",
-        recover: "the next expo start recreates it",
-        busy_if: &["expo"],
-    },
-    Artifact {
-        name: ".venv",
-        manifests: PY,
-        marker: Some("pyvenv.cfg"),
-        tool: "Python virtual environment",
-        recover: "recreate it and reinstall the requirements",
-        busy_if: &[],
-    },
-    Artifact {
-        name: "venv",
-        manifests: PY,
-        marker: Some("pyvenv.cfg"),
-        tool: "Python virtual environment",
-        recover: "recreate it and reinstall the requirements",
-        busy_if: &[],
-    },
-    Artifact {
-        name: ".tox",
-        manifests: &["tox.ini", "pyproject.toml", "setup.py"],
-        marker: None,
-        tool: "tox environments",
-        recover: "the next tox run recreates them",
-        busy_if: &["tox"],
-    },
-    Artifact {
-        name: ".mypy_cache",
-        manifests: PY,
-        marker: None,
-        tool: "mypy cache",
-        recover: "the next mypy run recreates it",
-        busy_if: &["mypy"],
-    },
-    Artifact {
-        name: ".gradle",
-        manifests: GRADLE,
-        marker: None,
-        tool: "Gradle project cache",
-        recover: "the next Gradle build recreates it",
-        busy_if: &["gradle", "gradlew"],
-    },
-    Artifact {
-        name: "Pods",
-        manifests: &["Podfile"],
-        marker: None,
-        tool: "CocoaPods",
-        recover: "pod install restores it",
-        busy_if: &["pod"],
-    },
-    Artifact {
-        name: ".build",
-        manifests: &["Package.swift"],
-        marker: None,
-        tool: "SwiftPM build output",
-        recover: "swift build recreates it",
-        busy_if: &["swift-build", "swift-package"],
-    },
-    Artifact {
-        name: ".dart_tool",
-        manifests: &["pubspec.yaml"],
-        marker: None,
-        tool: "Dart tool cache",
-        recover: "dart pub get restores it",
-        busy_if: &["dart", "flutter"],
-    },
-    Artifact {
-        name: ".zig-cache",
-        manifests: &["build.zig"],
-        marker: None,
-        tool: "Zig cache",
-        recover: "zig build recreates it",
-        busy_if: &["zig"],
-    },
-    Artifact {
-        name: "zig-out",
-        manifests: &["build.zig"],
-        marker: None,
-        tool: "Zig build output",
-        recover: "zig build recreates it",
-        busy_if: &["zig"],
-    },
+/// Top-level home folders that hold the user's own files. No fixed rule may
+/// point into them.
+const PERSONAL_HOME_FOLDERS: &[&str] = &[
+    "Documents",
+    "Desktop",
+    "Downloads",
+    "Pictures",
+    "Movies",
+    "Music",
+    "Applications",
+    "Public",
 ];
+
+/// Home folders holding keys and credentials. No rule may point into them.
+const SECRET_HOME_FOLDERS: &[&str] = &[
+    ".ssh",
+    ".gnupg",
+    ".aws",
+    ".azure",
+    ".kube",
+    ".password-store",
+    ".Trash",
+];
+
+/// Hidden home folders shared by many tools. A rule may point inside one
+/// (`.cache/uv`), never at the whole folder.
+const SHARED_DOT_FOLDERS: &[&str] = &[
+    ".cache", ".config", ".local", ".npm", ".cargo", ".rustup", ".gradle", ".m2", ".bun",
+];
+
+/// Folders under `~/Library` a rule may point into. Everything else there
+/// (Mail, Messages, Photos, Mobile Documents, Keychains…) is personal data.
+const LIBRARY_ALLOWED: &[&str] = &["Caches", "Developer", "pnpm"];
+
+fn rules() -> &'static CleanupRules {
+    static RULES: LazyLock<CleanupRules> = LazyLock::new(|| {
+        let rules: CleanupRules =
+            serde_json::from_str(RULES_JSON).expect("cleanup_rules.json does not parse");
+        if let Err(problem) = validate_rules(&rules) {
+            panic!("cleanup_rules.json is invalid: {problem}");
+        }
+        rules
+    });
+    &RULES
+}
+
+fn static_junk() -> &'static [StaticJunk] {
+    &rules().static_junk
+}
+
+fn artifacts() -> &'static [Artifact] {
+    &rules().artifacts
+}
+
+/// A single plain file or folder name: no separators, no `.`/`..`, nothing
+/// hidden in whitespace.
+fn plain_name(name: &str) -> bool {
+    !name.is_empty()
+        && name != "."
+        && name != ".."
+        && !name.contains(['/', '\\', '\0', '*', '?'])
+        && name.trim() == name
+}
+
+fn validate_target(key: &str, target: &str) -> Result<(), String> {
+    let parts: Vec<&str> = target.split('/').collect();
+    if parts.iter().any(|part| !plain_name(part)) {
+        return Err(format!(
+            "{key}: target {target:?} must be a relative path of plain names"
+        ));
+    }
+    if SECRET_HOME_FOLDERS.contains(&parts[0]) {
+        return Err(format!(
+            "{key}: target {target:?} is inside a credentials folder"
+        ));
+    }
+    if PERSONAL_HOME_FOLDERS.contains(&parts[0]) {
+        return Err(format!(
+            "{key}: target {target:?} is inside a personal folder"
+        ));
+    }
+    if parts.len() == 1 {
+        // A whole home-level folder only when it is a tool's own hidden
+        // store (`~/.pnpm-store`), never a shared root many tools use.
+        if !parts[0].starts_with('.') || SHARED_DOT_FOLDERS.contains(&parts[0]) {
+            return Err(format!("{key}: target {target:?} is a whole home folder"));
+        }
+    }
+    if parts[0] == "Library" {
+        if parts.len() < 3 {
+            return Err(format!(
+                "{key}: target {target:?} is a whole Library folder"
+            ));
+        }
+        if !LIBRARY_ALLOWED.contains(&parts[1]) {
+            return Err(format!(
+                "{key}: target {target:?} is outside Library/{{{}}}",
+                LIBRARY_ALLOWED.join(",")
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Checks the invariants the scan and clean code relies on. A rule that
+/// fails here would widen what Cleanup can move to the Trash, so the app
+/// refuses to start with it (and `cargo test` catches it first).
+fn validate_rules(rules: &CleanupRules) -> Result<(), String> {
+    let mut keys = HashSet::new();
+    for def in &rules.static_junk {
+        let key_ok = !def.key.is_empty()
+            && def
+                .key
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+        if !key_ok {
+            return Err(format!(
+                "key {:?} must be lowercase letters, digits and dashes",
+                def.key
+            ));
+        }
+        if !keys.insert(def.key.as_str()) {
+            return Err(format!("duplicate key {:?}", def.key));
+        }
+        if !matches!(def.category, JunkCategory::Xcode | JunkCategory::Packages) {
+            return Err(format!(
+                "{}: fixed rules belong to xcode or packages",
+                def.key
+            ));
+        }
+        if def.label.trim().is_empty() || def.detail.trim().is_empty() {
+            return Err(format!("{}: label and detail are required", def.key));
+        }
+        if def.targets.is_empty() {
+            return Err(format!("{}: at least one target is required", def.key));
+        }
+        for target in &def.targets {
+            validate_target(&def.key, target)?;
+        }
+        if def.busy_if.iter().any(|name| !plain_name(name)) {
+            return Err(format!(
+                "{}: busyIf entries must be plain process names",
+                def.key
+            ));
+        }
+    }
+    let mut names = HashSet::new();
+    for artifact in &rules.artifacts {
+        let name = artifact.name.as_str();
+        if !plain_name(name) {
+            return Err(format!("artifact {name:?} must be a single folder name"));
+        }
+        if AMBIGUOUS_ARTIFACTS.contains(&name.to_ascii_lowercase().as_str()) {
+            return Err(format!("artifact {name:?} is too ambiguous to clean"));
+        }
+        if !names.insert(name) {
+            return Err(format!("duplicate artifact {name:?}"));
+        }
+        if artifact.manifests.is_empty() || artifact.manifests.iter().any(|m| !plain_name(m)) {
+            return Err(format!("artifact {name:?} needs plain manifest file names"));
+        }
+        if artifact
+            .marker
+            .as_deref()
+            .is_some_and(|marker| !plain_name(marker))
+        {
+            return Err(format!(
+                "artifact {name:?}: marker must be a plain file name"
+            ));
+        }
+        if artifact.tool.trim().is_empty() || artifact.recover.trim().is_empty() {
+            return Err(format!("artifact {name:?}: tool and recover are required"));
+        }
+        if artifact.busy_if.iter().any(|p| !plain_name(p)) {
+            return Err(format!(
+                "artifact {name:?}: busyIf entries must be plain process names"
+            ));
+        }
+    }
+    Ok(())
+}
 
 /// Files whose presence inside an artifact means it is not junk.
 const KEY_FILE_NAMES: &[&str] = &["id_rsa", "id_ed25519", "id_ecdsa", "id_dsa"];
@@ -874,7 +708,7 @@ pub(crate) fn protected_roots(paths: &[String]) -> Vec<PathBuf> {
 
 /// The first of `names` that is running, as a user-facing reason. When the
 /// process list is unknown every guarded rule is busy (fail closed).
-fn busy_reason(env: &ScanEnv, names: &[&str]) -> Option<String> {
+fn busy_reason<S: AsRef<str>>(env: &ScanEnv, names: &[S]) -> Option<String> {
     if names.is_empty() {
         return None;
     }
@@ -883,7 +717,8 @@ fn busy_reason(env: &ScanEnv, names: &[&str]) -> Option<String> {
     };
     names
         .iter()
-        .find(|name| running.contains(**name))
+        .map(AsRef::as_ref)
+        .find(|name| running.contains(*name))
         .map(|name| format!("{name} is running"))
 }
 
@@ -1096,7 +931,7 @@ fn device_of(_path: &Path) -> Option<u64> {
 }
 
 fn artifact_named(name: &str) -> Option<&'static Artifact> {
-    ARTIFACTS.iter().find(|artifact| artifact.name == name)
+    artifacts().iter().find(|artifact| artifact.name == name)
 }
 
 /// The artifact rule that `path` matches: right name, a manifest next to it,
@@ -1111,7 +946,7 @@ fn matching_artifact(path: &Path) -> Option<&'static Artifact> {
     {
         return None;
     }
-    if let Some(marker) = artifact.marker {
+    if let Some(marker) = artifact.marker.as_deref() {
         if !path.join(marker).is_file() {
             return None;
         }
@@ -1196,7 +1031,7 @@ fn assess_artifact(
                 ));
             }
         }
-        if let Some(reason) = busy_reason(env, artifact.busy_if) {
+        if let Some(reason) = busy_reason(env, &artifact.busy_if) {
             return Err((SkipReason::AppRunning, reason, part));
         }
     }
@@ -1317,7 +1152,7 @@ fn cap(items: &mut Vec<JunkItem>, limit: usize, out: &mut Collector) {
 fn static_targets(env: &ScanEnv, def: &StaticJunk) -> (Vec<PathBuf>, Stats) {
     let mut total = Stats::default();
     let mut paths = Vec::new();
-    for target in def.targets {
+    for target in &def.targets {
         let path = env.home.join(target);
         match std::fs::symlink_metadata(&path) {
             Ok(metadata) if metadata.is_dir() => {}
@@ -1345,10 +1180,10 @@ fn static_targets(env: &ScanEnv, def: &StaticJunk) -> (Vec<PathBuf>, Stats) {
 }
 
 fn scan_static(env: &ScanEnv, category: JunkCategory, out: &mut Collector) {
-    for def in STATIC_JUNK.iter().filter(|def| def.category == category) {
+    for def in static_junk().iter().filter(|def| def.category == category) {
         let (paths, total) = static_targets(env, def);
         out.timed_out |= total.timed_out;
-        if !env.ignored.contains(def.key) {
+        if !env.ignored.contains(&def.key) {
             out.unreadable += total.unreadable;
         }
         let Some(path) = paths.first() else {
@@ -1365,7 +1200,7 @@ fn scan_static(env: &ScanEnv, category: JunkCategory, out: &mut Collector) {
                 message,
             );
         };
-        if env.ignored.contains(def.key) {
+        if env.ignored.contains(&def.key) {
             skip(
                 SkipReason::NeverClean,
                 "You marked this Never clean".to_string(),
@@ -1381,7 +1216,7 @@ fn scan_static(env: &ScanEnv, category: JunkCategory, out: &mut Collector) {
             );
             continue;
         }
-        if let Some(reason) = busy_reason(env, def.busy_if) {
+        if let Some(reason) = busy_reason(env, &def.busy_if) {
             skip(SkipReason::AppRunning, reason, out);
             continue;
         }
@@ -1678,15 +1513,15 @@ fn resolve_selection(
     if strict && env.ignored.contains(id) {
         return Err("You marked this Never clean.".to_string());
     }
-    if let Some(def) = STATIC_JUNK.iter().find(|def| def.key == id) {
-        for target in def.targets {
+    if let Some(def) = static_junk().iter().find(|def| def.key == id) {
+        for target in &def.targets {
             let path = env.home.join(target);
             if path.exists() && is_protected(&path, env.protected) {
                 return Err(LIBRARY_REFUSAL.to_string());
             }
         }
         if strict && !allow_in_use {
-            if let Some(reason) = busy_reason(env, def.busy_if) {
+            if let Some(reason) = busy_reason(env, &def.busy_if) {
                 return Err(format!("{reason} — quit it and try again."));
             }
         }
@@ -1801,7 +1636,7 @@ fn is_ignorable_id(id: &str) -> bool {
     if id.len() > 4096 || id.chars().any(char::is_control) {
         return false;
     }
-    if STATIC_JUNK.iter().any(|def| def.key == id) {
+    if static_junk().iter().any(|def| def.key == id) {
         return true;
     }
     matches!(
@@ -3187,5 +3022,101 @@ mod tests {
         assert!(ignored_ids(&pool).await.unwrap().is_empty());
         let footprint = library_footprint(&pool).await.unwrap();
         assert_eq!(footprint.total_items, 0);
+    }
+
+    fn parse_rules(json: &str) -> CleanupRules {
+        serde_json::from_str(json).expect("test rules parse")
+    }
+
+    fn one_static(target: &str) -> String {
+        format!(
+            r#"{{"static":[{{"key":"k","category":"packages","label":"L","detail":"D","tier":"regenerable","targets":["{target}"],"busyIf":[]}}],"artifacts":[]}}"#
+        )
+    }
+
+    fn one_artifact(name: &str, manifest: &str) -> String {
+        format!(
+            r#"{{"static":[],"artifacts":[{{"name":"{name}","manifests":["{manifest}"],"marker":null,"tool":"T","recover":"R","busyIf":[]}}]}}"#
+        )
+    }
+
+    #[test]
+    fn shipped_rules_load_and_validate() {
+        let rules = rules();
+        assert_eq!(rules.static_junk.len(), 21);
+        assert_eq!(rules.artifacts.len(), 20);
+        let keys: Vec<&str> = rules.static_junk.iter().map(|d| d.key.as_str()).collect();
+        // Keys are stored by Clean and Never clean; these must keep working.
+        for key in [
+            "xcode-derived-data",
+            "npm-cache",
+            "homebrew-cache",
+            "maven-repository",
+        ] {
+            assert!(keys.contains(&key), "missing {key}");
+        }
+        let venv = artifact_named("venv").expect("venv rule");
+        assert_eq!(venv.marker.as_deref(), Some("pyvenv.cfg"));
+        assert!(artifact_named("dist").is_none());
+    }
+
+    #[test]
+    fn a_valid_rule_passes() {
+        assert!(validate_rules(&parse_rules(&one_static("Library/Caches/foo"))).is_ok());
+        assert!(validate_rules(&parse_rules(&one_static(".cache/foo"))).is_ok());
+        assert!(validate_rules(&parse_rules(&one_static(".pnpm-store"))).is_ok());
+        assert!(validate_rules(&parse_rules(&one_artifact("target", "Cargo.toml"))).is_ok());
+    }
+
+    #[test]
+    fn rules_that_reach_outside_a_cache_are_rejected() {
+        for target in [
+            "",
+            "/Library/Caches/foo",
+            "Library/Caches/../../Documents",
+            ".cache",
+            ".cargo",
+            "Projects",
+            ".ssh/old_keys",
+            "Documents/old",
+            "Pictures/Photos Library.photoslibrary",
+            "Library/Mail/V10",
+            "Library/Mobile Documents/x",
+            "Library/Caches",
+            "Library/Caches//x",
+            "Library/Caches/*",
+        ] {
+            let rules = parse_rules(&one_static(target));
+            assert!(validate_rules(&rules).is_err(), "{target:?} was accepted");
+        }
+    }
+
+    #[test]
+    fn ambiguous_or_nested_artifacts_are_rejected() {
+        for name in ["dist", "Build", "vendor", "bin", "a/b", "..", ""] {
+            let rules = parse_rules(&one_artifact(name, "package.json"));
+            assert!(validate_rules(&rules).is_err(), "{name:?} was accepted");
+        }
+        let rules = parse_rules(&one_artifact("target", "../Cargo.toml"));
+        assert!(validate_rules(&rules).is_err());
+    }
+
+    #[test]
+    fn duplicate_keys_and_bad_categories_are_rejected() {
+        let rule = r#"{"key":"k","category":"packages","label":"L","detail":"D","tier":"regenerable","targets":[".cache/x"],"busyIf":[]}"#;
+        let twice = parse_rules(&format!(r#"{{"static":[{rule},{rule}],"artifacts":[]}}"#));
+        assert!(validate_rules(&twice).unwrap_err().contains("duplicate"));
+        let projects = parse_rules(&one_static(".cache/x").replace("packages", "projects"));
+        assert!(validate_rules(&projects).is_err());
+        let bad_key =
+            parse_rules(&one_static(".cache/x").replace(r#""key":"k""#, r#""key":"K k""#));
+        assert!(validate_rules(&bad_key).is_err());
+    }
+
+    #[test]
+    fn unknown_fields_do_not_parse() {
+        let json =
+            one_static(".cache/x").replace(r#""busyIf":[]"#, r#""busyIf":[],"recursive":true"#);
+        assert!(serde_json::from_str::<CleanupRules>(&json).is_err());
     }
 }

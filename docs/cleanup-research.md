@@ -299,7 +299,7 @@ space-reclaim screen is how cleaners acquire their reputation.
 
 ## Status
 
-As of November 2026, in `src-tauri/src/commands/junk.rs` and
+As of November 2026, in `src-tauri/src/commands/junk.rs`, `cleanup_rules.json` and
 `src/screens/CleanupScreen.tsx`:
 
 | Plan item | State |
@@ -312,7 +312,7 @@ As of November 2026, in `src-tauri/src/commands/junk.rs` and
 | 1.6 Single sink | Shipped as a unit test: `junk.rs` may not call `std::fs::remove_*` outside its tests. |
 | 2.1 Recovery tiers | Shipped. `JunkTier` `regenerable`/`rebuildable`; only regenerable items are one-click selectable. |
 | 2.2 Project-aware purge | Shipped. 20 artifact rules matched by manifest, Git-tracked/nested-repo/key/recent-activity refusal, hermetic bounded Git probe. `dist`, `build`, `bin`, `vendor` and `coverage` stay out as ambiguous. |
-| 2.3 Rules as data | Not done. Rules are still compiled-in constants (`STATIC_JUNK`, `ARTIFACTS`). |
+| 2.3 Rules as data | Shipped. Fixed rules and project artifacts live in `src-tauri/src/commands/cleanup_rules.json`, embedded with `include_str!` and checked at load: unique stable keys, relative plain-name targets, nothing in personal or credential folders, only `Library/{Caches,Developer,pnpm}`, no whole shared folder (`.cache`, `.cargo`…), no ambiguous artifact names, unknown fields rejected. An invalid file fails `cargo test` and the app refuses to load it. |
 
 Also shipped, beyond the plan:
 
