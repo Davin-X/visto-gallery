@@ -26,6 +26,7 @@ function item(overrides: Partial<JunkItem> & { id: string }): JunkItem {
     fileCount: 1,
     lastUsedAt: null,
     tier: "regenerable",
+    extraPaths: [],
     ...overrides,
   };
 }
@@ -35,6 +36,7 @@ function report(items: JunkItem[]): JunkCategoryReport {
     category: items[0]?.category ?? "xcode",
     status: "complete",
     statusMessage: null,
+    note: null,
     items,
     skips: [],
     totalBytes: totalBytes(items),

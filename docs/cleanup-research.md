@@ -326,8 +326,6 @@ Also shipped, beyond the plan:
 
 ---
 
----
-
 ## Plan
 
 ### Phase 1 — make the list trustworthy

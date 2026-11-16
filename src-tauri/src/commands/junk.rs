@@ -102,6 +102,9 @@ const MAX_DOWNLOAD_ITEMS: usize = 100;
 const MAX_SELECTION: usize = 1000;
 /// Each category's scan stops after this long and reports itself partial.
 const CATEGORY_BUDGET: Duration = Duration::from_secs(90);
+/// Re-checking a selection before trashing stops after this long; anything
+/// not re-checked in time is refused rather than trashed unverified.
+const CLEAN_BUDGET: Duration = Duration::from_secs(60);
 /// A Git probe that takes longer than this is "unknown", which means skip.
 const GIT_TIMEOUT: Duration = Duration::from_secs(5);
 /// Videos at least this large are called out in the library footprint.
@@ -184,6 +187,10 @@ pub struct JunkItem {
     /// epoch — how long ago the tool last actually used it.
     pub last_used_at: Option<i64>,
     pub tier: JunkTier,
+    /// Further folders this row covers besides `path` (a rule with several
+    /// targets, such as device support for each platform). The size and the
+    /// cleanup include them all.
+    pub extra_paths: Vec<String>,
 }
 
 /// A candidate that was found but is not offered, with the reason.
@@ -207,6 +214,9 @@ pub struct JunkCategoryReport {
     pub category: JunkCategory,
     pub status: ScanStatus,
     pub status_message: Option<String>,
+    /// Neutral information about the list, such as a cap on how many rows
+    /// are shown.
+    pub note: Option<String>,
     pub items: Vec<JunkItem>,
     pub skips: Vec<JunkSkip>,
     pub total_bytes: u64,
@@ -808,7 +818,11 @@ fn stats(path: &Path, deadline: Option<Instant>) -> Stats {
             continue;
         }
         if let Some(name) = entry.file_name().to_str() {
-            if KEY_FILE_NAMES.contains(&name) || name.starts_with("deploy_key") {
+            // `.pem`/`.key` only at the item's top level: packages inside
+            // node_modules ship test certificates by the hundred.
+            let top_level_key =
+                entry.depth() == 1 && (name.ends_with(".pem") || name.ends_with(".key"));
+            if KEY_FILE_NAMES.contains(&name) || name.starts_with("deploy_key") || top_level_key {
                 stats.has_key = true;
             }
         }
@@ -883,7 +897,6 @@ const SCRIPT_SUBCOMMANDS: &[&str] = &[
     "start",
     "test",
     "dev",
-    "exec",
     "serve",
     "preview",
     "watch",
@@ -1216,6 +1229,7 @@ struct Collector {
     timed_out: bool,
     unavailable: Option<String>,
     off: Option<String>,
+    note: Option<String>,
 }
 
 impl Collector {
@@ -1270,11 +1284,24 @@ impl Collector {
             category,
             status,
             status_message,
+            note: self.note,
             items: self.items,
             skips: self.skips,
             total_bytes,
             scanned_at: now_ms(),
         }
+    }
+}
+
+/// Keep the `limit` largest items (already sorted) and say so when some were
+/// left out, so a long list is never silently shortened.
+fn cap(items: &mut Vec<JunkItem>, limit: usize, out: &mut Collector) {
+    if items.len() > limit {
+        out.note = Some(format!(
+            "Showing the {limit} largest of {} found. Clean some and rescan to see the rest.",
+            items.len()
+        ));
+        items.truncate(limit);
     }
 }
 
@@ -1285,11 +1312,23 @@ fn static_targets(env: &ScanEnv, def: &StaticJunk) -> (Vec<PathBuf>, Stats) {
     let mut paths = Vec::new();
     for target in def.targets {
         let path = env.home.join(target);
-        if !path.is_dir() || is_protected(&path, env.protected) {
+        match std::fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.is_dir() => {}
+            // A denied ancestor hides the target; that is "could not read",
+            // not "nothing there".
+            Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+                total.unreadable += 1;
+                continue;
+            }
+            _ => continue,
+        }
+        if is_protected(&path, env.protected) {
             continue;
         }
         let part = stats(&path, env.deadline);
-        if part.files == 0 && part.unreadable == 0 {
+        // A walk cut short proves nothing about emptiness: keep the target so
+        // the caller sees `timed_out` instead of "already empty".
+        if part.files == 0 && part.unreadable == 0 && !part.timed_out {
             continue;
         }
         total.add(part);
@@ -1302,6 +1341,9 @@ fn scan_static(env: &ScanEnv, category: JunkCategory, out: &mut Collector) {
     for def in STATIC_JUNK.iter().filter(|def| def.category == category) {
         let (paths, total) = static_targets(env, def);
         out.timed_out |= total.timed_out;
+        if !env.ignored.contains(def.key) {
+            out.unreadable += total.unreadable;
+        }
         let Some(path) = paths.first() else {
             continue;
         };
@@ -1325,7 +1367,6 @@ fn scan_static(env: &ScanEnv, category: JunkCategory, out: &mut Collector) {
             continue;
         }
         if total.files == 0 {
-            out.unreadable += total.unreadable;
             skip(
                 SkipReason::Unreadable,
                 "This folder could not be read".to_string(),
@@ -1333,7 +1374,6 @@ fn scan_static(env: &ScanEnv, category: JunkCategory, out: &mut Collector) {
             );
             continue;
         }
-        out.unreadable += total.unreadable;
         if let Some(reason) = busy_reason(env, def.busy_if) {
             skip(SkipReason::AppRunning, reason, out);
             continue;
@@ -1349,6 +1389,10 @@ fn scan_static(env: &ScanEnv, category: JunkCategory, out: &mut Collector) {
             file_count: total.files,
             last_used_at: total.newest.map(to_ms),
             tier: def.tier,
+            extra_paths: paths[1..]
+                .iter()
+                .map(|extra| extra.to_string_lossy().into_owned())
+                .collect(),
         });
     }
 }
@@ -1428,6 +1472,7 @@ fn scan_projects(env: &ScanEnv, out: &mut Collector) {
                             file_count: part.files,
                             last_used_at: part.newest.map(to_ms),
                             tier: JunkTier::Rebuildable,
+                            extra_paths: Vec::new(),
                         });
                     }
                     Err((reason, message, part)) => {
@@ -1458,7 +1503,7 @@ fn scan_projects(env: &ScanEnv, out: &mut Collector) {
         }
     }
     items.sort_by_key(|item: &JunkItem| std::cmp::Reverse(item.bytes));
-    items.truncate(MAX_PROJECT_ITEMS);
+    cap(&mut items, MAX_PROJECT_ITEMS, out);
     out.items.extend(items);
 }
 
@@ -1551,10 +1596,11 @@ fn scan_downloads(env: &ScanEnv, out: &mut Collector) {
             file_count: 1,
             last_used_at: Some(to_ms(modified)),
             tier: JunkTier::Rebuildable,
+            extra_paths: Vec::new(),
         });
     }
     items.sort_by_key(|item: &JunkItem| std::cmp::Reverse(item.bytes));
-    items.truncate(MAX_DOWNLOAD_ITEMS);
+    cap(&mut items, MAX_DOWNLOAD_ITEMS, out);
     out.items.extend(items);
 }
 
@@ -1599,6 +1645,8 @@ fn plan_clean(env: &ScanEnv, ids: &[String]) -> (Vec<CleanPlanEntry>, Vec<JunkFa
 }
 
 const LIBRARY_REFUSAL: &str = "That folder is part of a library source and is never cleaned.";
+const UNVERIFIED: &str =
+    "Ran out of time re-checking this item, so it was left alone. Clean it on its own.";
 
 /// Re-validate one id. With `strict`, every pre-flight check applies (busy
 /// tools, Never clean, Git, recent activity); without it only the structural
@@ -1620,6 +1668,9 @@ fn resolve_selection(env: &ScanEnv, id: &str, strict: bool) -> Result<CleanPlanE
             }
         }
         let (paths, total) = static_targets(env, def);
+        if strict && total.timed_out {
+            return Err(UNVERIFIED.to_string());
+        }
         if paths.is_empty() || total.files == 0 {
             return Err("Nothing to remove — it is already empty or gone.".to_string());
         }
@@ -1665,8 +1716,14 @@ fn resolve_selection(env: &ScanEnv, id: &str, strict: bool) -> Result<CleanPlanE
                 );
             };
             let part = if strict {
-                assess_artifact(env, &path, artifact, &root)
-                    .map_err(|(_, message, _)| format!("{message}."))?
+                let part = assess_artifact(env, &path, artifact, &root)
+                    .map_err(|(_, message, _)| format!("{message}."))?;
+                // A walk cut short may have missed a nested repository or a
+                // key; that item is refused, never trashed unverified.
+                if part.timed_out {
+                    return Err(UNVERIFIED.to_string());
+                }
+                part
             } else {
                 stats(&path, env.deadline)
             };
@@ -1864,6 +1921,77 @@ pub async fn open_trash() -> Result<(), CommandError> {
     .map_err(|error| CommandError::internal(format!("Open Trash failed: {error}")))?
 }
 
+/// True when `path` no longer exists (it was moved to the Trash). Any other
+/// error counts as still present: it is never claimed as moved unverified.
+fn is_gone(path: &Path) -> bool {
+    matches!(
+        std::fs::symlink_metadata(path),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound
+    )
+}
+
+/// Trash every planned entry and report exactly what moved.
+///
+/// Finder processes a `delete {a, b, c}` list in order and stops at the
+/// first item it refuses, so a failed call may still have moved some items.
+/// After a failure the disk is checked: entries whose folders are all gone
+/// are counted as moved, and the rest are retried in halves until the refused
+/// entry is alone and reported with Finder's message. A result is never
+/// claimed without checking the disk.
+fn trash_entries<F>(plan: Vec<CleanPlanEntry>, trash: F) -> (Vec<CleanPlanEntry>, Vec<JunkFailure>)
+where
+    F: Fn(&[String]) -> Result<(), CommandError>,
+{
+    let mut moved = Vec::new();
+    let mut failed = Vec::new();
+    let mut pending = vec![plan];
+    while let Some(part) = pending.pop() {
+        if part.is_empty() {
+            continue;
+        }
+        let paths: Vec<String> = part
+            .iter()
+            .flat_map(|entry| entry.paths.iter())
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect();
+        let error = match trash(&paths) {
+            Ok(()) => {
+                moved.extend(part);
+                continue;
+            }
+            Err(error) => error,
+        };
+        let size = part.len();
+        let mut remaining = Vec::new();
+        for mut entry in part {
+            entry.paths.retain(|path| !is_gone(path));
+            if entry.paths.is_empty() {
+                moved.push(entry);
+            } else {
+                remaining.push(entry);
+            }
+        }
+        match remaining.len() {
+            0 => {}
+            // Alone (or the only one left after the rest moved): this is the
+            // entry Finder refused.
+            1 if size == 1 || remaining.len() < size => {
+                let entry = remaining.pop().expect("one entry");
+                failed.push(JunkFailure {
+                    id: entry.id,
+                    message: format!("Could not move to the Trash: {}", error.message.trim()),
+                });
+            }
+            _ => {
+                let back = remaining.split_off(remaining.len() / 2);
+                pending.push(back);
+                pending.push(remaining);
+            }
+        }
+    }
+    (moved, failed)
+}
+
 /// Move the selected junk to the Trash. Every id is re-validated first, and
 /// the run is recorded in the cleanup history.
 #[tauri::command]
@@ -1885,39 +2013,14 @@ pub async fn clean_junk(
 
     let result = tokio::task::spawn_blocking(move || {
         owned.probe();
-        let env = owned.env(None);
+        let env = owned.env(Some(Instant::now() + CLEAN_BUDGET));
         let (plan, mut failed) = plan_clean(&env, &items);
-        if plan.is_empty() {
-            return JunkCleanResult {
-                removed_items: 0,
-                moved_bytes: 0,
-                failed,
-            };
-        }
-        let paths: Vec<String> = plan
-            .iter()
-            .flat_map(|entry| entry.paths.iter())
-            .map(|path| path.to_string_lossy().into_owned())
-            .collect();
-        match super::media::trash_external_paths(&paths) {
-            Ok(()) => JunkCleanResult {
-                removed_items: plan.len() as u64,
-                moved_bytes: plan.iter().map(|entry| entry.bytes).sum(),
-                failed,
-            },
-            Err(error) => {
-                for entry in &plan {
-                    failed.push(JunkFailure {
-                        id: entry.id.clone(),
-                        message: error.message.clone(),
-                    });
-                }
-                JunkCleanResult {
-                    removed_items: 0,
-                    moved_bytes: 0,
-                    failed,
-                }
-            }
+        let (moved, refused) = trash_entries(plan, super::media::trash_external_paths);
+        failed.extend(refused);
+        JunkCleanResult {
+            removed_items: moved.len() as u64,
+            moved_bytes: moved.iter().map(|entry| entry.bytes).sum(),
+            failed,
         }
     })
     .await
@@ -2722,8 +2825,13 @@ mod tests {
     #[test]
     fn cleanup_code_never_deletes_directly() {
         let source = include_str!("junk.rs");
-        let code = &source[..source.find("#[cfg(test)]\nmod tests").unwrap()];
-        for sink in ["fs::remove_file", "fs::remove_dir", "remove_dir_all"] {
+        let code: String = source[..source.find("#[cfg(test)]\nmod tests").unwrap()]
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        // Bare names, so `use std::fs::remove_file;` cannot slip past.
+        for sink in ["remove_file", "remove_dir", "unlink"] {
             assert!(
                 !code.contains(sink),
                 "junk.rs must not call {sink}; use the Trash"
@@ -2777,6 +2885,162 @@ mod tests {
             "  10 npm run dev\n  11 cargo run\n",
         );
         assert!(!only_scripts.contains("npm") && !only_scripts.contains("cargo"));
+    }
+
+    /// A Trash stand-in that behaves like Finder: it moves paths in order
+    /// and stops with an error at the first refused one.
+    fn finder_like<'a>(
+        home: &'a TempHome,
+        refuse: &'static str,
+    ) -> impl Fn(&[String]) -> Result<(), CommandError> + 'a {
+        move |paths: &[String]| {
+            let bin = home.path().join(".Trash");
+            std::fs::create_dir_all(&bin).unwrap();
+            for path in paths {
+                if path.ends_with(refuse) {
+                    return Err(CommandError::io("Finder got an error: refused."));
+                }
+                let name = uuid::Uuid::new_v4().to_string();
+                std::fs::rename(path, bin.join(name)).unwrap();
+            }
+            Ok(())
+        }
+    }
+
+    fn entry(home: &TempHome, name: &str) -> CleanPlanEntry {
+        let path = home.write(&format!("junk/{name}/file"), 10);
+        CleanPlanEntry {
+            id: name.to_string(),
+            paths: vec![path.parent().unwrap().to_path_buf()],
+            bytes: 10,
+        }
+    }
+
+    #[test]
+    fn a_partly_failed_trash_reports_exactly_what_moved() {
+        let home = TempHome::new("partial-trash");
+        let plan: Vec<CleanPlanEntry> = ["a", "b", "refused", "c", "d"]
+            .into_iter()
+            .map(|name| entry(&home, name))
+            .collect();
+
+        let (moved, failed) = trash_entries(plan, finder_like(&home, "refused"));
+        let mut moved: Vec<String> = moved.into_iter().map(|entry| entry.id).collect();
+        moved.sort();
+        assert_eq!(
+            moved,
+            ["a", "b", "c", "d"],
+            "everything but the refused item"
+        );
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].id, "refused");
+        assert!(failed[0].message.contains("refused"));
+        assert!(home.path().join("junk/refused").exists());
+    }
+
+    #[test]
+    fn a_trash_that_moves_nothing_reports_nothing_moved() {
+        let home = TempHome::new("dead-trash");
+        let plan: Vec<CleanPlanEntry> = ["a", "b", "c"]
+            .into_iter()
+            .map(|n| entry(&home, n))
+            .collect();
+        let (moved, failed) = trash_entries(plan, |_: &[String]| {
+            Err(CommandError::io("Finder is not running"))
+        });
+        assert!(moved.is_empty());
+        assert_eq!(failed.len(), 3, "each entry is reported once");
+    }
+
+    #[test]
+    fn an_unverified_recheck_is_refused_not_trashed() {
+        let home = TempHome::new("deadline");
+        home.write("Library/Caches/Homebrew/bottle", 10);
+        home.write("Code/app/package.json", 2);
+        let file = home.write("Code/app/node_modules/pkg/index.js", 10);
+        age(&file, OLD);
+        let fixture = Fixture::new();
+        let mut env = fixture.env(&home);
+        env.deadline = Some(Instant::now() - Duration::from_secs(1));
+        let ids = vec![
+            "homebrew-cache".to_string(),
+            format!(
+                "projects:{}",
+                home.path().join("Code/app/node_modules").to_string_lossy()
+            ),
+        ];
+        let (plan, failed) = plan_clean(&env, &ids);
+        assert!(plan.is_empty());
+        assert!(failed
+            .iter()
+            .all(|failure| failure.message.contains("Ran out of time")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_denied_parent_folder_makes_the_category_partial() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = TempHome::new("denied-parent");
+        home.write("Library/Caches/Homebrew/bottle", 10);
+        let caches = home.path().join("Library/Caches");
+        std::fs::set_permissions(&caches, std::fs::Permissions::from_mode(0o000)).unwrap();
+        let fixture = Fixture::new();
+        let report = scan(&fixture.env(&home), JunkCategory::Packages);
+        std::fs::set_permissions(&caches, std::fs::Permissions::from_mode(0o755)).unwrap();
+        if report.status == ScanStatus::Complete && report.items.len() == 1 {
+            return; // running as root: permissions are not enforced
+        }
+        assert_eq!(report.status, ScanStatus::Partial);
+        assert!(report.items.is_empty());
+    }
+
+    #[test]
+    fn rows_covering_several_folders_list_them_and_caps_are_announced() {
+        let home = TempHome::new("multi");
+        home.write("Library/Developer/Xcode/iOS DeviceSupport/17/a", 10);
+        home.write("Library/Developer/Xcode/watchOS DeviceSupport/10/a", 10);
+        let fixture = Fixture::new();
+        let report = scan(&fixture.env(&home), JunkCategory::Xcode);
+        let support = report
+            .items
+            .iter()
+            .find(|item| item.id == "xcode-device-support")
+            .unwrap();
+        assert_eq!(support.extra_paths.len(), 1);
+        assert!(support.extra_paths[0].contains("watchOS"));
+
+        let mut out = Collector::default();
+        let mut items: Vec<JunkItem> = (0..5).map(|_| support.clone()).collect();
+        cap(&mut items, 3, &mut out);
+        assert_eq!(items.len(), 3);
+        assert!(out.note.unwrap().contains("3 largest of 5"));
+    }
+
+    #[test]
+    fn a_top_level_key_file_protects_an_artifact() {
+        let home = TempHome::new("pem");
+        home.write("Code/api/package.json", 2);
+        let key = home.write("Code/api/.venv/server.pem", 10);
+        home.write("Code/api/requirements.txt", 2);
+        let cfg = home.write("Code/api/.venv/pyvenv.cfg", 2);
+        home.write("Code/web/package.json", 2);
+        let fixture_pem = home.write("Code/web/node_modules/tls/test/cert.pem", 10);
+        for path in [&key, &cfg, &fixture_pem] {
+            age(path, OLD);
+        }
+        let fixture = Fixture::new();
+        let report = scan(&fixture.env(&home), JunkCategory::Projects);
+        let labels: Vec<&str> = report
+            .items
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
+        assert_eq!(
+            labels,
+            ["web/node_modules"],
+            "a deep test certificate is fine"
+        );
+        assert_eq!(report.skips[0].reason, SkipReason::Sensitive);
     }
 
     #[test]

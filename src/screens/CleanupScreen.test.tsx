@@ -38,6 +38,7 @@ const derived: JunkItem = {
   fileCount: 120,
   lastUsedAt: Date.now() - 2 * DAY,
   tier: "regenerable",
+  extraPaths: [],
 };
 
 const archives: JunkItem = {
@@ -51,6 +52,7 @@ const archives: JunkItem = {
   fileCount: 2,
   lastUsedAt: null,
   tier: "rebuildable",
+  extraPaths: [],
 };
 
 const modules: JunkItem = {
@@ -64,6 +66,7 @@ const modules: JunkItem = {
   fileCount: 40,
   lastUsedAt: Date.now() - 40 * DAY,
   tier: "rebuildable",
+  extraPaths: [],
 };
 
 const busySkip: JunkSkip = {
@@ -95,6 +98,7 @@ function report(
     category,
     status: "complete",
     statusMessage: null,
+    note: null,
     items,
     skips: [],
     totalBytes: items.reduce((sum, item) => sum + item.bytes, 0),
@@ -398,5 +402,52 @@ describe("CleanupScreen", () => {
     } finally {
       frame.remove();
     }
+  });
+
+  it("never calls an incomplete scan tidy", async () => {
+    reports = {
+      ...empty,
+      projects: report("projects", [], {
+        status: "partial",
+        statusMessage: "3 entries could not be read, so totals may be low.",
+      }),
+    };
+    renderScreen();
+
+    expect(await screen.findByText("Nothing found")).toBeInTheDocument();
+    expect(screen.queryByText("All tidy")).not.toBeInTheDocument();
+    expect(screen.getByText(/Nothing found in what could be read/)).toBeInTheDocument();
+  });
+
+  it("calls a complete empty scan tidy", async () => {
+    reports = empty;
+    renderScreen();
+    expect(await screen.findByText("All tidy")).toBeInTheDocument();
+    expect(screen.getByText("Nothing to clean — your Mac is already tidy.")).toBeInTheDocument();
+  });
+
+  it("lists every folder a row covers and shows list caps", async () => {
+    reports = {
+      ...full,
+      xcode: report(
+        "xcode",
+        [
+          {
+            ...derived,
+            id: "xcode-device-support",
+            label: "Device support symbols",
+            path: "/Users/dev/Library/Developer/Xcode/iOS DeviceSupport",
+            extraPaths: ["/Users/dev/Library/Developer/Xcode/watchOS DeviceSupport"],
+          },
+        ],
+        { note: "Showing the 200 largest of 312 found." },
+      ),
+    };
+    renderScreen();
+
+    expect(await screen.findByText("· 2 folders")).toBeInTheDocument();
+    const row = screen.getByText("Device support symbols").closest(".cleanup-row") as HTMLElement;
+    expect(row.textContent).toContain("watchOS DeviceSupport");
+    expect(screen.getByText("Showing the 200 largest of 312 found.")).toBeInTheDocument();
   });
 });

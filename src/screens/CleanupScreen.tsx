@@ -338,13 +338,27 @@ export default function CleanupScreen({
     });
   }, [showErrorNotice]);
 
+  // A category that could not be fully read can hide junk, so an empty
+  // result is only "tidy" when every scan was complete (or turned off).
+  const incomplete = JUNK_CATEGORY_ORDER.some((category) => {
+    const scan = scans[category];
+    if (scan.state === "failed") return true;
+    const status = reportOf(scan)?.status;
+    return status === "partial" || status === "unavailable";
+  });
+  const emptyResult = items.length === 0 && scannedOnce && !scanning;
+
   const headingSubtitle = (() => {
     if (!scannedOnce) return "Looking through Xcode, developer caches and your projects…";
-    if (items.length === 0 && !scanning) return "Nothing to clean — your Mac is already tidy.";
+    if (emptyResult) {
+      return incomplete
+        ? "Nothing found in what could be read — some folders could not be scanned."
+        : "Nothing to clean — your Mac is already tidy.";
+    }
     return `${plural(items.length, "item")} across ${
       JUNK_CATEGORY_ORDER.filter((category) => (reportOf(scans[category])?.items.length ?? 0) > 0)
         .length
-    } of 4 areas · everything goes to the Trash first`;
+    } of ${JUNK_CATEGORY_ORDER.length} areas · everything goes to the Trash first`;
   })();
 
   const disk = overview?.disk ?? null;
@@ -393,12 +407,14 @@ export default function CleanupScreen({
           <p className="cleanup-hero-label">
             {scanning
               ? "Found so far"
-              : items.length === 0 && scannedOnce
-                ? "All tidy"
+              : emptyResult
+                ? incomplete
+                  ? "Nothing found"
+                  : "All tidy"
                 : "Ready to clean"}
           </p>
           <p className="cleanup-hero-number" aria-live="polite">
-            {items.length === 0 && scannedOnce && !scanning ? (
+            {emptyResult && !incomplete ? (
               <span className="cleanup-hero-tidy">
                 <CheckIcon size={26} /> 0 B
               </span>
@@ -663,6 +679,8 @@ export default function CleanupScreen({
                 <InfoIcon size={13} /> {statusMessage}
               </p>
             )}
+
+            {report?.note && <p className="cleanup-group-note">{report.note}</p>}
 
             {groupItems.length > 0 && (
               <ul className="cleanup-list">
@@ -931,6 +949,9 @@ function CleanupRow({
       <div className="cleanup-row-main">
         <div className="cleanup-row-title">
           <span className="cleanup-row-name">{item.label}</span>
+          {item.extraPaths.length > 0 && (
+            <span className="cleanup-row-folders">· {item.extraPaths.length + 1} folders</span>
+          )}
           <span className={`cleanup-tier-chip is-${item.tier}`} title={tier.hint}>
             {tier.label}
           </span>
@@ -942,6 +963,9 @@ function CleanupRow({
         </div>
         <p className="cleanup-row-detail">{item.detail}</p>
         <MiddleTruncate text={item.path} className="cleanup-row-path" />
+        {item.extraPaths.map((extra) => (
+          <MiddleTruncate key={extra} text={extra} className="cleanup-row-path" />
+        ))}
       </div>
       <div className="cleanup-row-side">
         <span className="cleanup-row-size">{formatBytesSimple(item.bytes)}</span>

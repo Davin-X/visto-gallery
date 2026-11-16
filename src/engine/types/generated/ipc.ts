@@ -427,11 +427,22 @@ sharedBytes: number, fileCount: number,
  * Most recent modification inside the item, in milliseconds since the
  * epoch — how long ago the tool last actually used it.
  */
-lastUsedAt: number | null, tier: JunkTier, };
+lastUsedAt: number | null, tier: JunkTier, 
+/**
+ * Further folders this row covers besides `path` (a rule with several
+ * targets, such as device support for each platform). The size and the
+ * cleanup include them all.
+ */
+extraPaths: Array<string>, };
 
 export type JunkSkip = { id: string, category: JunkCategory, label: string, path: string, bytes: number, reason: SkipReason, message: string, };
 
-export type JunkCategoryReport = { category: JunkCategory, status: ScanStatus, statusMessage: string | null, items: Array<JunkItem>, skips: Array<JunkSkip>, totalBytes: number, scannedAt: number, };
+export type JunkCategoryReport = { category: JunkCategory, status: ScanStatus, statusMessage: string | null, 
+/**
+ * Neutral information about the list, such as a cap on how many rows
+ * are shown.
+ */
+note: string | null, items: Array<JunkItem>, skips: Array<JunkSkip>, totalBytes: number, scannedAt: number, };
 
 export type JunkFailure = { id: string, message: string, };
 
