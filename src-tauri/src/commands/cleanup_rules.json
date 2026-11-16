@@ -1,0 +1,559 @@
+{
+  "static": [
+    {
+      "key": "xcode-derived-data",
+      "category": "xcode",
+      "label": "Xcode DerivedData",
+      "detail": "Build products and indexes — Xcode rebuilds them on the next build",
+      "tier": "regenerable",
+      "targets": [
+        "Library/Developer/Xcode/DerivedData"
+      ],
+      "busyIf": [
+        "Xcode",
+        "xcodebuild",
+        "Simulator",
+        "XCBBuildService"
+      ]
+    },
+    {
+      "key": "xcode-device-support",
+      "category": "xcode",
+      "label": "Device support symbols",
+      "detail": "Debug symbols Xcode copies again the next time a device connects",
+      "tier": "regenerable",
+      "targets": [
+        "Library/Developer/Xcode/iOS DeviceSupport",
+        "Library/Developer/Xcode/watchOS DeviceSupport",
+        "Library/Developer/Xcode/tvOS DeviceSupport",
+        "Library/Developer/Xcode/visionOS DeviceSupport"
+      ],
+      "busyIf": [
+        "Xcode",
+        "xcodebuild",
+        "Simulator",
+        "XCBBuildService"
+      ]
+    },
+    {
+      "key": "xcode-previews",
+      "category": "xcode",
+      "label": "SwiftUI preview data",
+      "detail": "Preview simulators and builds — recreated when a preview runs",
+      "tier": "regenerable",
+      "targets": [
+        "Library/Developer/Xcode/UserData/Previews"
+      ],
+      "busyIf": [
+        "Xcode",
+        "xcodebuild",
+        "Simulator",
+        "XCBBuildService"
+      ]
+    },
+    {
+      "key": "simulator-caches",
+      "category": "xcode",
+      "label": "Simulator caches",
+      "detail": "Dyld and runtime caches the Simulator rebuilds on launch",
+      "tier": "regenerable",
+      "targets": [
+        "Library/Developer/CoreSimulator/Caches"
+      ],
+      "busyIf": [
+        "Xcode",
+        "xcodebuild",
+        "Simulator",
+        "XCBBuildService"
+      ]
+    },
+    {
+      "key": "xcode-app-cache",
+      "category": "xcode",
+      "label": "Xcode app cache",
+      "detail": "Downloaded documentation and download caches",
+      "tier": "regenerable",
+      "targets": [
+        "Library/Caches/com.apple.dt.Xcode"
+      ],
+      "busyIf": [
+        "Xcode",
+        "xcodebuild",
+        "Simulator",
+        "XCBBuildService"
+      ]
+    },
+    {
+      "key": "xcode-archives",
+      "category": "xcode",
+      "label": "Xcode Archives",
+      "detail": "Signed builds and dSYMs — keep them if you symbolicate crash logs",
+      "tier": "rebuildable",
+      "targets": [
+        "Library/Developer/Xcode/Archives"
+      ],
+      "busyIf": [
+        "Xcode",
+        "xcodebuild"
+      ]
+    },
+    {
+      "key": "npm-cache",
+      "category": "packages",
+      "label": "npm cache",
+      "detail": "Package tarballs npm downloads again when it needs them",
+      "tier": "regenerable",
+      "targets": [
+        ".npm/_cacache"
+      ],
+      "busyIf": [
+        "npm",
+        "npx"
+      ]
+    },
+    {
+      "key": "yarn-cache",
+      "category": "packages",
+      "label": "Yarn cache",
+      "detail": "Global Yarn package cache",
+      "tier": "regenerable",
+      "targets": [
+        "Library/Caches/Yarn"
+      ],
+      "busyIf": [
+        "yarn"
+      ]
+    },
+    {
+      "key": "pnpm-store",
+      "category": "packages",
+      "label": "pnpm store",
+      "detail": "Content-addressed store; projects that link into it keep their copies",
+      "tier": "regenerable",
+      "targets": [
+        "Library/pnpm/store",
+        ".pnpm-store"
+      ],
+      "busyIf": [
+        "pnpm",
+        "pnpx"
+      ]
+    },
+    {
+      "key": "bun-cache",
+      "category": "packages",
+      "label": "Bun install cache",
+      "detail": "Packages Bun downloads again on the next install",
+      "tier": "regenerable",
+      "targets": [
+        ".bun/install/cache"
+      ],
+      "busyIf": [
+        "bun"
+      ]
+    },
+    {
+      "key": "node-gyp-cache",
+      "category": "packages",
+      "label": "node-gyp headers",
+      "detail": "Node.js headers fetched for native modules",
+      "tier": "regenerable",
+      "targets": [
+        "Library/Caches/node-gyp"
+      ],
+      "busyIf": [
+        "node-gyp",
+        "npm"
+      ]
+    },
+    {
+      "key": "playwright-browsers",
+      "category": "packages",
+      "label": "Playwright browsers",
+      "detail": "Test browsers — run `npx playwright install` to get them back",
+      "tier": "rebuildable",
+      "targets": [
+        "Library/Caches/ms-playwright"
+      ],
+      "busyIf": [
+        "playwright"
+      ]
+    },
+    {
+      "key": "cocoapods-cache",
+      "category": "packages",
+      "label": "CocoaPods cache",
+      "detail": "Downloaded pod specs and archives",
+      "tier": "regenerable",
+      "targets": [
+        "Library/Caches/CocoaPods"
+      ],
+      "busyIf": [
+        "pod"
+      ]
+    },
+    {
+      "key": "swiftpm-cache",
+      "category": "packages",
+      "label": "Swift Package Manager cache",
+      "detail": "Fetched Swift packages and their repositories",
+      "tier": "regenerable",
+      "targets": [
+        "Library/Caches/org.swift.swiftpm"
+      ],
+      "busyIf": [
+        "swift-build",
+        "swift-package",
+        "xcodebuild",
+        "Xcode"
+      ]
+    },
+    {
+      "key": "cargo-cache",
+      "category": "packages",
+      "label": "Cargo registry cache",
+      "detail": "Crate archives Rust re-downloads when it needs them",
+      "tier": "regenerable",
+      "targets": [
+        ".cargo/registry/cache"
+      ],
+      "busyIf": [
+        "cargo",
+        "rustc"
+      ]
+    },
+    {
+      "key": "go-build-cache",
+      "category": "packages",
+      "label": "Go build cache",
+      "detail": "Compiled packages Go rebuilds on demand",
+      "tier": "regenerable",
+      "targets": [
+        "Library/Caches/go-build"
+      ],
+      "busyIf": [
+        "go",
+        "gopls"
+      ]
+    },
+    {
+      "key": "pip-cache",
+      "category": "packages",
+      "label": "pip cache",
+      "detail": "Wheels and downloads pip fetches again",
+      "tier": "regenerable",
+      "targets": [
+        "Library/Caches/pip"
+      ],
+      "busyIf": [
+        "pip",
+        "pip3"
+      ]
+    },
+    {
+      "key": "uv-cache",
+      "category": "packages",
+      "label": "uv cache",
+      "detail": "Python packages uv downloads again",
+      "tier": "regenerable",
+      "targets": [
+        ".cache/uv"
+      ],
+      "busyIf": [
+        "uv",
+        "uvx"
+      ]
+    },
+    {
+      "key": "gradle-cache",
+      "category": "packages",
+      "label": "Gradle caches",
+      "detail": "Dependencies and build caches Gradle downloads again",
+      "tier": "regenerable",
+      "targets": [
+        ".gradle/caches"
+      ],
+      "busyIf": [
+        "gradle",
+        "gradlew"
+      ]
+    },
+    {
+      "key": "maven-repository",
+      "category": "packages",
+      "label": "Maven repository",
+      "detail": "Local copies of Maven dependencies — the next build downloads them",
+      "tier": "rebuildable",
+      "targets": [
+        ".m2/repository"
+      ],
+      "busyIf": [
+        "mvn"
+      ]
+    },
+    {
+      "key": "homebrew-cache",
+      "category": "packages",
+      "label": "Homebrew cache",
+      "detail": "Downloaded bottles and formula sources",
+      "tier": "regenerable",
+      "targets": [
+        "Library/Caches/Homebrew"
+      ],
+      "busyIf": [
+        "brew",
+        "brew.sh",
+        "brew.rb"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "node_modules",
+      "manifests": [
+        "package.json"
+      ],
+      "marker": null,
+      "tool": "Dependencies",
+      "recover": "reinstall with npm, yarn or pnpm install",
+      "busyIf": [
+        "npm",
+        "yarn",
+        "pnpm",
+        "bun"
+      ]
+    },
+    {
+      "name": "target",
+      "manifests": [
+        "Cargo.toml"
+      ],
+      "marker": null,
+      "tool": "Rust build output",
+      "recover": "cargo build recreates it",
+      "busyIf": [
+        "cargo",
+        "rustc"
+      ]
+    },
+    {
+      "name": ".next",
+      "manifests": [
+        "package.json"
+      ],
+      "marker": null,
+      "tool": "Next.js build",
+      "recover": "next build recreates it",
+      "busyIf": []
+    },
+    {
+      "name": ".nuxt",
+      "manifests": [
+        "package.json"
+      ],
+      "marker": null,
+      "tool": "Nuxt build",
+      "recover": "nuxt build recreates it",
+      "busyIf": []
+    },
+    {
+      "name": ".svelte-kit",
+      "manifests": [
+        "package.json"
+      ],
+      "marker": null,
+      "tool": "SvelteKit output",
+      "recover": "the next dev or build run recreates it",
+      "busyIf": []
+    },
+    {
+      "name": ".turbo",
+      "manifests": [
+        "package.json"
+      ],
+      "marker": null,
+      "tool": "Turborepo cache",
+      "recover": "the next turbo run recreates it",
+      "busyIf": [
+        "turbo"
+      ]
+    },
+    {
+      "name": ".parcel-cache",
+      "manifests": [
+        "package.json"
+      ],
+      "marker": null,
+      "tool": "Parcel cache",
+      "recover": "the next build recreates it",
+      "busyIf": []
+    },
+    {
+      "name": ".angular",
+      "manifests": [
+        "angular.json"
+      ],
+      "marker": null,
+      "tool": "Angular cache",
+      "recover": "the next build recreates it",
+      "busyIf": [
+        "ng"
+      ]
+    },
+    {
+      "name": ".astro",
+      "manifests": [
+        "package.json"
+      ],
+      "marker": null,
+      "tool": "Astro cache",
+      "recover": "the next build recreates it",
+      "busyIf": []
+    },
+    {
+      "name": ".expo",
+      "manifests": [
+        "package.json"
+      ],
+      "marker": null,
+      "tool": "Expo cache",
+      "recover": "the next expo start recreates it",
+      "busyIf": [
+        "expo"
+      ]
+    },
+    {
+      "name": ".venv",
+      "manifests": [
+        "pyproject.toml",
+        "requirements.txt",
+        "setup.py",
+        "Pipfile"
+      ],
+      "marker": "pyvenv.cfg",
+      "tool": "Python virtual environment",
+      "recover": "recreate it and reinstall the requirements",
+      "busyIf": []
+    },
+    {
+      "name": "venv",
+      "manifests": [
+        "pyproject.toml",
+        "requirements.txt",
+        "setup.py",
+        "Pipfile"
+      ],
+      "marker": "pyvenv.cfg",
+      "tool": "Python virtual environment",
+      "recover": "recreate it and reinstall the requirements",
+      "busyIf": []
+    },
+    {
+      "name": ".tox",
+      "manifests": [
+        "tox.ini",
+        "pyproject.toml",
+        "setup.py"
+      ],
+      "marker": null,
+      "tool": "tox environments",
+      "recover": "the next tox run recreates them",
+      "busyIf": [
+        "tox"
+      ]
+    },
+    {
+      "name": ".mypy_cache",
+      "manifests": [
+        "pyproject.toml",
+        "requirements.txt",
+        "setup.py",
+        "Pipfile"
+      ],
+      "marker": null,
+      "tool": "mypy cache",
+      "recover": "the next mypy run recreates it",
+      "busyIf": [
+        "mypy"
+      ]
+    },
+    {
+      "name": ".gradle",
+      "manifests": [
+        "build.gradle",
+        "build.gradle.kts",
+        "settings.gradle",
+        "settings.gradle.kts"
+      ],
+      "marker": null,
+      "tool": "Gradle project cache",
+      "recover": "the next Gradle build recreates it",
+      "busyIf": [
+        "gradle",
+        "gradlew"
+      ]
+    },
+    {
+      "name": "Pods",
+      "manifests": [
+        "Podfile"
+      ],
+      "marker": null,
+      "tool": "CocoaPods",
+      "recover": "pod install restores it",
+      "busyIf": [
+        "pod"
+      ]
+    },
+    {
+      "name": ".build",
+      "manifests": [
+        "Package.swift"
+      ],
+      "marker": null,
+      "tool": "SwiftPM build output",
+      "recover": "swift build recreates it",
+      "busyIf": [
+        "swift-build",
+        "swift-package"
+      ]
+    },
+    {
+      "name": ".dart_tool",
+      "manifests": [
+        "pubspec.yaml"
+      ],
+      "marker": null,
+      "tool": "Dart tool cache",
+      "recover": "dart pub get restores it",
+      "busyIf": [
+        "dart",
+        "flutter"
+      ]
+    },
+    {
+      "name": ".zig-cache",
+      "manifests": [
+        "build.zig"
+      ],
+      "marker": null,
+      "tool": "Zig cache",
+      "recover": "zig build recreates it",
+      "busyIf": [
+        "zig"
+      ]
+    },
+    {
+      "name": "zig-out",
+      "manifests": [
+        "build.zig"
+      ],
+      "marker": null,
+      "tool": "Zig build output",
+      "recover": "zig build recreates it",
+      "busyIf": [
+        "zig"
+      ]
+    }
+  ]
+}
