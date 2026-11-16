@@ -307,8 +307,13 @@ export const tauri = {
     scan: (category: JunkCategory): Promise<JunkCategoryReport> =>
       invoke("scan_junk", { category }),
 
-    /** Move junk ids to the Trash; every id is re-validated in Rust. */
-    clean: (items: string[]): Promise<JunkCleanResult> => invoke("clean_junk", { items }),
+    /**
+     * Move junk ids to the Trash; every id is re-validated in Rust.
+     * `force` names the ids the user included despite their being in use;
+     * it waives only the busy and recent-activity checks.
+     */
+    clean: (items: string[], force: string[] = []): Promise<JunkCleanResult> =>
+      invoke("clean_junk", { items, force }),
 
     /** Show one candidate in Finder (same validation as a cleanup). */
     reveal: (id: string): Promise<void> => invoke("reveal_junk", { id }),

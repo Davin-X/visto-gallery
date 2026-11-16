@@ -38,6 +38,7 @@ const derived: JunkItem = {
   fileCount: 120,
   lastUsedAt: Date.now() - 2 * DAY,
   tier: "regenerable",
+  extraPaths: [],
 };
 
 const archives: JunkItem = {
@@ -51,6 +52,7 @@ const archives: JunkItem = {
   fileCount: 2,
   lastUsedAt: null,
   tier: "rebuildable",
+  extraPaths: [],
 };
 
 const modules: JunkItem = {
@@ -64,6 +66,7 @@ const modules: JunkItem = {
   fileCount: 40,
   lastUsedAt: Date.now() - 40 * DAY,
   tier: "rebuildable",
+  extraPaths: [],
 };
 
 const busySkip: JunkSkip = {
@@ -95,6 +98,7 @@ function report(
     category,
     status: "complete",
     statusMessage: null,
+    note: null,
     items,
     skips: [],
     totalBytes: items.reduce((sum, item) => sum + item.bytes, 0),
@@ -177,7 +181,7 @@ describe("CleanupScreen", () => {
     expect(screen.getAllByText("Needs rebuild", { selector: ".cleanup-tier-chip" })).toHaveLength(
       2,
     );
-    expect(screen.getByText("1.0 GB regenerates")).toBeInTheDocument();
+    expect(screen.getAllByText("Regenerates", { selector: ".cleanup-tier-chip" })).toHaveLength(1);
     expect(screen.getByText("+8.0 KB shared")).toBeInTheDocument();
   });
 
@@ -209,7 +213,7 @@ describe("CleanupScreen", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /^move to trash$/i }));
 
     await waitFor(() => {
-      expect(mocks.clean).toHaveBeenCalledWith(["xcode-derived-data"]);
+      expect(mocks.clean).toHaveBeenCalledWith(["xcode-derived-data"], []);
     });
     // Success is the banner alone, and it is honest: the Trash still holds the space.
     expect(await screen.findByText(/when you empty the Trash/)).toBeInTheDocument();
@@ -272,7 +276,7 @@ describe("CleanupScreen", () => {
       );
     });
 
-    const skip = screen.getByText("Homebrew cache").closest(".cleanup-skip") as HTMLElement;
+    const skip = screen.getByText("Homebrew cache").closest(".cleanup-row") as HTMLElement;
     fireEvent.click(within(skip).getByRole("button", { name: "Allow" }));
     await waitFor(() => {
       expect(mocks.setIgnored).toHaveBeenCalledWith("homebrew-cache", "Homebrew cache", false);
@@ -302,7 +306,10 @@ describe("CleanupScreen", () => {
 
     fireEvent.click(screen.getByRole("checkbox", { name: "Select Xcode Archives" }));
     expect(screen.getByText("+<1%")).toBeInTheDocument();
-    expect(screen.getByText("5.0 GB")).toBeInTheDocument();
+    const history = screen
+      .getByRole("heading", { name: "Recent cleanups" })
+      .closest("section") as HTMLElement;
+    expect(within(history).getByText("5.0 GB")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /find duplicates/i }));
     expect(onOpenDuplicates).toHaveBeenCalled();
   });
@@ -398,5 +405,109 @@ describe("CleanupScreen", () => {
     } finally {
       frame.remove();
     }
+  });
+
+  it("never calls an incomplete scan tidy", async () => {
+    reports = {
+      ...empty,
+      projects: report("projects", [], {
+        status: "partial",
+        statusMessage: "3 entries could not be read, so totals may be low.",
+      }),
+    };
+    renderScreen();
+
+    expect(await screen.findByText("Nothing found")).toBeInTheDocument();
+    expect(screen.queryByText("All tidy")).not.toBeInTheDocument();
+    expect(screen.getByText(/Nothing found in what could be read/)).toBeInTheDocument();
+  });
+
+  it("calls a complete empty scan tidy", async () => {
+    reports = empty;
+    renderScreen();
+    expect(await screen.findByText("All tidy")).toBeInTheDocument();
+    expect(screen.getByText("Nothing to clean — your Mac is already tidy.")).toBeInTheDocument();
+  });
+
+  it("lists every folder a row covers and shows list caps", async () => {
+    reports = {
+      ...full,
+      xcode: report(
+        "xcode",
+        [
+          {
+            ...derived,
+            id: "xcode-device-support",
+            label: "Device support symbols",
+            path: "/Users/dev/Library/Developer/Xcode/iOS DeviceSupport",
+            extraPaths: ["/Users/dev/Library/Developer/Xcode/watchOS DeviceSupport"],
+          },
+        ],
+        { note: "Showing the 200 largest of 312 found." },
+      ),
+    };
+    renderScreen();
+
+    expect(await screen.findByText("· 2 folders")).toBeInTheDocument();
+    const row = screen.getByText("Device support symbols").closest(".cleanup-row") as HTMLElement;
+    expect(row.textContent).toContain("watchOS DeviceSupport");
+    expect(screen.getByText("Showing the 200 largest of 312 found.")).toBeInTheDocument();
+  });
+
+  it("splits everything found into ready, in use and held back", async () => {
+    const big: JunkItem = { ...derived, id: "big-cache", label: "Big cache", bytes: 4 * GB };
+    reports = {
+      ...empty,
+      xcode: report("xcode", [big]),
+      packages: report("packages", [], { skips: [busySkip, ignoredSkip] }),
+    };
+    const { container } = renderScreen();
+    await screen.findByText("Big cache");
+
+    // The big number is everything found; the line under it says what can be
+    // cleaned and why the rest is skipped, in plain words.
+    const headline = container.querySelector(".cleanup-hero-number") as HTMLElement;
+    expect(headline).toHaveTextContent("8.0 GB");
+    expect(screen.getByText("4.0 GB ready to clean")).toBeInTheDocument();
+    expect(screen.getByText(/3\.0 GB skipped — a tool is running/)).toBeInTheDocument();
+    expect(screen.getByText("1.0 GB held back for safety")).toBeInTheDocument();
+  });
+
+  it("includes an in-use row by name and names it again before trashing", async () => {
+    mocks.clean.mockResolvedValueOnce({ removedItems: 1, movedBytes: 3 * GB, failed: [] });
+    renderScreen();
+    await screen.findByText("Xcode DerivedData");
+
+    // A skipped row is the same row as a cleanable one: the checkbox is the
+    // override, and it is dead for a structural reason.
+    const neverRow = screen.getByText("Homebrew cache").closest(".cleanup-row") as HTMLElement;
+    expect(within(neverRow).getByRole("checkbox")).toBeDisabled();
+    expect(within(neverRow).getByRole("button", { name: "Allow" })).toBeInTheDocument();
+
+    // An in-use row keeps the normal column order: size, then Show alone.
+    const skipRow = screen.getByText("npm cache").closest(".cleanup-row") as HTMLElement;
+    expect(
+      within(skipRow)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Show"]);
+
+    fireEvent.click(within(skipRow).getByRole("checkbox", { name: "Include npm cache anyway" }));
+    const bar = screen.getByRole("region", { name: "Cleanup selection" });
+    expect(within(bar).getByText("1 item")).toBeInTheDocument();
+    expect(within(bar).getByText("3.0 GB to the Trash")).toBeInTheDocument();
+    expect(within(bar).getByText("1 in use")).toBeInTheDocument();
+
+    fireEvent.click(within(bar).getByRole("button", { name: /move to trash/i }));
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByText(/looked in use when the folder was scanned/i),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText("npm cache — In use")).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: /^move to trash$/i }));
+    await waitFor(() => {
+      expect(mocks.clean).toHaveBeenCalledWith(["npm-cache"], ["npm-cache"]);
+    });
   });
 });

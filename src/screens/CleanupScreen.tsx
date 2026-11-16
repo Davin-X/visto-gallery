@@ -20,7 +20,10 @@ import {
   JUNK_TIER_COPY,
   SKIP_REASON_LABEL,
   allItems,
+  allSkips,
   allSelected,
+  isInUse,
+  junkSplit,
   lastUsedLabel,
   percent,
   pruneSelection,
@@ -30,6 +33,7 @@ import {
   runDateLabel,
   selectedBytes,
   someSelected,
+  sumBytes,
   totalBytes,
   type CategoryScan,
 } from "../engine/utils/junk";
@@ -163,17 +167,40 @@ export default function CleanupScreen({
   useFocusTrap(confirming, confirmRef);
 
   const items = useMemo(() => allItems(scans), [scans]);
+  const skips = useMemo(() => allSkips(scans), [scans]);
+  const split = useMemo(() => junkSplit(items, skips), [items, skips]);
   const scanning = JUNK_CATEGORY_ORDER.some((category) => scans[category].state === "scanning");
   const scannedOnce = JUNK_CATEGORY_ORDER.some(
     (category) => scans[category].state === "done" || scans[category].state === "failed",
   );
   const total = useMemo(() => totalBytes(items), [items]);
-  const regenerableTotal = useMemo(() => totalBytes(items, "regenerable"), [items]);
-  const rebuildableTotal = total - regenerableTotal;
-  const selectedTotal = useMemo(() => selectedBytes(items, selected), [items, selected]);
+  // "In use" is jargon; say the actual reason on the summary line.
+  const inUseSkips = useMemo(() => skips.filter(isInUse), [skips]);
+  const inUseReason = (() => {
+    const running = inUseSkips.some((skip) => skip.reason === "appRunning");
+    const recent = inUseSkips.some((skip) => skip.reason === "recentActivity");
+    if (running && recent) return "a tool is running or just changed";
+    if (running) return "a tool is running";
+    return "it just changed";
+  })();
   const selectedItems = useMemo(
     () => items.filter((item) => selected.has(item.id)),
     [items, selected],
+  );
+  // Skipped rows can be included by name, but only the ones that are merely
+  // in use: a Git-tracked or sensitive row is never selectable.
+  const selectedSkips = useMemo(
+    () => skips.filter((skip) => selected.has(skip.id)),
+    [skips, selected],
+  );
+  const selectedCount = selectedItems.length + selectedSkips.length;
+  const pendingBytes = useMemo(
+    () => selectedBytes(items, selected) + sumBytes(selectedSkips),
+    [items, selected, selectedSkips],
+  );
+  const forcedIds = useMemo(
+    () => selectedSkips.filter(isInUse).map((skip) => skip.id),
+    [selectedSkips],
   );
   const rebuildSelected = selectedItems.filter((item) => item.tier === "rebuildable");
   const regenerable = useMemo(() => regenerableIds(items), [items]);
@@ -214,14 +241,15 @@ export default function CleanupScreen({
     );
   }, [refreshSideData]);
 
-  // Once a scan settles, forget selected ids that are no longer listed.
+  // Once a scan settles, forget selected ids that are no longer listed, and
+  // any skipped row that is no longer merely in use.
   useEffect(() => {
     if (scanning) return;
     setSelected((current) => {
-      const next = pruneSelection(current, items);
+      const next = pruneSelection(current, [...items, ...skips.filter(isInUse)]);
       return next.size === current.size ? current : next;
     });
-  }, [items, scanning]);
+  }, [items, scanning, skips]);
 
   // One read-only scan when the screen first opens; Rescan is explicit after.
   useEffect(() => {
@@ -270,7 +298,9 @@ export default function CleanupScreen({
     setConfirming(false);
     setCleaning(true);
     try {
-      const result = await tauri.junk.clean([...selected]);
+      // `forcedIds` is the explicit "clean it anyway" list; Rust waives only
+      // the busy and recent-activity checks for those ids.
+      const result = await tauri.junk.clean([...selected], forcedIds);
       setLastResult(result);
       setSelected(new Set());
       // Success is reported by the banner on the page; a toast only adds
@@ -286,7 +316,7 @@ export default function CleanupScreen({
     } finally {
       setCleaning(false);
     }
-  }, [scanAll, selected, showErrorNotice, showNotice]);
+  }, [forcedIds, scanAll, selected, showErrorNotice, showNotice]);
 
   const reveal = useCallback(
     (id: string) => {
@@ -338,25 +368,45 @@ export default function CleanupScreen({
     });
   }, [showErrorNotice]);
 
+  // A category that could not be fully read can hide junk, so an empty
+  // result is only "tidy" when every scan was complete (or turned off).
+  const incomplete = JUNK_CATEGORY_ORDER.some((category) => {
+    const scan = scans[category];
+    if (scan.state === "failed") return true;
+    const status = reportOf(scan)?.status;
+    return status === "partial" || status === "unavailable";
+  });
+  const emptyResult = items.length === 0 && scannedOnce && !scanning;
+
   const headingSubtitle = (() => {
     if (!scannedOnce) return "Looking through Xcode, developer caches and your projects…";
-    if (items.length === 0 && !scanning) return "Nothing to clean — your Mac is already tidy.";
+    if (emptyResult) {
+      return incomplete
+        ? "Nothing found in what could be read — some folders could not be scanned."
+        : "Nothing to clean — your Mac is already tidy.";
+    }
     return `${plural(items.length, "item")} across ${
       JUNK_CATEGORY_ORDER.filter((category) => (reportOf(scans[category])?.items.length ?? 0) > 0)
         .length
-    } of 4 areas · everything goes to the Trash first`;
+    } of ${JUNK_CATEGORY_ORDER.length} areas · everything goes to the Trash first`;
   })();
 
   const disk = overview?.disk ?? null;
   const personalFolders = overview?.personalFolders ?? false;
   // The free-space preview follows the selection, or everything when nothing
   // is selected yet.
-  const gainItems = selected.size > 0 ? selectedItems : items;
+  const gainEntries =
+    selectedCount > 0
+      ? [
+          ...selectedItems.map((item) => ({ category: item.category, bytes: item.bytes })),
+          ...selectedSkips.map((skip) => ({ category: skip.category, bytes: skip.bytes })),
+        ]
+      : items.map((item) => ({ category: item.category, bytes: item.bytes }));
   const gainByCategory = JUNK_CATEGORY_ORDER.map((category) => ({
     category,
-    bytes: totalBytes(gainItems.filter((item) => item.category === category)),
+    bytes: sumBytes(gainEntries.filter((entry) => entry.category === category)),
   }));
-  const gain = totalBytes(gainItems);
+  const gain = sumBytes(gainEntries);
   const freeAfter = disk ? Math.min(disk.totalBytes, disk.availableBytes + gain) : 0;
   const library = overview?.library ?? null;
   const history = overview?.history ?? [];
@@ -393,39 +443,51 @@ export default function CleanupScreen({
           <p className="cleanup-hero-label">
             {scanning
               ? "Found so far"
-              : items.length === 0 && scannedOnce
-                ? "All tidy"
-                : "Ready to clean"}
+              : emptyResult
+                ? incomplete
+                  ? "Nothing found"
+                  : "All tidy"
+                : "Junk found"}
           </p>
           <p className="cleanup-hero-number" aria-live="polite">
-            {items.length === 0 && scannedOnce && !scanning ? (
+            {emptyResult && !incomplete ? (
               <span className="cleanup-hero-tidy">
                 <CheckIcon size={26} /> 0 B
               </span>
             ) : (
-              formatBytesSimple(total)
+              formatBytesSimple(split.total)
             )}
           </p>
-          <div className="cleanup-hero-tiers">
-            <span
-              className="cleanup-tier-chip is-regenerable"
-              title={JUNK_TIER_COPY.regenerable.hint}
-            >
-              {formatBytesSimple(regenerableTotal)} regenerates
-            </span>
-            <span
-              className="cleanup-tier-chip is-rebuildable"
-              title={JUNK_TIER_COPY.rebuildable.hint}
-            >
-              {formatBytesSimple(rebuildableTotal)} needs a rebuild
-            </span>
-          </div>
+          {split.total > 0 && (
+            <p className="cleanup-hero-split">
+              <span className="is-ready">
+                <i aria-hidden="true" /> {formatBytesSimple(split.ready)} ready to clean
+              </span>
+              {split.inUse > 0 && (
+                <span
+                  className="is-in-use"
+                  title="A tool is running or the folder changed in the last few minutes, so cleaning it could break something. Choose it on its row to clean it anyway."
+                >
+                  <i aria-hidden="true" /> {formatBytesSimple(split.inUse)} skipped — {inUseReason}
+                </span>
+              )}
+              {split.heldBack > 0 && (
+                <span
+                  className="is-held-back"
+                  title="A safety rule keeps this out: Git-tracked files, a private key, a folder that cannot be read, or Never clean."
+                >
+                  <i aria-hidden="true" /> {formatBytesSimple(split.heldBack)} held back for safety
+                </span>
+              )}
+            </p>
+          )}
           {regenerable.length > 0 && (
             <button
               type="button"
               className="quiet-button cleanup-hero-select"
               onClick={selectRegenerable}
               disabled={busy}
+              title="Only items tagged Regenerates: caches and build output that come back on their own. Nothing that would need a rebuild."
             >
               <SparkleIcon size={14} /> Select everything that regenerates
             </button>
@@ -435,10 +497,12 @@ export default function CleanupScreen({
         {disk && disk.totalBytes > 0 && (
           <div className="cleanup-disk">
             <div className="cleanup-disk-head">
-              <span>Free space</span>
+              <span className="cleanup-disk-label">Free space</span>
               <span className="cleanup-disk-change">
                 <b>{formatBytesSimple(disk.availableBytes)}</b>
-                <span aria-hidden="true"> → </span>
+                <span className="cleanup-disk-arrow" aria-hidden="true">
+                  →
+                </span>
                 <b className="is-after">{formatBytesSimple(freeAfter)}</b>
                 {gain > 0 && disk.availableBytes > 0 && (
                   <em>{growthLabel(gain, disk.availableBytes)}</em>
@@ -474,14 +538,14 @@ export default function CleanupScreen({
               {gainByCategory.map(({ category, bytes }) =>
                 bytes > 0 ? (
                   <li key={category}>
-                    <i className={`is-${category}`} /> {JUNK_CATEGORY_COPY[category].short} +
-                    {formatBytesSimple(bytes)}
+                    <i className={`is-${category}`} /> {JUNK_CATEGORY_COPY[category].short}{" "}
+                    <b>+{formatBytesSimple(bytes)}</b>
                   </li>
                 ) : null,
               )}
             </ul>
             <p className="cleanup-disk-note">
-              {selected.size > 0 ? "With your selection" : "If you clean everything listed"}, once
+              {selectedCount > 0 ? "With your selection" : "If you clean everything listed"}, once
               the Trash is emptied · {formatBytesSimple(disk.totalBytes)} disk, counted like Finder
             </p>
           </div>
@@ -664,6 +728,8 @@ export default function CleanupScreen({
               </p>
             )}
 
+            {report?.note && <p className="cleanup-group-note">{report.note}</p>}
+
             {groupItems.length > 0 && (
               <ul className="cleanup-list">
                 {(expanded.has(category) ? groupItems : groupItems.slice(0, ROW_LIMIT)).map(
@@ -701,7 +767,9 @@ export default function CleanupScreen({
             {skips.length > 0 && (
               <SkippedList
                 skips={skips}
+                selected={selected}
                 onReveal={reveal}
+                onForce={toggle}
                 onAllow={(skip) => void setNeverClean(skip.id, skip.label, false)}
               />
             )}
@@ -803,12 +871,15 @@ export default function CleanupScreen({
         </section>
       </div>
 
-      {selected.size > 0 && (
+      {selectedCount > 0 && (
         <div className="cleanup-selection-bar" role="region" aria-label="Cleanup selection">
           <div className="cleanup-selection-copy">
-            <b>{plural(selected.size, "item")}</b>
-            <span>{formatBytesSimple(selectedTotal)} to the Trash</span>
+            <b>{plural(selectedCount, "item")}</b>
+            <span>{formatBytesSimple(pendingBytes)} to the Trash</span>
             {rebuildSelected.length > 0 && <em>{rebuildSelected.length} need a rebuild</em>}
+            {selectedSkips.length > 0 && (
+              <em className="is-in-use">{selectedSkips.length} in use</em>
+            )}
           </div>
           <div className="cleanup-selection-actions">
             <button
@@ -851,7 +922,7 @@ export default function CleanupScreen({
                 <div>
                   <p className="eyebrow">CLEANUP</p>
                   <h2 id="cleanup-confirm-title">
-                    Move {plural(selected.size, "item")} to the Trash?
+                    Move {plural(selectedCount, "item")} to the Trash?
                   </h2>
                 </div>
                 <button
@@ -864,9 +935,26 @@ export default function CleanupScreen({
                 </button>
               </div>
               <p className="dialog-hint">
-                This moves {formatBytesSimple(selectedTotal)} to the Trash. The disk gets the space
+                This moves {formatBytesSimple(pendingBytes)} to the Trash. The disk gets the space
                 back when you empty it; until then Put Back restores everything.
               </p>
+              {selectedSkips.length > 0 && (
+                <div className="cleanup-confirm-caution is-in-use">
+                  <p>
+                    {plural(selectedSkips.length, "item")} looked in use when the folder was
+                    scanned, and you chose to clean {selectedSkips.length === 1 ? "it" : "them"}{" "}
+                    anyway:
+                  </p>
+                  <ul>
+                    {selectedSkips.slice(0, 4).map((skip) => (
+                      <li key={skip.id}>
+                        {skip.label} — {SKIP_REASON_LABEL[skip.reason]}
+                      </li>
+                    ))}
+                    {selectedSkips.length > 4 && <li>and {selectedSkips.length - 4} more</li>}
+                  </ul>
+                </div>
+              )}
               {rebuildSelected.length > 0 && (
                 <div className="cleanup-confirm-caution">
                   <p>{rebuildSelected.length} of these will need rebuilding or re-downloading:</p>
@@ -931,6 +1019,9 @@ function CleanupRow({
       <div className="cleanup-row-main">
         <div className="cleanup-row-title">
           <span className="cleanup-row-name">{item.label}</span>
+          {item.extraPaths.length > 0 && (
+            <span className="cleanup-row-folders">· {item.extraPaths.length + 1} folders</span>
+          )}
           <span className={`cleanup-tier-chip is-${item.tier}`} title={tier.hint}>
             {tier.label}
           </span>
@@ -942,6 +1033,9 @@ function CleanupRow({
         </div>
         <p className="cleanup-row-detail">{item.detail}</p>
         <MiddleTruncate text={item.path} className="cleanup-row-path" />
+        {item.extraPaths.map((extra) => (
+          <MiddleTruncate key={extra} text={extra} className="cleanup-row-path" />
+        ))}
       </div>
       <div className="cleanup-row-side">
         <span className="cleanup-row-size">{formatBytesSimple(item.bytes)}</span>
@@ -981,14 +1075,19 @@ function CleanupRow({
 
 function SkippedList({
   skips,
+  selected,
   onReveal,
+  onForce,
   onAllow,
 }: {
   skips: JunkSkip[];
+  selected: ReadonlySet<string>;
   onReveal: (id: string) => void;
+  onForce: (id: string) => void;
   onAllow: (skip: JunkSkip) => void;
 }) {
   const reasons = [...new Set(skips.map((skip) => SKIP_REASON_LABEL[skip.reason]))];
+  const anyOverridable = skips.some(isInUse);
   return (
     <details className="cleanup-skips">
       <summary>
@@ -997,36 +1096,79 @@ function SkippedList({
           {plural(skips.length, "item")} skipped
           <span className="cleanup-skips-why"> · {reasons.join(", ")}</span>
         </span>
-        <span className="cleanup-skips-bytes">
-          {formatBytesSimple(skips.reduce((sum, skip) => sum + skip.bytes, 0))} held back
-        </span>
+        {anyOverridable && (
+          <span className="cleanup-skips-hint">Tick a row to include it anyway</span>
+        )}
+        <span className="cleanup-skips-bytes">{formatBytesSimple(sumBytes(skips))} held back</span>
       </summary>
       <ul>
-        {skips.map((skip) => (
-          <li key={skip.id} className="cleanup-skip">
-            <span className={`cleanup-skip-reason is-${skip.reason}`}>
-              {SKIP_REASON_LABEL[skip.reason]}
-            </span>
-            <div className="cleanup-skip-main">
-              <span className="cleanup-row-name">{skip.label}</span>
-              <span className="cleanup-skip-message">{skip.message}</span>
-            </div>
-            <span className="cleanup-skip-size">{formatBytesSimple(skip.bytes)}</span>
-            {skip.reason === "neverClean" ? (
-              <button type="button" className="cleanup-link-button" onClick={() => onAllow(skip)}>
-                Allow
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="cleanup-link-button"
-                onClick={() => onReveal(skip.id)}
+        {skips.map((skip) => {
+          const included = selected.has(skip.id);
+          const overridable = isInUse(skip);
+          // A skipped row is the same row as a cleanable one. The checkbox is
+          // the only "include it anyway" control: ticking it is the override,
+          // and it is dead for a structural reason so one click cannot undo a
+          // safety rule or a Never clean decision.
+          return (
+            <li
+              key={skip.id}
+              className={`cleanup-row cleanup-row-skip${included ? " is-included" : ""}`}
+            >
+              <label
+                className="cleanup-check"
+                title={
+                  overridable
+                    ? "Tick to include it in the next cleanup anyway"
+                    : skip.reason === "neverClean"
+                      ? "Marked Never clean — press Allow first"
+                      : "A safety rule keeps this out of cleaning"
+                }
               >
-                Show
-              </button>
-            )}
-          </li>
-        ))}
+                <input
+                  type="checkbox"
+                  checked={included}
+                  disabled={!overridable}
+                  onChange={() => onForce(skip.id)}
+                  aria-label={
+                    overridable ? `Include ${skip.label} anyway` : `${skip.label} is held back`
+                  }
+                />
+              </label>
+              <div className="cleanup-row-main">
+                <div className="cleanup-row-title">
+                  <span className="cleanup-row-name">{skip.label}</span>
+                  <span className={`cleanup-tier-chip is-${skip.reason}`}>
+                    {SKIP_REASON_LABEL[skip.reason]}
+                  </span>
+                </div>
+                <p className="cleanup-row-detail">{skip.message}</p>
+              </div>
+              <div className="cleanup-row-side">
+                <span className="cleanup-row-size">{formatBytesSimple(skip.bytes)}</span>
+                <span className="cleanup-row-actions">
+                  <button
+                    type="button"
+                    className="cleanup-link-button"
+                    onClick={() => onReveal(skip.id)}
+                    title={`Show ${skip.label} in Finder`}
+                  >
+                    Show
+                  </button>
+                  {skip.reason === "neverClean" && (
+                    <button
+                      type="button"
+                      className="cleanup-link-button"
+                      onClick={() => onAllow(skip)}
+                      title="Allow this to be offered for cleaning again"
+                    >
+                      Allow
+                    </button>
+                  )}
+                </span>
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </details>
   );

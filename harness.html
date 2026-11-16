@@ -449,7 +449,7 @@
         // in the harness and in README captures. One report per category.
         if (cmd === "scan_junk") {
           const daysAgo = (days) => Date.now() - days * 24 * 60 * 60 * 1000;
-          const row = (item) => ({ sharedBytes: 0, ...item });
+          const row = (item) => ({ sharedBytes: 0, extraPaths: [], ...item });
           const byCategory = {
             xcode: {
               items: [
@@ -470,6 +470,7 @@
                   label: "Device support symbols",
                   detail: "Debug symbols Xcode copies again the next time a device connects",
                   path: "/Users/you/Library/Developer/Xcode/iOS DeviceSupport",
+                  extraPaths: ["/Users/you/Library/Developer/Xcode/watchOS DeviceSupport"],
                   bytes: 6549825126,
                   fileCount: 12884,
                   lastUsedAt: daysAgo(21),
@@ -590,6 +591,7 @@
             category,
             status: "complete",
             statusMessage: null,
+            note: null,
             items: entry.items,
             skips: entry.skips,
             totalBytes: entry.items.reduce((sum, item) => sum + item.bytes, 0),
