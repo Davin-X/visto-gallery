@@ -440,10 +440,195 @@
         return [];
       };
 
-      const noop = async (cmd) => {
+      const noop = async (cmd, args) => {
         if (cmd === "get_settings") return {};
         if (cmd === "get_vault_status") {
           return { configured: false, locked: true, itemCount: 0 };
+        }
+        // Cleanup screen: a demo inventory so the screen has something to show
+        // in the harness and in README captures. One report per category.
+        if (cmd === "scan_junk") {
+          const daysAgo = (days) => Date.now() - days * 24 * 60 * 60 * 1000;
+          const row = (item) => ({ sharedBytes: 0, ...item });
+          const byCategory = {
+            xcode: {
+              items: [
+                row({
+                  id: "xcode-derived-data",
+                  category: "xcode",
+                  label: "Xcode DerivedData",
+                  detail: "Build products and indexes — Xcode rebuilds them on the next build",
+                  path: "/Users/you/Library/Developer/Xcode/DerivedData",
+                  bytes: 19756849562,
+                  fileCount: 48213,
+                  lastUsedAt: daysAgo(2),
+                  tier: "regenerable",
+                }),
+                row({
+                  id: "xcode-device-support",
+                  category: "xcode",
+                  label: "Device support symbols",
+                  detail: "Debug symbols Xcode copies again the next time a device connects",
+                  path: "/Users/you/Library/Developer/Xcode/iOS DeviceSupport",
+                  bytes: 6549825126,
+                  fileCount: 12884,
+                  lastUsedAt: daysAgo(21),
+                  tier: "regenerable",
+                }),
+                row({
+                  id: "xcode-archives",
+                  category: "xcode",
+                  label: "Xcode Archives",
+                  detail: "Signed builds and dSYMs — keep them if you symbolicate crash logs",
+                  path: "/Users/you/Library/Developer/Xcode/Archives",
+                  bytes: 1932735283,
+                  fileCount: 42,
+                  lastUsedAt: daysAgo(150),
+                  tier: "rebuildable",
+                }),
+              ],
+              skips: [],
+            },
+            packages: {
+              items: [
+                row({
+                  id: "npm-cache",
+                  category: "packages",
+                  label: "npm cache",
+                  detail: "Package tarballs npm downloads again when it needs them",
+                  path: "/Users/you/.npm/_cacache",
+                  bytes: 3435973837,
+                  fileCount: 91120,
+                  lastUsedAt: daysAgo(6),
+                  tier: "regenerable",
+                }),
+                row({
+                  id: "homebrew-cache",
+                  category: "packages",
+                  label: "Homebrew cache",
+                  detail: "Downloaded bottles and formula sources",
+                  path: "/Users/you/Library/Caches/Homebrew",
+                  bytes: 1288490188,
+                  fileCount: 214,
+                  lastUsedAt: daysAgo(12),
+                  tier: "regenerable",
+                }),
+              ],
+              skips: [
+                {
+                  id: "cargo-cache",
+                  category: "packages",
+                  label: "Cargo registry cache",
+                  path: "/Users/you/.cargo/registry/cache",
+                  bytes: 966367641,
+                  reason: "appRunning",
+                  message: "cargo is running",
+                },
+              ],
+            },
+            projects: {
+              items: [
+                row({
+                  id: "projects:/Users/you/Code/atlas/node_modules",
+                  category: "projects",
+                  label: "atlas/node_modules",
+                  detail: "Dependencies in ~/Code/atlas — reinstall with npm, yarn or pnpm install",
+                  path: "/Users/you/Code/atlas/node_modules",
+                  bytes: 851443712,
+                  sharedBytes: 214748364,
+                  fileCount: 21406,
+                  lastUsedAt: daysAgo(120),
+                  tier: "rebuildable",
+                }),
+                row({
+                  id: "projects:/Users/you/Code/engine/target",
+                  category: "projects",
+                  label: "engine/target",
+                  detail: "Rust build output in ~/Code/engine — cargo build recreates it",
+                  path: "/Users/you/Code/engine/target",
+                  bytes: 4294967296,
+                  fileCount: 18877,
+                  lastUsedAt: daysAgo(34),
+                  tier: "rebuildable",
+                }),
+              ],
+              skips: [
+                {
+                  id: "projects:/Users/you/Code/site/node_modules",
+                  category: "projects",
+                  label: "site/node_modules",
+                  path: "/Users/you/Code/site/node_modules",
+                  bytes: 412316860,
+                  reason: "recentActivity",
+                  message: "Changed in the last few minutes — probably in use",
+                },
+              ],
+            },
+            downloads: {
+              items: [
+                row({
+                  id: "downloads:/Users/you/Downloads/Xcode_15.4.xip",
+                  category: "downloads",
+                  label: "Xcode_15.4.xip",
+                  detail: "Installer downloaded 210 days ago — download it again if you need it",
+                  path: "/Users/you/Downloads/Xcode_15.4.xip",
+                  bytes: 2576980378,
+                  fileCount: 1,
+                  lastUsedAt: daysAgo(210),
+                  tier: "rebuildable",
+                }),
+              ],
+              skips: [],
+            },
+          };
+          const category = args?.category ?? "xcode";
+          const entry = byCategory[category] ?? { items: [], skips: [] };
+          await new Promise((resolve) =>
+            setTimeout(resolve, { xcode: 450, packages: 700, projects: 1300, downloads: 250 }[category] ?? 300),
+          );
+          return {
+            category,
+            status: "complete",
+            statusMessage: null,
+            items: entry.items,
+            skips: entry.skips,
+            totalBytes: entry.items.reduce((sum, item) => sum + item.bytes, 0),
+            scannedAt: Date.now(),
+          };
+        }
+        if (cmd === "get_cleanup_overview") {
+          const GB = 1024 * 1024 * 1024;
+          return {
+            disk: { totalBytes: 994 * GB, availableBytes: 118 * GB },
+            personalFolders: true,
+            library: {
+              totalItems: 18342,
+              totalBytes: 212 * GB,
+              photoBytes: 74 * GB,
+              videoBytes: 121 * GB,
+              rawBytes: 17 * GB,
+              largeVideoCount: 23,
+              largeVideoBytes: 58 * GB,
+            },
+            history: [
+              {
+                finishedAt: Date.now() - 3 * 24 * 60 * 60 * 1000,
+                removedItems: 6,
+                movedBytes: 14 * GB,
+                failedItems: 0,
+              },
+            ],
+          };
+        }
+        if (cmd === "list_junk_ignored") return [];
+        if (cmd === "clean_junk") return { removedItems: 0, movedBytes: 0, failed: [] };
+        if (
+          cmd === "reveal_junk" ||
+          cmd === "set_junk_ignored" ||
+          cmd === "set_cleanup_personal_folders" ||
+          cmd === "open_trash"
+        ) {
+          return null;
         }
         return [];
       };
@@ -470,6 +655,22 @@
           if (command === "plugin:event|unlisten") {
             eventHandlers.delete(args?.event);
             return null;
+          }
+          // The cleanup screen uses the same demo inventory in both modes; the
+          // benchmark fixtures do not model system junk.
+          if (
+            [
+              "scan_junk",
+              "clean_junk",
+              "reveal_junk",
+              "set_junk_ignored",
+              "list_junk_ignored",
+              "get_cleanup_overview",
+              "set_cleanup_personal_folders",
+              "open_trash",
+            ].includes(command)
+          ) {
+            return noop(command, args);
           }
           return isBenchmark ? syntheticInvoke(command, args) : noop(command, args);
         },

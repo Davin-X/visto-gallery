@@ -17,15 +17,17 @@ mod tests {
     use crate::commands::{
         AccentColor, AlbumOverview, AlbumsView, AppSettings, Appearance, AudioTrackInfo,
         BackupInfo, BatchExportError, BatchExportItem, BatchExportProgress, BatchExportRequest,
-        BatchExportResult, CacheKind, ClearCacheResult, CropRect, CropState, DefaultLayout,
-        DisplayPreview, DuplicateGroup, EditPreset, EditRecipe, EditValues, ExifData, ExportResult,
-        ExternalPlayer, HiddenLockStatus, LibraryFilterDTO, LibraryFolder, LibraryItemsPage,
+        BatchExportResult, CacheKind, CleanupOverview, CleanupRun, ClearCacheResult, CropRect,
+        CropState, DefaultLayout, DiskSpace, DisplayPreview, DuplicateGroup, EditPreset,
+        EditRecipe, EditValues, ExifData, ExportResult, ExternalPlayer, HiddenLockStatus,
+        JunkCategory, JunkCategoryReport, JunkCleanResult, JunkFailure, JunkIgnoredItem, JunkItem,
+        JunkSkip, JunkTier, LibraryFilterDTO, LibraryFolder, LibraryFootprint, LibraryItemsPage,
         LibraryStats, MediaProbe, PartialSettings, PlaybackConversionProgress, PlaybackStrategy,
         PreparedPlayback, RenderRequest, RestoreResult, RootPathMappingPreview,
-        RootPathMappingResult, ScanResult, SmartAlbum, SmartAlbumFilter, StartupView, StorageUsage,
-        SubtitleTrackInfo, ThumbnailRequest, ThumbnailResponse, ThumbnailSize, TimelineMonth,
-        TrashError, TrashRestoreFailure, TrashRestoreItem, TrashRestoreResult, TrashResult,
-        UpdateCheck, ViewerZoomBehavior,
+        RootPathMappingResult, ScanResult, ScanStatus, SkipReason, SmartAlbum, SmartAlbumFilter,
+        StartupView, StorageUsage, SubtitleTrackInfo, ThumbnailRequest, ThumbnailResponse,
+        ThumbnailSize, TimelineMonth, TrashError, TrashRestoreFailure, TrashRestoreItem,
+        TrashRestoreResult, TrashResult, UpdateCheck, ViewerZoomBehavior,
     };
     use crate::errors::{CommandError, ErrorCode};
     use crate::media_kind::MediaKind;
@@ -118,6 +120,20 @@ mod tests {
             StorageUsage,
             CacheKind,
             ClearCacheResult,
+            JunkCategory,
+            JunkTier,
+            ScanStatus,
+            SkipReason,
+            JunkItem,
+            JunkSkip,
+            JunkCategoryReport,
+            JunkFailure,
+            JunkCleanResult,
+            JunkIgnoredItem,
+            DiskSpace,
+            LibraryFootprint,
+            CleanupRun,
+            CleanupOverview,
         );
 
         let directory = export_dir();

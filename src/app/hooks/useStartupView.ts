@@ -14,6 +14,7 @@ const RESTORABLE_SCREENS: readonly Screen[] = [
   "Library",
   "Albums",
   "Duplicates",
+  "Cleanup",
   "Batch",
   "Settings",
 ];

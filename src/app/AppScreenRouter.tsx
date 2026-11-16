@@ -12,6 +12,7 @@ import VideoPlayerScreen from "../screens/VideoPlayerScreen";
 import BatchScreen from "../screens/BatchScreen";
 import AlbumsScreen from "../screens/AlbumsScreen";
 import DuplicatesScreen from "../screens/DuplicatesScreen";
+import CleanupScreen from "../screens/CleanupScreen";
 import { SettingsScreen } from "../design/components/SettingsScreen";
 import type { LibraryFolder, LibraryStats, ErrorCode, SmartAlbum } from "../engine/types/commands";
 import type { LibraryState } from "../engine/stores/useLibraryStore";
@@ -578,6 +579,14 @@ export function AppScreenRouter({
             await library.scanDuplicates();
           }}
           onOpenItem={(id: string) => openViewer(id, "Duplicates")}
+        />
+      )}
+
+      {screen === "Cleanup" && (
+        <CleanupScreen
+          showNotice={showNotice}
+          showErrorNotice={showErrorNotice}
+          onOpenDuplicates={() => setScreen("Duplicates")}
         />
       )}
 

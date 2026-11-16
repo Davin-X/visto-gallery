@@ -196,6 +196,14 @@ pub fn run() {
             // Storage
             get_storage_usage,
             clear_cache,
+            scan_junk,
+            clean_junk,
+            reveal_junk,
+            open_trash,
+            set_junk_ignored,
+            list_junk_ignored,
+            get_cleanup_overview,
+            set_cleanup_personal_folders,
             // Library
             scan_library,
             pick_source_folders,
