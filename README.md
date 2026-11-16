@@ -48,6 +48,7 @@ VistoGallery points at the folders you already have. It never copies, moves or u
 - **Organize.** Albums, Smart Albums that update themselves, tags, favorites, ratings, color labels and hidden items.
 - **Edit without fear.** Exposure, contrast, highlights, shadows, warmth, saturation, crop, rotate and flip. Edits are drafts until you save, and the original is kept so you can restore it.
 - **Clean up duplicates.** SHA-256 matching finds exact copies, then a side-by-side compare shows what differs before anything moves to the Trash.
+- **Clean up your Mac.** Find Xcode and developer caches (npm, pnpm, Cargo, Homebrew and more), build folders in your projects (`node_modules`, `target`, `.venv` and others) and, if you allow it, old installers in Downloads. Anything in use, tracked by Git or marked Never clean is skipped with the reason; the rest moves to the Trash so Put Back works, after a fresh check in Rust. A library folder is never touched.
 - **Export in batches.** Convert to JPEG, PNG or WebP, or keep the original format, with naming patterns, resizing and metadata stripping.
 - **Feels like a Mac app.** Finder tags, Reveal in Finder, Trash with Put Back, light, dark and system themes, and accent colors.
 - **Portable catalog.** Back up and restore the catalog, or point it at a library that moved to a new drive.

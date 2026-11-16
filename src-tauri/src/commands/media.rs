@@ -291,6 +291,13 @@ impl TrashSink for OsTrash {
     }
 }
 
+/// Move paths that are not catalog items to the Trash. Uses the same sink as
+/// item deletion, so Finder's Put Back keeps working for system and developer
+/// junk too.
+pub(crate) fn trash_external_paths(paths: &[String]) -> Result<(), CommandError> {
+    OsTrash::new().delete_all(paths)
+}
+
 /// Move validated targets to Trash, then remove their catalog rows (and the
 /// journaled edit originals that only existed for those rows).
 ///

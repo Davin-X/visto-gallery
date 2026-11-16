@@ -22,6 +22,7 @@
 @import "./styles/edit.css"; /* Edit screen */
 @import "./styles/page-widths.css"; /* Batch export layout and per-screen content widths */
 @import "./styles/duplicates.css"; /* Duplicate finder and compare overlay */
+@import "./styles/cleanup.css"; /* Cleanup screen for system and developer junk */
 @import "./styles/video-player.css"; /* Video player screen and Now Playing chip */
 @import "./styles/fallbacks.css"; /* Viewport fallbacks for engines without container queries */
 @import "./styles/smart-albums.css"; /* Smart Albums overview and filter popover extras */

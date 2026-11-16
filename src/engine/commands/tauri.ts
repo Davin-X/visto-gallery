@@ -42,6 +42,11 @@ import type {
   StorageUsage,
   CacheKind,
   ClearCacheResult,
+  JunkCategory,
+  JunkCategoryReport,
+  JunkCleanResult,
+  JunkIgnoredItem,
+  CleanupOverview,
   TimelineMonth,
   HiddenLockStatus,
   DisplayPreview,
@@ -295,6 +300,34 @@ export const tauri = {
 
     /** Delete a cache's files; videos that may still be playing are kept. */
     clear: (kind: CacheKind): Promise<ClearCacheResult> => invoke("clear_cache", { kind }),
+  },
+
+  junk: {
+    /** Read-only inventory of one category; the screen scans all in parallel. */
+    scan: (category: JunkCategory): Promise<JunkCategoryReport> =>
+      invoke("scan_junk", { category }),
+
+    /** Move junk ids to the Trash; every id is re-validated in Rust. */
+    clean: (items: string[]): Promise<JunkCleanResult> => invoke("clean_junk", { items }),
+
+    /** Show one candidate in Finder (same validation as a cleanup). */
+    reveal: (id: string): Promise<void> => invoke("reveal_junk", { id }),
+
+    /** Add an id to, or remove it from, the Never clean list. */
+    setIgnored: (id: string, label: string, ignored: boolean): Promise<void> =>
+      invoke("set_junk_ignored", { id, label, ignored }),
+
+    listIgnored: (): Promise<JunkIgnoredItem[]> => invoke("list_junk_ignored"),
+
+    /** Disk space, library footprint and recent cleanup runs. */
+    overview: (): Promise<CleanupOverview> => invoke("get_cleanup_overview"),
+
+    /** Turn scanning of Documents, Desktop and Downloads on or off. */
+    setPersonalFolders: (enabled: boolean): Promise<void> =>
+      invoke("set_cleanup_personal_folders", { enabled }),
+
+    /** Open the Trash in Finder so moved items can be emptied. */
+    openTrash: (): Promise<void> => invoke("open_trash"),
   },
 
   settings: {

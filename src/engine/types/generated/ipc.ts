@@ -403,3 +403,56 @@ export type ClearCacheResult = { removedFiles: number, freedBytes: number,
  */
 keptFiles: number, };
 
+export type JunkCategory = "xcode" | "packages" | "projects" | "downloads";
+
+export type JunkTier = "regenerable" | "rebuildable";
+
+export type ScanStatus = "complete" | "partial" | "unavailable" | "off";
+
+export type SkipReason = "appRunning" | "recentActivity" | "unreadable" | "gitTracked" | "sensitive" | "neverClean";
+
+export type JunkItem = { id: string, category: JunkCategory, label: string, detail: string, path: string, 
+/**
+ * Allocated bytes that moving this item to the Trash (and emptying it)
+ * gives back. Hard links shared with files outside the item are not
+ * included: removing one link frees nothing.
+ */
+bytes: number, 
+/**
+ * Allocated bytes of files hard-linked from outside the item (a pnpm
+ * `node_modules` linking into the store, for example).
+ */
+sharedBytes: number, fileCount: number, 
+/**
+ * Most recent modification inside the item, in milliseconds since the
+ * epoch — how long ago the tool last actually used it.
+ */
+lastUsedAt: number | null, tier: JunkTier, };
+
+export type JunkSkip = { id: string, category: JunkCategory, label: string, path: string, bytes: number, reason: SkipReason, message: string, };
+
+export type JunkCategoryReport = { category: JunkCategory, status: ScanStatus, statusMessage: string | null, items: Array<JunkItem>, skips: Array<JunkSkip>, totalBytes: number, scannedAt: number, };
+
+export type JunkFailure = { id: string, message: string, };
+
+export type JunkCleanResult = { removedItems: number, 
+/**
+ * Bytes moved to the Trash. The disk only gains them back when the
+ * Trash is emptied.
+ */
+movedBytes: number, failed: Array<JunkFailure>, };
+
+export type JunkIgnoredItem = { id: string, label: string, createdAt: number, };
+
+export type DiskSpace = { totalBytes: number, availableBytes: number, };
+
+export type LibraryFootprint = { totalItems: number, totalBytes: number, photoBytes: number, videoBytes: number, rawBytes: number, largeVideoCount: number, largeVideoBytes: number, };
+
+export type CleanupRun = { finishedAt: number, removedItems: number, movedBytes: number, failedItems: number, };
+
+export type CleanupOverview = { disk: DiskSpace | null, 
+/**
+ * Whether Documents, Desktop and Downloads are scanned.
+ */
+personalFolders: boolean, library: LibraryFootprint, history: Array<CleanupRun>, };
+

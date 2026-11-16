@@ -9,6 +9,7 @@ mod edit_recipes;
 mod finder_tags;
 pub(crate) mod hidden_lock;
 mod import_pipeline;
+mod junk;
 mod library;
 mod media;
 mod playback;
@@ -50,6 +51,7 @@ pub(crate) use import_pipeline::{
 };
 #[allow(unused_imports)]
 pub(crate) use import_pipeline::{inspect_media_file, kind_for_ext};
+pub use junk::*;
 pub use library::*;
 pub use media::*;
 use notify::Watcher;

@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **Cleanup screen for system and developer junk**: a new **Cleanup** row in the sidebar scans Xcode (DerivedData, device support, SwiftUI previews, simulator caches, Archives), developer caches (npm, Yarn, pnpm, Bun, node-gyp, Playwright, CocoaPods, SwiftPM, Cargo, Go, pip, uv, Gradle, Maven, Homebrew), project build folders recognised by their manifest (`node_modules`, `target`, `.next`, `.venv`, `Pods`, `.build` and more), and `.dmg`/`.pkg`/`.iso`/`.xip` installers in Downloads older than 30 days. Categories scan in parallel and fill in live. Sizes are allocated bytes, with hard links shared elsewhere counted separately. Rows are tagged **Regenerates** or **Needs rebuild**. Anything whose tool is running, that changed in the last few minutes, that Git tracks, that holds a nested repository or private key, or that you marked **Never clean** is shown as skipped with the reason. Unreadable folders mark a category partial instead of looking empty. Everything moves to the Trash (Put Back works), every id is re-validated in Rust before trashing, library folders are refused, and a recent-cleanups history, a free-space preview ("118 GB → 156 GB", counted like Finder, following your selection) and the photo-library footprint sit alongside. Documents, Desktop and Downloads are only scanned once you turn that on, so opening the screen never triggers macOS folder-access prompts, and the project walk never descends into a library folder.
+
 ## [0.5.0] - 2026-11-15
 
 ### Added

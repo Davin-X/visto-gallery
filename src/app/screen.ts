@@ -4,6 +4,7 @@ export type Screen =
   | "Viewer"
   | "Video"
   | "Duplicates"
+  | "Cleanup"
   | "Edit"
   | "Batch"
   | "Hidden"
