@@ -2,6 +2,7 @@ import type {
   JunkCategory,
   JunkCategoryReport,
   JunkItem,
+  JunkSkip,
   JunkTier,
   SkipReason,
 } from "../types/commands";
@@ -79,6 +80,44 @@ export function allItems(scans: Partial<Record<JunkCategory, CategoryScan>>): Ju
   return JUNK_CATEGORY_ORDER.flatMap((category) => reportOf(scans[category])?.items ?? []);
 }
 
+/** Every candidate the scan held back, in category order. */
+export function allSkips(scans: Partial<Record<JunkCategory, CategoryScan>>): JunkSkip[] {
+  return JUNK_CATEGORY_ORDER.flatMap((category) => reportOf(scans[category])?.skips ?? []);
+}
+
+/**
+ * The only skip reasons the user may override: the tool is running, or the
+ * folder changed minutes ago. Structural reasons (Git, keys, no access,
+ * Never clean) are never overridable, in the UI or in Rust.
+ */
+export function isInUse(skip: JunkSkip): boolean {
+  return skip.reason === "appRunning" || skip.reason === "recentActivity";
+}
+
+/** Bytes of any list of sized entries — items or skips. */
+export function sumBytes(entries: readonly { bytes: number }[]): number {
+  return entries.reduce((sum, entry) => sum + entry.bytes, 0);
+}
+
+export type JunkSplit = {
+  /** Offered rows: cleanable right now. */
+  ready: number;
+  /** Held back because the tool is running or the folder just changed. */
+  inUse: number;
+  /** Held back for a reason the user cannot override. */
+  heldBack: number;
+  /** Everything found, whether offered or not. */
+  total: number;
+};
+
+/** Split what the scan found into ready, in use and otherwise held back. */
+export function junkSplit(items: readonly JunkItem[], skips: readonly JunkSkip[]): JunkSplit {
+  const ready = sumBytes(items);
+  const inUse = sumBytes(skips.filter(isInUse));
+  const heldBack = sumBytes(skips.filter((skip) => !isInUse(skip)));
+  return { ready, inUse, heldBack, total: ready + inUse + heldBack };
+}
+
 /** Bytes represented by the selected ids (unknown ids count as zero). */
 export function selectedBytes(items: JunkItem[], selected: ReadonlySet<string>): number {
   return items.reduce((sum, item) => (selected.has(item.id) ? sum + item.bytes : sum), 0);
@@ -105,8 +144,11 @@ export function someSelected(items: JunkItem[], selected: ReadonlySet<string>): 
 }
 
 /** Drop selected ids that are no longer in the list (after a rescan). */
-export function pruneSelection(selected: ReadonlySet<string>, items: JunkItem[]): Set<string> {
-  const known = new Set(items.map((item) => item.id));
+export function pruneSelection(
+  selected: ReadonlySet<string>,
+  entries: readonly { id: string }[],
+): Set<string> {
+  const known = new Set(entries.map((entry) => entry.id));
   return new Set([...selected].filter((id) => known.has(id)));
 }
 

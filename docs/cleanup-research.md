@@ -323,6 +323,15 @@ Also shipped, beyond the plan:
 - The project walk never descends into a registered library folder.
 - The overview shows Finder-style free space (important-usage capacity) before
   and after cleaning, the photo library's footprint, and recent runs.
+- The hero splits what was found into **ready**, **in use** and **held back**,
+  on one line under the number, so the headline cannot be read as "all the junk
+  on this Mac". It is computed from the scan the screen already has; it costs no
+  extra IPC.
+- A row skipped as *in use* can be included by name: ticking its checkbox
+  sends the id to `clean_junk` in a separate `force` list, which waives only the
+  busy/recent-activity checks. Allowlist, library roots, Git, keys, unreadable
+  folders and Never clean still refuse, so the checkbox is disabled on those
+  rows. A rescan drops any included row that is no longer merely in use.
 
 ---
 
@@ -480,6 +489,9 @@ Derived from the tools above, in priority order:
    the user does elsewhere.
 7. **Rules are data; code is the engine.**
 8. **Every destructive bypass carries a written reason.**
+9. **An override is explicit, narrow and re-checked.** Ticking a skipped row
+   includes one named row; it opens only the in-use gate (busy tool, recent activity),
+   never the structural ones, and the confirm dialog names every row it adds.
 
 ## Sources
 

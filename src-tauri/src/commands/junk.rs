@@ -1146,6 +1146,7 @@ fn assess_artifact(
     path: &Path,
     artifact: &Artifact,
     root: &Path,
+    allow_in_use: bool,
 ) -> Result<Stats, (SkipReason, String, Stats)> {
     let id = format!("projects:{}", path.to_string_lossy());
     if env.ignored.contains(&id) {
@@ -1177,21 +1178,27 @@ fn assess_artifact(
             part,
         ));
     }
-    if let Some(newest) = part.newest {
-        if SystemTime::now()
-            .duration_since(newest)
-            .map(|elapsed| elapsed < RECENT_ACTIVITY)
-            .unwrap_or(true)
-        {
-            return Err((
-                SkipReason::RecentActivity,
-                "Changed in the last few minutes — probably in use".to_string(),
-                part,
-            ));
+    // "In use" is the one class the user can override per item, and only
+    // explicitly: a folder that changed minutes ago, or one whose tool is
+    // running. Everything below still runs, so a Git-tracked or sensitive
+    // folder stays refused even when the user forces the row.
+    if !allow_in_use {
+        if let Some(newest) = part.newest {
+            if SystemTime::now()
+                .duration_since(newest)
+                .map(|elapsed| elapsed < RECENT_ACTIVITY)
+                .unwrap_or(true)
+            {
+                return Err((
+                    SkipReason::RecentActivity,
+                    "Changed in the last few minutes — probably in use".to_string(),
+                    part,
+                ));
+            }
         }
-    }
-    if let Some(reason) = busy_reason(env, artifact.busy_if) {
-        return Err((SkipReason::AppRunning, reason, part));
+        if let Some(reason) = busy_reason(env, artifact.busy_if) {
+            return Err((SkipReason::AppRunning, reason, part));
+        }
     }
     let project = path.parent().unwrap_or(path);
     if let Some(repo) = repository_root(project, root) {
@@ -1445,7 +1452,7 @@ fn scan_projects(env: &ScanEnv, out: &mut Collector) {
                     .map(|name| name.to_string_lossy().into_owned())
                     .unwrap_or_else(|| "project".to_string());
                 let label = format!("{project}/{name}");
-                match assess_artifact(env, path, artifact, &root) {
+                match assess_artifact(env, path, artifact, &root, false) {
                     Ok(part) => {
                         out.unreadable += part.unreadable;
                         out.timed_out |= part.timed_out;
@@ -1623,9 +1630,18 @@ struct CleanPlanEntry {
 
 /// Validate every selected id and turn it into the real paths to trash.
 ///
+/// `forced` holds the ids the user explicitly chose to clean even though the
+/// scan reported them as in use. It only unlocks the busy and recent-activity
+/// checks; structural refusals (allowlist, library roots, Git, keys, Never
+/// clean) stay in force.
+///
 /// Invalid ids become failures instead of aborting the run, so one stale row
 /// cannot block the rest of the cleanup.
-fn plan_clean(env: &ScanEnv, ids: &[String]) -> (Vec<CleanPlanEntry>, Vec<JunkFailure>) {
+fn plan_clean(
+    env: &ScanEnv,
+    ids: &[String],
+    forced: &HashSet<String>,
+) -> (Vec<CleanPlanEntry>, Vec<JunkFailure>) {
     let mut plan = Vec::new();
     let mut failed = Vec::new();
     let mut seen = HashSet::new();
@@ -1633,7 +1649,7 @@ fn plan_clean(env: &ScanEnv, ids: &[String]) -> (Vec<CleanPlanEntry>, Vec<JunkFa
         if !seen.insert(id) {
             continue;
         }
-        match resolve_selection(env, id, true) {
+        match resolve_selection(env, id, true, forced.contains(id)) {
             Ok(entry) => plan.push(entry),
             Err(message) => failed.push(JunkFailure {
                 id: id.clone(),
@@ -1650,8 +1666,15 @@ const UNVERIFIED: &str =
 
 /// Re-validate one id. With `strict`, every pre-flight check applies (busy
 /// tools, Never clean, Git, recent activity); without it only the structural
-/// checks do, which is what revealing an item in Finder needs.
-fn resolve_selection(env: &ScanEnv, id: &str, strict: bool) -> Result<CleanPlanEntry, String> {
+/// checks do, which is what revealing an item in Finder needs. With
+/// `allow_in_use`, the two "in use" refusals are waived because the user
+/// picked the item out by name.
+fn resolve_selection(
+    env: &ScanEnv,
+    id: &str,
+    strict: bool,
+    allow_in_use: bool,
+) -> Result<CleanPlanEntry, String> {
     if strict && env.ignored.contains(id) {
         return Err("You marked this Never clean.".to_string());
     }
@@ -1662,7 +1685,7 @@ fn resolve_selection(env: &ScanEnv, id: &str, strict: bool) -> Result<CleanPlanE
                 return Err(LIBRARY_REFUSAL.to_string());
             }
         }
-        if strict {
+        if strict && !allow_in_use {
             if let Some(reason) = busy_reason(env, def.busy_if) {
                 return Err(format!("{reason} — quit it and try again."));
             }
@@ -1716,7 +1739,7 @@ fn resolve_selection(env: &ScanEnv, id: &str, strict: bool) -> Result<CleanPlanE
                 );
             };
             let part = if strict {
-                let part = assess_artifact(env, &path, artifact, &root)
+                let part = assess_artifact(env, &path, artifact, &root, allow_in_use)
                     .map_err(|(_, message, _)| format!("{message}."))?;
                 // A walk cut short may have missed a nested repository or a
                 // key; that item is refused, never trashed unverified.
@@ -1889,7 +1912,8 @@ pub async fn reveal_junk(
 ) -> Result<(), CommandError> {
     let owned = OwnedEnv::load(&catalog).await?;
     tokio::task::spawn_blocking(move || {
-        let entry = resolve_selection(&owned.env(None), &id, false).map_err(CommandError::path)?;
+        let entry =
+            resolve_selection(&owned.env(None), &id, false, false).map_err(CommandError::path)?;
         let target = entry
             .paths
             .first()
@@ -1994,10 +2018,15 @@ where
 
 /// Move the selected junk to the Trash. Every id is re-validated first, and
 /// the run is recorded in the cleanup history.
+///
+/// `force` lists the ids the user chose to clean despite their being in use.
+/// It cannot widen what may be cleaned: the allowlist, library roots, Git,
+/// private keys and the Never clean list are still checked.
 #[tauri::command]
 pub async fn clean_junk(
     catalog: State<'_, crate::Catalog>,
     items: Vec<String>,
+    force: Vec<String>,
 ) -> Result<JunkCleanResult, CommandError> {
     if items.is_empty() {
         return Err(CommandError::invalid(
@@ -2014,7 +2043,8 @@ pub async fn clean_junk(
     let result = tokio::task::spawn_blocking(move || {
         owned.probe();
         let env = owned.env(Some(Instant::now() + CLEAN_BUDGET));
-        let (plan, mut failed) = plan_clean(&env, &items);
+        let forced: HashSet<String> = force.into_iter().collect();
+        let (plan, mut failed) = plan_clean(&env, &items, &forced);
         let (moved, refused) = trash_entries(plan, super::media::trash_external_paths);
         failed.extend(refused);
         JunkCleanResult {
@@ -2420,12 +2450,34 @@ mod tests {
         );
 
         let env = fixture.env(&home);
-        let (plan, failed) = plan_clean(&env, &["xcode-derived-data".to_string()]);
+        let (plan, failed) = plan_clean(&env, &["xcode-derived-data".to_string()], &HashSet::new());
         assert!(plan.is_empty());
         assert!(failed[0].message.contains("xcodebuild is running"));
 
         let packages = scan(&env, JunkCategory::Packages);
         assert_eq!(packages.items.len(), 1, "npm is not busy");
+    }
+
+    #[test]
+    fn a_running_tools_rule_can_be_forced_by_id() {
+        let home = TempHome::new("force-busy");
+        home.write(".cargo/registry/cache/serde-1.0.0.crate", 40);
+        let mut fixture = Fixture::new();
+        fixture.running.insert("cargo".to_string());
+        let env = fixture.env(&home);
+        let id = "cargo-cache".to_string();
+
+        let (plan, failed) = plan_clean(&env, std::slice::from_ref(&id), &HashSet::new());
+        assert!(plan.is_empty());
+        assert!(failed[0].message.contains("cargo is running"));
+
+        // Only the id named in the request is waived; the ScanEnv itself is
+        // unchanged, so the next selection is checked as usual.
+        let forced: HashSet<String> = [id.clone()].into_iter().collect();
+        let (plan, failed) = plan_clean(&env, std::slice::from_ref(&id), &forced);
+        assert!(failed.is_empty(), "{:?}", failed);
+        assert_eq!(plan.len(), 1);
+        assert_eq!(plan[0].id, id);
     }
 
     #[test]
@@ -2452,11 +2504,11 @@ mod tests {
         assert!(report.items.is_empty());
         assert_eq!(report.skips[0].reason, SkipReason::NeverClean);
 
-        let (plan, failed) = plan_clean(&env, &["homebrew-cache".to_string()]);
+        let (plan, failed) = plan_clean(&env, &["homebrew-cache".to_string()], &HashSet::new());
         assert!(plan.is_empty());
         assert!(failed[0].message.contains("Never clean"));
         assert!(
-            resolve_selection(&env, "homebrew-cache", false).is_ok(),
+            resolve_selection(&env, "homebrew-cache", false, false).is_ok(),
             "reveal still works"
         );
     }
@@ -2549,6 +2601,59 @@ mod tests {
         );
         assert_eq!(reason("keys/node_modules"), Some(SkipReason::Sensitive));
         assert_eq!(reason("nested/node_modules"), Some(SkipReason::Sensitive));
+    }
+
+    #[test]
+    fn an_in_use_artifact_can_be_forced_but_never_a_sensitive_or_ignored_one() {
+        let home = TempHome::new("force-artifact");
+        // Changed minutes ago: skippable as Active, and the user may override.
+        home.write("Projects/live/package.json", 2);
+        home.write("Projects/live/node_modules/.vite/deps", 20);
+        // A nested repository: refused whatever the user asks for.
+        home.write("Projects/nested/package.json", 2);
+        let nested = home.write("Projects/nested/node_modules/dep/.git/HEAD", 20);
+        age(&nested, OLD);
+        // Never clean: also refused when forced.
+        home.write("Projects/kept/package.json", 2);
+        let kept = home.write("Projects/kept/node_modules/pkg/index.js", 20);
+        age(&kept, OLD);
+        let mut fixture = Fixture::new();
+
+        let id =
+            |project: &str| format!("projects:{}", home.path().join(project).to_string_lossy());
+        let live = id("Projects/live/node_modules");
+        let nested = id("Projects/nested/node_modules");
+        let kept = id("Projects/kept/node_modules");
+        fixture.ignored.insert(kept.clone());
+        let env = fixture.env(&home);
+
+        let report = scan(&env, JunkCategory::Projects);
+        assert!(report.items.is_empty(), "{:?}", report.items);
+
+        // Without the override the in-use folder is refused.
+        let (plan, failed) = plan_clean(&env, std::slice::from_ref(&live), &HashSet::new());
+        assert!(plan.is_empty());
+        assert!(failed[0]
+            .message
+            .contains("Changed in the last few minutes"));
+
+        // With it, the same id resolves: the user named it.
+        let forced: HashSet<String> = [live.clone()].into_iter().collect();
+        let (plan, failed) = plan_clean(&env, std::slice::from_ref(&live), &forced);
+        assert!(failed.is_empty(), "{:?}", failed);
+        assert_eq!(plan.len(), 1);
+
+        // Forcing a sensitive folder changes nothing.
+        let forced: HashSet<String> = [nested.clone()].into_iter().collect();
+        let (plan, failed) = plan_clean(&env, std::slice::from_ref(&nested), &forced);
+        assert!(plan.is_empty());
+        assert!(failed[0].message.contains("Contains a Git repository"));
+
+        // Nor a folder the user marked Never clean.
+        let forced: HashSet<String> = [kept.clone()].into_iter().collect();
+        let (plan, failed) = plan_clean(&env, std::slice::from_ref(&kept), &forced);
+        assert!(plan.is_empty());
+        assert!(failed[0].message.contains("Never clean"));
     }
 
     #[test]
@@ -2691,7 +2796,7 @@ mod tests {
             "unknown:whatever".to_string(),
             "npm-cache-typo".to_string(),
         ] {
-            let (plan, failed) = plan_clean(&env, std::slice::from_ref(&id));
+            let (plan, failed) = plan_clean(&env, std::slice::from_ref(&id), &HashSet::new());
             assert!(plan.is_empty(), "{id} must not resolve");
             assert_eq!(failed.len(), 1);
         }
@@ -2707,7 +2812,7 @@ mod tests {
         fixture.protected = vec![home.path().join("Documents/Photos")];
         let id = format!("projects:{}", node_modules.to_string_lossy());
 
-        let (plan, failed) = plan_clean(&fixture.env(&home), &[id]);
+        let (plan, failed) = plan_clean(&fixture.env(&home), &[id], &HashSet::new());
         assert!(plan.is_empty());
         assert!(failed[0].message.contains("library source"));
     }
@@ -2728,7 +2833,7 @@ mod tests {
             format!("downloads:{}", installer.to_string_lossy()),
             format!("downloads:{}", installer.to_string_lossy()),
         ];
-        let (plan, failed) = plan_clean(&fixture.env(&home), &ids);
+        let (plan, failed) = plan_clean(&fixture.env(&home), &ids, &HashSet::new());
         assert!(
             failed.is_empty(),
             "{:?}",
@@ -2747,7 +2852,7 @@ mod tests {
         let installer = home.write("Downloads/fresh.dmg", 40);
         let id = format!("downloads:{}", installer.to_string_lossy());
         let fixture = Fixture::new();
-        let (plan, failed) = plan_clean(&fixture.env(&home), &[id]);
+        let (plan, failed) = plan_clean(&fixture.env(&home), &[id], &HashSet::new());
         assert!(plan.is_empty());
         assert!(failed[0].message.contains("newer than 30 days"));
     }
@@ -2790,7 +2895,7 @@ mod tests {
             ),
             format!("downloads:{}", installer.to_string_lossy()),
         ];
-        let (plan, failed) = plan_clean(&env, &ids);
+        let (plan, failed) = plan_clean(&env, &ids, &HashSet::new());
         assert!(plan.is_empty());
         assert_eq!(failed.len(), 2);
     }
@@ -2969,7 +3074,7 @@ mod tests {
                 home.path().join("Code/app/node_modules").to_string_lossy()
             ),
         ];
-        let (plan, failed) = plan_clean(&env, &ids);
+        let (plan, failed) = plan_clean(&env, &ids, &HashSet::new());
         assert!(plan.is_empty());
         assert!(failed
             .iter()

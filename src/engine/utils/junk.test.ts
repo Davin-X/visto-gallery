@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   allItems,
   allSelected,
+  allSkips,
+  isInUse,
+  junkSplit,
   lastUsedLabel,
   percent,
   pruneSelection,
@@ -13,7 +16,7 @@ import {
   totalBytes,
   type CategoryScan,
 } from "./junk";
-import type { JunkCategoryReport, JunkItem } from "../types/commands";
+import type { JunkCategoryReport, JunkItem, JunkSkip } from "../types/commands";
 
 function item(overrides: Partial<JunkItem> & { id: string }): JunkItem {
   return {
@@ -27,6 +30,18 @@ function item(overrides: Partial<JunkItem> & { id: string }): JunkItem {
     lastUsedAt: null,
     tier: "regenerable",
     extraPaths: [],
+    ...overrides,
+  };
+}
+
+function skip(overrides: Partial<JunkSkip> & { id: string }): JunkSkip {
+  return {
+    category: "packages",
+    label: overrides.id,
+    path: `/tmp/${overrides.id}`,
+    bytes: 0,
+    reason: "appRunning",
+    message: "",
     ...overrides,
   };
 }
@@ -105,5 +120,45 @@ describe("junk helpers", () => {
     expect(percent(-5, 10)).toBe("0%");
     expect(percent(5, 10)).toBe("50.00%");
     expect(percent(50, 10)).toBe("100.00%");
+  });
+
+  it("splits what was found into ready, in use and held back", () => {
+    const items = [item({ id: "a", bytes: 400 })];
+    const skips = [
+      skip({ id: "busy", bytes: 300, reason: "appRunning" }),
+      skip({ id: "fresh", bytes: 100, reason: "recentActivity" }),
+      skip({ id: "git", bytes: 150, reason: "gitTracked" }),
+      skip({ id: "key", bytes: 50, reason: "sensitive" }),
+    ];
+    expect(junkSplit(items, skips)).toEqual({
+      ready: 400,
+      inUse: 400,
+      heldBack: 200,
+      total: 1000,
+    });
+    // Only "in use" can be overridden by name; the rest never can.
+    expect(skips.filter(isInUse).map((entry) => entry.id)).toEqual(["busy", "fresh"]);
+    expect(isInUse(skip({ id: "homebrew", bytes: 1, reason: "neverClean" }))).toBe(false);
+    expect(isInUse(skip({ id: "locked", bytes: 1, reason: "unreadable" }))).toBe(false);
+  });
+
+  it("collects skips in screen order alongside the items", () => {
+    const scans: Record<string, CategoryScan> = {
+      packages: {
+        state: "done",
+        report: { ...report([]), skips: [skip({ id: "npm", bytes: 1, reason: "appRunning" })] },
+      },
+      projects: {
+        state: "done",
+        report: { ...report([]), skips: [skip({ id: "target", bytes: 2, reason: "gitTracked" })] },
+      },
+    };
+    expect(allSkips(scans).map((entry) => entry.id)).toEqual(["npm", "target"]);
+    expect(junkSplit([], allSkips(scans))).toEqual({
+      ready: 0,
+      inUse: 1,
+      heldBack: 2,
+      total: 3,
+    });
   });
 });
