@@ -1,4 +1,5 @@
 {
+  "$schema": "./cleanup_rules.schema.json",
   "static": [
     {
       "key": "xcode-derived-data",
@@ -555,5 +556,16 @@
         "zig"
       ]
     }
+  ],
+  "ambiguousArtifacts": [
+    "dist",
+    "build",
+    "bin",
+    "obj",
+    "out",
+    "vendor",
+    "coverage",
+    "lib",
+    "src"
   ]
 }
