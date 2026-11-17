@@ -70,6 +70,9 @@ Use VoiceOver on the native app and record the exact output where it differs fro
 - [ ] A bundled build appears in Finder > Open With for a JPEG, a RAW file and an MP4 — and not for an unsupported file type.
 - [ ] Double-clicking a photo opens it in the viewer, imports only that file, and leaves the sidebar sources unchanged until **Add folder** is chosen.
 - [ ] Opening a file while VistoGallery is already running reuses the open window and plays it, with no second copy in the Dock.
+- [ ] Settings → General → Default apps, **Use VistoGallery** for Photos shows the heads-up, then one macOS dialog per type not already set; keeping the current app in one skips the rest, and the row and notice match what Finder now does.
+- [ ] **Use Preview** switches the photo types back, and the row updates after a change made in Finder's Get Info once the window is focused again.
+- [ ] In `tauri dev` the section explains that only the installed app can be set as a default, with no buttons.
 - [ ] Finder tag action on one file appears in Finder > Get Info or Tags.
 - [ ] Bulk Finder tag action reports per-file success/failure and does not delete Finder-only tags.
 - [ ] First delete on a fresh macOS user account shows the Automation prompt naming Finder, and allowing it moves the files to the Trash.

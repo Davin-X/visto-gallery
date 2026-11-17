@@ -19,6 +19,7 @@ import { ViewingPanel } from "./settings/ViewingPanel";
 import { LibraryPanel } from "./settings/LibraryPanel";
 import { PrivacyPanel } from "./settings/PrivacyPanel";
 import { AdvancedPanel } from "./settings/AdvancedPanel";
+import { DefaultAppsSection } from "./settings/DefaultAppsSection";
 import { GearIcon, EyeIcon, FolderIcon, ShieldIcon, CpuIcon } from "./icons";
 
 export type SettingsTab = "general" | "viewing" | "library" | "privacy" | "advanced";
@@ -375,6 +376,7 @@ export function SettingsScreen(props: {
             renderAccentPicker={renderAccentPicker}
           />
         )}
+        {activeTab === "general" && <DefaultAppsSection showNotice={showNotice} />}
         {activeTab === "viewing" && (
           <ViewingPanel
             defaultLayout={defaultLayout}

@@ -1521,7 +1521,6 @@
   margin-top: 12px;
 }
 
-
 /* ===== Responsive ===== */
 
 /* Tablet / medium windows: reduce padding, let controls breathe without
@@ -1927,4 +1926,81 @@
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+/* Default apps */
+.default-apps-control {
+  flex-wrap: nowrap;
+}
+
+.default-apps-handler {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.default-apps-handler.is-visto {
+  color: var(--text);
+}
+
+.default-apps-handler svg {
+  flex-shrink: 0;
+  color: var(--blue);
+}
+
+.default-apps-count {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.default-apps-more > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.default-apps-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.default-apps-more > summary .settings-row-label b {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.default-apps-chevron {
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.default-apps-more[open] .default-apps-chevron {
+  transform: rotate(90deg);
+}
+
+.default-apps-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 2px 16px;
+  margin: 4px 0 0;
+  padding: 0 12px 8px 30px;
+  list-style: none;
+}
+
+.default-apps-list li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  font-size: 12px;
+}
+
+.default-apps-list li b {
+  color: var(--ink);
+  font-weight: 600;
 }

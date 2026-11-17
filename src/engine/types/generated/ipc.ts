@@ -477,3 +477,22 @@ export type CleanupOverview = { disk: DiskSpace | null,
  */
 personalFolders: boolean, library: LibraryFootprint, history: Array<CleanupRun>, };
 
+export type DefaultAppGroup = "photos" | "videos" | "other";
+
+export type DefaultAppType = { uti: string, label: string, group: DefaultAppGroup, 
+/**
+ * The app Finder opens this type with now, by display name.
+ */
+handlerName: string | null, isVisto: boolean, };
+
+export type DefaultAppsStatus = { 
+/**
+ * False in `tauri dev` and on other platforms: only the installed app
+ * bundle can become a default.
+ */
+supported: boolean, unsupportedReason: string | null, types: Array<DefaultAppType>, };
+
+export type DefaultAppTarget = "visto" | "system";
+
+export type SetDefaultOutcome = "changed" | "declined";
+

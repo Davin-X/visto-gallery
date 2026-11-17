@@ -68,6 +68,11 @@ export type {
   TimelineMonth,
   HiddenLockStatus,
   DisplayPreview,
+  DefaultAppGroup,
+  DefaultAppType,
+  DefaultAppsStatus,
+  DefaultAppTarget,
+  SetDefaultOutcome,
 } from "./generated/ipc";
 
 export type { UpdateCheck as UpdateCheckResult } from "./generated/ipc";
