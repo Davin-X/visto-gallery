@@ -53,6 +53,16 @@ export type LibraryFolder = { path: string, name: string, itemCount: number, tot
  */
 available: boolean, };
 
+export type OpenPath = { 
+/**
+ * Canonical path, as handed to `import_files`.
+ */
+path: string, 
+/**
+ * Folders are indexed as a source; files are opened in the viewer.
+ */
+isDir: boolean, };
+
 export type LibraryFilterDTO = { kind?: string, favorite?: boolean, hidden?: boolean, 
 /**
  * `Some(true)` narrows to animated items, `Some(false)` to still ones.

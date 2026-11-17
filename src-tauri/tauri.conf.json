@@ -37,25 +37,144 @@
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost blob: data:; media-src 'self' asset: http://asset.localhost blob:; font-src 'self'; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-src 'none'; frame-ancestors 'none'",
       "assetProtocol": {
         "enable": true,
-        "scope": [
-          "$APPCACHE/**"
-        ]
+        "scope": ["$APPCACHE/**"]
       }
     }
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "dmg"
-    ],
-    "externalBin": [
-      "binaries/ffmpeg",
-      "binaries/ffprobe"
-    ],
-    "icon": [
-      "icons/icon.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
+    "targets": ["dmg"],
+    "externalBin": ["binaries/ffmpeg", "binaries/ffprobe"],
+    "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"],
+    "fileAssociations": [
+      {
+        "ext": [
+          "avif",
+          "bmp",
+          "gif",
+          "heic",
+          "heif",
+          "jpeg",
+          "jpg",
+          "jxl",
+          "png",
+          "tif",
+          "tiff",
+          "webp"
+        ],
+        "contentTypes": ["public.avif", "public.heic", "public.heif", "public.jpeg-xl"],
+        "name": "Image",
+        "role": "Viewer",
+        "rank": "Alternate"
+      },
+      {
+        "ext": ["jfif", "jpe"],
+        "name": "Image (other formats)",
+        "role": "Viewer",
+        "rank": "Alternate"
+      },
+      {
+        "ext": [
+          "3fr",
+          "ari",
+          "arw",
+          "bay",
+          "cap",
+          "cr2",
+          "cr3",
+          "dcs",
+          "dcr",
+          "dng",
+          "drf",
+          "eip",
+          "erf",
+          "fff",
+          "gpr",
+          "iiq",
+          "k25",
+          "kdc",
+          "mdc",
+          "mef",
+          "mos",
+          "mrw",
+          "nef",
+          "nrw",
+          "obm",
+          "orf",
+          "pef",
+          "ptx",
+          "pxn",
+          "r3d",
+          "raf",
+          "raw",
+          "rw2",
+          "rwl",
+          "sr2",
+          "srf",
+          "srw",
+          "x3f"
+        ],
+        "name": "RAW Image",
+        "role": "Viewer",
+        "rank": "Alternate"
+      },
+      {
+        "ext": ["avi", "m4v", "mov", "mp4"],
+        "name": "Video",
+        "role": "Viewer",
+        "rank": "Alternate"
+      },
+      {
+        "ext": [
+          "3g2",
+          "3gp",
+          "asf",
+          "flv",
+          "m2ts",
+          "mpeg",
+          "mpg",
+          "mts",
+          "ogv",
+          "ts",
+          "webm",
+          "wmv"
+        ],
+        "contentTypes": [
+          "public.3gpp2",
+          "public.3gpp",
+          "com.microsoft.advanced-systems-format",
+          "com.adobe.flash.video",
+          "public.avchd-mpeg-2-transport-stream",
+          "public.mpeg",
+          "public.mpeg-2-transport-stream",
+          "org.xiph.ogv",
+          "org.webmproject.webm",
+          "com.microsoft.windows-media-wmv"
+        ],
+        "name": "Video (other containers)",
+        "role": "Viewer",
+        "rank": "Alternate"
+      },
+      {
+        "ext": ["mkv"],
+        "exportedType": {
+          "identifier": "org.matroska.mkv",
+          "conformsTo": ["public.movie"]
+        },
+        "name": "Matroska Video",
+        "role": "Viewer",
+        "rank": "Alternate"
+      },
+      {
+        "ext": ["vob"],
+        "exportedType": {
+          "identifier": "com.vistogallery.mpeg-program-stream",
+          "conformsTo": ["public.movie"]
+        },
+        "name": "MPEG Program Stream",
+        "role": "Viewer",
+        "rank": "Alternate"
+      }
     ]
   }
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { tauri } from "../../engine/commands/tauri";
 import { useLibraryStore } from "../../engine/stores";
-import type { LibraryFolder } from "../../engine/types/commands";
+import type { LibraryFolder, ScanResult } from "../../engine/types/commands";
 import type { Screen } from "../screen";
 import { setScreen } from "../useNavigationStore";
 import type { ShowErrorNotice, ShowNotice } from "../types";
@@ -39,17 +39,14 @@ export function useSourceActions({
   const [removingAllSources, setRemovingAllSources] = useState(false);
   const [albumDragOver, setAlbumDragOver] = useState(false);
 
-  const importFiles = async () => {
-    let paths: string[];
-    try {
-      // The backend opens the picker so it can trust the paths it imports.
-      paths = await tauri.library.pickMediaFiles();
-      if (!paths.length) return;
-    } catch (e) {
-      showErrorNotice(e, "Could not open the file picker");
-      return;
-    }
-
+  /**
+   * Import exactly these paths. Files stay files (never expanded to their
+   * folder); folders are walked and remembered as sources. Callers supply a
+   * path the backend already trusts — a picker result, a native drop, or a
+   * Finder open, which Rust grants before queueing it.
+   */
+  const importPaths = async (paths: string[]): Promise<ScanResult | null> => {
+    if (!paths.length) return null;
     const library = useLibraryStore.getState();
     try {
       showNotice(`Importing ${paths.length.toLocaleString()} file(s)…`);
@@ -71,11 +68,27 @@ export function useSourceActions({
             ? `Imported ${result.items.length.toLocaleString()} file(s).`
             : "No supported media files selected.",
       );
+      return result;
     } catch (e) {
       library.setBusy(false);
       library.setProgress(null);
       showErrorNotice(e, "Import failed");
+      return null;
     }
+  };
+
+  const importFiles = async () => {
+    let paths: string[];
+    try {
+      // The backend opens the picker so it can trust the paths it imports.
+      paths = await tauri.library.pickMediaFiles();
+      if (!paths.length) return;
+    } catch (e) {
+      showErrorNotice(e, "Could not open the file picker");
+      return;
+    }
+
+    await importPaths(paths);
   };
 
   const importFolder = async () => {
@@ -368,6 +381,7 @@ export function useSourceActions({
 
   return {
     importFiles,
+    importPaths,
     importFolder,
     rescanSource,
     rescanSources,

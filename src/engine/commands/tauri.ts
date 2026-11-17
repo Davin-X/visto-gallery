@@ -23,6 +23,7 @@ import type {
   BatchProgressEvent,
   DuplicateGroup,
   LibraryFolder,
+  OpenPath,
   LibraryChangedEvent,
   ImportProgressEvent,
   ThumbnailReadyEvent,
@@ -61,6 +62,9 @@ export const tauri = {
     cancelScan: (): Promise<void> => invoke("cancel_scan"),
 
     importFiles: (paths: string[]): Promise<ScanResult> => invoke("import_files", { paths }),
+
+    /** Drain the paths Finder handed to the app. Taking them empties the queue. */
+    takePendingOpenPaths: (): Promise<OpenPath[]> => invoke("take_pending_open_paths"),
 
     /** Native folder picker owned by the backend; picked roots are trusted. */
     pickSourceFolders: (): Promise<string[]> => invoke("pick_source_folders"),
@@ -418,6 +422,9 @@ export const events = {
 
   onFolderWatchError: (callback: (event: { path: string; message: string }) => void) =>
     listen<{ path: string; message: string }>("folder-watch-error", (e) => callback(e.payload)),
+
+  /** A Finder "Open With" path reached the queue; drain it. */
+  onOpenPathsPending: (callback: () => void) => listen("open-paths-pending", () => callback()),
 };
 
 // Helper: Build thumbnail data URL from response

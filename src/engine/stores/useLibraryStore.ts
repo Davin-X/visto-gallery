@@ -209,6 +209,13 @@ export interface LibraryState {
   setActiveAlbum: (albumId: string | null) => void;
 
   // Actions - Items
+  /**
+   * Make one item part of the loaded page even when the current query did not
+   * page it in — Finder "Open With" plays a file imported moments ago that may
+   * sort outside the first page. The next library load replaces it, so this
+   * never changes what the query means.
+   */
+  includeItem: (item: MediaItem) => void;
   toggleFavorite: (id: string) => Promise<void>;
   toggleHidden: (id: string) => Promise<void>;
   setFavoriteForIds: (ids: string[], favorite: boolean) => Promise<void>;
@@ -1215,6 +1222,13 @@ export const useLibraryStore = create<LibraryState>()(
       },
 
       // Items
+      includeItem: (item) => {
+        const state = get();
+        if (state.items.some((known) => known.id === item.id)) return;
+        set({ items: [item, ...state.items], totalCount: state.totalCount + 1 });
+        get().refreshDerived();
+      },
+
       toggleFavorite: async (id) => {
         const item = get().items.find((i) => i.id === id);
         if (!item) return;
