@@ -122,16 +122,28 @@
   }
 }
 
-/* Slideshow bottom controls - matches viewer video controls style */
-.slideshow-controls {
+/* Slideshow bottom HUD: caption stacked above the controls in one
+   bottom-anchored column, so the caption offset is structural. */
+.slideshow-bottom {
   position: absolute;
   bottom: 18px;
   left: 50%;
   z-index: 2;
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 8px;
-  max-width: min(720px, 90vw);
+  width: 100%;
+  max-width: min(880px, 94vw);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+/* Slideshow bottom controls - matches viewer video controls style */
+.slideshow-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   padding: 8px 12px;
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -139,20 +151,19 @@
   background: rgba(20, 24, 30, 0.92);
   backdrop-filter: blur(10px);
   color: #fff;
-  transform: translateX(-50%);
   box-sizing: border-box;
   opacity: 0;
   pointer-events: none;
   transition:
     opacity 0.18s ease,
     transform 0.18s ease;
-  transform: translateX(-50%) translateY(8px);
+  transform: translateY(8px);
 }
 
 .slideshow-overlay.hud-visible .slideshow-controls {
   opacity: 1;
   pointer-events: auto;
-  transform: translateX(-50%) translateY(0);
+  transform: translateY(0);
 }
 
 .slideshow-controls button {
@@ -160,7 +171,7 @@
   flex: 0 0 auto;
   place-items: center;
   padding: 6px;
-  border: 0 !important;
+  border: 0;
   border-radius: 8px;
   background: transparent;
   color: #fff;
@@ -214,40 +225,51 @@
   outline-offset: 2px;
 }
 
-/* Caption in the controls bar. An older global rule positions
-   .slideshow-caption absolutely (bottom-left of the stage), which pulled it
-   out of the bar and left it floating above it; keep it in the flow here. */
+/* Caption on its own line just above the controls bar. Keeping it out of the
+   single-row bar lets a long filename use the full width instead of being
+   squeezed between the transport and the tools, and it never collapses to
+   nothing in video mode where the seek bar needs the room. */
 .slideshow-caption {
-  position: static;
-  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  min-width: 0;
-  max-width: 400px;
-  text-align: center;
-}
-
-/* `align-items: center` gives each line its max-content width, so a long
-   filename used to spill out of the caption and over the right-hand controls.
-   Clamp both lines to the caption's width; the name then ellipsizes. */
-.slideshow-caption > div {
   max-width: 100%;
+  text-align: center;
+  pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  opacity: 0;
+  transition: opacity 0.18s ease;
 }
 
-.slideshow-caption > div:first-child {
+.slideshow-overlay.hud-visible .slideshow-caption {
+  opacity: 1;
+}
+
+.slideshow-caption-name {
+  max-width: 100%;
   font-weight: 600;
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: rgba(255, 255, 255, 0.94);
+  color: rgba(255, 255, 255, 0.95);
 }
 
-.slideshow-caption > div:last-child {
+.slideshow-caption-meta {
+  max-width: 100%;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* The first right-side tool is the bar's spacer: transport stays left, tools
+   stay right. Without it the photo bar packs everything left and leaves half
+   the pill empty, because only the video seek bar grows. */
+.slideshow-controls .slideshow-tools-start {
+  margin-left: auto;
 }
 
 .slideshow-zoom-value {
@@ -265,6 +287,30 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* Ambient audio - a track the user picked in Settings, played under the show.
+   It is independent of the video's volume so a muted video does not silence
+   the background track, and vice versa. */
+.slideshow-ambient-btn {
+  width: auto;
+  padding: 6px;
+}
+
+.slideshow-ambient-volume {
+  flex: 0 0 72px;
+  width: 72px;
+  min-width: 56px;
+}
+
+.slideshow-ambient-error {
+  flex: 0 1 auto;
+  max-width: 200px;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Transform active state */
@@ -400,18 +446,4 @@
   backdrop-filter: blur(8px);
   white-space: nowrap;
   pointer-events: none;
-}
-
-.slideshow-zoom-value {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  min-width: 44px;
-  text-align: center;
-}
-
-.slideshow-stop {
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 600;
 }

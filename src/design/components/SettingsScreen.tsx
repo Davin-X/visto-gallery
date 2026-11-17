@@ -93,6 +93,8 @@ export function SettingsScreen(props: {
   const slideshowInterval = useSettingsStore((s) => s.slideshowInterval);
   const slideshowShuffle = useSettingsStore((s) => s.slideshowShuffle);
   const slideshowLoop = useSettingsStore((s) => s.slideshowLoop);
+  const slideshowBackgroundAudio = useSettingsStore((s) => s.slideshowBackgroundAudio);
+  const slideshowBackgroundAudioPath = useSettingsStore((s) => s.slideshowBackgroundAudioPath);
   const videoAutoPlay = useSettingsStore((s) => s.videoAutoPlay);
   const videoLoop = useSettingsStore((s) => s.videoLoop);
   const maxCacheSize = useSettingsStore((s) => s.maxCacheSizeGB);
@@ -116,6 +118,28 @@ export function SettingsScreen(props: {
   const handleSidebarWidthChange = (width: number) => {
     update("sidebarWidth", width);
   };
+
+  const pickAmbientAudio = useCallback(async () => {
+    try {
+      const path = await tauri.library.pickAmbientAudio();
+      if (!path) return;
+      // Save the path first: if this fails we never flip the toggle on, so the
+      // show can't be left enabled with no track.
+      await update("slideshowBackgroundAudioPath", path);
+      await update("slideshowBackgroundAudio", true);
+    } catch (error) {
+      showErrorNotice(error, "Could not pick an ambient audio track");
+    }
+  }, [update, showErrorNotice]);
+
+  const clearAmbientAudio = useCallback(async () => {
+    try {
+      await update("slideshowBackgroundAudio", false);
+      await update("slideshowBackgroundAudioPath", null);
+    } catch (error) {
+      showErrorNotice(error, "Could not clear the ambient audio track");
+    }
+  }, [update, showErrorNotice]);
 
   const handleResetSettings = useCallback(async () => {
     setShowResetConfirm(false);
@@ -384,9 +408,13 @@ export function SettingsScreen(props: {
             slideshowInterval={slideshowInterval}
             slideshowShuffle={slideshowShuffle}
             slideshowLoop={slideshowLoop}
+            slideshowBackgroundAudio={slideshowBackgroundAudio}
+            slideshowBackgroundAudioPath={slideshowBackgroundAudioPath}
             videoAutoPlay={videoAutoPlay}
             videoLoop={videoLoop}
             onChange={update}
+            onPickAmbientAudio={pickAmbientAudio}
+            onClearAmbientAudio={clearAmbientAudio}
             renderRadioGroup={renderRadioGroup}
           />
         )}

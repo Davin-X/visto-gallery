@@ -323,6 +323,19 @@ pub async fn import_files(
     let db = super::get_db(&catalog)?;
     for raw in &paths {
         super::authorize_import_path(raw, &db, &state.grants).await?;
+        // A media file is served from its original path through the asset
+        // protocol (a video plays natively; a still is served as-is or via a
+        // preview). The path was just authorized as picked, so grant the asset
+        // scope too — otherwise the first render returns 403 and the tile or
+        // the slideshow shows nothing.
+        let grant_path = std::path::PathBuf::from(raw);
+        if grant_path.is_dir() {
+            let _ = app
+                .asset_protocol_scope()
+                .allow_directory(&grant_path, true);
+        } else if grant_path.is_file() {
+            let _ = app.asset_protocol_scope().allow_file(&grant_path);
+        }
     }
     let job = state.scan_jobs.start();
     let walk_cancel = job.flag();

@@ -19,6 +19,8 @@ export const defaultSettings: AppSettings = {
   slideshowInterval: 5,
   slideshowShuffle: false,
   slideshowLoop: true,
+  slideshowBackgroundAudio: false,
+  slideshowBackgroundAudioPath: null,
   videoAutoPlay: true,
   videoLoop: false,
   watchFolders: [],

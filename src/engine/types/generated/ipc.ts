@@ -271,7 +271,16 @@ progress: number | null, };
 
 export type UpdateCheck = { available: boolean, currentVersion: string, latestVersion: string, notes: string, releaseUrl: string, downloadUrl?: string | null, publishedAt?: string | null, checkedAt: number, };
 
-export type AppSettings = { appearance: Appearance, accentColor: AccentColor, sidebarWidth: number, inspectorWidth: number, showExtensions: boolean, animateTransitions: boolean, startupView: StartupView, openLastFolder: boolean, restoreWindowState: boolean, defaultLayout: DefaultLayout, thumbnailSize: ThumbnailSize, albumsView: AlbumsView, viewerZoomBehavior: ViewerZoomBehavior, slideshowInterval: number, slideshowShuffle: boolean, slideshowLoop: boolean, videoAutoPlay: boolean, videoLoop: boolean, watchFolders: Array<string>, autoImport: boolean, 
+export type AppSettings = { appearance: Appearance, accentColor: AccentColor, sidebarWidth: number, inspectorWidth: number, showExtensions: boolean, animateTransitions: boolean, startupView: StartupView, openLastFolder: boolean, restoreWindowState: boolean, defaultLayout: DefaultLayout, thumbnailSize: ThumbnailSize, albumsView: AlbumsView, viewerZoomBehavior: ViewerZoomBehavior, slideshowInterval: number, slideshowShuffle: boolean, slideshowLoop: boolean, 
+/**
+ * Play an ambient track under the slideshow. Disabled by default because
+ * ambient audio is a presentation aid, not a library default.
+ */
+slideshowBackgroundAudio: boolean, 
+/**
+ * Path to the ambient track, if one was picked. Empty when none.
+ */
+slideshowBackgroundAudioPath: string | null, videoAutoPlay: boolean, videoLoop: boolean, watchFolders: Array<string>, autoImport: boolean, 
 /**
  * Dormant compatibility field. RAW+JPEG pairing is not implemented yet;
  * the control is marked unavailable in Settings, but the persisted value
@@ -314,7 +323,16 @@ lockHiddenInBackground: boolean,
  */
 maxCacheSizeGB: number, thumbnailQuality: number, enableDebugLogging: boolean, showNativeLimitWarnings: boolean, };
 
-export type PartialSettings = { appearance?: Appearance, accentColor?: AccentColor, sidebarWidth?: number, inspectorWidth?: number, showExtensions?: boolean, animateTransitions?: boolean, startupView?: StartupView, openLastFolder?: boolean, restoreWindowState?: boolean, defaultLayout?: DefaultLayout, thumbnailSize?: ThumbnailSize, albumsView?: AlbumsView, viewerZoomBehavior?: ViewerZoomBehavior, slideshowInterval?: number, slideshowShuffle?: boolean, slideshowLoop?: boolean, videoAutoPlay?: boolean, videoLoop?: boolean, watchFolders?: Array<string>, autoImport?: boolean, 
+export type PartialSettings = { appearance?: Appearance, accentColor?: AccentColor, sidebarWidth?: number, inspectorWidth?: number, showExtensions?: boolean, animateTransitions?: boolean, startupView?: StartupView, openLastFolder?: boolean, restoreWindowState?: boolean, defaultLayout?: DefaultLayout, thumbnailSize?: ThumbnailSize, albumsView?: AlbumsView, viewerZoomBehavior?: ViewerZoomBehavior, slideshowInterval?: number, slideshowShuffle?: boolean, slideshowLoop?: boolean, 
+/**
+ * Play an ambient track under the slideshow. Disabled by default because
+ * ambient audio is a presentation aid, not a library default.
+ */
+slideshowBackgroundAudio?: boolean, 
+/**
+ * Path to the ambient track, if one was picked. Empty when none.
+ */
+slideshowBackgroundAudioPath?: string | null, videoAutoPlay?: boolean, videoLoop?: boolean, watchFolders?: Array<string>, autoImport?: boolean, 
 /**
  * Dormant compatibility field. RAW+JPEG pairing is not implemented yet;
  * the control is marked unavailable in Settings, but the persisted value

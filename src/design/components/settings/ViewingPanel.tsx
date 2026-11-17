@@ -9,9 +9,13 @@ export function ViewingPanel(props: {
   slideshowInterval: number;
   slideshowShuffle: boolean;
   slideshowLoop: boolean;
+  slideshowBackgroundAudio: boolean;
+  slideshowBackgroundAudioPath: string | null;
   videoAutoPlay: boolean;
   videoLoop: boolean;
   onChange: SettingsChange;
+  onPickAmbientAudio: () => void;
+  onClearAmbientAudio: () => void;
   renderRadioGroup: RenderRadioGroup;
 }) {
   return (
@@ -107,6 +111,60 @@ export function ViewingPanel(props: {
               />
               <span className="toggle-track" />
             </label>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div className="settings-row-label">
+            <b>Ambient audio</b>
+            <span className="settings-row-desc">
+              Play a track under the slideshow. Off by default; the track is not cataloged, so it
+              never touches your library.
+            </span>
+          </div>
+          <div
+            className="settings-row-control"
+            style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}
+          >
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                aria-label="Enable ambient audio"
+                checked={props.slideshowBackgroundAudio}
+                onChange={(e) => props.onChange("slideshowBackgroundAudio", e.target.checked)}
+              />
+              <span className="toggle-track" />
+            </label>
+            {props.slideshowBackgroundAudio && (
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span
+                  style={{
+                    flex: 1,
+                    fontSize: 12,
+                    color: "var(--text-muted)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={props.slideshowBackgroundAudioPath || "No track chosen"}
+                >
+                  {props.slideshowBackgroundAudioPath
+                    ? props.slideshowBackgroundAudioPath.split("/").pop()
+                    : "No track chosen"}
+                </span>
+                <button type="button" className="settings-btn" onClick={props.onPickAmbientAudio}>
+                  Choose…
+                </button>
+                {props.slideshowBackgroundAudioPath && (
+                  <button
+                    type="button"
+                    className="settings-btn"
+                    onClick={props.onClearAmbientAudio}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </section>

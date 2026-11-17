@@ -75,6 +75,9 @@ export const tauri = {
     /** Native media-file picker owned by the backend; picked files are trusted. */
     pickMediaFiles: (): Promise<string[]> => invoke("pick_media_files"),
 
+    /** Native audio-file picker for the slideshow ambient track. */
+    pickAmbientAudio: (): Promise<string | null> => invoke("pick_ambient_audio"),
+
     getItems: (filter: LibraryFilterDTO): Promise<LibraryItemsPage> =>
       invoke("get_library_items", { filter }),
 

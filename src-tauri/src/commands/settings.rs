@@ -40,6 +40,14 @@ fn normalize_settings(settings: &mut AppSettings) {
     }
     settings.thumbnail_quality = settings.thumbnail_quality.clamp(1, 100);
     settings.slideshow_interval = settings.slideshow_interval.clamp(1, 3600);
+    // Keep an absolute path even when the file is not reachable right now (an
+    // external drive that is not mounted). Dropping it would force the user to
+    // re-pick after every disconnect; playback fails with a message instead.
+    settings.slideshow_background_audio_path = settings
+        .slideshow_background_audio_path
+        .as_deref()
+        .filter(|p| std::path::Path::new(p).is_absolute())
+        .map(|s| s.to_owned());
     // A watched folder must be absolute: a relative path resolves against an
     // unpredictable working directory (a Finder launch starts at `/`).
     settings.watch_folders.retain(|folder| {
@@ -136,6 +144,12 @@ async fn save_settings_into(
     if let Some(v) = patch.slideshow_loop {
         settings.slideshow_loop = v;
     }
+    if let Some(v) = patch.slideshow_background_audio {
+        settings.slideshow_background_audio = v;
+    }
+    if let Some(v) = patch.slideshow_background_audio_path {
+        settings.slideshow_background_audio_path = v;
+    }
     if let Some(v) = patch.video_auto_play {
         settings.video_auto_play = v;
     }
@@ -214,6 +228,17 @@ async fn save_settings_into(
         ),
         ("slideshow_shuffle", settings.slideshow_shuffle.to_string()),
         ("slideshow_loop", settings.slideshow_loop.to_string()),
+        (
+            "slideshow_background_audio",
+            settings.slideshow_background_audio.to_string(),
+        ),
+        (
+            "slideshow_background_audio_path",
+            settings
+                .slideshow_background_audio_path
+                .clone()
+                .unwrap_or_default(),
+        ),
         ("video_auto_play", settings.video_auto_play.to_string()),
         ("video_loop", settings.video_loop.to_string()),
         (
@@ -385,6 +410,77 @@ mod tests {
         assert_eq!(
             reloaded.watch_folders,
             vec!["/Users/example/Pictures".to_string()]
+        );
+    }
+
+    #[tokio::test]
+    async fn ambient_audio_path_is_kept_when_the_file_is_missing() {
+        // An absolute path is kept even if it is not reachable right now (e.g.
+        // an external drive that is not mounted). Playback fails with a message
+        // instead of silently dropping the track and forcing a re-pick.
+        let db = test_db().await;
+        let saved = save_settings_into(
+            &db,
+            PartialSettings {
+                slideshow_background_audio: Some(true),
+                slideshow_background_audio_path: Some(Some("/no/such/track.mp3".to_string())),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("save settings");
+
+        assert!(saved.slideshow_background_audio);
+        assert_eq!(
+            saved.slideshow_background_audio_path.as_deref(),
+            Some("/no/such/track.mp3"),
+            "an unreachable absolute path is kept so the user need not re-pick"
+        );
+    }
+
+    #[tokio::test]
+    async fn ambient_audio_path_is_dropped_when_it_is_relative() {
+        let db = test_db().await;
+        let saved = save_settings_into(
+            &db,
+            PartialSettings {
+                slideshow_background_audio: Some(true),
+                slideshow_background_audio_path: Some(Some("relative/track.mp3".to_string())),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("save settings");
+
+        assert!(saved.slideshow_background_audio);
+        assert!(
+            saved.slideshow_background_audio_path.is_none(),
+            "a relative path cannot be resolved against an unpredictable cwd"
+        );
+    }
+
+    #[tokio::test]
+    async fn ambient_audio_path_is_kept_when_the_file_exists() {
+        let db = test_db().await;
+        let dir = std::env::temp_dir().join(format!("visto-ambient-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let path = dir.join("track.mp3");
+        std::fs::write(&path, b"").expect("write temp track");
+
+        let saved = save_settings_into(
+            &db,
+            PartialSettings {
+                slideshow_background_audio: Some(true),
+                slideshow_background_audio_path: Some(Some(path.to_string_lossy().to_string())),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("save settings");
+
+        assert_eq!(
+            saved.slideshow_background_audio_path.as_deref(),
+            Some(path.to_string_lossy().as_ref())
         );
     }
 }

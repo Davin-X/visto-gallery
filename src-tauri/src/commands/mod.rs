@@ -119,7 +119,8 @@ pub(crate) use security::paths::{
     authorize_import_path, is_path_under_registered_roots, normalize_root, path_is_inside,
 };
 pub use security::paths::{
-    pick_media_files, pick_source_folders, validate_path_under_registered_roots, GrantedPaths,
+    pick_ambient_audio, pick_media_files, pick_source_folders,
+    validate_path_under_registered_roots, GrantedPaths,
 };
 
 /// Event asking the frontend to re-read catalog-wide counts.
@@ -148,6 +149,19 @@ pub(crate) fn apply_setting(settings: &mut AppSettings, key: &str, value: &str) 
         "slideshow_interval" => settings.slideshow_interval = value.parse().unwrap_or(5),
         "slideshow_shuffle" => settings.slideshow_shuffle = value.parse().unwrap_or(false),
         "slideshow_loop" => settings.slideshow_loop = value.parse().unwrap_or(true),
+        "slideshow_background_audio" => {
+            settings.slideshow_background_audio = value.parse().unwrap_or(false)
+        }
+        "slideshow_background_audio_path" => {
+            // The column stores "" for "no track"; that must read back as None,
+            // not Some(""). `parse::<String>()` always succeeds, so the empty
+            // case has to be special-cased.
+            settings.slideshow_background_audio_path = if value.is_empty() {
+                None
+            } else {
+                Some(value.to_string())
+            };
+        }
         "video_auto_play" => settings.video_auto_play = value.parse().unwrap_or(true),
         "video_loop" => settings.video_loop = value.parse().unwrap_or(false),
         "watch_folders" => {

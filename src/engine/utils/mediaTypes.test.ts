@@ -4,6 +4,7 @@ import {
   getKindBadgeClass,
   getKindDotClass,
   canPlayVideoInApp,
+  canDecodeStill,
   classifyVideoFailure,
   fileExtension,
 } from "./mediaTypes";
@@ -43,4 +44,23 @@ test("only an unsupported container or a decode error blames the format", () => 
   expect(classifyVideoFailure(4, "/lib/a.mp4")).toBe("unavailable");
   expect(classifyVideoFailure(2, "/lib/a.mp4")).toBe("unavailable");
   expect(classifyVideoFailure(undefined, "/lib/a.mp4")).toBe("unavailable");
+});
+
+test("stills WKWebView decodes natively skip the preview", () => {
+  // The common web formats must try the original, not an IPC preview.
+  expect(canDecodeStill("/lib/a.jpg")).toBe(true);
+  expect(canDecodeStill("/lib/a.JPEG")).toBe(true);
+  expect(canDecodeStill("/lib/a.png")).toBe(true);
+  expect(canDecodeStill("/lib/a.gif")).toBe(true);
+  expect(canDecodeStill("/lib/a.bmp")).toBe(true);
+  expect(canDecodeStill("/lib/a.avif")).toBe(true);
+  expect(canDecodeStill("/lib/a.webp")).toBe(true);
+  expect(canDecodeStill("/lib/a.tif")).toBe(true);
+  expect(canDecodeStill("/lib/a.tiff")).toBe(true);
+  // Containers WKWebView cannot decode take the macOS preview path.
+  expect(canDecodeStill("/lib/a.heic")).toBe(false);
+  expect(canDecodeStill("/lib/a.heif")).toBe(false);
+  expect(canDecodeStill("/lib/a.jxl")).toBe(false);
+  // Items without an extension stay optimistic; onError catches failures.
+  expect(canDecodeStill("")).toBe(true);
 });
