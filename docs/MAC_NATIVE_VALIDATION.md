@@ -67,6 +67,9 @@ Use VoiceOver on the native app and record the exact output where it differs fro
 - [ ] Disabled auto-import does not import until manual rescan.
 - [ ] Removing a source stops watching or displays a clear failure notice.
 - [ ] Full Disk Access denial or inaccessible source produces an actionable message.
+- [ ] A bundled build appears in Finder > Open With for a JPEG, a RAW file and an MP4 — and not for an unsupported file type.
+- [ ] Double-clicking a photo opens it in the viewer, imports only that file, and leaves the sidebar sources unchanged until **Add folder** is chosen.
+- [ ] Opening a file while VistoGallery is already running reuses the open window and plays it, with no second copy in the Dock.
 - [ ] Finder tag action on one file appears in Finder > Get Info or Tags.
 - [ ] Bulk Finder tag action reports per-file success/failure and does not delete Finder-only tags.
 - [ ] First delete on a fresh macOS user account shows the Automation prompt naming Finder, and allowing it moves the files to the Trash.

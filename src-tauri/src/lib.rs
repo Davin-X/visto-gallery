@@ -1,8 +1,9 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
 use sqlx::SqlitePool;
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, RunEvent, State};
 
 // Modules
 mod commands;
@@ -59,6 +60,11 @@ pub(crate) struct AppState {
     pub(crate) trash_cancel: commands::CancelGroup,
     pub(crate) batch_cancel: commands::CancelGroup,
     pub(crate) duplicate_cancel: commands::CancelGroup,
+    /// Files and folders Finder handed to the app ("Open With" or a
+    /// double-click). The queue is the source of truth: it is filled before the
+    /// webview can listen, drained once on mount, and drained again whenever
+    /// `open-paths-pending` fires.
+    pub(crate) pending_open_paths: Mutex<Vec<commands::OpenPath>>,
 }
 
 impl Default for AppState {
@@ -70,8 +76,105 @@ impl Default for AppState {
             trash_cancel: commands::CancelGroup::default(),
             batch_cancel: commands::CancelGroup::default(),
             duplicate_cancel: commands::CancelGroup::default(),
+            pending_open_paths: Mutex::new(Vec::new()),
         }
     }
+}
+
+/// Fires after an opened path reaches the queue. Deliberately payload free:
+/// the queue holds the paths, so a wake-up that races the mount costs one
+/// empty drain instead of losing the open.
+const OPEN_PATHS_PENDING: &str = "open-paths-pending";
+
+/// Canonical form of a Finder-opened path, or `None` when it no longer exists.
+fn canonical_open_path(raw: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(raw);
+    let canonical = path.canonicalize().unwrap_or(path);
+    (canonical.is_file() || canonical.is_dir()).then_some(canonical)
+}
+
+/// Existing paths, canonicalised and deduplicated, in the order they arrived.
+///
+/// macOS delivers one launch through up to three routes — `RunEvent::Opened`,
+/// a repeat launch's argv, and the first launch's argv — so the same file can
+/// show up twice before the page drains the queue.
+fn normalize_open_paths(raw_paths: Vec<String>) -> Vec<commands::OpenPath> {
+    let mut entries: Vec<commands::OpenPath> = Vec::new();
+    for raw in raw_paths {
+        let Some(path) = canonical_open_path(&raw) else {
+            tracing::warn!("opened path '{raw}' no longer exists; ignored");
+            continue;
+        };
+        let path = path.to_string_lossy().into_owned();
+        if entries.iter().any(|queued| queued.path == path) {
+            continue;
+        }
+        let is_dir = PathBuf::from(&path).is_dir();
+        entries.push(commands::OpenPath { path, is_dir });
+    }
+    entries
+}
+
+/// Grant and queue the paths Finder opened, then wake the frontend.
+fn push_open_paths(app: &tauri::AppHandle, raw_paths: Vec<String>) {
+    let entries = normalize_open_paths(raw_paths);
+    if entries.is_empty() {
+        return;
+    }
+    let state: State<'_, AppState> = app.state();
+    for entry in &entries {
+        let path = PathBuf::from(&entry.path);
+        // Finder is the user choosing a path, exactly like a picker or a drop:
+        // grant it, or `import_files` rejects it as never having been chosen.
+        state.grants.grant([&path]);
+        // A video that plays natively is served from the original file, so the
+        // asset protocol must be able to read it for this session.
+        let scope = app.asset_protocol_scope();
+        let allowed = if entry.is_dir {
+            scope.allow_directory(&path, true)
+        } else {
+            scope.allow_file(&path)
+        };
+        if let Err(error) = allowed {
+            tracing::warn!(
+                "opened path '{}' was not granted to the asset scope: {error}",
+                entry.path
+            );
+        }
+    }
+
+    let added = {
+        let mut pending = state
+            .pending_open_paths
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut added = 0;
+        for entry in entries {
+            if pending.iter().any(|queued| queued.path == entry.path) {
+                continue;
+            }
+            pending.push(entry);
+            added += 1;
+        }
+        added
+    };
+
+    if added > 0 {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.emit(OPEN_PATHS_PENDING, ());
+        }
+    }
+}
+
+/// Hand every queued Finder path to the page. Taking the queue empties it, so
+/// a drain that runs twice can never import the same open twice.
+#[tauri::command]
+fn take_pending_open_paths(state: State<'_, AppState>) -> Vec<commands::OpenPath> {
+    let mut pending = state
+        .pending_open_paths
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    std::mem::take(&mut *pending)
 }
 
 pub fn run() {
@@ -82,11 +185,21 @@ pub fn run() {
         // A second launch (common after a crash/relaunch) focuses the existing
         // instance instead of spawning a duplicate process that plays the same
         // media at the same time.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
                 let _ = window.show();
                 let _ = window.set_focus();
+            }
+            // A second launch carrying files ("Open With" while the app is
+            // already running) hands them over as arguments.
+            let paths: Vec<String> = args
+                .into_iter()
+                .skip(1)
+                .filter(|argument| !argument.starts_with('-'))
+                .collect();
+            if !paths.is_empty() {
+                push_open_paths(app, paths);
             }
         }))
         .plugin(tauri_plugin_dialog::init())
@@ -190,6 +303,19 @@ pub fn run() {
                     _ => {}
                 }
             });
+
+            // A first launch can already carry paths as arguments (`open -a`,
+            // or "Open With" before the process exists). macOS also delivers
+            // the same open through `RunEvent::Opened`; the queue dedupes the
+            // overlap. Read argv last so the state and menu exist first.
+            let launch_paths: Vec<String> = std::env::args_os()
+                .skip(1)
+                .filter_map(|argument| argument.into_string().ok())
+                .filter(|argument| !argument.starts_with('-'))
+                .collect();
+            if !launch_paths.is_empty() {
+                push_open_paths(app.handle(), launch_paths);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -312,7 +438,92 @@ pub fn run() {
             check_updates,
             open_external,
             export_bytes,
+            take_pending_open_paths,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // macOS delivers Finder opens here while the app is running; a cold
+            // launch arrives through argv as well, and the queue dedupes it.
+            #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+            if let RunEvent::Opened { urls } = event {
+                let paths = urls
+                    .into_iter()
+                    .filter_map(|url| url.to_file_path().ok())
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .collect();
+                push_open_paths(app, paths);
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "android")))]
+            let _ = (app, event);
+        });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_workspace(name: &str) -> PathBuf {
+        let root =
+            std::env::temp_dir().join(format!("visto-open-paths-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("create temp workspace");
+        root
+    }
+
+    #[test]
+    fn open_paths_keep_one_entry_per_existing_path() {
+        let root = temp_workspace("dedupe");
+        let file = root.join("photo.jpg");
+        std::fs::write(&file, b"not really a jpeg").expect("write temp file");
+        let missing = root.join("gone.jpg");
+
+        let entries = normalize_open_paths(vec![
+            file.to_string_lossy().into_owned(),
+            root.to_string_lossy().into_owned(),
+            // The same file again, through a redundant path spelling.
+            format!("{}/./photo.jpg", root.to_string_lossy()),
+            missing.to_string_lossy().into_owned(),
+        ]);
+
+        assert_eq!(entries.len(), 2, "one file, one folder, no duplicates");
+        assert_eq!(
+            entries[0].path,
+            file.canonicalize().unwrap().to_string_lossy()
+        );
+        assert!(!entries[0].is_dir);
+        assert!(entries[1].is_dir);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn file_associations_match_the_supported_extensions() {
+        let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("valid tauri.conf.json");
+        let mut claimed: Vec<&str> = config["bundle"]["fileAssociations"]
+            .as_array()
+            .expect("bundle.fileAssociations")
+            .iter()
+            .flat_map(|association| {
+                association["ext"]
+                    .as_array()
+                    .expect("association ext list")
+                    .iter()
+                    .map(|ext| ext.as_str().expect("extension is a string"))
+            })
+            .collect();
+        claimed.sort_unstable();
+
+        let mut supported: Vec<&str> = crate::media_kind::EXTENSION_TABLE
+            .iter()
+            .map(|(ext, _)| *ext)
+            .collect();
+        supported.sort_unstable();
+
+        assert_eq!(
+            claimed, supported,
+            "\"Open With\" must claim exactly the extensions the catalog accepts"
+        );
+    }
 }

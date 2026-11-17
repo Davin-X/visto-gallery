@@ -18,6 +18,16 @@ pub struct ScanResult {
     pub duration: i64,
 }
 
+/// A file or folder Finder opened with the app ("Open With" / double-click).
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenPath {
+    /// Canonical path, as handed to `import_files`.
+    pub path: String,
+    /// Folders are indexed as a source; files are opened in the viewer.
+    pub is_dir: bool,
+}
+
 /// A folder in the library, either explicitly imported or inferred from the
 /// on-disk location of items added before folder tracking existed.
 #[derive(Serialize, TS)]

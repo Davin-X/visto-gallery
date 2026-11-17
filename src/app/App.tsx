@@ -31,6 +31,7 @@ import { useDeleteFlow } from "./hooks/useDeleteFlow";
 import { useImportProgress } from "./hooks/useImportProgress";
 import { useLibraryStats } from "./hooks/useLibraryStats";
 import { useNativeMenu } from "./hooks/useNativeMenu";
+import { useOpenWith } from "./hooks/useOpenWith";
 import { useSourceActions } from "./hooks/useSourceActions";
 import { useStartupView } from "./hooks/useStartupView";
 import { useUpdateCheck } from "./hooks/useUpdateCheck";
@@ -535,6 +536,14 @@ function App() {
     checkUpdates: () => void updates.checkForUpdates(true),
     showSettings: () => openSettings(),
     showShortcuts: () => setShortcutsCheatSheetOpen(true),
+  });
+
+  // Finder "Open With" / double-click: play the file, offer to add its folder.
+  useOpenWith({
+    openViewer: (id) => openViewer(id),
+    importPaths: sources.importPaths,
+    showNotice,
+    showErrorNotice,
   });
 
   const activeAlbumName = library.activeAlbum

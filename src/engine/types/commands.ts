@@ -6,6 +6,7 @@ export type {
   Tag,
   ScanResult,
   LibraryFolder,
+  OpenPath,
   LibraryFilterDTO,
   LibraryItemsPage,
   LibraryStats,
