@@ -115,6 +115,7 @@ CI also runs `cargo audit` on `src-tauri/Cargo.lock` and `npm audit --omit=dev -
 - Add a line under **Unreleased** in [CHANGELOG.md](./CHANGELOG.md) for anything a user would notice.
 - Include before and after screenshots for UI changes, in light and dark mode.
 - For changes to native behavior (Trash, Finder tags, file dialogs, drag and drop), work through the relevant rows of [docs/MAC_NATIVE_VALIDATION.md](./docs/MAC_NATIVE_VALIDATION.md).
+- Merge with a merge commit (`gh pr merge <n> --merge --delete-branch`), not a squash: `main` keeps one commit per PR and the branch it came from.
 
 ### Checklist
 
