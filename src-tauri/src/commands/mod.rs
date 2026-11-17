@@ -4,6 +4,7 @@ mod backup;
 mod batch;
 mod batch_pipeline;
 mod cancel;
+mod default_apps;
 mod duplicates;
 mod edit_recipes;
 mod finder_tags;
@@ -32,6 +33,11 @@ pub use batch::*;
 pub(crate) use batch_pipeline::{export_batch_item, render_batch_filename};
 pub use cancel::{cancel_move_to_trash, cancel_scan};
 pub(crate) use cancel::{CancelGroup, CancelToken};
+pub use default_apps::{default_apps_status, set_default_app};
+#[cfg(test)]
+pub use default_apps::{
+    DefaultAppGroup, DefaultAppTarget, DefaultAppType, DefaultAppsStatus, SetDefaultOutcome,
+};
 pub use duplicates::*;
 pub use edit_recipes::*;
 pub use finder_tags::{merge_finder_tags, read_finder_tags, write_finder_tags};

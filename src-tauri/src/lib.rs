@@ -341,6 +341,8 @@ pub fn run() {
             get_library_items,
             get_matching_ids,
             get_display_preview,
+            default_apps_status,
+            set_default_app,
             hidden_lock_status,
             unlock_hidden,
             keep_hidden_unlocked,

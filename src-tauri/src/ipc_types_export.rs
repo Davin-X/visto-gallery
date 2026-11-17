@@ -18,16 +18,17 @@ mod tests {
         AccentColor, AlbumOverview, AlbumsView, AppSettings, Appearance, AudioTrackInfo,
         BackupInfo, BatchExportError, BatchExportItem, BatchExportProgress, BatchExportRequest,
         BatchExportResult, CacheKind, CleanupOverview, CleanupRun, ClearCacheResult, CropRect,
-        CropState, DefaultLayout, DiskSpace, DisplayPreview, DuplicateGroup, EditPreset,
-        EditRecipe, EditValues, ExifData, ExportResult, ExternalPlayer, HiddenLockStatus,
-        JunkCategory, JunkCategoryReport, JunkCleanResult, JunkFailure, JunkIgnoredItem, JunkItem,
-        JunkSkip, JunkTier, LibraryFilterDTO, LibraryFolder, LibraryFootprint, LibraryItemsPage,
+        CropState, DefaultAppGroup, DefaultAppTarget, DefaultAppType, DefaultAppsStatus,
+        DefaultLayout, DiskSpace, DisplayPreview, DuplicateGroup, EditPreset, EditRecipe,
+        EditValues, ExifData, ExportResult, ExternalPlayer, HiddenLockStatus, JunkCategory,
+        JunkCategoryReport, JunkCleanResult, JunkFailure, JunkIgnoredItem, JunkItem, JunkSkip,
+        JunkTier, LibraryFilterDTO, LibraryFolder, LibraryFootprint, LibraryItemsPage,
         LibraryStats, MediaProbe, OpenPath, PartialSettings, PlaybackConversionProgress,
         PlaybackStrategy, PreparedPlayback, RenderRequest, RestoreResult, RootPathMappingPreview,
-        RootPathMappingResult, ScanResult, ScanStatus, SkipReason, SmartAlbum, SmartAlbumFilter,
-        StartupView, StorageUsage, SubtitleTrackInfo, ThumbnailRequest, ThumbnailResponse,
-        ThumbnailSize, TimelineMonth, TrashError, TrashRestoreFailure, TrashRestoreItem,
-        TrashRestoreResult, TrashResult, UpdateCheck, ViewerZoomBehavior,
+        RootPathMappingResult, ScanResult, ScanStatus, SetDefaultOutcome, SkipReason, SmartAlbum,
+        SmartAlbumFilter, StartupView, StorageUsage, SubtitleTrackInfo, ThumbnailRequest,
+        ThumbnailResponse, ThumbnailSize, TimelineMonth, TrashError, TrashRestoreFailure,
+        TrashRestoreItem, TrashRestoreResult, TrashResult, UpdateCheck, ViewerZoomBehavior,
     };
     use crate::errors::{CommandError, ErrorCode};
     use crate::media_kind::MediaKind;
@@ -135,6 +136,11 @@ mod tests {
             LibraryFootprint,
             CleanupRun,
             CleanupOverview,
+            DefaultAppGroup,
+            DefaultAppType,
+            DefaultAppsStatus,
+            DefaultAppTarget,
+            SetDefaultOutcome,
         );
 
         let directory = export_dir();

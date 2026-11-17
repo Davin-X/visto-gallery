@@ -50,6 +50,9 @@ import type {
   CleanupOverview,
   TimelineMonth,
   HiddenLockStatus,
+  DefaultAppsStatus,
+  DefaultAppTarget,
+  SetDefaultOutcome,
   DisplayPreview,
 } from "../types/commands";
 
@@ -283,6 +286,15 @@ export const tauri = {
     /** Merge app tags into existing Finder tags without deleting any. */
     mergeTags: (path: string, tags: string[]): Promise<string[]> =>
       invoke("merge_finder_tags", { path, tags }),
+  },
+
+  defaultApps: {
+    /** Which app Finder opens each offered photo and video type with. */
+    status: (): Promise<DefaultAppsStatus> => invoke("default_apps_status"),
+
+    /** Change one type. macOS may ask the user first; resolves after they answer. */
+    set: (uti: string, target: DefaultAppTarget): Promise<SetDefaultOutcome> =>
+      invoke("set_default_app", { uti, target }),
   },
 
   hiddenLock: {

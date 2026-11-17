@@ -37,20 +37,12 @@ export function ViewingPanel(props: {
             <span className="settings-row-desc">Default thumbnail dimensions in grid view</span>
           </div>
           <div className="settings-row-control">
-            <select
-              className="settings-select"
-              aria-label="Thumbnail size"
-              value={props.thumbnailSize}
-              onChange={(e) =>
-                props.onChange("thumbnailSize", e.target.value as AppSettings["thumbnailSize"])
-              }
-            >
-              {THUMBNAIL_SIZES.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.label}
-                </option>
-              ))}
-            </select>
+            {props.renderRadioGroup(
+              "Thumbnail size",
+              props.thumbnailSize,
+              THUMBNAIL_SIZES,
+              (v: string) => props.onChange("thumbnailSize", v as AppSettings["thumbnailSize"]),
+            )}
           </div>
         </div>
       </section>
