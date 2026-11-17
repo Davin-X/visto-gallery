@@ -323,6 +323,13 @@ struct CleanupRules {
     #[serde(rename = "static")]
     static_junk: Vec<StaticJunk>,
     artifacts: Vec<Artifact>,
+    #[serde(rename = "ambiguousArtifacts")]
+    ambiguous_artifacts: Vec<String>,
+    /// An editor-only pointer at the schema file. `deny_unknown_fields` means
+    /// it has to be declared here, or the shipped JSON will not parse at all.
+    #[serde(rename = "$schema", default)]
+    #[allow(dead_code)]
+    schema: Option<String>,
 }
 
 /// The complete allowlist: every fixed junk location and every project
@@ -330,12 +337,6 @@ struct CleanupRules {
 /// cannot be changed on disk, and [`validate_rules`] rejects any rule that
 /// could reach outside a tool's own cache.
 const RULES_JSON: &str = include_str!("cleanup_rules.json");
-
-/// Artifact names too ambiguous to clean: they are as often source or
-/// release output as build cache.
-const AMBIGUOUS_ARTIFACTS: &[&str] = &[
-    "dist", "build", "bin", "obj", "out", "vendor", "coverage", "lib", "src",
-];
 
 /// Top-level home folders that hold the user's own files. No fixed rule may
 /// point into them.
@@ -483,13 +484,28 @@ fn validate_rules(rules: &CleanupRules) -> Result<(), String> {
             ));
         }
     }
+
+    let mut ambiguous_set = HashSet::new();
+    for name in &rules.ambiguous_artifacts {
+        if !plain_name(name) {
+            return Err(format!(
+                "ambiguous artifact {name:?} must be a plain folder name"
+            ));
+        }
+        if !ambiguous_set.insert(name.to_ascii_lowercase()) {
+            return Err(format!("duplicate ambiguous artifact {name:?}"));
+        }
+    }
     let mut names = HashSet::new();
     for artifact in &rules.artifacts {
         let name = artifact.name.as_str();
         if !plain_name(name) {
             return Err(format!("artifact {name:?} must be a single folder name"));
         }
-        if AMBIGUOUS_ARTIFACTS.contains(&name.to_ascii_lowercase().as_str()) {
+        if rules
+            .ambiguous_artifacts
+            .contains(&name.to_ascii_lowercase())
+        {
             return Err(format!("artifact {name:?} is too ambiguous to clean"));
         }
         if !names.insert(name) {
@@ -751,6 +767,7 @@ fn names_from_ps(comm: &str, args: &str) -> HashSet<String> {
         Some((pid.to_string(), rest.trim().to_string()))
     };
     let by_pid: HashMap<String, String> = args.lines().filter_map(split).collect();
+
     let mut names = HashSet::new();
     for (pid, exe) in comm.lines().filter_map(split) {
         let Some(exe_name) = base_name(&exe) else {
@@ -3028,15 +3045,19 @@ mod tests {
         serde_json::from_str(json).expect("test rules parse")
     }
 
+    /// The names the fence must keep: as often source or release output as a
+    /// build cache. The shipped file carries all nine, checked below.
+    const AMBIGUOUS: &str = r#""dist","build","bin","obj","out","vendor","coverage","lib","src""#;
+
     fn one_static(target: &str) -> String {
         format!(
-            r#"{{"static":[{{"key":"k","category":"packages","label":"L","detail":"D","tier":"regenerable","targets":["{target}"],"busyIf":[]}}],"artifacts":[]}}"#
+            r#"{{"static":[{{"key":"k","category":"packages","label":"L","detail":"D","tier":"regenerable","targets":["{target}"],"busyIf":[]}}],"artifacts":[],"ambiguousArtifacts":[{AMBIGUOUS}]}}"#
         )
     }
 
     fn one_artifact(name: &str, manifest: &str) -> String {
         format!(
-            r#"{{"static":[],"artifacts":[{{"name":"{name}","manifests":["{manifest}"],"marker":null,"tool":"T","recover":"R","busyIf":[]}}]}}"#
+            r#"{{"static":[],"artifacts":[{{"name":"{name}","manifests":["{manifest}"],"marker":null,"tool":"T","recover":"R","busyIf":[]}}],"ambiguousArtifacts":[{AMBIGUOUS}]}}"#
         )
     }
 
@@ -3104,13 +3125,45 @@ mod tests {
     #[test]
     fn duplicate_keys_and_bad_categories_are_rejected() {
         let rule = r#"{"key":"k","category":"packages","label":"L","detail":"D","tier":"regenerable","targets":[".cache/x"],"busyIf":[]}"#;
-        let twice = parse_rules(&format!(r#"{{"static":[{rule},{rule}],"artifacts":[]}}"#));
+        let twice = parse_rules(&format!(
+            r#"{{"static":[{rule},{rule}],"artifacts":[],"ambiguousArtifacts":[{AMBIGUOUS}]}}"#
+        ));
         assert!(validate_rules(&twice).unwrap_err().contains("duplicate"));
         let projects = parse_rules(&one_static(".cache/x").replace("packages", "projects"));
         assert!(validate_rules(&projects).is_err());
         let bad_key =
             parse_rules(&one_static(".cache/x").replace(r#""key":"k""#, r#""key":"K k""#));
         assert!(validate_rules(&bad_key).is_err());
+    }
+
+    /// The fence used to be a Rust `const`. Now that it is data, this is what
+    /// stops a JSON-only edit from quietly unfencing `src` or `vendor`.
+    #[test]
+    fn the_shipped_fence_covers_every_ambiguous_name() {
+        let shipped: Vec<String> = rules()
+            .ambiguous_artifacts
+            .iter()
+            .map(|name| name.to_ascii_lowercase())
+            .collect();
+        for name in [
+            "dist", "build", "bin", "obj", "out", "vendor", "coverage", "lib", "src",
+        ] {
+            assert!(
+                shipped.contains(&name.to_string()),
+                "{name:?} is no longer fenced"
+            );
+        }
+    }
+
+    #[test]
+    fn the_fence_itself_must_be_plain_and_unique() {
+        for list in [r#""a/b""#, r#""""#, r#""*""#, r#""dup","dup""#] {
+            let json = format!(r#"{{"static":[],"artifacts":[],"ambiguousArtifacts":[{list}]}}"#);
+            assert!(
+                validate_rules(&parse_rules(&json)).is_err(),
+                "{list} was accepted"
+            );
+        }
     }
 
     #[test]

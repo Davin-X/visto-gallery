@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Cleanup Rules",
+  "type": "object",
+  "properties": {
+    "static": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "category", "label", "detail", "targets", "tier", "busyIf"],
+        "properties": {
+          "key": { "type": "string" },
+          "category": { "enum": ["xcode", "packages", "projects", "downloads"] },
+          "label": { "type": "string" },
+          "detail": { "type": "string" },
+          "targets": { "type": "array", "items": { "type": "string" } },
+          "tier": { "enum": ["regenerable", "rebuildable"] },
+          "busyIf": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "manifests", "tool", "recover", "busyIf"],
+        "properties": {
+          "name": { "type": "string" },
+          "manifests": { "type": "array", "items": { "type": "string" } },
+          "marker": { "type": ["string", "null"] },
+          "tool": { "type": "string" },
+          "recover": { "type": "string" },
+          "busyIf": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "ambiguousArtifacts": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "required": ["static", "artifacts", "ambiguousArtifacts"]
+}
