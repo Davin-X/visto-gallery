@@ -43,3 +43,6 @@ untracked/
 .clinerules
 
 .kilo
+
+# Local knowledge graph (graphify), rebuilt per machine and never committed
+graphify-out/
