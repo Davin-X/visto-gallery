@@ -21,9 +21,12 @@
       // audio tracks and a subtitle, so the player's track menus are driven by
       // real probe data rather than by a hand-crafted component state.
       const trackProbe = params.get("tracks") === "1";
-      // `longNames=1` stretches every fixture name so the list tables' name
-      // truncation and column floors can be exercised end to end.
-      const longNames = params.get("longNames") === "1";
+      // `longNames=N` stretches every fixture name so the list tables' name
+      // truncation and column floors can be exercised end to end. N repeats
+      // the fixture name N times: `1` is the usual long name, and a test that
+      // needs overflow no matter the platform font asks for a multiple.
+      const longNameRepeats = Math.max(0, Math.floor(Number(params.get("longNames") || 0)));
+      const longNames = longNameRepeats > 0;
       // `raw=N` makes the N items after the videos RAW files (.dng), whose
       // viewer image comes from `get_display_preview`.
       const rawCount = Math.max(0, Math.floor(Number(params.get("raw") || 0)));
@@ -81,7 +84,7 @@
                 ? tinyVideoData
                 : `/synthetic/benchmark-${index}.${extension}`,
             name: longNames
-              ? `this-is-a-very-long-camera-generated-filename-with-a-shared-prefix-${index}-and-a-distinguishing-tail-0042.${extension}`
+              ? `${`this-is-a-very-long-camera-generated-filename-with-a-shared-prefix-${index}-and-a-distinguishing-tail-0042-`.repeat(longNameRepeats).slice(0, -1)}.${extension}`
               : `benchmark-${index}.${extension}`,
             extension,
             kind: isVideo ? "video" : isRaw ? "raw" : "photo",
