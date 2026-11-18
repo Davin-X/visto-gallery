@@ -41,7 +41,7 @@ pub(crate) async fn purge_catalog(db: &SqlitePool) -> Result<(), CommandError> {
         "smart_albums",
         "library_folders",
     ] {
-        sqlx::query(&format!("DELETE FROM {table}"))
+        sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {table}")))
             .execute(&mut *tx)
             .await
             .map_err(|e| CommandError::database(format!("Could not clear {table}: {e}")))?;
@@ -268,9 +268,9 @@ pub(crate) async fn relink_moved_items_from(
         .await
         ?;
         for table in ["media_tags", "album_items", "edit_recipes", "edit_backups"] {
-            sqlx::query(&format!(
+            sqlx::query(sqlx::AssertSqlSafe(format!(
                 "UPDATE {table} SET media_id = ? WHERE media_id = ?"
-            ))
+            )))
             .bind(&new_id)
             .bind(old_id)
             .execute(&mut *transaction)
@@ -287,9 +287,12 @@ pub(crate) async fn relink_moved_items_from(
 #[tauri::command]
 pub async fn get_tags(catalog: State<'_, Catalog>) -> Result<Vec<Tag>, CommandError> {
     let db = crate::commands::get_db(&catalog)?;
-    let tags = sqlx::query_as::<_, Tag>(&format!("{} ORDER BY t.name ASC", TAG_SELECT))
-        .fetch_all(&db)
-        .await?;
+    let tags = sqlx::query_as::<_, Tag>(sqlx::AssertSqlSafe(format!(
+        "{} ORDER BY t.name ASC",
+        TAG_SELECT
+    )))
+    .fetch_all(&db)
+    .await?;
     Ok(tags)
 }
 

@@ -39,10 +39,11 @@ pub async fn get_album_overviews(
 pub(crate) async fn load_album_overviews(
     db: &sqlx::SqlitePool,
 ) -> Result<Vec<AlbumOverview>, CommandError> {
-    let albums = sqlx::query_as::<_, Album>(&format!(
+    // Constants only: the select list and the order are both fixed here.
+    let albums = sqlx::query_as::<_, Album>(sqlx::AssertSqlSafe(format!(
         "{} ORDER BY a.position ASC, a.created_at ASC, a.id ASC",
         super::ALBUM_SELECT
-    ))
+    )))
     .fetch_all(db)
     .await?;
 
@@ -124,10 +125,11 @@ pub(crate) async fn load_album_overviews(
 #[tauri::command]
 pub async fn get_albums(catalog: State<'_, crate::Catalog>) -> Result<Vec<Album>, CommandError> {
     let db = super::get_db(&catalog)?;
-    let mut albums = sqlx::query_as::<_, Album>(&format!(
+    // Constants only: the select list and the order are both fixed here.
+    let mut albums = sqlx::query_as::<_, Album>(sqlx::AssertSqlSafe(format!(
         "{} ORDER BY a.position ASC, a.created_at ASC, a.id ASC",
         super::ALBUM_SELECT
-    ))
+    )))
     .fetch_all(&db)
     .await?;
 

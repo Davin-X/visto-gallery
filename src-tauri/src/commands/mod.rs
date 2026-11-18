@@ -369,7 +369,8 @@ mod purge_catalog_tests {
     }
 
     async fn count(db: &sqlx::SqlitePool, table: &str) -> i64 {
-        sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
+        // Tests only: the table comes from the calling test, never a request.
+        sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT COUNT(*) FROM {table}")))
             .fetch_one(db)
             .await
             .expect("count rows")
