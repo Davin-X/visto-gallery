@@ -24,6 +24,7 @@ import {
   ChartIcon,
   TrashIcon,
   ChevronLeftIcon,
+  ChevronRightIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
 } from "../design/components/icons";
@@ -75,6 +76,10 @@ interface AppTopBarProps {
   appearance: Appearance;
   onCycleAccent: () => void;
   onOpenSettings: () => void;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  onGoBack: () => void;
+  onGoForward: () => void;
   onMouseDown: (e: React.MouseEvent) => void;
   onDoubleClick: (e: React.MouseEvent) => void;
   /** Set while a video is in the background player on a non-Video screen. */
@@ -101,6 +106,10 @@ export function AppTopBar({
   onToggleAppearance,
   onCycleAccent,
   onOpenSettings,
+  canGoBack,
+  canGoForward,
+  onGoBack,
+  onGoForward,
   onMouseDown,
   onDoubleClick,
   nowPlaying,
@@ -115,7 +124,32 @@ export function AppTopBar({
 
   return (
     <header className="topbar" onMouseDown={onMouseDown} onDoubleClick={onDoubleClick}>
-      <div className="topbar-brand" aria-hidden="true" />
+      {screen !== "Video" && (
+        <div className="topbar-leading">
+          <div className="topbar-history" role="group" aria-label="History">
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Go back"
+              title="Go back (⌘[)"
+              onClick={onGoBack}
+              disabled={!canGoBack}
+            >
+              <ChevronLeftIcon size={16} strokeWidth={2} />
+            </button>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Go forward"
+              title="Go forward (⌘])"
+              onClick={onGoForward}
+              disabled={!canGoForward}
+            >
+              <ChevronRightIcon size={16} strokeWidth={2} />
+            </button>
+          </div>
+        </div>
+      )}
       <div className="topbar-context">
         {screen === "Library" ? (
           activeAlbumName ? (
@@ -249,8 +283,6 @@ interface AppSidebarProps {
   onOpenScreen: (screen: Screen) => void;
   onOpenSources: () => void;
   onOpenUpdate: () => void;
-  canGoBack?: boolean;
-  onGoBack?: () => void;
 }
 
 export function AppSidebar({
@@ -266,8 +298,6 @@ export function AppSidebar({
   onOpenScreen,
   onOpenSources,
   onOpenUpdate,
-  canGoBack,
-  onGoBack,
 }: AppSidebarProps) {
   const folderCount = folders.length;
   const folderItems = folders.reduce((total, folder) => total + folder.itemCount, 0);
@@ -464,20 +494,6 @@ export function AppSidebar({
               )}
             </button>
           </div>
-          {canGoBack && onGoBack && (
-            <button
-              type="button"
-              className={`sidebar-back-button${sidebarCollapsed ? " is-collapsed" : ""}`}
-              onClick={onGoBack}
-              aria-label="Go back"
-              title="Go back (⌘[)"
-            >
-              <span className="sidebar-back-icon">
-                <ChevronLeftIcon size={16} strokeWidth={2} />
-              </span>
-              {!sidebarCollapsed && <span>Back</span>}
-            </button>
-          )}
           <nav className="primary-nav" aria-label="Main navigation">
             {NAV_ITEMS.map(({ label, Icon, screen: target }) => {
               return (
