@@ -52,7 +52,7 @@ pub async fn save_edit_recipe(
     catalog: State<'_, crate::Catalog>,
 ) -> Result<EditRecipe, CommandError> {
     let db = super::get_db(&catalog)?;
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::clock::now_millis();
 
     let edits_json = serde_json::to_string(&edits)?;
     let crop_json = crop
@@ -290,7 +290,7 @@ pub async fn copy_edit_recipe(
     catalog: State<'_, crate::Catalog>,
 ) -> Result<EditRecipe, CommandError> {
     let db = super::get_db(&catalog)?;
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::clock::now_millis();
 
     // Read the source recipe
     let source = get_edit_recipe_inner(&db, &from_media_id).await?;
@@ -349,7 +349,7 @@ pub async fn batch_apply_edit(
     catalog: State<'_, crate::Catalog>,
 ) -> Result<usize, CommandError> {
     let db = super::get_db(&catalog)?;
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::clock::now_millis();
 
     let edits_json = serde_json::to_string(&edits)?;
     let crop_json = crop
@@ -397,7 +397,7 @@ pub async fn save_edit_preset(
     catalog: State<'_, crate::Catalog>,
 ) -> Result<EditPreset, CommandError> {
     let db = super::get_db(&catalog)?;
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::clock::now_millis();
     let id = id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
     let edits_json = serde_json::to_string(&edits)?;
@@ -979,7 +979,7 @@ pub async fn apply_edit_preset(
     catalog: State<'_, crate::Catalog>,
 ) -> Result<EditRecipe, CommandError> {
     let db = super::get_db(&catalog)?;
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = crate::clock::now_millis();
 
     // Read the preset
     let preset_row = sqlx::query("SELECT edits, crop FROM edit_presets WHERE id = ?")

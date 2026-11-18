@@ -6,6 +6,7 @@ use sqlx::SqlitePool;
 use tauri::{Emitter, Manager, RunEvent, State};
 
 // Modules
+mod clock;
 mod commands;
 mod db;
 mod errors;
