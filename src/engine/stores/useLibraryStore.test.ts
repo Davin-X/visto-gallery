@@ -405,6 +405,7 @@ test("createSmartAlbum persists the current whitelisted filter", async () => {
     query: "mountain",
     minRating: 3,
     colorLabelFilter: "blue",
+    tagsFilter: ["nature"],
     dateFrom: 100,
     dateTo: 200,
   });
@@ -418,6 +419,7 @@ test("createSmartAlbum persists the current whitelisted filter", async () => {
       query: "mountain",
       rating: 3,
       colorLabel: "blue",
+      tags: ["nature"],
       dateFrom: 100,
       dateTo: 200,
     }),
@@ -439,6 +441,7 @@ test("openSmartAlbum applies the saved filter definition without arbitrary SQL",
           dateFrom: 100,
           dateTo: 200,
           sourcePath: "/Photos",
+          tags: ["minimal"],
         },
         itemCount: 1,
         coverItems: [],
@@ -459,7 +462,11 @@ test("openSmartAlbum applies the saved filter definition without arbitrary SQL",
   expect(state.dateFrom).toBe(100);
   expect(state.dateTo).toBe(200);
   expect(state.activeSource).toBe("/Photos");
+  expect(state.tagsFilter).toEqual(["minimal"]);
   expect(state.activeAlbum).toBeNull();
+  // The saved tags must reach the backend page query, otherwise the album
+  // opens as an unfiltered library.
+  expect(useLibraryStore.getState().getCurrentLibraryFilter().tags).toEqual(["minimal"]);
 });
 
 test("clearFilters resets every refinement and reloads the library", async () => {
@@ -473,6 +480,7 @@ test("clearFilters resets every refinement and reloads the library", async () =>
     colorLabelFilter: "blue",
     cameraFilter: "Nikon Z8",
     lensFilter: "Nikkor",
+    tagsFilter: ["minimal"],
     dateFrom: 100,
     dateTo: 200,
   });
@@ -490,6 +498,7 @@ test("clearFilters resets every refinement and reloads the library", async () =>
   expect(state.colorLabelFilter).toBeNull();
   expect(state.cameraFilter).toBeNull();
   expect(state.lensFilter).toBeNull();
+  expect(state.tagsFilter).toEqual([]);
   expect(state.dateFrom).toBeNull();
   expect(state.dateTo).toBeNull();
 });

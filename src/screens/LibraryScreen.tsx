@@ -142,6 +142,23 @@ function folderName(path: string) {
   return folder.slice(folder.lastIndexOf("/") + 1) || folder;
 }
 
+/**
+ * The heading above the grid.
+ *
+ * A Smart Album is a saved filter, not a media-kind tab, so its own name wins:
+ * rating, tag and colour definitions would otherwise all read "All Media" even
+ * though the grid is filtered.
+ */
+export function libraryHeading(
+  hiddenView: boolean | undefined,
+  smartAlbumName: string | null,
+  filter: string,
+): string {
+  if (hiddenView) return "Hidden";
+  if (smartAlbumName) return smartAlbumName;
+  return filter === "All" ? "All Media" : filter;
+}
+
 interface LibraryScreenProps {
   activeAlbum: string | null;
   albumDragOver?: boolean;
@@ -430,6 +447,11 @@ function LibraryScreen(props: LibraryScreenProps) {
     ? props.albums?.find((album) => album.id === props.activeAlbum)
     : null;
   const activeAlbumName = props.activeAlbum ? (activeAlbumRecord?.name ?? "Album") : null;
+  // A Smart Album is a saved filter, not a media-kind tab, so its name is the
+  // only accurate heading: rating/tag/colour definitions all open as "All
+  // Media" otherwise.
+  const activeSmartAlbumName =
+    library.smartAlbums.find((album) => album.id === library.activeSmartAlbum)?.name ?? null;
   const inAlbum = Boolean(props.activeAlbum);
   const activeAlbumItems = useMemo(
     () =>
@@ -493,6 +515,7 @@ function LibraryScreen(props: LibraryScreenProps) {
         library.activeSmartAlbum ||
         library.cameraFilter ||
         library.lensFilter ||
+        library.tagsFilter.length > 0 ||
         props.minRating !== null ||
         props.colorLabelFilter ||
         props.dateFrom != null ||
@@ -1322,21 +1345,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                 <p className="eyebrow">
                   {props.hiddenView ? "OUT OF THE GALLERY" : "YOUR COLLECTION"}
                 </p>
-                <h1>
-                  {props.hiddenView
-                    ? "Hidden"
-                    : props.filter === "Photos"
-                      ? "Photos"
-                      : props.filter === "Videos"
-                        ? "Videos"
-                        : props.filter === "RAW"
-                          ? "RAW"
-                          : props.filter === "Animations"
-                            ? "Animations"
-                            : props.filter === "Favorites"
-                              ? "Favorites"
-                              : "All Media"}
-                </h1>
+                <h1>{libraryHeading(props.hiddenView, activeSmartAlbumName, props.filter)}</h1>
                 {/* The hidden-view note lives in the heading instead of a
                     banner row so the sticky header stays short. When nothing is
                     hidden the empty state already says the same thing. */}

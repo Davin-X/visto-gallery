@@ -102,6 +102,10 @@ export interface LibraryState {
   colorLabelFilter: string | null; // 'red' | 'yellow' | 'green' | 'blue' | 'purple'
   cameraFilter: string | null; // filter by camera model
   lensFilter: string | null; // filter by lens model
+  // Tags applied by a Smart Album. There is no manual tag picker in the
+  // Library, so this is set only when a saved definition with `tags` opens;
+  // the backend already supports the filter.
+  tagsFilter: string[];
   // Which collection the viewer navigates when it opens. Hidden items are
   // deliberately absent from the normal viewer, so the Hidden gallery asks the
   // viewer to browse the hidden set instead.
@@ -427,6 +431,7 @@ export function currentLibraryFilter(state: LibraryState): LibraryFilterDTO {
     colorLabel: state.colorLabelFilter ?? undefined,
     camera: state.cameraFilter ?? undefined,
     lens: state.lensFilter ?? undefined,
+    tags: state.tagsFilter.length > 0 ? state.tagsFilter : undefined,
     hidden: false,
   };
 }
@@ -600,6 +605,7 @@ export const useLibraryStore = create<LibraryState>()(
       colorLabelFilter: null,
       cameraFilter: null,
       lensFilter: null,
+      tagsFilter: [],
       busy: false,
       canceling: false,
       refreshingLibrary: false,
@@ -1090,6 +1096,7 @@ export const useLibraryStore = create<LibraryState>()(
           colorLabelFilter: null,
           cameraFilter: null,
           lensFilter: null,
+          tagsFilter: [],
           dateFrom: null,
           dateTo: null,
           activeSmartAlbum: null,
@@ -1216,6 +1223,7 @@ export const useLibraryStore = create<LibraryState>()(
           activeSmartAlbum: null,
           filter: "All",
           activeSource: null,
+          tagsFilter: [],
         });
         get().refreshDerived();
         void get().loadLibrary();
@@ -1795,6 +1803,7 @@ export const useLibraryStore = create<LibraryState>()(
           colorLabel: state.colorLabelFilter ?? undefined,
           camera: state.cameraFilter ?? undefined,
           lens: state.lensFilter ?? undefined,
+          tags: state.tagsFilter.length > 0 ? state.tagsFilter : undefined,
           sortBy: state.sortBy,
           sortOrder: state.sortOrder,
         };
@@ -1894,6 +1903,7 @@ export const useLibraryStore = create<LibraryState>()(
           colorLabelFilter: filter.colorLabel ?? null,
           cameraFilter: filter.camera ?? null,
           lensFilter: filter.lens ?? null,
+          tagsFilter: filter.tags ?? [],
           sortBy: filter.sortBy ?? get().sortBy,
           sortOrder: filter.sortOrder ?? get().sortOrder,
         });
