@@ -189,6 +189,24 @@ export function SlideshowIcon({ size = 18, className = "", strokeWidth = 1.8 }: 
   );
 }
 
+/** A note on a stand: the slideshow ambient track. Slashed when muted, the
+    same "no sound" convention VolumeIcon uses. */
+export function MusicIcon({
+  size = 15,
+  className = "",
+  strokeWidth = 1.8,
+  muted = false,
+}: IconProps & { muted?: boolean }) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth} fill="none">
+      <path d="M5.4 18.4V9.4l11.2-4.2v11.2" />
+      <circle cx="8.4" cy="17.4" r="1.4" />
+      <circle cx="14.4" cy="14.4" r="1.4" />
+      {muted && <path d="M3.8 3.8l16.4 16.4" />}
+    </Svg>
+  );
+}
+
 /* ===== Small action icons ===== */
 
 export function PlusIcon({ size = 16, className = "", strokeWidth = 1.9 }: IconProps) {

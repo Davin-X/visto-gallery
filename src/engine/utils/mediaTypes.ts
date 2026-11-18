@@ -31,6 +31,34 @@ export function canPlayVideoInApp(path?: string, name?: string): boolean {
   return !ext || IN_APP_VIDEO_EXTENSIONS.has(ext);
 }
 
+/**
+ * Stills WKWebView decodes natively at full quality. RAW files (handled by the
+ * item's kind) and a couple of containers it cannot decode (HEIC/HEIF,
+ * JPEG-XL) are served a macOS-rendered JPEG preview; everything else is handed
+ * the original and only falls back to a preview if it fails to load. This is a
+ * deliberately narrow eager list — the Viewer is even leaner (RAW plus load
+ * errors), so formats like WebP/TIFF should try the original first rather than
+ * paying an IPC round-trip per slide.
+ */
+const DECODABLE_STILL_EXTENSIONS = new Set([
+  "jpg",
+  "jpeg",
+  "jpe",
+  "jfif",
+  "png",
+  "gif",
+  "bmp",
+  "avif",
+  "webp",
+  "tif",
+  "tiff",
+]);
+
+export function canDecodeStill(path?: string, name?: string): boolean {
+  const ext = fileExtension(path) || fileExtension(name);
+  return !ext || DECODABLE_STILL_EXTENSIONS.has(ext);
+}
+
 /** Why a video failed to play in the app. */
 export type VideoFailureKind = "format" | "unavailable";
 

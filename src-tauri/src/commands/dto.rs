@@ -377,6 +377,11 @@ define_settings! {
     slideshow_interval: i32 = 5,
     slideshow_shuffle: bool = false,
     slideshow_loop: bool = true,
+    /// Play an ambient track under the slideshow. Disabled by default because
+    /// ambient audio is a presentation aid, not a library default.
+    slideshow_background_audio: bool = false,
+    /// Path to the ambient track, if one was picked. Empty when none.
+    slideshow_background_audio_path: Option<String> = None,
     video_auto_play: bool = true,
     video_loop: bool = false,
     watch_folders: Vec<String> = Vec::new(),

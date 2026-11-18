@@ -1157,58 +1157,11 @@ kbd {
   color: var(--accent-text);
   font-size: 13px;
 }
-.slideshow-caption {
-  position: absolute;
-  bottom: 70px;
-  left: 22px;
-}
-.slideshow-caption > span {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 13px;
-  letter-spacing: 0.12em;
-}
-.slideshow-caption h2 {
-  margin: 8px 0 4px;
-  font-family: "Manrope", sans-serif;
-  font-size: 22px;
-  letter-spacing: -0.04em;
-}
-.slideshow-caption p {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 12px;
-}
-.slideshow-caption i {
-  padding: 0 3px;
-  font-style: normal;
-}
-.slideshow-controls {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
-  left: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 7px;
-  background: rgba(20, 24, 29, 0.62);
-  backdrop-filter: blur(8px);
-}
-.slideshow-controls button {
-  padding: 7px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.12);
-  color: white;
-  font-size: 12px;
-}
-.slideshow-controls > span {
-  margin-left: auto;
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 13px;
-}
+/* `.slideshow-caption` and `.slideshow-controls` are styled by
+   app/styles/slideshow.css; the overlay is the only slideshow surface. The
+   rules that used to live here (absolute caption at bottom-left, bordered
+   bar spanning the window, `margin-left: auto` on direct span children)
+   fought it, so they were removed rather than overridden. */
 .slideshow-settings {
   padding: 14px;
   border: 1px solid var(--line);

@@ -232,10 +232,11 @@ pub fn run() {
             let opened = tauri::async_runtime::block_on(async {
                 let db = Database::open(&app_handle).await?;
                 let folders = db.registered_folders().await;
-                anyhow::Ok((db, folders))
+                let media_dirs = db.media_item_parent_dirs().await;
+                anyhow::Ok((db, folders, media_dirs))
             });
             match opened {
-                Ok((db, folders)) => {
+                Ok((db, folders, media_dirs)) => {
                     // A restored or hand-edited catalog can list any folder.
                     // Only grant roots that are real folders under the user's
                     // home or a mounted volume; never `/`.
@@ -254,6 +255,51 @@ pub fn run() {
                                 "registered root '{folder}' was not granted to the asset scope: {reason}"
                             ),
                         }
+                    }
+                    // Files imported on their own (not via a registered folder)
+                    // lost their per-session asset grant on restart. Re-grant
+                    // the directories that hold cataloged items so originals
+                    // load without re-importing. These are held to the same
+                    // rule as registered roots — an existing folder under the
+                    // user's home or a mounted volume, never `/` — so a
+                    // hand-edited catalog cannot widen read access to the
+                    // whole filesystem.
+                    for dir in media_dirs {
+                        match commands::security::paths::grantable_root(&dir, &home) {
+                            Ok(path) => {
+                                let _ = app_handle
+                                    .asset_protocol_scope()
+                                    .allow_directory(&path, true);
+                            }
+                            Err(reason) => tracing::warn!(
+                                "media directory '{dir}' was not granted to the asset scope: {reason}"
+                            ),
+                        }
+                    }
+                    // A track picked in Settings is authorized for the session
+                    // only; re-grant it at launch so the show can play it after
+                    // a restart. A drive that is not mounted is skipped here and
+                    // fails at play time with a message, not silently.
+                    match tauri::async_runtime::block_on(
+                        commands::load_persisted_settings(db.pool()),
+                    ) {
+                        Ok(settings) => {
+                            if let Some(path) =
+                                settings.slideshow_background_audio_path.as_deref()
+                            {
+                                let file = std::path::PathBuf::from(path);
+                                if let Ok(canonical) = file.canonicalize() {
+                                    if canonical.is_file() {
+                                        let _ = app_handle
+                                            .asset_protocol_scope()
+                                            .allow_file(&canonical);
+                                    }
+                                }
+                            }
+                        }
+                        Err(error) => tracing::warn!(
+                            "could not read settings to re-grant ambient audio: {error:#}"
+                        ),
                     }
                     let background = db.handle();
                     catalog.set(Ok(db.pool().clone()));
@@ -335,6 +381,7 @@ pub fn run() {
             scan_library,
             pick_source_folders,
             pick_media_files,
+            pick_ambient_audio,
             cancel_scan,
             cancel_move_to_trash,
             cancel_find_duplicates,

@@ -12,5 +12,8 @@ export function startConfiguredSlideshow(items: MediaItem[], startId?: string | 
   slideshow.setInterval(preferences.slideshowInterval);
   slideshow.setShuffle(preferences.slideshowShuffle);
   slideshow.setLoop(preferences.slideshowLoop);
+  slideshow.setAmbientPath(
+    preferences.slideshowBackgroundAudio ? preferences.slideshowBackgroundAudioPath : null,
+  );
   slideshow.open(items, startId);
 }

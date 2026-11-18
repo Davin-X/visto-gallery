@@ -15,6 +15,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use sqlx::SqlitePool;
+use tauri::Manager;
 use tauri::State;
 use tauri_plugin_dialog::DialogExt;
 
@@ -244,6 +245,37 @@ pub async fn pick_media_files(
         .unwrap_or_default();
     state.grants.grant(&picked);
     Ok(picked)
+}
+
+/// Native file picker for an ambient audio track played under a slideshow.
+/// The picked file is granted for this session so the asset protocol can serve
+/// it, and the path is returned so the frontend can save it as a setting.
+#[tauri::command]
+pub async fn pick_ambient_audio(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Option<String>, CommandError> {
+    // Only formats WKWebView can decode. ogg and ADTS aac do not play in the
+    // webview, so offering them would pick a track that silently fails.
+    let picked = app
+        .dialog()
+        .file()
+        .set_title("Choose an ambient audio track")
+        .add_filter("Audio", &["mp3", "m4a", "wav", "flac"])
+        .blocking_pick_files()
+        .map(paths_to_strings)
+        .unwrap_or_default();
+    let Some(path) = picked.first() else {
+        return Ok(None);
+    };
+    state.grants.grant(&picked);
+    // The show loads the track through the asset protocol, so the picked file
+    // must be in its scope. `grants` is the import authorization allowlist, not
+    // the asset scope — without this the track 404s.
+    if let Ok(canonical) = std::path::Path::new(path).canonicalize() {
+        let _ = app.asset_protocol_scope().allow_file(&canonical);
+    }
+    Ok(Some(path.clone()))
 }
 
 #[cfg(test)]
