@@ -1,5 +1,5 @@
+use crate::clock::now_millis;
 use anyhow::Result;
-use chrono::Utc;
 use sqlx::{sqlite::SqlitePoolOptions, Row, SqlitePool};
 use std::path::PathBuf;
 use tauri::Manager;
@@ -151,7 +151,7 @@ impl Database {
 
         sqlx::query("INSERT OR REPLACE INTO _migration_flags (name, completed_at) VALUES (?, ?)")
             .bind(FLAG)
-            .bind(Utc::now().timestamp_millis())
+            .bind(now_millis())
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -212,7 +212,7 @@ impl Database {
         sqlx::query(
             "INSERT OR REPLACE INTO _migration_flags (name, completed_at) VALUES ('backfill_animation_flags', ?)"
         )
-        .bind(Utc::now().timestamp_millis())
+        .bind(now_millis())
         .execute(&self.pool)
         .await?;
 
@@ -275,7 +275,7 @@ impl Database {
 
         sqlx::query("INSERT OR REPLACE INTO _migration_flags (name, completed_at) VALUES (?, ?)")
             .bind(FLAG)
-            .bind(Utc::now().timestamp_millis())
+            .bind(now_millis())
             .execute(&self.pool)
             .await?;
         Ok(())

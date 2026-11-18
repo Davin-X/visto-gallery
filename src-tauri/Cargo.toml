@@ -22,7 +22,7 @@ tauri-plugin-single-instance = "2"
 tokio = { version = "1", features = ["full", "macros"] }
 
 # Database
-sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "macros", "time", "uuid", "chrono", "migrate"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "macros", "time", "uuid", "migrate"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -38,8 +38,7 @@ notify = "8"
 uuid = { version = "1", features = ["v4", "serde"] }
 
 # Time
-time = { version = "0.3", features = ["serde", "formatting", "macros", "std"] }
-chrono = { version = "0.4", features = ["serde"] }
+time = { version = "0.3", features = ["formatting", "macros", "parsing", "serde", "std"] }
 
 # Trash
 trash = "5"
