@@ -427,12 +427,13 @@ mod thumbnail_cache_tests {
         assert!(favorite, "the favourite flag survives the move");
 
         for (table, column) in [("media_tags", "tag_id"), ("album_items", "album_id")] {
-            let value: String =
-                sqlx::query_scalar(&format!("SELECT {column} FROM {table} WHERE media_id = ?"))
-                    .bind(&new_id)
-                    .fetch_one(&db)
-                    .await
-                    .unwrap_or_else(|_| panic!("relation in {table} should follow the move"));
+            let value: String = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+                "SELECT {column} FROM {table} WHERE media_id = ?"
+            )))
+            .bind(&new_id)
+            .fetch_one(&db)
+            .await
+            .unwrap_or_else(|_| panic!("relation in {table} should follow the move"));
             assert!(!value.is_empty());
         }
         let recipe_owner: String = sqlx::query_scalar("SELECT media_id FROM edit_recipes")
