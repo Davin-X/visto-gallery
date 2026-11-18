@@ -14,6 +14,12 @@ updates:
       - dependency-name: "typescript"
         update-types:
           - "version-update:semver-major"
+      # eslint 10 is installable for typescript-eslint 8, but
+      # eslint-plugin-react 7.37.5 (latest) still caps its peer range at ^9.7,
+      # so npm ci fails with ERESOLVE before lint or the build can run (#313).
+      - dependency-name: "eslint"
+        update-types:
+          - "version-update:semver-major"
     labels:
       - "dependencies"
       - "npm"
