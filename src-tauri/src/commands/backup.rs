@@ -11,6 +11,13 @@ use ts_rs::TS;
 const BACKUP_FORMAT_VERSION: i64 = 1;
 const META_TABLE: &str = "visto_backup_meta";
 
+/// Quote a SQLite identifier for the few statements that cannot bind one:
+/// `VACUUM INTO` takes a literal path, and table/column names come from a
+/// backup file's own schema rather than from a request.
+fn quote_ident(name: &str) -> String {
+    format!("\"{}\"", name.replace('"', "\"\""))
+}
+
 const REQUIRED_TABLES: &[&str] = &[
     "media_items",
     "albums",
@@ -163,9 +170,11 @@ async fn table_exists(
     schema: &str,
     table: &str,
 ) -> Result<bool, CommandError> {
-    let sql =
-        format!("SELECT 1 FROM {schema}.sqlite_master WHERE type = 'table' AND name = ? LIMIT 1");
-    let found: Option<i64> = sqlx::query_scalar(&sql)
+    let sql = format!(
+        "SELECT 1 FROM {}.sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+        quote_ident(schema)
+    );
+    let found: Option<i64> = sqlx::query_scalar(sqlx::AssertSqlSafe(sql))
         .bind(table)
         .fetch_optional(&mut *conn)
         .await?;
@@ -258,7 +267,9 @@ async fn snapshot_to(db: &SqlitePool, destination: &Path) -> Result<(), CommandE
     }
     let destination = destination.to_string_lossy().into_owned();
     let escaped = destination.replace('\'', "''");
-    sqlx::query(&format!("VACUUM INTO '{escaped}'"))
+    // `VACUUM INTO` needs a literal path; quotes are doubled above so the
+    // destination cannot end the string early.
+    sqlx::query(sqlx::AssertSqlSafe(format!("VACUUM INTO '{escaped}'")))
         .execute(db)
         .await
         .map_err(|e| CommandError::database(format!("Could not create catalog snapshot: {e}")))?;
@@ -270,21 +281,21 @@ async fn annotate_snapshot(path: &str) -> Result<(), CommandError> {
         .filename(path)
         .create_if_missing(false);
     let mut conn = SqliteConnection::connect_with(&options).await?;
-    sqlx::query(&format!(
+    sqlx::query(sqlx::AssertSqlSafe(format!(
         "CREATE TABLE IF NOT EXISTS {META_TABLE} (
             version INTEGER NOT NULL,
             app_version TEXT NOT NULL,
             created_at INTEGER NOT NULL
         )"
-    ))
+    )))
     .execute(&mut conn)
     .await?;
-    sqlx::query(&format!("DELETE FROM {META_TABLE}"))
+    sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {META_TABLE}")))
         .execute(&mut conn)
         .await?;
-    sqlx::query(&format!(
+    sqlx::query(sqlx::AssertSqlSafe(format!(
         "INSERT INTO {META_TABLE} (version, app_version, created_at) VALUES (?, ?, ?)"
-    ))
+    )))
     .bind(BACKUP_FORMAT_VERSION)
     .bind(env!("CARGO_PKG_VERSION"))
     .bind(super::now_ms())
@@ -400,8 +411,12 @@ async fn copy_table(
     table: &str,
     columns: &[&str],
 ) -> Result<(), CommandError> {
+    // The schema argument selects *which* database's table to describe. A
+    // schema prefix on the pragma function itself (`restore_src.pragma_table_info`)
+    // is ignored and would describe the main catalog instead, so a backup
+    // missing a column would silently look complete.
     let present: std::collections::HashSet<String> =
-        sqlx::query_scalar::<_, String>("SELECT name FROM restore_src.pragma_table_info(?)")
+        sqlx::query_scalar::<_, String>("SELECT name FROM pragma_table_info(?, 'restore_src')")
             .bind(table)
             .fetch_all(&mut **tx)
             .await
@@ -416,10 +431,15 @@ async fn copy_table(
     if kept.is_empty() {
         return Ok(());
     }
-    let columns = kept.join(", ");
-    sqlx::query(&format!(
-        "INSERT INTO {table} ({columns}) SELECT {columns} FROM restore_src.{table}"
-    ))
+    let quoted_table = quote_ident(table);
+    let columns = kept
+        .iter()
+        .map(|column| quote_ident(column))
+        .collect::<Vec<_>>()
+        .join(", ");
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "INSERT INTO {quoted_table} ({columns}) SELECT {columns} FROM restore_src.{quoted_table}"
+    )))
     .execute(&mut **tx)
     .await
     .map_err(|e| CommandError::database(format!("Could not restore {table}: {e}")))?;
@@ -984,9 +1004,10 @@ mod tests {
             .await
             .unwrap();
 
-        // Replace only the optional Smart Album table with an incompatible
-        // shape. Validation does not require this table, so restore reaches
-        // the copy step and fails inside the transaction.
+        // Replace only the optional Smart Album table with one that has rows
+        // but lacks columns this build requires (`filter_json`, timestamps).
+        // Validation does not require this table, so restore reaches the copy
+        // step and fails there, inside the transaction.
         let mut backup =
             SqliteConnection::connect_with(&SqliteConnectOptions::new().filename(&backup_path))
                 .await
@@ -996,6 +1017,10 @@ mod tests {
             .await
             .unwrap();
         sqlx::query("CREATE TABLE smart_albums (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
+            .execute(&mut backup)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO smart_albums (id, name) VALUES ('s1', 'Recent')")
             .execute(&mut backup)
             .await
             .unwrap();
@@ -1020,6 +1045,163 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(current_path, "/current/changed.jpg");
+
+        db.close().await;
+        let _ = std::fs::remove_file(catalog_path);
+        let _ = std::fs::remove_file(backup_path);
+    }
+
+    #[tokio::test]
+    async fn restores_an_older_backup_that_lacks_a_newer_column() {
+        let (db, catalog_path) = catalog_db().await;
+        insert_catalog_item(&db, "m1", "/older/photo.jpg").await;
+        let backup_path = temp_backup("older-column");
+        snapshot_to(&db, &backup_path).await.unwrap();
+        annotate_snapshot(backup_path.to_str().unwrap())
+            .await
+            .unwrap();
+
+        // Behave like a snapshot written before `color_label` existed: the
+        // column is gone, everything else is unchanged.
+        let mut backup =
+            SqliteConnection::connect_with(&SqliteConnectOptions::new().filename(&backup_path))
+                .await
+                .unwrap();
+        sqlx::query("ALTER TABLE media_items DROP COLUMN color_label")
+            .execute(&mut backup)
+            .await
+            .unwrap();
+        backup.close().await.unwrap();
+
+        sqlx::query("UPDATE media_items SET path = '/current/changed.jpg' WHERE id = 'm1'")
+            .execute(&db)
+            .await
+            .unwrap();
+
+        restore_backup_into_catalog(&db, backup_path.to_str().unwrap())
+            .await
+            .unwrap();
+
+        // The columns the backup still has are copied; the missing one falls
+        // back to its default instead of failing the whole restore.
+        let (path, name, rating, color_label): (String, String, i64, Option<String>) =
+            sqlx::query_as(
+                "SELECT path, name, rating, color_label FROM media_items WHERE id = 'm1'",
+            )
+            .fetch_one(&db)
+            .await
+            .unwrap();
+        assert_eq!(path, "/older/photo.jpg");
+        assert_eq!(name, "a.jpg");
+        assert_eq!(rating, 4);
+        assert_eq!(color_label, None);
+
+        db.close().await;
+        let _ = std::fs::remove_file(catalog_path);
+        let _ = std::fs::remove_file(backup_path);
+    }
+
+    /// A file-backed catalog built from the production migration set, opened
+    /// with the same options as the app (WAL, foreign keys). The other tests
+    /// use a hand-written schema, so this one catches a restore that only
+    /// works against the test tables and not the real catalog.
+    async fn migrated_db() -> (SqlitePool, PathBuf) {
+        let path = temp_backup("migrated");
+        let options = SqliteConnectOptions::new()
+            .filename(&path)
+            .create_if_missing(true)
+            .foreign_keys(true)
+            .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal);
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .expect("open migrated catalog");
+        sqlx::migrate!("./migrations")
+            .run(&db)
+            .await
+            .expect("run migrations");
+        (db, path)
+    }
+
+    #[tokio::test]
+    async fn restores_every_table_of_a_migrated_catalog() {
+        let (db, catalog_path) = migrated_db().await;
+        for statement in [
+            "INSERT INTO library_folders (path, added_at) VALUES ('/photos', 1)",
+            "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at, rating, color_label) VALUES ('m1', '/photos/a.jpg', 'a.jpg', 'jpg', 'photo', 10, 1, 1, 1, 4, 'blue')",
+            "INSERT INTO albums (id, name, created_at, updated_at) VALUES ('a1', 'Trips', 1, 1)",
+            "INSERT INTO album_items (album_id, media_id, added_at) VALUES ('a1', 'm1', 1)",
+            "INSERT INTO tags (id, name, created_at) VALUES ('t1', 'Summer', 1)",
+            "INSERT INTO media_tags (media_id, tag_id) VALUES ('m1', 't1')",
+            "INSERT INTO smart_albums (id, name, filter_json, created_at, updated_at) VALUES ('s1', 'Recent', '{}', 1, 1)",
+            "INSERT INTO edit_recipes (media_id, edits, history, created_at, updated_at) VALUES ('m1', '{}', '[]', 1, 1)",
+            "INSERT INTO edit_backups (media_id, original_path, backup_path, size, created_at) VALUES ('m1', '/photos/a.jpg', '/backups/a.jpg', 10, 1)",
+        ] {
+            sqlx::query(statement).execute(&db).await.unwrap();
+        }
+
+        let backup_path = temp_backup("migrated-snapshot");
+        snapshot_to(&db, &backup_path).await.unwrap();
+        annotate_snapshot(backup_path.to_str().unwrap())
+            .await
+            .unwrap();
+
+        // Lose everything, then restore what the snapshot held.
+        for table in [
+            "edit_backups",
+            "edit_recipes",
+            "media_tags",
+            "album_items",
+            "smart_albums",
+            "media_items",
+            "albums",
+            "tags",
+            "library_folders",
+        ] {
+            sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {table}")))
+                .execute(&db)
+                .await
+                .unwrap();
+        }
+
+        restore_backup_into_catalog(&db, backup_path.to_str().unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            attached_databases(&db).await,
+            vec!["main".to_string()],
+            "the restore source must be detached before the connection is reused"
+        );
+
+        let (path, rating, color_label): (String, i64, String) =
+            sqlx::query_as("SELECT path, rating, color_label FROM media_items WHERE id = 'm1'")
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(path, "/photos/a.jpg");
+        assert_eq!(rating, 4);
+        assert_eq!(color_label, "blue");
+
+        for (sql, expected) in [
+            ("SELECT name FROM albums WHERE id = 'a1'", "Trips"),
+            ("SELECT name FROM tags WHERE id = 't1'", "Summer"),
+            ("SELECT name FROM smart_albums WHERE id = 's1'", "Recent"),
+            ("SELECT tag_id FROM media_tags WHERE media_id = 'm1'", "t1"),
+            (
+                "SELECT album_id FROM album_items WHERE media_id = 'm1'",
+                "a1",
+            ),
+            ("SELECT path FROM library_folders", "/photos"),
+            ("SELECT edits FROM edit_recipes WHERE media_id = 'm1'", "{}"),
+            (
+                "SELECT backup_path FROM edit_backups WHERE media_id = 'm1'",
+                "/backups/a.jpg",
+            ),
+        ] {
+            let value: String = sqlx::query_scalar(sql).fetch_one(&db).await.unwrap();
+            assert_eq!(value, expected, "after restoring {sql}");
+        }
 
         db.close().await;
         let _ = std::fs::remove_file(catalog_path);
