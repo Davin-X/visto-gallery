@@ -78,6 +78,46 @@
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.18));
 }
 
+/* History controls sit at the far left, after the traffic lights, so they read
+   as browser-style back/forward rather than as another sidebar tab. */
+.topbar-leading {
+  grid-column: 1;
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.topbar-history {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.topbar-history .icon-button {
+  width: 26px;
+  height: 26px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.topbar-history .icon-button:not(:disabled):hover {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* Keep both controls in place when there is nowhere to go: the disabled pair
+   is the standard history affordance, and nothing shifts when it enables. */
+.topbar-history .icon-button:disabled {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.35;
+  cursor: default;
+}
+
 .topbar-context {
   justify-self: center;
   display: inline-flex;

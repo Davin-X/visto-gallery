@@ -101,18 +101,6 @@
   .app-body.sidebar-collapsed .sidebar-header {
     padding: 14px 12px 10px;
   }
-  .app-body.sidebar-collapsed .sidebar-back-button {
-    width: 40px;
-    min-width: 40px;
-    height: 36px;
-    margin: 8px auto 0;
-    padding: 0;
-    justify-content: center;
-    border-radius: 9px;
-  }
-  .app-body.sidebar-collapsed .sidebar-back-icon {
-    transform: scale(1.05);
-  }
   .app-body.sidebar-collapsed .nav-item,
   .app-body.sidebar-collapsed .sources-entry,
   .app-body.sidebar-collapsed .sidebar-label {
@@ -222,8 +210,7 @@
   .app-body.sidebar-collapsed .nav-item,
   .app-body.sidebar-collapsed .sources-entry,
   .app-body.sidebar-collapsed .sidebar-stats-button,
-  .app-body.sidebar-collapsed .sidebar-collapse-toggle,
-  .app-body.sidebar-collapsed .sidebar-back-button {
+  .app-body.sidebar-collapsed .sidebar-collapse-toggle {
     border: 1px solid transparent;
     background: transparent;
     color: var(--muted);
@@ -235,16 +222,14 @@
 
   /* Glyphs follow their item rather than carrying a colour of their own. */
   .app-body.sidebar-collapsed .nav-icon,
-  .app-body.sidebar-collapsed .sources-entry-icon,
-  .app-body.sidebar-collapsed .sidebar-back-icon {
+  .app-body.sidebar-collapsed .sources-entry-icon {
     color: inherit;
   }
 
   .app-body.sidebar-collapsed .nav-item:hover,
   .app-body.sidebar-collapsed .sources-entry:hover,
   .app-body.sidebar-collapsed .sidebar-stats-button:hover,
-  .app-body.sidebar-collapsed .sidebar-collapse-toggle:hover,
-  .app-body.sidebar-collapsed .sidebar-back-button:hover {
+  .app-body.sidebar-collapsed .sidebar-collapse-toggle:hover:hover {
     border-color: var(--line);
     background: var(--surface-3);
     color: var(--text);
@@ -253,8 +238,7 @@
   .app-body.sidebar-collapsed .nav-item:focus-visible,
   .app-body.sidebar-collapsed .sources-entry:focus-visible,
   .app-body.sidebar-collapsed .sidebar-stats-button:focus-visible,
-  .app-body.sidebar-collapsed .sidebar-collapse-toggle:focus-visible,
-  .app-body.sidebar-collapsed .sidebar-back-button:focus-visible {
+  .app-body.sidebar-collapsed .sidebar-collapse-toggle:focus-visible:focus-visible {
     outline: 2px solid var(--blue);
     outline-offset: 2px;
     border-color: var(--line);

@@ -71,7 +71,9 @@ function assetUrl(path: string) {
 function App() {
   const screen = useNavigationStore((s) => s.screen);
   const canGoBack = useNavigationStore((s) => s.history.length > 0);
+  const canGoForward = useNavigationStore((s) => s.forward.length > 0);
   const goBack = useNavigationStore((s) => s.goBack);
+  const goForward = useNavigationStore((s) => s.goForward);
 
   // A mouse's back and forward buttons (3 and 4) walk the same history.
   useEffect(() => {
@@ -601,6 +603,10 @@ function App() {
             settings.update("accentColor", next);
           }}
           onOpenSettings={() => openSettings()}
+          canGoBack={canGoBack}
+          canGoForward={canGoForward}
+          onGoBack={goBack}
+          onGoForward={goForward}
           onMouseDown={beginTopbarDrag}
           onDoubleClick={handleTopbarDoubleClick}
         />
@@ -621,9 +627,6 @@ function App() {
           onOpenUpdate={() => updates.setUpdateDialogOpen(true)}
           sidebarCollapsed={library.sidebarCollapsed}
           onToggleCollapse={library.toggleSidebarCollapsed}
-          // Video player has its own back control; avoid redundant sidebar back.
-          canGoBack={canGoBack && screen !== "Video"}
-          onGoBack={goBack}
         />
       }
       overlays={
