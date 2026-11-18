@@ -185,12 +185,18 @@ pub async fn scan_library(
 
     // Hand back the albums and tags so the sidebar is populated from the same
     // call that imports, instead of staying empty until a separate round-trip.
-    let albums = sqlx::query_as::<_, Album>(&format!("{} ORDER BY a.created_at ASC", ALBUM_SELECT))
-        .fetch_all(&db)
-        .await?;
-    let tags = sqlx::query_as::<_, Tag>(&format!("{} ORDER BY t.name ASC", TAG_SELECT))
-        .fetch_all(&db)
-        .await?;
+    let albums = sqlx::query_as::<_, Album>(sqlx::AssertSqlSafe(format!(
+        "{} ORDER BY a.created_at ASC",
+        ALBUM_SELECT
+    )))
+    .fetch_all(&db)
+    .await?;
+    let tags = sqlx::query_as::<_, Tag>(sqlx::AssertSqlSafe(format!(
+        "{} ORDER BY t.name ASC",
+        TAG_SELECT
+    )))
+    .fetch_all(&db)
+    .await?;
 
     Ok(ScanResult {
         items,
@@ -410,12 +416,18 @@ pub async fn import_files(
 
     hydrate_relations(&db, &mut items).await?;
 
-    let albums = sqlx::query_as::<_, Album>(&format!("{} ORDER BY a.created_at ASC", ALBUM_SELECT))
-        .fetch_all(&db)
-        .await?;
-    let tags = sqlx::query_as::<_, Tag>(&format!("{} ORDER BY t.name ASC", TAG_SELECT))
-        .fetch_all(&db)
-        .await?;
+    let albums = sqlx::query_as::<_, Album>(sqlx::AssertSqlSafe(format!(
+        "{} ORDER BY a.created_at ASC",
+        ALBUM_SELECT
+    )))
+    .fetch_all(&db)
+    .await?;
+    let tags = sqlx::query_as::<_, Tag>(sqlx::AssertSqlSafe(format!(
+        "{} ORDER BY t.name ASC",
+        TAG_SELECT
+    )))
+    .fetch_all(&db)
+    .await?;
 
     let discovered_count = items.len();
     if discovered_count > 0 {
@@ -973,7 +985,8 @@ async fn hydrate_relations(db: &SqlitePool, items: &mut [MediaItem]) -> Result<(
             "SELECT mt.media_id, t.name FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE mt.media_id IN ({})",
             placeholders
         );
-        let mut tag_query = sqlx::query_as::<_, (String, String)>(&tag_sql);
+        // The only interpolated part is a run of `?` placeholders, one per id.
+        let mut tag_query = sqlx::query_as::<_, (String, String)>(sqlx::AssertSqlSafe(tag_sql));
         for id in ids {
             tag_query = tag_query.bind(*id);
         }
@@ -985,7 +998,7 @@ async fn hydrate_relations(db: &SqlitePool, items: &mut [MediaItem]) -> Result<(
             "SELECT media_id, album_id FROM album_items WHERE media_id IN ({})",
             placeholders
         );
-        let mut album_query = sqlx::query_as::<_, (String, String)>(&album_sql);
+        let mut album_query = sqlx::query_as::<_, (String, String)>(sqlx::AssertSqlSafe(album_sql));
         for id in ids {
             album_query = album_query.bind(*id);
         }
@@ -2109,8 +2122,9 @@ async fn library_stats_scoped(
     hidden_scope: bool,
 ) -> Result<LibraryStats, CommandError> {
     let scope = u8::from(hidden_scope);
+    // `scope` is 0 or 1 from a bool, never request data.
     let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
-        &format!(
+        sqlx::AssertSqlSafe(format!(
             "SELECT
             SUM(CASE WHEN kind = 'photo' AND hidden = {scope} AND is_animated = 0 THEN 1 ELSE 0 END),
             SUM(CASE WHEN kind = 'video' AND hidden = {scope} THEN 1 ELSE 0 END),
@@ -2127,7 +2141,7 @@ async fn library_stats_scoped(
             SUM(CASE WHEN favorite = 1 AND hidden = {scope} THEN size ELSE 0 END),
             SUM(CASE WHEN hidden = 1 THEN size ELSE 0 END)
         FROM media_items"
-        ),
+        )),
     )
     .fetch_one(db)
     .await
@@ -3499,7 +3513,8 @@ mod sort_index_tests {
             .run(&db)
             .await
             .expect("run migrations");
-        let rows = sqlx::query(&format!("EXPLAIN QUERY PLAN {sql}"))
+        // The plan wrapper only prefixes a query this test wrote.
+        let rows = sqlx::query(sqlx::AssertSqlSafe(format!("EXPLAIN QUERY PLAN {sql}")))
             .bind(0i32)
             .bind(201i64)
             .fetch_all(&db)
