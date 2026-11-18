@@ -1042,13 +1042,15 @@ pub(crate) fn camera_name(make: Option<String>, model: Option<String>) -> Option
 /// Parse an EXIF date ("2024:05:17 14:03:09"). Like the rest of the catalog,
 /// the wall-clock time is stored as if it were UTC.
 pub(crate) fn parse_exif_datetime(text: &str) -> Option<i64> {
-    let text = text.trim();
-    let head = text.get(..19)?;
-    chrono::NaiveDateTime::parse_from_str(head, "%Y:%m:%d %H:%M:%S")
-        .or_else(|_| chrono::NaiveDateTime::parse_from_str(head, "%Y-%m-%d %H:%M:%S"))
+    let head = text.trim().get(..19)?;
+    let colons = time::macros::format_description!("[year]:[month]:[day] [hour]:[minute]:[second]");
+    let dashes = time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
+    time::PrimitiveDateTime::parse(head, colons)
+        .or_else(|_| time::PrimitiveDateTime::parse(head, dashes))
         .ok()
-        .filter(|dt| dt.and_utc().timestamp() > 0)
-        .map(|dt| dt.and_utc().timestamp_millis())
+        .map(|dt| dt.assume_utc())
+        .filter(|dt| dt.unix_timestamp() > 0)
+        .map(|dt| dt.unix_timestamp() * 1000)
 }
 
 #[cfg(test)]
