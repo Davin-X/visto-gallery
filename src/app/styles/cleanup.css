@@ -1,5 +1,53 @@
 /* ===== Cleanup screen: system and developer junk ===== */
 
+/* One sidebar entry, two views. The strip is quiet on purpose: the accent
+   already marks the sidebar entry, so the current tab only needs to read as
+   selected, not as another button. */
+.cleanup-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: var(--space-4);
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-3);
+}
+
+.cleanup-tabs button {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.cleanup-tabs button:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.cleanup-tabs button[aria-current="page"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+.cleanup-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .cleanup-page {
   /* One hue per category, shared by the disk bar, cards, dots and groups. */
   --cleanup-xcode: #3b82f6;

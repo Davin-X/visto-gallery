@@ -123,7 +123,7 @@ describe("DuplicatesScreen", () => {
 
   it("does not claim there are no duplicates before any scan", () => {
     renderScreen([], false);
-    expect(screen.getByRole("heading", { name: "Find duplicate files" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Find duplicate media" })).toBeTruthy();
     expect(screen.queryByText(/No duplicates found/)).toBeNull();
     expect(screen.queryByText(/unique by content/)).toBeNull();
     // One scan button, in the empty state, not a second one in the header.

@@ -579,6 +579,7 @@ export function AppScreenRouter({
             await library.scanDuplicates();
           }}
           onOpenItem={(id: string) => openViewer(id, "Duplicates")}
+          onOpenCleanup={() => setScreen("Cleanup")}
         />
       )}
 

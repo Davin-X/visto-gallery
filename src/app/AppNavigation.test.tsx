@@ -1,7 +1,7 @@
 /// <reference types="vitest/globals" />
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { AppTopBar } from "./AppNavigation";
+import { AppSidebar, AppTopBar } from "./AppNavigation";
 
 function renderTopBar(overrides: Partial<React.ComponentProps<typeof AppTopBar>> = {}) {
   const onGoBack = vi.fn();
@@ -63,9 +63,84 @@ describe("AppTopBar history controls", () => {
     expect(screen.queryByRole("button", { name: "Go forward" })).toBeNull();
   });
 
-  test("still names the current screen in the middle of the bar", () => {
+  test("names the shared Clean up destination instead of the tab", () => {
     renderTopBar({ screen: "Cleanup" });
+    expect(screen.getByText("Clean up")).toBeInTheDocument();
 
-    expect(screen.getByText("Cleanup")).toBeInTheDocument();
+    cleanup();
+    renderTopBar({ screen: "Duplicates" });
+    expect(screen.getByText("Clean up")).toBeInTheDocument();
+  });
+});
+
+const zeroStats = {
+  photos: 0,
+  videos: 0,
+  raws: 0,
+  animations: 0,
+  animationsSize: 0,
+  uncategorized: 0,
+  favorites: 0,
+  hidden: 0,
+  photoSize: 0,
+  videoSize: 0,
+  rawSize: 0,
+  uncategorizedSize: 0,
+  favoriteSize: 0,
+  hiddenSize: 0,
+  totalSize: 0,
+};
+
+function renderSidebar(overrides: Partial<React.ComponentProps<typeof AppSidebar>> = {}) {
+  const onOpenScreen = vi.fn();
+  render(
+    <AppSidebar
+      screen="Library"
+      folders={[]}
+      sourcesSheetOpen={false}
+      stats={zeroStats}
+      updateAvailable={false}
+      updateVersion={null}
+      appVersion="0.5.0"
+      sidebarCollapsed={false}
+      onToggleCollapse={vi.fn()}
+      onOpenScreen={onOpenScreen}
+      onOpenSources={vi.fn()}
+      onOpenUpdate={vi.fn()}
+      {...overrides}
+    />,
+  );
+  return { onOpenScreen };
+}
+
+describe("Clean up sidebar entry", () => {
+  test("replaces the separate Duplicates and Cleanup entries", () => {
+    renderSidebar();
+
+    expect(screen.getByRole("button", { name: "Clean up" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Duplicates" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cleanup" })).toBeNull();
+  });
+
+  test("stays highlighted on both of its screens", () => {
+    renderSidebar({ screen: "Duplicates" });
+    expect(screen.getByRole("button", { name: "Clean up" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+
+    cleanup();
+    renderSidebar({ screen: "Cleanup" });
+    expect(screen.getByRole("button", { name: "Clean up" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  test("opens the default tab without leaving the other one", () => {
+    const { onOpenScreen } = renderSidebar({ screen: "Cleanup" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clean up" }));
+    expect(onOpenScreen).toHaveBeenCalledWith("Duplicates");
   });
 });

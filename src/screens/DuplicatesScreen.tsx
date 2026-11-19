@@ -18,6 +18,7 @@ import type { DuplicateGroup, MediaItem } from "../engine/types/media";
 import { buildGroupViews, type GroupView, type KeeperMode } from "../engine/duplicates/grouping";
 import { CompareOverlay } from "../design/components/CompareOverlay";
 import { formatFileDate } from "../engine/utils/mediaDate";
+import { CleanupTabs } from "../design/components/CleanupTabs";
 
 interface DuplicatesScreenProps {
   groups: DuplicateGroup[];
@@ -41,6 +42,8 @@ interface DuplicatesScreenProps {
   onHideIds: (ids: string[]) => void | Promise<void>;
   /** Open a copy in the viewer so it can be inspected before removal. */
   onOpenItem?: (id: string) => void;
+  /** Switch to the Mac storage tab of Clean up. */
+  onOpenCleanup?: () => void;
 }
 
 const GROUP_PAGE = 40;
@@ -107,6 +110,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     onHideIds,
     assetUrl,
     onOpenItem,
+    onOpenCleanup,
   } = props;
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -536,11 +540,11 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     <div className="page-heading">
       <div>
         <p className="eyebrow">CLEANUP</p>
-        <h1>Duplicate files</h1>
+        <h1>Duplicate media</h1>
         <p className="page-subtitle">
           {hasGroups
             ? `${groups.length.toLocaleString()} ${groups.length === 1 ? "group" : "groups"} · ${libraryTotals.copies.toLocaleString()} extra ${libraryTotals.copies === 1 ? "copy" : "copies"} · ${formatBytesSimple(libraryTotals.bytes)} reclaimable`
-            : "Find exact copies of the same file and free up the space they take."}
+            : "Find exact copies of the same photo or video in your library and free up the space they take."}
         </p>
       </div>
       <div className="duplicate-heading-actions">
@@ -561,6 +565,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
 
   return (
     <div className="feature-page duplicates-page" ref={pageRef} onScroll={handleScroll}>
+      {onOpenCleanup && <CleanupTabs screen="Duplicates" onOpenCleanup={onOpenCleanup} />}
       {pageHeading}
 
       {hasGroups && (
@@ -716,7 +721,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               : isDuplicateScan
                 ? "Scanning your library"
                 : !hasGroups && !scanned
-                  ? "Find duplicate files"
+                  ? "Find duplicate media"
                   : EMPTY_TITLES[hasGroups ? filterKind : "all"]}
           </h2>
           <p>
@@ -725,12 +730,12 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               : isDuplicateScan
                 ? "Comparing files byte for byte. Large libraries can take a moment."
                 : !hasGroups && !scanned
-                  ? "The scan compares the contents of every file in your library. Nothing is moved until you choose which copies to remove."
+                  ? "The scan compares the contents of every photo and video in your library — nothing outside it. Nothing is moved until you choose which copies to remove."
                   : hasGroups
                     ? otherKinds.length > 0
                       ? `Found ${otherKindsLabel} instead. Use the media tabs above to switch.`
                       : "Nothing in this scan matches the selected media type."
-                    : "Every file in your library is unique by content. Identical-looking photos that differ by even one byte are not flagged."}
+                    : "Every photo and video in your library is unique by content. Identical-looking shots that differ by even one byte are not flagged."}
           </p>
           {!busy &&
             (hasGroups ? (

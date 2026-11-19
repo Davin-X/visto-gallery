@@ -8,7 +8,6 @@ import {
   MonitorIcon,
   LibraryIcon,
   AlbumsIcon,
-  DuplicatesIcon,
   EditIcon,
   BatchIcon,
   FolderIcon,
@@ -50,15 +49,17 @@ const APPEARANCE_LABEL: Record<Appearance, string> = {
 const NAV_ITEMS: Array<{
   label: string;
   Icon: typeof LibraryIcon;
-  screen: Screen;
+  /** Every screen this entry owns; the first one is where a click lands. */
+  screens: Screen[];
 }> = [
-  { label: "Library", Icon: LibraryIcon, screen: "Library" },
-  { label: "Albums", Icon: AlbumsIcon, screen: "Albums" },
-  { label: "Duplicates", Icon: DuplicatesIcon, screen: "Duplicates" },
-  { label: "Cleanup", Icon: TrashIcon, screen: "Cleanup" },
-  { label: "Edit", Icon: EditIcon, screen: "Edit" },
-  { label: "Batch", Icon: BatchIcon, screen: "Batch" },
-  { label: "Hidden", Icon: EyeOffIcon, screen: "Hidden" },
+  { label: "Library", Icon: LibraryIcon, screens: ["Library"] },
+  { label: "Albums", Icon: AlbumsIcon, screens: ["Albums"] },
+  // Duplicates and Cleanup are separate screens behind one entry so the tab
+  // strip, Back/Forward and the saved last view all keep working.
+  { label: "Clean up", Icon: TrashIcon, screens: ["Duplicates", "Cleanup"] },
+  { label: "Edit", Icon: EditIcon, screens: ["Edit"] },
+  { label: "Batch", Icon: BatchIcon, screens: ["Batch"] },
+  { label: "Hidden", Icon: EyeOffIcon, screens: ["Hidden"] },
 ];
 
 interface AppTopBarProps {
@@ -161,6 +162,8 @@ export function AppTopBar({
           <span>Albums</span>
         ) : screen === "Video" ? (
           <span>Video Player</span>
+        ) : screen === "Duplicates" || screen === "Cleanup" ? (
+          <span>Clean up</span>
         ) : (
           <span>{screen}</span>
         )}
@@ -495,16 +498,17 @@ export function AppSidebar({
             </button>
           </div>
           <nav className="primary-nav" aria-label="Main navigation">
-            {NAV_ITEMS.map(({ label, Icon, screen: target }) => {
+            {NAV_ITEMS.map(({ label, Icon, screens }) => {
+              const active = screens.includes(screen);
               return (
                 <button
                   key={label}
                   type="button"
-                  className={`nav-item ${screen === target ? "active" : ""}`}
+                  className={`nav-item ${active ? "active" : ""}`}
                   aria-label={label}
                   title={label}
-                  aria-current={screen === target ? "page" : undefined}
-                  onClick={() => onOpenScreen(target)}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => onOpenScreen(screens[0])}
                 >
                   <span className="nav-icon">
                     <Icon size={18} />

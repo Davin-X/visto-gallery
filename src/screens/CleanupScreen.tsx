@@ -12,6 +12,7 @@ import {
   TrashIcon,
 } from "../design/components/icons";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
+import { CleanupTabs } from "../design/components/CleanupTabs";
 import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import {
@@ -413,6 +414,7 @@ export default function CleanupScreen({
 
   return (
     <div className="feature-page cleanup-page">
+      <CleanupTabs screen="Cleanup" onOpenDuplicates={onOpenDuplicates} />
       <div className="page-heading">
         <div>
           <p className="eyebrow">STORAGE</p>
