@@ -6,6 +6,10 @@
 .cleanup-tabs {
   display: inline-flex;
   align-items: center;
+  /* .feature-page is a flex column, so a flex item would stretch the strip
+     across the whole page. */
+  width: fit-content;
+  align-self: flex-start;
   gap: 2px;
   margin-bottom: var(--space-4);
   padding: 3px;
