@@ -580,6 +580,10 @@ export function AppScreenRouter({
           }}
           onOpenItem={(id: string) => openViewer(id, "Duplicates")}
           onOpenCleanup={() => setScreen("Cleanup")}
+          onError={showErrorNotice}
+          folders={library.folders}
+          scope={library.duplicateScope}
+          onChangeScope={library.setDuplicateScope}
         />
       )}
 

@@ -64,6 +64,9 @@ export interface LibraryState {
   /** True once a duplicate scan has finished (or been cancelled) this
    *  session. Until then the screen must not claim there are no duplicates. */
   duplicatesScanned: boolean;
+  /** Library folder the last scan was limited to, or null for the whole
+   *  catalog. Results belong to the scope they were scanned in. */
+  duplicateScope: string | null;
   folders: LibraryFolder[];
 
   // UI State
@@ -258,6 +261,8 @@ export interface LibraryState {
   scanDuplicates: () => Promise<void>;
   cancelScan: () => Promise<void>;
   clearDuplicates: () => void;
+  /** Limit the next scan to one folder (or back to the whole catalog). */
+  setDuplicateScope: (path: string | null) => void;
 
   // Actions - UI
   setBusy: (busy: boolean) => void;
@@ -582,6 +587,7 @@ export const useLibraryStore = create<LibraryState>()(
       tags: [],
       duplicates: [],
       duplicatesScanned: false,
+      duplicateScope: null,
       folders: [],
       inspectedId: null,
       selectedIds: [],
@@ -939,6 +945,11 @@ export const useLibraryStore = create<LibraryState>()(
             s.activeSource === path || (s.activeSource && s.activeSource.startsWith(prefix))
               ? null
               : s.activeSource,
+          // A duplicate scope under the removed folder has nothing left to scan.
+          duplicateScope:
+            s.duplicateScope === path || (s.duplicateScope && s.duplicateScope.startsWith(prefix))
+              ? null
+              : s.duplicateScope,
         }));
         get().refreshDerived();
         await get().loadFolders();
@@ -1922,6 +1933,7 @@ export const useLibraryStore = create<LibraryState>()(
 
       // Duplicates
       scanDuplicates: async () => {
+        const scope = get().duplicateScope;
         // Keep previous results so we can merge partial results on cancel
         const previousDuplicates = get().duplicates;
         set({
@@ -1930,7 +1942,7 @@ export const useLibraryStore = create<LibraryState>()(
           progress: { phase: "hashing", processed: 0, total: 0 },
         });
         try {
-          const duplicates = await tauri.duplicates.scan();
+          const duplicates = await tauri.duplicates.scan(scope);
           const cancelled = get().canceling;
           // On cancel, use partial results from this run (already saved to DB).
           // Merge with previous to preserve groups that were fully resolved.
@@ -1987,6 +1999,13 @@ export const useLibraryStore = create<LibraryState>()(
       },
 
       clearDuplicates: () => set({ duplicates: [], duplicatesScanned: false }),
+
+      setDuplicateScope: (path) => {
+        if (get().duplicateScope === path) return;
+        // Groups found in another folder say nothing about this one, and
+        // keeping them would offer copies for deletion that are out of scope.
+        set({ duplicateScope: path, duplicates: [], duplicatesScanned: false });
+      },
 
       // UI
       setBusy: (busy) => set({ busy, ...(busy ? {} : { canceling: false }) }),

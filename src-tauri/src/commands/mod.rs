@@ -7,6 +7,7 @@ mod cancel;
 mod default_apps;
 mod duplicates;
 mod edit_recipes;
+mod file_duplicates;
 mod finder_tags;
 pub(crate) mod hidden_lock;
 mod import_pipeline;
@@ -40,6 +41,8 @@ pub use default_apps::{
 };
 pub use duplicates::*;
 pub use edit_recipes::*;
+pub(crate) use file_duplicates::FileDuplicateSession;
+pub use file_duplicates::*;
 pub use finder_tags::{merge_finder_tags, read_finder_tags, write_finder_tags};
 #[cfg(test)]
 pub use hidden_lock::HiddenLockStatus;

@@ -12,9 +12,15 @@ import {
 } from "../design/components/icons";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import { KindBadge } from "../design/components/KindBadge";
-import { tauri } from "../engine/commands/tauri";
+import { events, tauri } from "../engine/commands/tauri";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { DuplicateGroup, MediaItem } from "../engine/types/media";
+import type {
+  FileDuplicateGroup,
+  FileDuplicateItem,
+  FileDuplicateScan,
+  LibraryFolder,
+} from "../engine/types/commands";
 import { buildGroupViews, type GroupView, type KeeperMode } from "../engine/duplicates/grouping";
 import { CompareOverlay } from "../design/components/CompareOverlay";
 import { formatFileDate } from "../engine/utils/mediaDate";
@@ -44,6 +50,13 @@ interface DuplicatesScreenProps {
   onOpenItem?: (id: string) => void;
   /** Switch to the Mac storage tab of Clean up. */
   onOpenCleanup?: () => void;
+  /** Library folders the scan can be limited to. Empty hides the picker. */
+  folders?: LibraryFolder[];
+  /** Folder the next scan is limited to; null compares the whole library. */
+  scope?: string | null;
+  onChangeScope?: (path: string | null) => void;
+  /** Report a failed any-file scan or trash request. */
+  onError?: (error: unknown, prefix?: string) => void;
 }
 
 const GROUP_PAGE = 40;
@@ -51,6 +64,7 @@ const GROUP_PAGE = 40;
 const INLINE_COPIES = 4;
 
 type ViewMode = "grid" | "list";
+type ScanMode = "media" | "files";
 type KindFilter = "all" | "photo" | "video" | "raw";
 type SortBy = "saving" | "copies" | "newest" | "name";
 
@@ -111,6 +125,10 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     assetUrl,
     onOpenItem,
     onOpenCleanup,
+    folders = [],
+    scope = null,
+    onChangeScope,
+    onError,
   } = props;
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -127,6 +145,16 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
 
   const groups = useMemo(() => groupsProp ?? [], [groupsProp]);
   const progress = progressProp ?? null;
+  const scopeFolder = useMemo(
+    () => (scope ? (folders.find((folder) => folder.path === scope) ?? null) : null),
+    [folders, scope],
+  );
+  const scopeLabel = scopeFolder?.name ?? "this folder";
+  // An any-file scan always compares one folder, so it never offers "All
+  // folders": with none chosen it uses the first source instead of showing a
+  // screen with nothing to scan.
+  const fileScope = scope ?? folders[0]?.path ?? null;
+  const fileScopeLabel = folders.find((folder) => folder.path === fileScope)?.name ?? "this folder";
 
   const kindCounts = useMemo(() => {
     const counts: Record<KindFilter, number> = { all: groups.length, photo: 0, video: 0, raw: 0 };
@@ -296,32 +324,6 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
       setRenderLimit((limit) => Math.min(limit + GROUP_PAGE, groupViews.length));
     }
   }, [groupViews.length, renderLimit]);
-
-  useKeyboard([
-    useCallback(
-      (e: KeyboardEvent) => {
-        if (busy) return;
-        if (isEditableTarget(e.target)) return;
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
-          e.preventDefault();
-          selectAllCopies();
-        }
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
-          e.preventDefault();
-          selectNone();
-        }
-        if (e.key === "Escape" && selected.size > 0) {
-          e.preventDefault();
-          selectNone();
-        }
-        if ((e.key === "Delete" || e.key === "Backspace") && selected.size > 0) {
-          e.preventDefault();
-          onRequestDeleteItems([...selected]);
-        }
-      },
-      [busy, selected, selectAllCopies, selectNone, onRequestDeleteItems],
-    ),
-  ]);
 
   const revealItem = (path: string) => {
     void tauri.items.revealInFinder(path);
@@ -529,6 +531,531 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     );
   };
 
+  // ---- Any-file scan --------------------------------------------------
+  // A separate scan from the media one: the backend walks the chosen folder,
+  // keeps every hash in memory and never touches the media catalog. Results
+  // live here, so leaving the screen throws them away.
+  const [mode, setMode] = useState<ScanMode>("media");
+  const [fileScan, setFileScan] = useState<FileDuplicateScan | null>(null);
+  const [fileBusy, setFileBusy] = useState(false);
+  const [fileProgress, setFileProgress] = useState<{
+    phase?: string;
+    processed?: number;
+    total?: number;
+    currentFile?: string;
+  } | null>(null);
+  const [fileSelected, setFileSelected] = useState<Set<string>>(new Set());
+  const [confirmFileTrash, setConfirmFileTrash] = useState(false);
+
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    void events
+      .onFileDuplicatesProgress((event) => setFileProgress(event))
+      .then((unlisten) => {
+        stop = unlisten;
+      });
+    return () => stop?.();
+  }, []);
+
+  // Results belong to the folder they came from; a new scope invalidates them.
+  useEffect(() => {
+    setFileScan(null);
+    setFileSelected(new Set());
+    setConfirmFileTrash(false);
+  }, [scope]);
+
+  const fileGroups = useMemo(() => fileScan?.groups ?? [], [fileScan]);
+  const fileTotals = useMemo(() => {
+    let copies = 0;
+    let bytes = 0;
+    fileGroups.forEach((group) => {
+      group.items.forEach((item) => {
+        if (item.keeper) return;
+        copies += 1;
+        bytes += item.size;
+      });
+    });
+    return { copies, bytes };
+  }, [fileGroups]);
+  const fileSelectedBytes = useMemo(() => {
+    let bytes = 0;
+    fileGroups.forEach((group) => {
+      group.items.forEach((item) => {
+        if (fileSelected.has(item.id)) bytes += item.size;
+      });
+    });
+    return bytes;
+  }, [fileGroups, fileSelected]);
+
+  const switchMode = useCallback(
+    (next: ScanMode) => {
+      setMode(next);
+      setConfirmFileTrash(false);
+      // The any-file scan needs one folder; default to the first source rather
+      // than making the user chase a disabled button.
+      if (next === "files" && !scope && folders.length > 0) onChangeScope?.(folders[0].path);
+    },
+    [scope, folders, onChangeScope],
+  );
+
+  const runFileScan = useCallback(async () => {
+    if (!fileScope) return;
+    setFileBusy(true);
+    setConfirmFileTrash(false);
+    setFileProgress({ phase: "walking", processed: 0, total: 0 });
+    try {
+      const result = await tauri.fileDuplicates.scan(fileScope);
+      setFileScan(result);
+      setFileSelected(new Set());
+    } catch (error) {
+      onError?.(error, "Could not compare that folder");
+    } finally {
+      setFileBusy(false);
+      setFileProgress(null);
+    }
+  }, [fileScope, onError]);
+
+  const toggleFileItem = useCallback((id: string) => {
+    setFileSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectFileCopies = useCallback((group: FileDuplicateGroup) => {
+    setFileSelected((prev) => {
+      const next = new Set(prev);
+      const hasKeeper = group.items.some((item) => item.keeper);
+      group.items.forEach((item, index) => {
+        // If there's no keeper (e.g., keeper was trashed), the first item is now the keeper.
+        const isKeeper = hasKeeper ? item.keeper : index === 0;
+        if (!isKeeper) next.add(item.id);
+      });
+      return next;
+    });
+  }, []);
+
+  const trashFileSelection = useCallback(async () => {
+    if (fileSelected.size === 0) return;
+    // Non-media files are the user's own documents, so the first click only
+    // arms the button; nothing moves until they confirm.
+    if (!confirmFileTrash) {
+      setConfirmFileTrash(true);
+      return;
+    }
+    setFileBusy(true);
+    try {
+      const result = await tauri.fileDuplicates.trash([...fileSelected]);
+      const gone = new Set(result.trashed);
+      setFileScan((previous) =>
+        previous
+          ? {
+              ...previous,
+              groups: previous.groups
+                .map((group) => {
+                  const remaining = group.items.filter((item) => !gone.has(item.id));
+                  // If the keeper was trashed, promote the first remaining item to keeper.
+                  const hasKeeper = remaining.some((item) => item.keeper);
+                  const items = hasKeeper
+                    ? remaining
+                    : remaining.map((item, index) => ({ ...item, keeper: index === 0 }));
+                  return { ...group, items };
+                })
+                // A group of one is no longer a duplicate.
+                .filter((group) => group.items.length > 1),
+            }
+          : previous,
+      );
+      setFileSelected(new Set());
+      setConfirmFileTrash(false);
+      if (result.failed.length > 0) {
+        onError?.(
+          new Error(result.failed[0].error),
+          `${result.failed.length} file${result.failed.length === 1 ? "" : "s"} stayed put`,
+        );
+      }
+    } catch (error) {
+      onError?.(error, "Could not move those files to Trash");
+    } finally {
+      setFileBusy(false);
+    }
+  }, [fileSelected, confirmFileTrash, onError]);
+
+  // Media mode keyboard shortcuts
+  useKeyboard([
+    useCallback(
+      (e: KeyboardEvent) => {
+        if (mode !== "media" || busy) return;
+        if (isEditableTarget(e.target)) return;
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
+          e.preventDefault();
+          selectAllCopies();
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
+          e.preventDefault();
+          selectNone();
+        }
+        if (e.key === "Escape" && selected.size > 0) {
+          e.preventDefault();
+          selectNone();
+        }
+        if ((e.key === "Delete" || e.key === "Backspace") && selected.size > 0) {
+          e.preventDefault();
+          onRequestDeleteItems([...selected]);
+        }
+      },
+      [mode, busy, selected, selectAllCopies, selectNone, onRequestDeleteItems],
+    ),
+  ]);
+
+  // File mode keyboard shortcuts
+  useKeyboard([
+    useCallback(
+      (e: KeyboardEvent) => {
+        if (mode !== "files" || fileBusy) return;
+        if (isEditableTarget(e.target)) return;
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
+          e.preventDefault();
+          // Select all copies in all groups
+          const ids = new Set<string>();
+          fileGroups.forEach((group) => {
+            const hasKeeper = group.items.some((item) => item.keeper);
+            group.items.forEach((item, index) => {
+              const isKeeper = hasKeeper ? item.keeper : index === 0;
+              if (!isKeeper) ids.add(item.id);
+            });
+          });
+          setFileSelected(ids);
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
+          e.preventDefault();
+          setFileSelected(new Set());
+        }
+        if (e.key === "Escape" && fileSelected.size > 0) {
+          e.preventDefault();
+          setFileSelected(new Set());
+          setConfirmFileTrash(false);
+        }
+        if ((e.key === "Delete" || e.key === "Backspace") && fileSelected.size > 0) {
+          e.preventDefault();
+          void trashFileSelection();
+        }
+      },
+      [mode, fileBusy, fileGroups, fileSelected, confirmFileTrash, trashFileSelection],
+    ),
+  ]);
+
+  const modeTabs =
+    folders.length > 0 && onChangeScope ? (
+      <div className="duplicate-filter-tabs" role="group" aria-label="What to compare">
+        <button
+          type="button"
+          aria-pressed={mode === "media"}
+          className={mode === "media" ? "is-active" : ""}
+          onClick={() => switchMode("media")}
+        >
+          Photos &amp; videos
+        </button>
+        <button
+          type="button"
+          aria-pressed={mode === "files"}
+          className={mode === "files" ? "is-active" : ""}
+          title="Compare every file type inside one folder, in memory only"
+          onClick={() => switchMode("files")}
+        >
+          Any file type
+        </button>
+      </div>
+    ) : null;
+
+  const folderPicker =
+    folders.length > 0 && onChangeScope ? (
+      <label
+        className="source-select duplicate-scope-select"
+        title={
+          mode === "files"
+            ? `Comparing every file type inside ${fileScopeLabel}`
+            : scopeFolder
+              ? `Only comparing files inside ${scopeFolder.name}`
+              : "Comparing the whole library"
+        }
+      >
+        <FolderIcon size={14} />
+        <span className="source-select-label">Folder</span>
+        <select
+          value={mode === "files" ? (fileScope ?? "") : (scope ?? "")}
+          onChange={(e) => onChangeScope(e.target.value || null)}
+          aria-label="Only compare files in this folder"
+        >
+          {mode === "media" && <option value="">All folders</option>}
+          {folders.map((folder) => (
+            <option key={folder.path} value={folder.path}>
+              {folder.name}
+            </option>
+          ))}
+        </select>
+      </label>
+    ) : null;
+
+  const renderFileRow = (item: FileDuplicateItem) => {
+    const isSelected = fileSelected.has(item.id);
+    return (
+      <li key={item.id} className={`file-duplicate-row${isSelected ? " is-selected" : ""}`}>
+        <button
+          type="button"
+          className="file-duplicate-pick"
+          aria-pressed={isSelected}
+          aria-label={`${isSelected ? "Deselect" : "Select"} ${item.name} in ${parentFolder(item.path)}`}
+          onClick={() => toggleFileItem(item.id)}
+        >
+          <span className={`file-duplicate-check${isSelected ? " is-on" : ""}`} aria-hidden="true">
+            {isSelected ? <CheckIcon size={11} /> : null}
+          </span>
+        </button>
+        <span className="file-duplicate-ext" aria-hidden="true">
+          {item.extension || "file"}
+        </span>
+        <span className="file-duplicate-main">
+          <span className="file-duplicate-name" title={item.path}>
+            {item.name}
+          </span>
+          <span className="file-duplicate-path" title={item.path}>
+            {parentFolder(item.path)}
+          </span>
+        </span>
+        <span className="file-duplicate-size">{formatBytesSimple(item.size)}</span>
+        {item.keeper ? <span className="file-duplicate-keep">Keep</span> : null}
+        <button
+          type="button"
+          className="duplicate-tile-tool"
+          title="Show in Finder"
+          aria-label={`Show ${item.name} in Finder`}
+          onClick={() => revealItem(item.path)}
+        >
+          <FolderIcon size={13} />
+        </button>
+      </li>
+    );
+  };
+
+  const renderFileGroup = (group: FileDuplicateGroup) => {
+    const reclaimable = group.items
+      .filter((item) => !item.keeper)
+      .reduce((sum, item) => sum + item.size, 0);
+    return (
+      <section className="duplicate-group" key={group.id}>
+        <header className="duplicate-group-head">
+          <div className="duplicate-group-copy">
+            <span className="duplicate-group-title">{group.items.length} identical copies</span>
+            <span className="duplicate-group-sub">
+              {formatBytesSimple(group.size)} each · <b>{formatBytesSimple(reclaimable)}</b>{" "}
+              reclaimable
+            </span>
+          </div>
+          <div className="duplicate-group-actions">
+            <button
+              type="button"
+              className="quiet-button"
+              disabled={fileBusy}
+              onClick={() => selectFileCopies(group)}
+            >
+              Select copies
+            </button>
+          </div>
+        </header>
+        <ul className="file-duplicate-rows">{group.items.map(renderFileRow)}</ul>
+      </section>
+    );
+  };
+
+  const fileHeading = (
+    <div className="page-heading">
+      <div>
+        <p className="eyebrow">CLEANUP</p>
+        <h1>Duplicate files</h1>
+        <p className="page-subtitle">
+          {fileScan && fileGroups.length > 0
+            ? `${fileGroups.length.toLocaleString()} ${fileGroups.length === 1 ? "group" : "groups"} · ${fileTotals.copies.toLocaleString()} extra ${fileTotals.copies === 1 ? "copy" : "copies"} · ${formatBytesSimple(fileTotals.bytes)} reclaimable`
+            : fileScan
+              ? `${fileScan.filesScanned.toLocaleString()} files scanned · ${fileScan.filesCompared.toLocaleString()} compared byte for byte inside ${fileScopeLabel}.`
+              : fileScope
+                ? `Compare every file type inside ${fileScopeLabel} — documents, project files, archives, photos. Hashes stay in memory for this scan and are never saved.`
+                : "Pick a folder to compare every file type inside it."}
+        </p>
+      </div>
+      <div className="duplicate-heading-actions">
+        {modeTabs}
+        {folderPicker}
+        {fileScan && !fileBusy && (
+          <button
+            type="button"
+            className="quiet-button"
+            onClick={() => {
+              setFileScan(null);
+              setFileSelected(new Set());
+              setConfirmFileTrash(false);
+            }}
+          >
+            Clear
+          </button>
+        )}
+        {fileBusy ? (
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => void tauri.duplicates.cancel()}
+          >
+            Cancel
+          </button>
+        ) : fileScope && fileScan ? (
+          <button type="button" className="primary-button" onClick={runFileScan}>
+            Rescan
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  const fileBody = (
+    <>
+      {!fileScope ? (
+        <div className="duplicate-empty">
+          <span className="duplicate-empty-icon" aria-hidden="true">
+            <DuplicatesIcon size={26} />
+          </span>
+          <h2>Add a source folder first</h2>
+          <p>
+            An any-file comparison runs inside one folder. Add the folder you want to clean up as a
+            library source, then pick it here.
+          </p>
+        </div>
+      ) : fileBusy ? (
+        <div className="duplicate-empty">
+          <span className="duplicate-empty-icon" aria-hidden="true">
+            <DuplicatesIcon size={26} />
+          </span>
+          <h2>{fileProgress?.phase === "walking" ? "Listing files" : "Comparing file contents"}</h2>
+          <p>
+            {fileProgress?.phase === "walking"
+              ? `Walking ${fileScopeLabel}. Hidden files, packages and node_modules are skipped.`
+              : fileProgress && fileProgress.total
+                ? `${(fileProgress.processed ?? 0).toLocaleString()} of ${fileProgress.total.toLocaleString()} files compared so far…`
+                : `Comparing file contents inside ${fileScopeLabel}…`}
+          </p>
+          <button
+            type="button"
+            className="quiet-button"
+            onClick={() => void tauri.duplicates.cancel()}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : !fileScan ? (
+        <div className="duplicate-empty">
+          <span className="duplicate-empty-icon" aria-hidden="true">
+            <DuplicatesIcon size={26} />
+          </span>
+          <h2>Find duplicate files</h2>
+          <p>
+            Compares every file inside {fileScopeLabel} — text, PDFs, project files, archives,
+            photos. Files are only read: the hashes stay in memory for this scan and are thrown away
+            when you leave this screen.
+          </p>
+          <button type="button" className="primary-button" onClick={runFileScan}>
+            Scan folder
+          </button>
+        </div>
+      ) : fileGroups.length === 0 ? (
+        <div className="duplicate-empty">
+          <span className="duplicate-empty-icon" aria-hidden="true">
+            <DuplicatesIcon size={26} />
+          </span>
+          <h2>{fileScan.stoppedEarly ? "Nothing identical was found" : "Every file is unique"}</h2>
+          <p>
+            {fileScan.filesScanned.toLocaleString()} files scanned and{" "}
+            {fileScan.filesCompared.toLocaleString()} compared byte for byte inside {fileScopeLabel}
+            . No two files have the same contents.
+          </p>
+          <button type="button" className="primary-button" onClick={runFileScan}>
+            Scan again
+          </button>
+        </div>
+      ) : (
+        <>
+          {fileScan.stoppedEarly && <p className="duplicate-notice">{fileScan.stoppedEarly}</p>}
+          <div className="duplicate-selection-bar">
+            <div className="duplicate-selection-copy">
+              <span>
+                <b>{fileSelected.size.toLocaleString()}</b> of {fileTotals.copies.toLocaleString()}{" "}
+                extra copies selected
+              </span>
+              {fileSelected.size > 0 && (
+                <span className="duplicate-selection-savings">
+                  {formatBytesSimple(fileSelectedBytes)} reclaimable
+                </span>
+              )}
+            </div>
+            <div className="duplicate-selection-actions">
+              <button
+                type="button"
+                className="quiet-button"
+                disabled={fileBusy || fileTotals.copies === 0}
+                onClick={() => {
+                  const next = new Set<string>();
+                  fileGroups.forEach((group) =>
+                    group.items.forEach((item) => {
+                      if (!item.keeper) next.add(item.id);
+                    }),
+                  );
+                  setFileSelected(next);
+                  setConfirmFileTrash(false);
+                }}
+              >
+                Select copies
+              </button>
+              <button
+                type="button"
+                className="quiet-button"
+                disabled={fileSelected.size === 0}
+                onClick={() => {
+                  setFileSelected(new Set());
+                  setConfirmFileTrash(false);
+                }}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                className={confirmFileTrash ? "danger-button is-armed" : "danger-button"}
+                disabled={fileBusy || fileSelected.size === 0}
+                onClick={trashFileSelection}
+              >
+                <TrashIcon size={13} />
+                {confirmFileTrash
+                  ? `Confirm: move ${fileSelected.size.toLocaleString()} to Trash`
+                  : "Move to Trash"}
+              </button>
+            </div>
+          </div>
+          <div className="duplicate-groups">{fileGroups.map(renderFileGroup)}</div>
+        </>
+      )}
+    </>
+  );
+
+  // File mode renders on its own so the media screen stays exactly as it was.
+  if (mode === "files") {
+    return (
+      <div className="feature-page duplicates-page" ref={pageRef}>
+        {onOpenCleanup && <CleanupTabs screen="Duplicates" onOpenCleanup={onOpenCleanup} />}
+        {fileHeading}
+        {fileBody}
+      </div>
+    );
+  }
+
   const hasGroups = groups.length > 0;
   const hasVisibleGroups = groupViews.length > 0;
   const isDuplicateScan = busy && progress?.phase === "hashing";
@@ -544,10 +1071,14 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
         <p className="page-subtitle">
           {hasGroups
             ? `${groups.length.toLocaleString()} ${groups.length === 1 ? "group" : "groups"} · ${libraryTotals.copies.toLocaleString()} extra ${libraryTotals.copies === 1 ? "copy" : "copies"} · ${formatBytesSimple(libraryTotals.bytes)} reclaimable`
-            : "Find exact copies of the same photo or video in your library and free up the space they take."}
+            : scope
+              ? `Find exact copies of the same photo or video inside ${scopeLabel} and free up the space they take.`
+              : "Find exact copies of the same photo or video in your library and free up the space they take."}
         </p>
       </div>
       <div className="duplicate-heading-actions">
+        {modeTabs}
+        {folderPicker}
         {hasGroups && (
           <button type="button" className="quiet-button" onClick={onClear} disabled={busy}>
             Clear
@@ -730,12 +1261,16 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               : isDuplicateScan
                 ? "Comparing files byte for byte. Large libraries can take a moment."
                 : !hasGroups && !scanned
-                  ? "The scan compares the contents of every photo and video in your library — nothing outside it. Nothing is moved until you choose which copies to remove."
+                  ? scope
+                    ? `The scan compares the contents of every photo and video inside ${scopeLabel} — nothing outside it. Nothing is moved until you choose which copies to remove.`
+                    : "The scan compares the contents of every photo and video in your library — nothing outside it. Nothing is moved until you choose which copies to remove."
                   : hasGroups
                     ? otherKinds.length > 0
                       ? `Found ${otherKindsLabel} instead. Use the media tabs above to switch.`
                       : "Nothing in this scan matches the selected media type."
-                    : "Every photo and video in your library is unique by content. Identical-looking shots that differ by even one byte are not flagged."}
+                    : scope
+                      ? `Every photo and video inside ${scopeLabel} is unique by content. Identical-looking shots that differ by even one byte are not flagged.`
+                      : "Every photo and video in your library is unique by content. Identical-looking shots that differ by even one byte are not flagged."}
           </p>
           {!busy &&
             (hasGroups ? (
@@ -744,7 +1279,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               </button>
             ) : (
               <button type="button" className="primary-button" onClick={onScan}>
-                {scanned ? "Scan again" : "Scan library"}
+                {scanned ? "Scan again" : scope ? "Scan folder" : "Scan library"}
               </button>
             ))}
         </div>

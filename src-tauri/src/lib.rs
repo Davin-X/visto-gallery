@@ -61,6 +61,8 @@ pub(crate) struct AppState {
     pub(crate) trash_cancel: commands::CancelGroup,
     pub(crate) batch_cancel: commands::CancelGroup,
     pub(crate) duplicate_cancel: commands::CancelGroup,
+    /// The last any-file duplicate scan (id -> path), kept in memory only.
+    pub(crate) file_duplicates: Mutex<commands::FileDuplicateSession>,
     /// Files and folders Finder handed to the app ("Open With" or a
     /// double-click). The queue is the source of truth: it is filled before the
     /// webview can listen, drained once on mount, and drained again whenever
@@ -77,6 +79,7 @@ impl Default for AppState {
             trash_cancel: commands::CancelGroup::default(),
             batch_cancel: commands::CancelGroup::default(),
             duplicate_cancel: commands::CancelGroup::default(),
+            file_duplicates: Mutex::new(commands::FileDuplicateSession::default()),
             pending_open_paths: Mutex::new(Vec::new()),
         }
     }
@@ -385,6 +388,8 @@ pub fn run() {
             cancel_scan,
             cancel_move_to_trash,
             cancel_find_duplicates,
+            find_file_duplicates,
+            trash_file_duplicates,
             import_files,
             get_library_items,
             get_matching_ids,

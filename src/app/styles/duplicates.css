@@ -1276,3 +1276,145 @@
   }
 }
 
+
+/* ===== Any-file scan ===== */
+
+/* A short scan is a fact about the result, not an error: a muted banner above
+   the groups, so the counts below are never read as the whole folder. */
+.duplicate-notice {
+  margin: 0 0 var(--space-3);
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--orange) 34%, var(--line));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--orange) 8%, var(--surface-2));
+  color: var(--ink);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.file-duplicate-rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.file-duplicate-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 6px 14px;
+  border-top: 1px solid var(--line);
+  transition: background 120ms ease;
+}
+
+.file-duplicate-row:first-child {
+  border-top: 0;
+}
+
+.file-duplicate-row:hover {
+  background: var(--surface-3);
+}
+
+.file-duplicate-row.is-selected {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.file-duplicate-pick {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.file-duplicate-check {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--accent-contrast);
+}
+
+.file-duplicate-check.is-on {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.file-duplicate-ext {
+  flex: 0 0 auto;
+  min-width: 34px;
+  padding: 2px 6px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.file-duplicate-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.file-duplicate-name {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-duplicate-path {
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-duplicate-size {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.file-duplicate-keep {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--green) 15%, transparent);
+  color: var(--green);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Non-media files are documents, so the second click is visibly different
+   from the first: armed, not merely hovered. */
+.danger-button.is-armed {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
