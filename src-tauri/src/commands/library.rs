@@ -732,7 +732,50 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
             for tag in tags {
                 names.push_bind(tag.clone());
             }
-            qb.push("))");
+            qb.push(")");
+            if f.tag_match.as_deref() == Some("all") {
+                // Duplicate names in the request must not raise the bar.
+                let needed = tags.iter().collect::<std::collections::HashSet<_>>().len() as i64;
+                qb.push(" GROUP BY mt.media_id HAVING COUNT(DISTINCT t.name) = ")
+                    .push_bind(needed);
+            }
+            qb.push(")");
+        }
+    }
+    if let Some(size_min) = f.size_min {
+        qb.push(" AND size >= ").push_bind(size_min);
+    }
+    if let Some(size_max) = f.size_max {
+        qb.push(" AND size <= ").push_bind(size_max);
+    }
+    if let Some(extension) = &f.extension {
+        // Normalise here, at the single choke point, so a direct
+        // `LibraryFilterDTO { extension: Some(".JPG") }` caller still matches
+        // the dot-less lowercase value stored in `media_items`.
+        let extension = extension.trim().trim_start_matches('.').to_lowercase();
+        if !extension.is_empty() {
+            qb.push(" AND lower(extension) = ").push_bind(extension);
+        }
+    }
+    if let Some(has_location) = f.has_location {
+        qb.push(if has_location {
+            " AND latitude IS NOT NULL AND longitude IS NOT NULL"
+        } else {
+            " AND (latitude IS NULL OR longitude IS NULL)"
+        });
+    }
+    if let Some(orientation) = &f.orientation {
+        match orientation.as_str() {
+            "landscape" => {
+                qb.push(" AND width IS NOT NULL AND height IS NOT NULL AND width > height");
+            }
+            "portrait" => {
+                qb.push(" AND width IS NOT NULL AND height IS NOT NULL AND width < height");
+            }
+            "square" => {
+                qb.push(" AND width IS NOT NULL AND height IS NOT NULL AND width = height AND width > 0");
+            }
+            _ => {}
         }
     }
     if let Some(query) = &f.query {
@@ -740,9 +783,15 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
         let like = format!("%{}%", escape_like(query));
         qb.push(" AND (name LIKE ")
             .push_bind(like.clone())
-            .push(" ESCAPE '\\' OR path LIKE ")
+            .push(" ESCAPE '\\'")
+            // Only the part of the path inside a registered library folder is
+            // searchable. Matching the raw absolute path let a query like
+            // `dev` hit the home-directory prefix and return the library.
+            .push(" OR EXISTS (SELECT 1 FROM library_folders lf WHERE substr(media_items.path, 1, length(rtrim(lf.path, '/')))")
+            .push(" = rtrim(lf.path, '/') AND substr(media_items.path, length(rtrim(lf.path, '/')) + 2) LIKE ")
             .push_bind(like.clone())
-            .push(" ESCAPE '\\' OR extension LIKE ")
+            .push(" ESCAPE '\\')")
+            .push(" OR extension LIKE ")
             .push_bind(like.clone())
             .push(" ESCAPE '\\' OR kind LIKE ")
             .push_bind(like.clone())
@@ -2793,6 +2842,12 @@ mod pagination_tests {
         .execute(&db)
         .await
         .expect("create media table");
+        sqlx::query(
+            "CREATE TABLE library_folders (path TEXT PRIMARY KEY, added_at INTEGER NOT NULL)",
+        )
+        .execute(&db)
+        .await
+        .expect("create library folders table");
         sqlx::query("CREATE TABLE tags (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
             .execute(&db)
             .await
@@ -3065,6 +3120,12 @@ mod filter_and_scale_tests {
         .execute(&db)
         .await
         .expect("create media table");
+        sqlx::query(
+            "CREATE TABLE library_folders (path TEXT PRIMARY KEY, added_at INTEGER NOT NULL)",
+        )
+        .execute(&db)
+        .await
+        .expect("create library folders table");
         sqlx::query("CREATE TABLE tags (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
             .execute(&db)
             .await
@@ -3205,6 +3266,39 @@ mod filter_and_scale_tests {
     }
 
     #[tokio::test]
+    async fn extension_filter_normalises_a_direct_caller_value() {
+        let db = filter_db().await;
+        insert_item(&db, "a", "photo", Some(1), 1, None).await;
+        insert_item(&db, "b", "photo", Some(2), 2, None).await;
+
+        for extension in [".JPG", " jpg ", "jpg"] {
+            let page = get_library_items_page(
+                &db,
+                LibraryFilterDTO {
+                    extension: Some(extension.to_string()),
+                    limit: Some(10),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("extension filter query must be valid SQL");
+            assert_eq!(page.total_count, Some(2), "extension {extension:?}");
+        }
+
+        let none = get_library_items_page(
+            &db,
+            LibraryFilterDTO {
+                extension: Some("png".to_string()),
+                limit: Some(10),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("extension filter query must be valid SQL");
+        assert_eq!(none.total_count, Some(0));
+    }
+
+    #[tokio::test]
     async fn search_treats_percent_and_underscore_literally() {
         let db = filter_db().await;
         insert_item(&db, "IMG_0001", "photo", Some(1), 1, None).await;
@@ -3235,6 +3329,54 @@ mod filter_and_scale_tests {
         assert_eq!(search("IMG_").await, ["IMG_0001"]);
         assert_eq!(search("100%").await, ["sale-100%"]);
         assert_eq!(search("_").await, ["IMG_0001"]);
+    }
+
+    #[tokio::test]
+    async fn search_only_looks_at_paths_inside_a_library_folder() {
+        let db = filter_db().await;
+        sqlx::query("INSERT INTO library_folders (path, added_at) VALUES ('/Users/dev/Photos', 1)")
+            .execute(&db)
+            .await
+            .expect("insert library folder");
+        for (id, path) in [
+            ("trip", "/Users/dev/Photos/2024/trip.jpg"),
+            ("outside", "/Users/dev/Documents/outside.jpg"),
+        ] {
+            sqlx::query(
+                "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at) VALUES (?, ?, ?, 'jpg', 'photo', 1, 1, 1, 1)",
+            )
+            .bind(id)
+            .bind(path)
+            .bind(format!("{id}.jpg"))
+            .execute(&db)
+            .await
+            .expect("insert media row");
+        }
+
+        let search = |query: &str| {
+            let db = db.clone();
+            let query = query.to_string();
+            async move {
+                let page = get_library_items_page(
+                    &db,
+                    LibraryFilterDTO {
+                        query: Some(query),
+                        limit: Some(10),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .expect("search");
+                let mut ids: Vec<String> = page.items.into_iter().map(|i| i.id).collect();
+                ids.sort();
+                ids
+            }
+        };
+
+        // The shared `/Users/dev` prefix is not part of any searchable path.
+        assert_eq!(search("dev").await, Vec::<String>::new());
+        // Folders inside a library folder stay searchable.
+        assert_eq!(search("2024").await, ["trip"]);
     }
 
     #[tokio::test]

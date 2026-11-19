@@ -68,7 +68,27 @@ export type LibraryFilterDTO = { kind?: string, favorite?: boolean, hidden?: boo
  * `Some(true)` narrows to animated items, `Some(false)` to still ones.
  * Independent of `kind`, which keeps its photo | video | raw meaning.
  */
-animated?: boolean, albumId?: string, query?: string, tags?: Array<string>, dateFrom?: number, dateTo?: number, 
+animated?: boolean, albumId?: string, query?: string, tags?: Array<string>, 
+/**
+ * How multiple tags combine: `any` (default) or `all`.
+ */
+tagMatch?: "any" | "all", 
+/**
+ * File size range in bytes, inclusive on both ends.
+ */
+sizeMin?: number, sizeMax?: number, 
+/**
+ * File extension without the leading dot, matched case-insensitively.
+ */
+extension?: string, 
+/**
+ * `Some(true)` requires GPS coordinates, `Some(false)` excludes them.
+ */
+hasLocation?: boolean, 
+/**
+ * Frame shape from width and height.
+ */
+orientation?: "landscape" | "portrait" | "square", dateFrom?: number, dateTo?: number, 
 /**
  * `YYYY-MM`: only items in that Timeline month (see `TIMELINE_MONTH_SQL`).
  */
@@ -190,7 +210,31 @@ export type TrashRestoreResult = { restored: Array<string>, failed: Array<TrashR
 
 export type DuplicateGroup = { id: string, sha256: string, size: number, items: Array<MediaItem>, };
 
-export type SmartAlbumFilter = { kind?: "photo" | "video" | "raw", favorite?: boolean | null, query?: string | null, tags?: Array<string> | null, dateFrom?: number | null, dateTo?: number | null, sourcePath?: string | null, rating?: number | null, colorLabel?: string | null, camera?: string | null, lens?: string | null, sortBy?: "capturedAt" | "modifiedAt" | "name" | "size" | "kind", sortOrder?: "asc" | "desc", };
+export type SmartAlbumFilter = { kind?: "photo" | "video" | "raw", favorite?: boolean | null, query?: string | null, tags?: Array<string> | null, 
+/**
+ * `any` (default) matches one of the tags, `all` requires every one.
+ */
+tagMatch?: "any" | "all", 
+/**
+ * File size range in bytes, inclusive on both ends.
+ */
+sizeMin?: number | null, sizeMax?: number | null, 
+/**
+ * File extension without the leading dot, matched case-insensitively.
+ */
+extension?: string | null, 
+/**
+ * `Some(true)` narrows to animated items, `Some(false)` to still ones.
+ */
+animated?: boolean | null, 
+/**
+ * `Some(true)` requires GPS coordinates, `Some(false)` excludes them.
+ */
+hasLocation?: boolean | null, 
+/**
+ * Frame shape from width and height.
+ */
+orientation?: "landscape" | "portrait" | "square", dateFrom?: number | null, dateTo?: number | null, sourcePath?: string | null, rating?: number | null, colorLabel?: string | null, camera?: string | null, lens?: string | null, sortBy?: "capturedAt" | "modifiedAt" | "name" | "size" | "kind", sortOrder?: "asc" | "desc", };
 
 export type SmartAlbum = { id: string, name: string, filter: SmartAlbumFilter, itemCount: number, coverItems: Array<MediaItem>, createdAt: number, updatedAt: number, };
 

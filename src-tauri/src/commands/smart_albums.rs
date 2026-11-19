@@ -22,6 +22,21 @@ pub struct SmartAlbumFilter {
     pub favorite: Option<bool>,
     pub query: Option<String>,
     pub tags: Option<Vec<String>>,
+    /// `any` (default) matches one of the tags, `all` requires every one.
+    #[ts(optional, type = "\"any\" | \"all\"")]
+    pub tag_match: Option<String>,
+    /// File size range in bytes, inclusive on both ends.
+    pub size_min: Option<i64>,
+    pub size_max: Option<i64>,
+    /// File extension without the leading dot, matched case-insensitively.
+    pub extension: Option<String>,
+    /// `Some(true)` narrows to animated items, `Some(false)` to still ones.
+    pub animated: Option<bool>,
+    /// `Some(true)` requires GPS coordinates, `Some(false)` excludes them.
+    pub has_location: Option<bool>,
+    /// Frame shape from width and height.
+    #[ts(optional, type = "\"landscape\" | \"portrait\" | \"square\"")]
+    pub orientation: Option<String>,
     pub date_from: Option<i64>,
     pub date_to: Option<i64>,
     pub source_path: Option<String>,
@@ -52,6 +67,41 @@ impl SmartAlbumFilter {
                 return Err(CommandError::invalid(
                     "Smart Album rating must be between 0 and 5".to_string(),
                 ));
+            }
+        }
+        if self.size_min.is_some_and(|size| size < 0) || self.size_max.is_some_and(|size| size < 0)
+        {
+            return Err(CommandError::invalid(
+                "Smart Album file sizes cannot be negative".to_string(),
+            ));
+        }
+        if let (Some(min), Some(max)) = (self.size_min, self.size_max) {
+            if min > max {
+                return Err(CommandError::invalid(
+                    "Smart Album minimum size must not exceed its maximum size".to_string(),
+                ));
+            }
+        }
+        if let Some(extension) = &self.extension {
+            let trimmed = extension.trim().trim_start_matches('.');
+            if trimmed.is_empty() || trimmed.contains(['/', '\\']) {
+                return Err(CommandError::invalid(
+                    "Smart Album extension must be a file extension such as jpg".to_string(),
+                ));
+            }
+        }
+        if let Some(orientation) = &self.orientation {
+            if !matches!(orientation.as_str(), "landscape" | "portrait" | "square") {
+                return Err(CommandError::invalid(format!(
+                    "Unsupported Smart Album orientation: {orientation}"
+                )));
+            }
+        }
+        if let Some(tag_match) = &self.tag_match {
+            if !matches!(tag_match.as_str(), "any" | "all") {
+                return Err(CommandError::invalid(format!(
+                    "Unsupported Smart Album tag match: {tag_match}"
+                )));
             }
         }
         if let (Some(from), Some(to)) = (self.date_from, self.date_to) {
@@ -86,10 +136,16 @@ impl SmartAlbumFilter {
             kind: self.kind.clone(),
             favorite: self.favorite,
             hidden: None,
-            animated: None,
             album_id: None,
             query: self.query.clone(),
             tags: self.tags.clone(),
+            tag_match: self.tag_match.clone(),
+            size_min: self.size_min,
+            size_max: self.size_max,
+            extension: self.extension.clone(),
+            animated: self.animated,
+            has_location: self.has_location,
+            orientation: self.orientation.clone(),
             date_from: self.date_from,
             date_to: self.date_to,
             month: None,
@@ -617,5 +673,249 @@ mod tests {
             ..Default::default()
         };
         assert!(bad_rating.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_v2_values() {
+        let bad_size = SmartAlbumFilter {
+            size_min: Some(10),
+            size_max: Some(5),
+            ..Default::default()
+        };
+        assert!(bad_size.validate().is_err());
+
+        let negative_size = SmartAlbumFilter {
+            size_min: Some(-1),
+            ..Default::default()
+        };
+        assert!(negative_size.validate().is_err());
+
+        let bad_extension = SmartAlbumFilter {
+            extension: Some("/photos/jpg".into()),
+            ..Default::default()
+        };
+        assert!(bad_extension.validate().is_err());
+
+        let blank_extension = SmartAlbumFilter {
+            extension: Some(" . ".into()),
+            ..Default::default()
+        };
+        assert!(blank_extension.validate().is_err());
+
+        let bad_orientation = SmartAlbumFilter {
+            orientation: Some("diagonal".into()),
+            ..Default::default()
+        };
+        assert!(bad_orientation.validate().is_err());
+
+        let bad_tag_match = SmartAlbumFilter {
+            tag_match: Some("some".into()),
+            ..Default::default()
+        };
+        assert!(bad_tag_match.validate().is_err());
+
+        let valid = SmartAlbumFilter {
+            size_min: Some(1),
+            size_max: Some(2),
+            extension: Some(".JPG".into()),
+            orientation: Some("landscape".into()),
+            tag_match: Some("all".into()),
+            ..Default::default()
+        };
+        assert!(valid.validate().is_ok());
+    }
+
+    #[tokio::test]
+    async fn v2_filters_narrow_by_size_extension_animation_location_orientation_and_tags() {
+        use sqlx::sqlite::SqlitePoolOptions;
+
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&db).await.unwrap();
+
+        for (id, extension, size, width, height, located, animated) in [
+            (
+                "portrait-jpg",
+                "jpg",
+                1_000_000_i64,
+                300_i64,
+                400_i64,
+                false,
+                false,
+            ),
+            ("landscape-gif", "gif", 5_000_000, 1600, 900, true, true),
+            ("square-png", "png", 2_500_000, 800, 800, true, false),
+        ] {
+            sqlx::query(
+                "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, created_at, updated_at, width, height, latitude, longitude, is_animated) VALUES (?, ?, ?, ?, 'photo', ?, 1, 1, 1, 1, ?, ?, ?, ?, ?)",
+            )
+            .bind(id)
+            .bind(format!("/lib/{id}.{extension}"))
+            .bind(format!("{id}.{extension}"))
+            .bind(extension)
+            .bind(size)
+            .bind(width)
+            .bind(height)
+            .bind(if located { Some(12.34_f64) } else { None })
+            .bind(if located { Some(56.78_f64) } else { None })
+            .bind(if animated { 1_i64 } else { 0_i64 })
+            .execute(&db)
+            .await
+            .unwrap();
+        }
+        for (id, name) in [("t-travel", "travel"), ("t-family", "family")] {
+            sqlx::query("INSERT INTO tags (id, name, created_at) VALUES (?, ?, 1)")
+                .bind(id)
+                .bind(name)
+                .execute(&db)
+                .await
+                .unwrap();
+        }
+        for (media, tag) in [
+            ("portrait-jpg", "t-travel"),
+            ("landscape-gif", "t-travel"),
+            ("landscape-gif", "t-family"),
+            ("square-png", "t-family"),
+        ] {
+            sqlx::query("INSERT INTO media_tags (media_id, tag_id) VALUES (?, ?)")
+                .bind(media)
+                .bind(tag)
+                .execute(&db)
+                .await
+                .unwrap();
+        }
+
+        let mut names = 0;
+        let mut count = |filter: SmartAlbumFilter| {
+            names += 1;
+            let db = db.clone();
+            async move {
+                super::create_smart_album_in_catalog(&db, format!("Album {names}"), filter)
+                    .await
+                    .unwrap()
+                    .item_count
+            }
+        };
+
+        assert_eq!(
+            count(SmartAlbumFilter {
+                size_min: Some(2_000_000),
+                ..Default::default()
+            })
+            .await,
+            2
+        );
+        assert_eq!(
+            count(SmartAlbumFilter {
+                size_max: Some(1_500_000),
+                ..Default::default()
+            })
+            .await,
+            1
+        );
+        assert_eq!(
+            count(SmartAlbumFilter {
+                size_min: Some(1_000_000),
+                size_max: Some(2_500_000),
+                ..Default::default()
+            })
+            .await,
+            2
+        );
+        // The extension is matched case-insensitively and without its dot.
+        assert_eq!(
+            count(SmartAlbumFilter {
+                extension: Some(".GIF".into()),
+                ..Default::default()
+            })
+            .await,
+            1
+        );
+        assert_eq!(
+            count(SmartAlbumFilter {
+                animated: Some(true),
+                ..Default::default()
+            })
+            .await,
+            1
+        );
+        assert_eq!(
+            count(SmartAlbumFilter {
+                animated: Some(false),
+                ..Default::default()
+            })
+            .await,
+            2
+        );
+        assert_eq!(
+            count(SmartAlbumFilter {
+                has_location: Some(true),
+                ..Default::default()
+            })
+            .await,
+            2
+        );
+        assert_eq!(
+            count(SmartAlbumFilter {
+                has_location: Some(false),
+                ..Default::default()
+            })
+            .await,
+            1
+        );
+        for (orientation, expected) in [("landscape", 1), ("portrait", 1), ("square", 1)] {
+            assert_eq!(
+                count(SmartAlbumFilter {
+                    orientation: Some(orientation.into()),
+                    ..Default::default()
+                })
+                .await,
+                expected,
+                "orientation {orientation}"
+            );
+        }
+        assert_eq!(
+            count(SmartAlbumFilter {
+                tags: Some(vec!["travel".into()]),
+                ..Default::default()
+            })
+            .await,
+            2
+        );
+        assert_eq!(
+            count(SmartAlbumFilter {
+                tags: Some(vec!["travel".into(), "family".into()]),
+                ..Default::default()
+            })
+            .await,
+            3,
+            "any matches one of the tags"
+        );
+        assert_eq!(
+            count(SmartAlbumFilter {
+                tags: Some(vec!["travel".into(), "family".into()]),
+                tag_match: Some("all".into()),
+                ..Default::default()
+            })
+            .await,
+            1,
+            "all requires every tag"
+        );
+
+        // Every clause composes into one narrowing definition.
+        assert_eq!(
+            count(SmartAlbumFilter {
+                size_min: Some(2_000_000),
+                animated: Some(true),
+                has_location: Some(true),
+                orientation: Some("landscape".into()),
+                ..Default::default()
+            })
+            .await,
+            1
+        );
     }
 }

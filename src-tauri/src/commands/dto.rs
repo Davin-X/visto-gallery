@@ -55,6 +55,19 @@ pub struct LibraryFilterDTO {
     pub album_id: Option<String>,
     pub query: Option<String>,
     pub tags: Option<Vec<String>>,
+    /// How multiple tags combine: `any` (default) or `all`.
+    #[ts(optional, type = "\"any\" | \"all\"")]
+    pub tag_match: Option<String>,
+    /// File size range in bytes, inclusive on both ends.
+    pub size_min: Option<i64>,
+    pub size_max: Option<i64>,
+    /// File extension without the leading dot, matched case-insensitively.
+    pub extension: Option<String>,
+    /// `Some(true)` requires GPS coordinates, `Some(false)` excludes them.
+    pub has_location: Option<bool>,
+    /// Frame shape from width and height.
+    #[ts(optional, type = "\"landscape\" | \"portrait\" | \"square\"")]
+    pub orientation: Option<String>,
     pub date_from: Option<i64>,
     pub date_to: Option<i64>,
     /// `YYYY-MM`: only items in that Timeline month (see `TIMELINE_MONTH_SQL`).
