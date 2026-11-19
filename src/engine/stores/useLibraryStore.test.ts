@@ -469,6 +469,20 @@ test("openSmartAlbum applies the saved filter definition without arbitrary SQL",
   expect(useLibraryStore.getState().getCurrentLibraryFilter().tags).toEqual(["minimal"]);
 });
 
+test("setTagsFilter dedupes, clears the saved album and reaches the page query", async () => {
+  (window as any).__TAURI_INTERNALS__ = {};
+  useLibraryStore.setState({ activeSmartAlbum: "smart-1" });
+
+  useLibraryStore.getState().setTagsFilter(["nature", "nature", "minimal"]);
+  await Promise.resolve();
+  delete (window as any).__TAURI_INTERNALS__;
+
+  const state = useLibraryStore.getState();
+  expect(state.tagsFilter).toEqual(["nature", "minimal"]);
+  expect(state.activeSmartAlbum).toBeNull();
+  expect(state.getCurrentLibraryFilter().tags).toEqual(["nature", "minimal"]);
+});
+
 test("clearFilters resets every refinement and reloads the library", async () => {
   (window as any).__TAURI_INTERNALS__ = {};
   useLibraryStore.setState({
