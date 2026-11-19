@@ -310,7 +310,8 @@ describe("CleanupScreen", () => {
       .getByRole("heading", { name: "Recent cleanups" })
       .closest("section") as HTMLElement;
     expect(within(history).getByText("5.0 GB")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /find duplicates/i }));
+    // Duplicates is a tab now, so this screen only routes to it.
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate media" }));
     expect(onOpenDuplicates).toHaveBeenCalled();
   });
 

@@ -8,7 +8,6 @@ import {
   MonitorIcon,
   LibraryIcon,
   AlbumsIcon,
-  DuplicatesIcon,
   EditIcon,
   BatchIcon,
   FolderIcon,
@@ -34,12 +33,20 @@ import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { LibraryFolder, LibraryStats } from "../engine/types/commands";
 import { isHiddenLocked, useHiddenLockStore } from "../engine/stores/useHiddenLockStore";
 import type { Screen } from "./screen";
+import type { CleanupScreen } from "./useNavigationStore";
 import { usePopoverFocus } from "../design/hooks/usePopoverFocus";
 
 /** The top-bar button cycles light → dark → system → light. */
 export function cycleAppearance(appearance: Appearance): Appearance {
   return appearance === "light" ? "dark" : appearance === "dark" ? "system" : "light";
 }
+
+/** Top-bar name for screens whose sidebar entry is not the screen name. */
+const SCREEN_TITLES: Partial<Record<Screen, string>> = {
+  Video: "Video Player",
+  Duplicates: "Clean up",
+  Cleanup: "Clean up",
+};
 
 const APPEARANCE_LABEL: Record<Appearance, string> = {
   light: "Light",
@@ -50,15 +57,17 @@ const APPEARANCE_LABEL: Record<Appearance, string> = {
 const NAV_ITEMS: Array<{
   label: string;
   Icon: typeof LibraryIcon;
-  screen: Screen;
+  /** Every screen this entry owns; the first one is where a click lands. */
+  screens: Screen[];
 }> = [
-  { label: "Library", Icon: LibraryIcon, screen: "Library" },
-  { label: "Albums", Icon: AlbumsIcon, screen: "Albums" },
-  { label: "Duplicates", Icon: DuplicatesIcon, screen: "Duplicates" },
-  { label: "Cleanup", Icon: TrashIcon, screen: "Cleanup" },
-  { label: "Edit", Icon: EditIcon, screen: "Edit" },
-  { label: "Batch", Icon: BatchIcon, screen: "Batch" },
-  { label: "Hidden", Icon: EyeOffIcon, screen: "Hidden" },
+  { label: "Library", Icon: LibraryIcon, screens: ["Library"] },
+  { label: "Albums", Icon: AlbumsIcon, screens: ["Albums"] },
+  // Duplicates and Cleanup are separate screens behind one entry so the tab
+  // strip, Back/Forward and the saved last view all keep working.
+  { label: "Clean up", Icon: TrashIcon, screens: ["Duplicates", "Cleanup"] },
+  { label: "Edit", Icon: EditIcon, screens: ["Edit"] },
+  { label: "Batch", Icon: BatchIcon, screens: ["Batch"] },
+  { label: "Hidden", Icon: EyeOffIcon, screens: ["Hidden"] },
 ];
 
 interface AppTopBarProps {
@@ -157,12 +166,8 @@ export function AppTopBar({
           ) : (
             <span className="muted">Library</span>
           )
-        ) : screen === "Albums" ? (
-          <span>Albums</span>
-        ) : screen === "Video" ? (
-          <span>Video Player</span>
         ) : (
-          <span>{screen}</span>
+          <span>{SCREEN_TITLES[screen] ?? screen}</span>
         )}
         {busy && (
           <span className="topbar-busy">
@@ -272,6 +277,8 @@ export function AppTopBar({
 
 interface AppSidebarProps {
   screen: Screen;
+  /** The Clean up view the user was last on. */
+  cleanupTab: CleanupScreen;
   folders: LibraryFolder[];
   sourcesSheetOpen: boolean;
   stats: LibraryStats;
@@ -287,6 +294,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({
   screen,
+  cleanupTab,
   folders,
   sourcesSheetOpen,
   stats,
@@ -495,15 +503,19 @@ export function AppSidebar({
             </button>
           </div>
           <nav className="primary-nav" aria-label="Main navigation">
-            {NAV_ITEMS.map(({ label, Icon, screen: target }) => {
+            {NAV_ITEMS.map(({ label, Icon, screens }) => {
+              const active = screens.includes(screen);
+              // Clicking the entry from elsewhere returns to the last tab;
+              // the tab strip itself is the only way to change it.
+              const target = screens.includes("Cleanup") ? cleanupTab : screens[0];
               return (
                 <button
                   key={label}
                   type="button"
-                  className={`nav-item ${screen === target ? "active" : ""}`}
+                  className={`nav-item ${active ? "active" : ""}`}
                   aria-label={label}
                   title={label}
-                  aria-current={screen === target ? "page" : undefined}
+                  aria-current={active ? "page" : undefined}
                   onClick={() => onOpenScreen(target)}
                 >
                   <span className="nav-icon">

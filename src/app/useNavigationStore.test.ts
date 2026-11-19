@@ -28,7 +28,13 @@ const openAlbum = (id: string) => {
 describe("navigation history", () => {
   beforeEach(() => {
     library.activeAlbum = null;
-    useNavigationStore.setState({ screen: "Library", album: null, history: [], forward: [] });
+    useNavigationStore.setState({
+      screen: "Library",
+      album: null,
+      history: [],
+      forward: [],
+      cleanupTab: "Duplicates",
+    });
   });
 
   it("goes Back from an opened album to the Albums overview", () => {
@@ -71,6 +77,23 @@ describe("navigation history", () => {
     nav().goBack();
     nav().setScreen("Duplicates");
     expect(nav().forward).toEqual([]);
+  });
+
+  it("remembers the last Clean up tab for the sidebar entry", () => {
+    nav().setScreen("Cleanup");
+    expect(nav().cleanupTab).toBe("Cleanup");
+
+    nav().setScreen("Library");
+    expect(nav().cleanupTab).toBe("Cleanup");
+
+    nav().setScreen("Duplicates");
+    expect(nav().cleanupTab).toBe("Duplicates");
+
+    nav().setScreen("Cleanup");
+    nav().setScreen("Albums");
+    nav().goBack();
+    expect(nav().screen).toBe("Cleanup");
+    expect(nav().cleanupTab).toBe("Cleanup");
   });
 
   it(`keeps the last ${HISTORY_LIMIT} steps`, () => {

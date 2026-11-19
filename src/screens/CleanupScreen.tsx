@@ -5,13 +5,13 @@ import { useKeyboard } from "../engine/hooks/useKeyboard";
 import {
   CheckIcon,
   ChevronDownIcon,
-  DuplicatesIcon,
   InfoIcon,
   ShieldIcon,
   SparkleIcon,
   TrashIcon,
 } from "../design/components/icons";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
+import { CleanupTabs } from "../design/components/CleanupTabs";
 import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import {
@@ -173,7 +173,6 @@ export default function CleanupScreen({
   const scannedOnce = JUNK_CATEGORY_ORDER.some(
     (category) => scans[category].state === "done" || scans[category].state === "failed",
   );
-  const total = useMemo(() => totalBytes(items), [items]);
   // "In use" is jargon; say the actual reason on the summary line.
   const inUseSkips = useMemo(() => skips.filter(isInUse), [skips]);
   const inUseReason = (() => {
@@ -413,6 +412,7 @@ export default function CleanupScreen({
 
   return (
     <div className="feature-page cleanup-page">
+      <CleanupTabs screen="Cleanup" onOpenDuplicates={onOpenDuplicates} />
       <div className="page-heading">
         <div>
           <p className="eyebrow">STORAGE</p>
@@ -420,6 +420,17 @@ export default function CleanupScreen({
           <p className="page-subtitle">{headingSubtitle}</p>
         </div>
         <div className="cleanup-heading-actions">
+          {regenerable.length > 0 && (
+            <button
+              type="button"
+              className="quiet-button cleanup-hero-select"
+              onClick={selectRegenerable}
+              disabled={busy}
+              title="Only items tagged Regenerates: caches and build output that come back on their own. Nothing that would need a rebuild."
+            >
+              <SparkleIcon size={14} /> Select everything that regenerates
+            </button>
+          )}
           <button
             type="button"
             className="primary-button"
@@ -481,17 +492,6 @@ export default function CleanupScreen({
               )}
             </p>
           )}
-          {regenerable.length > 0 && (
-            <button
-              type="button"
-              className="quiet-button cleanup-hero-select"
-              onClick={selectRegenerable}
-              disabled={busy}
-              title="Only items tagged Regenerates: caches and build output that come back on their own. Nothing that would need a rebuild."
-            >
-              <SparkleIcon size={14} /> Select everything that regenerates
-            </button>
-          )}
         </div>
 
         {disk && disk.totalBytes > 0 && (
@@ -550,67 +550,64 @@ export default function CleanupScreen({
             </p>
           </div>
         )}
+        {/* One card per category --------------------------------------- */}
+        <div className="cleanup-cards">
+          {JUNK_CATEGORY_ORDER.map((category) => {
+            const scan = scans[category];
+            const report = reportOf(scan);
+            const count = report?.items.length ?? 0;
+            const skipped = report?.skips.length ?? 0;
+            const bytes = report?.totalBytes ?? 0;
+            let status: React.ReactNode;
+            if (scan.state === "scanning" || scan.state === "idle") {
+              status = (
+                <>
+                  <span className="spinner" aria-hidden="true" /> Scanning…
+                </>
+              );
+            } else if (scan.state === "failed") {
+              status = <span className="is-warning">Couldn’t scan</span>;
+            } else if (report?.status === "off") {
+              status = "Off · turn on below";
+            } else if (report?.status === "unavailable") {
+              status = <span className="is-warning">No access</span>;
+            } else if (count === 0) {
+              status = skipped > 0 ? `${skipped} skipped` : "Nothing to clean";
+            } else {
+              status = (
+                <>
+                  {plural(count, "item")}
+                  {skipped > 0 && <span className="cleanup-card-dim"> · {skipped} skipped</span>}
+                  {report?.status === "partial" && <span className="is-warning"> · partial</span>}
+                </>
+              );
+            }
+            return (
+              <button
+                type="button"
+                key={category}
+                className={`cleanup-card is-${category}`}
+                onClick={() =>
+                  document
+                    .getElementById(`cleanup-${category}`)
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+                disabled={
+                  (count === 0 && skipped === 0 && !report?.statusMessage) ||
+                  report?.status === "off"
+                }
+              >
+                <span className="cleanup-card-title">
+                  <i className={`cleanup-dot is-${category}`} />
+                  {JUNK_CATEGORY_COPY[category].title}
+                </span>
+                <span className="cleanup-card-bytes">{formatBytesSimple(bytes)}</span>
+                <span className="cleanup-card-status">{status}</span>
+              </button>
+            );
+          })}
+        </div>
       </section>
-
-      {/* One card per category --------------------------------------- */}
-      <div className="cleanup-cards">
-        {JUNK_CATEGORY_ORDER.map((category) => {
-          const scan = scans[category];
-          const report = reportOf(scan);
-          const count = report?.items.length ?? 0;
-          const skipped = report?.skips.length ?? 0;
-          const bytes = report?.totalBytes ?? 0;
-          let status: React.ReactNode;
-          if (scan.state === "scanning" || scan.state === "idle") {
-            status = (
-              <>
-                <span className="spinner" aria-hidden="true" /> Scanning…
-              </>
-            );
-          } else if (scan.state === "failed") {
-            status = <span className="is-warning">Couldn’t scan</span>;
-          } else if (report?.status === "off") {
-            status = "Off · turn on below";
-          } else if (report?.status === "unavailable") {
-            status = <span className="is-warning">No access</span>;
-          } else if (count === 0) {
-            status = skipped > 0 ? `${skipped} skipped` : "Nothing to clean";
-          } else {
-            status = (
-              <>
-                {plural(count, "item")}
-                {skipped > 0 && <span className="cleanup-card-dim"> · {skipped} skipped</span>}
-                {report?.status === "partial" && <span className="is-warning"> · partial</span>}
-              </>
-            );
-          }
-          return (
-            <button
-              type="button"
-              key={category}
-              className={`cleanup-card is-${category}`}
-              onClick={() =>
-                document
-                  .getElementById(`cleanup-${category}`)
-                  ?.scrollIntoView({ behavior: "smooth", block: "start" })
-              }
-              disabled={
-                (count === 0 && skipped === 0 && !report?.statusMessage) || report?.status === "off"
-              }
-            >
-              <span className="cleanup-card-title">
-                <i className={`cleanup-dot is-${category}`} />
-                {JUNK_CATEGORY_COPY[category].title}
-              </span>
-              <span className="cleanup-card-bytes">{formatBytesSimple(bytes)}</span>
-              <span className="cleanup-card-meter" aria-hidden="true">
-                <span style={{ width: percent(bytes, total) }} />
-              </span>
-              <span className="cleanup-card-status">{status}</span>
-            </button>
-          );
-        })}
-      </div>
 
       {overview && (
         <label className="cleanup-scope">
@@ -818,11 +815,6 @@ export default function CleanupScreen({
                 {plural(library.largeVideoCount, "video")} over 1 GB take{" "}
                 {formatBytesSimple(library.largeVideoBytes)}.
               </p>
-            )}
-            {onOpenDuplicates && (
-              <button type="button" className="quiet-button" onClick={onOpenDuplicates}>
-                <DuplicatesIcon size={14} /> Find duplicates
-              </button>
             )}
           </section>
         )}
