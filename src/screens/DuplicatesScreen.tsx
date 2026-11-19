@@ -743,7 +743,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           void trashFileSelection();
         }
       },
-      [mode, fileBusy, fileGroups, fileSelected, confirmFileTrash, trashFileSelection],
+      [mode, fileBusy, fileGroups, fileSelected, trashFileSelection],
     ),
   ]);
 

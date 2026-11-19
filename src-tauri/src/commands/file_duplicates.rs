@@ -319,13 +319,11 @@ pub async fn find_file_duplicates(
             let path_b = &candidates[*b].0;
             let depth_a = path_a.matches('/').count();
             let depth_b = path_b.matches('/').count();
-            depth_a
-                .cmp(&depth_b)
-                .then_with(|| {
-                    let name_a = path_a.rsplit('/').next().unwrap_or(path_a);
-                    let name_b = path_b.rsplit('/').next().unwrap_or(path_b);
-                    compare_keeper_name(name_a, name_b)
-                })
+            depth_a.cmp(&depth_b).then_with(|| {
+                let name_a = path_a.rsplit('/').next().unwrap_or(path_a);
+                let name_b = path_b.rsplit('/').next().unwrap_or(path_b);
+                compare_keeper_name(name_a, name_b)
+            })
         });
         let size = candidates[indices[0]].1 as i64;
         let items: Vec<FileDuplicateItem> = indices
