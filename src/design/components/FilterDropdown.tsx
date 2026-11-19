@@ -3,14 +3,18 @@ import { createPortal } from "react-dom";
 import { FilterIcon } from "./icons";
 import { endOfLocalDay, startOfLocalDay, toDateInputValue } from "../../engine/utils/dateRange";
 import { usePopoverFocus } from "../hooks/usePopoverFocus";
+import type { Tag } from "../../engine/types/generated/ipc";
 
 interface FilterDropdownProps {
   minRating: number | null;
   colorLabelFilter: string | null;
   dateFrom: number | null;
   dateTo: number | null;
+  tags: Tag[];
+  tagsFilter: string[];
   onSetMinRating: (rating: number | null) => void;
   onSetColorLabelFilter: (colorLabel: string | null) => void;
+  onSetTagsFilter: (tags: string[]) => void;
   onSetDateRange: (from: number | null, to: number | null) => void;
   onCreateSmartAlbum?: (name: string) => void;
 }
@@ -93,6 +97,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
   const activeCount =
     (props.minRating ? 1 : 0) +
     (props.colorLabelFilter ? 1 : 0) +
+    (props.tagsFilter.length > 0 ? 1 : 0) +
     (props.dateFrom != null || props.dateTo != null ? 1 : 0);
 
   return (
@@ -145,6 +150,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
                   onClick={() => {
                     props.onSetMinRating(null);
                     props.onSetColorLabelFilter(null);
+                    props.onSetTagsFilter([]);
                     props.onSetDateRange(null, null);
                   }}
                 >
@@ -247,6 +253,45 @@ export function FilterDropdown(props: FilterDropdownProps) {
                 })}
               </div>
             </div>
+
+            {props.tags.length > 0 && (
+              <div className="filter-section">
+                <div className="filter-section-heading">
+                  <span className="filter-section-label">Tags</span>
+                  <span className="filter-section-hint">
+                    {props.tagsFilter.length > 0
+                      ? `${props.tagsFilter.length} SELECTED`
+                      : "MATCH ANY"}
+                  </span>
+                </div>
+                <div className="filter-chip-row">
+                  {props.tags.map((tag) => {
+                    const active = props.tagsFilter.includes(tag.name);
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        className={`quick-filter filter-tag-chip ${active ? "active" : ""}`}
+                        aria-pressed={active}
+                        aria-label={`${tag.name}, ${tag.itemCount.toLocaleString()} items`}
+                        title={`${tag.itemCount.toLocaleString()} items`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          props.onSetTagsFilter(
+                            active
+                              ? props.tagsFilter.filter((name) => name !== tag.name)
+                              : [...props.tagsFilter, tag.name],
+                          );
+                        }}
+                      >
+                        <span aria-hidden="true">#</span>
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {props.onCreateSmartAlbum && (
               <div className="filter-section filter-smart-album">

@@ -33,6 +33,7 @@ import VideoThumb from "../design/components/VideoThumb";
 import { useDraftTransforms } from "../engine/stores/useEditStore";
 import { draftImageStyle } from "../engine/utils/draftImage";
 import { searchShortcutLabel } from "../engine/utils/shortcut";
+import { toDateInputValue } from "../engine/utils/dateRange";
 import {
   useLibraryStore,
   libraryViewKey,
@@ -50,6 +51,7 @@ import {
 import type { ContextMenuItem } from "../design/components/ContextMenu";
 import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { FilterDropdown } from "../design/components/FilterDropdown";
+import { ActiveRefinements } from "../design/components/ActiveRefinements";
 import SplitButton from "../design/components/SplitButton";
 import { useSettingsStore } from "../engine/stores/useSettingsStore";
 import { useThumbnailSize, useInspectorWidth } from "../engine/stores/useSettingsStore";
@@ -525,6 +527,16 @@ function LibraryScreen(props: LibraryScreenProps) {
     if (props.hiddenView) library.clearHiddenFilters();
     else library.clearFilters();
   };
+  // The date chip needs a short, self-describing label because it is the only
+  // place the range is shown once the Filters panel closes.
+  const dateFilterLabel = (() => {
+    const from = toDateInputValue(props.dateFrom);
+    const to = toDateInputValue(props.dateTo);
+    if (from && to) return `${from} – ${to}`;
+    if (from) return `From ${from}`;
+    if (to) return `To ${to}`;
+    return "";
+  })();
 
   const emptyView = () => {
     if (props.hiddenView) {
@@ -1632,11 +1644,32 @@ function LibraryScreen(props: LibraryScreenProps) {
               colorLabelFilter={props.colorLabelFilter}
               dateFrom={props.dateFrom}
               dateTo={props.dateTo}
+              tags={library.tags}
+              tagsFilter={library.tagsFilter}
               onSetMinRating={props.onSetMinRating}
               onSetColorLabelFilter={props.onSetColorLabelFilter}
+              onSetTagsFilter={library.setTagsFilter}
               onSetDateRange={props.onSetDateRange}
               onCreateSmartAlbum={props.onCreateSmartAlbum}
             />
+            {!props.hiddenView && (
+              <ActiveRefinements
+                tags={library.tagsFilter}
+                minRating={props.minRating}
+                colorLabel={props.colorLabelFilter}
+                camera={library.cameraFilter}
+                lens={library.lensFilter}
+                dateLabel={dateFilterLabel}
+                onRemoveTag={(tag) =>
+                  library.setTagsFilter(library.tagsFilter.filter((name) => name !== tag))
+                }
+                onClearRating={() => props.onSetMinRating(null)}
+                onClearColor={() => props.onSetColorLabelFilter(null)}
+                onClearCamera={() => library.setCameraFilter(null)}
+                onClearLens={() => library.setLensFilter(null)}
+                onClearDate={() => props.onSetDateRange(null, null)}
+              />
+            )}
             {hasActiveRefinements && (
               <button
                 type="button"

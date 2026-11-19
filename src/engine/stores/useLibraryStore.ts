@@ -199,6 +199,7 @@ export interface LibraryState {
   setHiddenQuery: (query: string) => void;
   setMinRating: (rating: number | null) => void;
   setColorLabelFilter: (colorLabel: string | null) => void;
+  setTagsFilter: (tags: string[]) => void;
   setCameraFilter: (camera: string | null) => void;
   setLensFilter: (lens: string | null) => void;
   setLayout: (layout: LayoutMode) => void;
@@ -1142,6 +1143,14 @@ export const useLibraryStore = create<LibraryState>()(
 
       setColorLabelFilter: (colorLabel) => {
         set({ colorLabelFilter: colorLabel, activeSmartAlbum: null });
+        get().refreshDerived();
+        void get().loadLibrary();
+      },
+
+      setTagsFilter: (tags) => {
+        // Editing tags by hand leaves the saved definition behind; the chips
+        // and the Clear all control keep the remaining scope visible.
+        set({ tagsFilter: [...new Set(tags)], activeSmartAlbum: null });
         get().refreshDerived();
         void get().loadLibrary();
       },
