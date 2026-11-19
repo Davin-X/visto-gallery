@@ -33,12 +33,20 @@ import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { LibraryFolder, LibraryStats } from "../engine/types/commands";
 import { isHiddenLocked, useHiddenLockStore } from "../engine/stores/useHiddenLockStore";
 import type { Screen } from "./screen";
+import type { CleanupScreen } from "./useNavigationStore";
 import { usePopoverFocus } from "../design/hooks/usePopoverFocus";
 
 /** The top-bar button cycles light → dark → system → light. */
 export function cycleAppearance(appearance: Appearance): Appearance {
   return appearance === "light" ? "dark" : appearance === "dark" ? "system" : "light";
 }
+
+/** Top-bar name for screens whose sidebar entry is not the screen name. */
+const SCREEN_TITLES: Partial<Record<Screen, string>> = {
+  Video: "Video Player",
+  Duplicates: "Clean up",
+  Cleanup: "Clean up",
+};
 
 const APPEARANCE_LABEL: Record<Appearance, string> = {
   light: "Light",
@@ -158,14 +166,8 @@ export function AppTopBar({
           ) : (
             <span className="muted">Library</span>
           )
-        ) : screen === "Albums" ? (
-          <span>Albums</span>
-        ) : screen === "Video" ? (
-          <span>Video Player</span>
-        ) : screen === "Duplicates" || screen === "Cleanup" ? (
-          <span>Clean up</span>
         ) : (
-          <span>{screen}</span>
+          <span>{SCREEN_TITLES[screen] ?? screen}</span>
         )}
         {busy && (
           <span className="topbar-busy">
@@ -275,6 +277,8 @@ export function AppTopBar({
 
 interface AppSidebarProps {
   screen: Screen;
+  /** The Clean up view the user was last on. */
+  cleanupTab: CleanupScreen;
   folders: LibraryFolder[];
   sourcesSheetOpen: boolean;
   stats: LibraryStats;
@@ -290,6 +294,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({
   screen,
+  cleanupTab,
   folders,
   sourcesSheetOpen,
   stats,
@@ -500,6 +505,9 @@ export function AppSidebar({
           <nav className="primary-nav" aria-label="Main navigation">
             {NAV_ITEMS.map(({ label, Icon, screens }) => {
               const active = screens.includes(screen);
+              // Clicking the entry from elsewhere returns to the last tab;
+              // the tab strip itself is the only way to change it.
+              const target = screens.includes("Cleanup") ? cleanupTab : screens[0];
               return (
                 <button
                   key={label}
@@ -508,7 +516,7 @@ export function AppSidebar({
                   aria-label={label}
                   title={label}
                   aria-current={active ? "page" : undefined}
-                  onClick={() => onOpenScreen(screens[0])}
+                  onClick={() => onOpenScreen(target)}
                 >
                   <span className="nav-icon">
                     <Icon size={18} />

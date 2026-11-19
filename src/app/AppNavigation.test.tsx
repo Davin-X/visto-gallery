@@ -96,6 +96,7 @@ function renderSidebar(overrides: Partial<React.ComponentProps<typeof AppSidebar
   render(
     <AppSidebar
       screen="Library"
+      cleanupTab="Duplicates"
       folders={[]}
       sourcesSheetOpen={false}
       stats={zeroStats}
@@ -137,8 +138,20 @@ describe("Clean up sidebar entry", () => {
     );
   });
 
-  test("opens the default tab without leaving the other one", () => {
-    const { onOpenScreen } = renderSidebar({ screen: "Cleanup" });
+  test("returns to the last tab, not always the first", () => {
+    const fromLibrary = renderSidebar({ cleanupTab: "Cleanup" });
+    fireEvent.click(screen.getByRole("button", { name: "Clean up" }));
+    expect(fromLibrary.onOpenScreen).toHaveBeenCalledWith("Cleanup");
+
+    cleanup();
+    const fromCleanup = renderSidebar({ screen: "Cleanup", cleanupTab: "Cleanup" });
+    fireEvent.click(screen.getByRole("button", { name: "Clean up" }));
+    // Already there: the entry keeps the tab instead of resetting to Duplicates.
+    expect(fromCleanup.onOpenScreen).toHaveBeenCalledWith("Cleanup");
+  });
+
+  test("starts on Duplicate media before either tab has been opened", () => {
+    const { onOpenScreen } = renderSidebar();
 
     fireEvent.click(screen.getByRole("button", { name: "Clean up" }));
     expect(onOpenScreen).toHaveBeenCalledWith("Duplicates");

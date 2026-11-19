@@ -36,8 +36,17 @@ function applyAlbum(location: NavLocation) {
  * change goes through `setScreen`, so opening an album, a photo, Edit or a
  * player is recorded the same way as a sidebar click.
  */
+/** The two views behind the single Clean up sidebar entry. */
+export type CleanupScreen = "Duplicates" | "Cleanup";
+
+/** Only the two Clean up screens change the remembered tab. */
+const cleanupTabFor = (screen: Screen, current: CleanupScreen): CleanupScreen =>
+  screen === "Duplicates" ? "Duplicates" : screen === "Cleanup" ? "Cleanup" : current;
+
 interface NavigationState {
   screen: Screen;
+  /** Which Clean up tab the sidebar entry returns to. */
+  cleanupTab: CleanupScreen;
   /** Album of the current location, as of the last navigation. */
   album: string | null;
   history: NavLocation[];
@@ -55,6 +64,7 @@ interface NavigationState {
 
 export const useNavigationStore = create<NavigationState>()((set, get) => ({
   screen: "Library",
+  cleanupTab: "Duplicates",
   album: null,
   history: [],
   forward: [],
@@ -63,7 +73,7 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
     const from: NavLocation = { screen: state.screen, album: state.album };
     const to: NavLocation = { screen, album: activeAlbum() };
     if (sameLocation(from, to)) {
-      set({ screen, album: to.album });
+      set({ screen, album: to.album, cleanupTab: cleanupTabFor(screen, state.cleanupTab) });
       return;
     }
     const record = !TRANSIENT.has(from.screen);
@@ -72,9 +82,20 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
       record && !(last && sameLocation(last, from))
         ? [...state.history, from].slice(-HISTORY_LIMIT)
         : state.history;
-    set({ screen, album: to.album, history, forward: [] });
+    set({
+      screen,
+      album: to.album,
+      history,
+      forward: [],
+      cleanupTab: cleanupTabFor(screen, state.cleanupTab),
+    });
   },
-  replaceScreen: (screen) => set({ screen, album: activeAlbum() }),
+  replaceScreen: (screen) =>
+    set({
+      screen,
+      album: activeAlbum(),
+      cleanupTab: cleanupTabFor(screen, get().cleanupTab),
+    }),
   goBack: () => {
     const state = get();
     const target = state.history[state.history.length - 1];
@@ -84,6 +105,7 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
     set({
       screen: target.screen,
       album: target.album,
+      cleanupTab: cleanupTabFor(target.screen, state.cleanupTab),
       history: state.history.slice(0, -1),
       forward: TRANSIENT.has(current.screen) ? state.forward : [...state.forward, current],
     });
@@ -97,6 +119,7 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
     set({
       screen: target.screen,
       album: target.album,
+      cleanupTab: cleanupTabFor(target.screen, state.cleanupTab),
       forward: state.forward.slice(0, -1),
       history: TRANSIENT.has(current.screen)
         ? state.history

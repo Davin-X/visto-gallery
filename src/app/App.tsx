@@ -70,6 +70,7 @@ function assetUrl(path: string) {
 
 function App() {
   const screen = useNavigationStore((s) => s.screen);
+  const cleanupTab = useNavigationStore((s) => s.cleanupTab);
   const canGoBack = useNavigationStore((s) => s.history.length > 0);
   const canGoForward = useNavigationStore((s) => s.forward.length > 0);
   const goBack = useNavigationStore((s) => s.goBack);
@@ -616,6 +617,7 @@ function App() {
           // An open album belongs to Albums, even though its grid is drawn by
           // the Library screen.
           screen={screen === "Library" && library.activeAlbum ? "Albums" : screen}
+          cleanupTab={cleanupTab}
           folders={library.folders}
           sourcesSheetOpen={sourcesSheetOpen}
           stats={libraryStats}
