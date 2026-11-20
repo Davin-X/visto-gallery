@@ -57,6 +57,8 @@ interface DuplicatesScreenProps {
   onChangeScope?: (path: string | null) => void;
   /** Report a failed any-file scan or trash request. */
   onError?: (error: unknown, prefix?: string) => void;
+  /** Called after files were trashed, so the library drops matching rows. */
+  onFilesTrashed?: () => void;
 }
 
 const GROUP_PAGE = 40;
@@ -107,6 +109,18 @@ function parentFolder(path: string): string {
   return index > 0 ? path.slice(0, index) : path;
 }
 
+/** The item to keep in a group. The first item stands in when no keeper is
+ *  marked, so a group can never offer every copy for deletion. */
+function keeperIdOf(group: FileDuplicateGroup): string | undefined {
+  return (group.items.find((item) => item.keeper) ?? group.items[0])?.id;
+}
+
+/** The ids a click on "Select copies" would trash: everything except the keeper. */
+function copyIdsOf(group: FileDuplicateGroup): string[] {
+  const keeper = keeperIdOf(group);
+  return group.items.filter((item) => item.id !== keeper).map((item) => item.id);
+}
+
 function formatDate(timestamp?: number): string {
   if (!timestamp) return "";
   return formatFileDate(timestamp);
@@ -129,6 +143,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     scope = null,
     onChangeScope,
     onError,
+    onFilesTrashed,
   } = props;
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -546,22 +561,40 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   } | null>(null);
   const [fileSelected, setFileSelected] = useState<Set<string>>(new Set());
   const [confirmFileTrash, setConfirmFileTrash] = useState(false);
+  // Bumped when the scope changes, so a scan still running for the previous
+  // folder cannot paint its results over the new one.
+  const fileScanRequest = useRef(0);
+  const fileBusyRef = useRef(false);
 
   useEffect(() => {
+    fileBusyRef.current = fileBusy;
+  }, [fileBusy]);
+
+  useEffect(() => {
+    let disposed = false;
     let stop: (() => void) | undefined;
     void events
       .onFileDuplicatesProgress((event) => setFileProgress(event))
       .then((unlisten) => {
-        stop = unlisten;
+        // The window can close before `listen` resolves; there is no cleanup
+        // function to call yet, so drop the listener here instead.
+        if (disposed) unlisten();
+        else stop = unlisten;
       });
-    return () => stop?.();
+    return () => {
+      disposed = true;
+      stop?.();
+    };
   }, []);
 
-  // Results belong to the folder they came from; a new scope invalidates them.
+  // Results belong to the folder they came from; a new scope invalidates them,
+  // and a scan for the old folder is stopped rather than left running.
   useEffect(() => {
+    fileScanRequest.current += 1;
     setFileScan(null);
     setFileSelected(new Set());
     setConfirmFileTrash(false);
+    if (fileBusyRef.current) void tauri.duplicates.cancel();
   }, [scope]);
 
   const fileGroups = useMemo(() => fileScan?.groups ?? [], [fileScan]);
@@ -569,8 +602,9 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     let copies = 0;
     let bytes = 0;
     fileGroups.forEach((group) => {
+      const keeper = keeperIdOf(group);
       group.items.forEach((item) => {
-        if (item.keeper) return;
+        if (item.id === keeper) return;
         copies += 1;
         bytes += item.size;
       });
@@ -587,28 +621,27 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     return bytes;
   }, [fileGroups, fileSelected]);
 
-  const switchMode = useCallback(
-    (next: ScanMode) => {
-      setMode(next);
-      setConfirmFileTrash(false);
-      // The any-file scan needs one folder; default to the first source rather
-      // than making the user chase a disabled button.
-      if (next === "files" && !scope && folders.length > 0) onChangeScope?.(folders[0].path);
-    },
-    [scope, folders, onChangeScope],
-  );
+  const switchMode = useCallback((next: ScanMode) => {
+    setMode(next);
+    setConfirmFileTrash(false);
+    // The any-file scan falls back to the first folder on its own; changing
+    // modes must not narrow the media scan or throw its results away.
+  }, []);
 
   const runFileScan = useCallback(async () => {
     if (!fileScope) return;
+    const request = fileScanRequest.current + 1;
+    fileScanRequest.current = request;
     setFileBusy(true);
     setConfirmFileTrash(false);
     setFileProgress({ phase: "walking", processed: 0, total: 0 });
     try {
       const result = await tauri.fileDuplicates.scan(fileScope);
+      if (request !== fileScanRequest.current) return;
       setFileScan(result);
       setFileSelected(new Set());
     } catch (error) {
-      onError?.(error, "Could not compare that folder");
+      if (request === fileScanRequest.current) onError?.(error, "Could not compare that folder");
     } finally {
       setFileBusy(false);
       setFileProgress(null);
@@ -627,12 +660,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const selectFileCopies = useCallback((group: FileDuplicateGroup) => {
     setFileSelected((prev) => {
       const next = new Set(prev);
-      const hasKeeper = group.items.some((item) => item.keeper);
-      group.items.forEach((item, index) => {
-        // If there's no keeper (e.g., keeper was trashed), the first item is now the keeper.
-        const isKeeper = hasKeeper ? item.keeper : index === 0;
-        if (!isKeeper) next.add(item.id);
-      });
+      for (const id of copyIdsOf(group)) next.add(id);
       return next;
     });
   }, []);
@@ -670,6 +698,9 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
       );
       setFileSelected(new Set());
       setConfirmFileTrash(false);
+      // Files that belong to the catalog left rows behind; reload so Library
+      // does not keep showing what just went to the Trash.
+      if (result.trashed.length > 0) onFilesTrashed?.();
       if (result.failed.length > 0) {
         onError?.(
           new Error(result.failed[0].error),
@@ -681,7 +712,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     } finally {
       setFileBusy(false);
     }
-  }, [fileSelected, confirmFileTrash, onError]);
+  }, [fileSelected, confirmFileTrash, onError, onFilesTrashed]);
 
   // Media mode keyboard shortcuts
   useKeyboard([
@@ -773,7 +804,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const folderPicker =
     folders.length > 0 && onChangeScope ? (
       <label
-        className="source-select duplicate-scope-select"
+        className="source-select"
         title={
           mode === "files"
             ? `Comparing every file type inside ${fileScopeLabel}`
@@ -788,6 +819,9 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           value={mode === "files" ? (fileScope ?? "") : (scope ?? "")}
           onChange={(e) => onChangeScope(e.target.value || null)}
           aria-label="Only compare files in this folder"
+          // Switching folders mid-scan would land the old folder's results
+          // under the new name; Cancel is right there instead.
+          disabled={fileBusy}
         >
           {mode === "media" && <option value="">All folders</option>}
           {folders.map((folder) => (
@@ -841,8 +875,9 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   };
 
   const renderFileGroup = (group: FileDuplicateGroup) => {
+    const keeper = keeperIdOf(group);
     const reclaimable = group.items
-      .filter((item) => !item.keeper)
+      .filter((item) => item.id !== keeper)
       .reduce((sum, item) => sum + item.size, 0);
     return (
       <section className="duplicate-group" key={group.id}>
@@ -972,11 +1007,17 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           <span className="duplicate-empty-icon" aria-hidden="true">
             <DuplicatesIcon size={26} />
           </span>
-          <h2>{fileScan.stoppedEarly ? "Nothing identical was found" : "Every file is unique"}</h2>
+          <h2>
+            {fileScan.cancelled
+              ? "Scan cancelled"
+              : fileScan.stoppedEarly
+                ? "Scan stopped early"
+                : "Every file is unique"}
+          </h2>
           <p>
-            {fileScan.filesScanned.toLocaleString()} files scanned and{" "}
-            {fileScan.filesCompared.toLocaleString()} compared byte for byte inside {fileScopeLabel}
-            . No two files have the same contents.
+            {fileScan.cancelled || fileScan.stoppedEarly
+              ? `${fileScan.filesScanned.toLocaleString()} files scanned and ${fileScan.filesCompared.toLocaleString()} compared inside ${fileScopeLabel} before the scan stopped. Files it did not reach were not compared.`
+              : `${fileScan.filesScanned.toLocaleString()} files scanned and ${fileScan.filesCompared.toLocaleString()} compared byte for byte inside ${fileScopeLabel}. No two files have the same contents.`}
           </p>
           <button type="button" className="primary-button" onClick={runFileScan}>
             Scan again
@@ -985,6 +1026,11 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
       ) : (
         <>
           {fileScan.stoppedEarly && <p className="duplicate-notice">{fileScan.stoppedEarly}</p>}
+          {fileScan.cancelled && (
+            <p className="duplicate-notice">
+              The scan was cancelled, so these results are partial. Scan again to finish.
+            </p>
+          )}
           <div className="duplicate-selection-bar">
             <div className="duplicate-selection-copy">
               <span>
@@ -1003,13 +1049,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                 className="quiet-button"
                 disabled={fileBusy || fileTotals.copies === 0}
                 onClick={() => {
-                  const next = new Set<string>();
-                  fileGroups.forEach((group) =>
-                    group.items.forEach((item) => {
-                      if (!item.keeper) next.add(item.id);
-                    }),
-                  );
-                  setFileSelected(next);
+                  setFileSelected(new Set(fileGroups.flatMap(copyIdsOf)));
                   setConfirmFileTrash(false);
                 }}
               >

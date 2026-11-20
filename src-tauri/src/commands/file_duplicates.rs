@@ -312,19 +312,9 @@ pub async fn find_file_duplicates(
         if indices.len() < 2 {
             continue;
         }
-        // Shallowest path first, then keeper name preference: the copy closest to the
-        // folder root is the one to keep, and that choice is explainable.
-        indices.sort_by(|a, b| {
-            let path_a = &candidates[*a].0;
-            let path_b = &candidates[*b].0;
-            let depth_a = path_a.matches('/').count();
-            let depth_b = path_b.matches('/').count();
-            depth_a.cmp(&depth_b).then_with(|| {
-                let name_a = path_a.rsplit('/').next().unwrap_or(path_a);
-                let name_b = path_b.rsplit('/').next().unwrap_or(path_b);
-                compare_keeper_name(name_a, name_b)
-            })
-        });
+        // Keeper name preference first, then the shallowest path: an original
+        // nested a level deeper still beats a "copy" sitting at the root.
+        indices.sort_by(|a, b| compare_keeper_paths(&candidates[*a].0, &candidates[*b].0));
         let size = candidates[indices[0]].1 as i64;
         let items: Vec<FileDuplicateItem> = indices
             .iter()
@@ -392,6 +382,8 @@ fn remember(state: &State<'_, crate::AppState>, scope: &str, items: HashMap<Stri
 #[tauri::command]
 pub async fn trash_file_duplicates(
     state: State<'_, crate::AppState>,
+    catalog: State<'_, crate::Catalog>,
+    window: Window,
     ids: Vec<String>,
 ) -> Result<FileDuplicateTrashResult, CommandError> {
     let mut seen = HashSet::new();
@@ -451,12 +443,17 @@ pub async fn trash_file_duplicates(
             continue;
         }
         // One file in the batch refused, so retry them individually to report
-        // exactly which ones stayed.
+        // exactly which ones stayed. `delete_all` stops at the first failure,
+        // so a path that is already gone was moved by the batch and is not a
+        // failure.
         for (id, path) in chunk {
-            let path = PathBuf::from(path);
-            let moved = tokio::task::spawn_blocking(move || trash::delete(&path).is_ok())
-                .await
-                .unwrap_or(false);
+            let target = PathBuf::from(path);
+            let attempt = target.clone();
+            let moved = tokio::task::spawn_blocking(move || {
+                trash::delete(&attempt).is_ok() || !attempt.exists()
+            })
+            .await
+            .unwrap_or(false);
             if moved {
                 trashed.push(id.clone());
             } else {
@@ -475,7 +472,66 @@ pub async fn trash_file_duplicates(
         }
     }
 
+    // A photo or video in the folder is also a catalog row. Removing its file
+    // has to remove the row too, or Library keeps showing a file that is gone.
+    // The files are already in the Trash, so a catalog failure is not reported
+    // as a trash failure; the next scan of the source prunes the row.
+    if !trashed.is_empty() {
+        let path_by_id: HashMap<&str, &str> = eligible
+            .iter()
+            .map(|(id, path)| (id.as_str(), path.as_str()))
+            .collect();
+        let paths: Vec<String> = trashed
+            .iter()
+            .filter_map(|id| path_by_id.get(id.as_str()).map(|path| path.to_string()))
+            .collect();
+        if let Ok(db) = super::get_db(&catalog) {
+            if let Ok(item_ids) = remove_catalog_rows(&db, &paths).await {
+                if !item_ids.is_empty() {
+                    let _ = window.emit(
+                        "library-changed",
+                        json!({ "type": "removed", "itemIds": item_ids }),
+                    );
+                }
+            }
+        }
+    }
+
     Ok(FileDuplicateTrashResult { trashed, failed })
+}
+
+/// Delete the catalog rows for files an any-file scan just trashed, returning
+/// their ids for `library-changed`. Files that were never in the catalog are
+/// simply not found.
+async fn remove_catalog_rows(
+    db: &sqlx::SqlitePool,
+    paths: &[String],
+) -> Result<Vec<String>, CommandError> {
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut builder =
+        sqlx::QueryBuilder::<sqlx::Sqlite>::new("SELECT id FROM media_items WHERE path IN (");
+    let mut values = builder.separated(", ");
+    for path in paths {
+        values.push_bind(path);
+    }
+    values.push_unseparated(")");
+    let ids = builder
+        .build_query_scalar::<String>()
+        .fetch_all(db)
+        .await
+        .map_err(|error| {
+            CommandError::database(format!(
+                "could not match trashed files to catalog rows: {error}"
+            ))
+        })?;
+    if ids.is_empty() {
+        return Ok(ids);
+    }
+    let backups = super::media::remove_trashed_rows(db, &ids).await?;
+    super::media::remove_edit_backup_files(&backups);
+    Ok(ids)
 }
 
 /// A path may be trashed only while it is still inside the scanned folder and
@@ -510,6 +566,16 @@ fn path_is_inside(path: &str, scope: &str) -> bool {
     }
     path.strip_prefix(scope)
         .is_some_and(|rest| rest.starts_with('/'))
+}
+
+/// The reason a walk stops once it has counted `walked` files. Always reports,
+/// never silently samples: a truncated list has to say so.
+fn walk_stop_reason(walked: usize) -> Option<String> {
+    (walked as u64 >= MAX_WALKED_FILES).then(|| {
+        format!(
+            "Stopped after {MAX_WALKED_FILES} files, so this scan is not complete. Pick a smaller folder to compare all of it."
+        )
+    })
 }
 
 /// Every regular file under `root`, with its size, subject to the walk limits.
@@ -548,10 +614,8 @@ fn walk_scope(root: &Path, cancel: &AtomicBool) -> (Vec<(String, u64)>, Option<S
                 continue;
             }
         }
-        if files.len() as u64 >= MAX_WALKED_FILES {
-            stopped = Some(format!(
-                "Stopped after {MAX_WALKED_FILES} files, so this scan is not complete. Pick a smaller folder to compare all of it."
-            ));
+        if let Some(reason) = walk_stop_reason(files.len()) {
+            stopped = Some(reason);
             break;
         }
         files.push((entry.path().to_string_lossy().into_owned(), size));
@@ -653,9 +717,21 @@ fn compare_keeper_name(a: &str, b: &str) -> std::cmp::Ordering {
     }
 }
 
+/// Keeper order inside one duplicate group: a name without a copy suffix
+/// wins outright, then the file closest to the folder root breaks ties.
+fn compare_keeper_paths(a: &str, b: &str) -> std::cmp::Ordering {
+    let name_a = a.rsplit('/').next().unwrap_or(a);
+    let name_b = b.rsplit('/').next().unwrap_or(b);
+    compare_keeper_name(name_a, name_b)
+        .then_with(|| a.matches('/').count().cmp(&b.matches('/').count()))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{compare_keeper_name, is_walkable, path_is_inside, walk_scope, MAX_WALKED_FILES};
+    use super::{
+        compare_keeper_name, compare_keeper_paths, is_walkable, path_is_inside,
+        remove_catalog_rows, validate_trash_target, walk_scope, walk_stop_reason, MAX_WALKED_FILES,
+    };
     use std::sync::atomic::AtomicBool;
     use walkdir::WalkDir;
 
@@ -734,12 +810,15 @@ mod tests {
 
     #[test]
     fn the_walk_limit_is_reported_rather_than_silently_sampled() {
-        // The limit itself is far too large to fill in a test, so assert the
-        // contract the message depends on: a stopped walk carries a reason.
+        // The limit is far too large to fill in a test, so exercise the check
+        // itself plus the complete-walk case it must stay quiet for.
+        assert_eq!(walk_stop_reason(MAX_WALKED_FILES as usize - 1), None);
+        let reason = walk_stop_reason(MAX_WALKED_FILES as usize).expect("limit message");
+        assert!(reason.contains(&MAX_WALKED_FILES.to_string()));
+
         let root = scratch_dir("limit");
         write(&root.join("a.bin"), b"aaaa");
         assert_eq!(walk_scope(&root, &AtomicBool::new(false)).1, None);
-        assert!(MAX_WALKED_FILES >= 200_000);
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -785,6 +864,20 @@ mod tests {
     }
 
     #[test]
+    fn keeper_name_beats_depth_within_a_group() {
+        // An original one folder down still beats a "copy" at the root.
+        assert_eq!(
+            compare_keeper_paths("/shoot/session/a.jpg", "/shoot/a copy.jpg"),
+            std::cmp::Ordering::Less
+        );
+        // Same name: the copy nearer the root is the one to keep.
+        assert_eq!(
+            compare_keeper_paths("/shoot/b.jpg", "/shoot/session/b.jpg"),
+            std::cmp::Ordering::Less
+        );
+    }
+
+    #[test]
     fn keeper_name_catches_finder_copy_suffix() {
         // macOS Finder names first duplicate as "name copy.ext"
         assert_eq!(
@@ -795,5 +888,72 @@ mod tests {
             compare_keeper_name("file copy.jp2", "file.jp2"),
             std::cmp::Ordering::Greater
         );
+    }
+
+    #[test]
+    fn trash_targets_must_be_regular_files_inside_the_scope() {
+        let root = scratch_dir("trash-targets");
+        let file = root.join("a.jpg");
+        write(&file, b"aaaa");
+        let scope = root.to_string_lossy();
+
+        assert!(validate_trash_target(file.to_str().expect("utf-8 path"), &scope).is_ok());
+        // A file outside the folder that was scanned.
+        assert!(validate_trash_target("/etc/hosts", &scope).is_err());
+
+        // A package or folder is not a file...
+        let folder = root.join("sub");
+        std::fs::create_dir_all(&folder).expect("create folder");
+        assert!(validate_trash_target(folder.to_str().expect("utf-8 path"), &scope).is_err());
+
+        // ...and a symlink is never followed, even inside the scope.
+        #[cfg(unix)]
+        {
+            let link = root.join("link.jpg");
+            std::os::unix::fs::symlink(&file, &link).expect("create symlink");
+            assert!(validate_trash_target(link.to_str().expect("utf-8 path"), &scope).is_err());
+        }
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn only_catalogued_trashed_paths_leave_the_catalog() {
+        let db = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory catalog");
+        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL)")
+            .execute(&db)
+            .await
+            .expect("create media table");
+        sqlx::query("CREATE TABLE edit_backups (media_id TEXT, backup_path TEXT)")
+            .execute(&db)
+            .await
+            .expect("create edit backups table");
+        for (id, path) in [
+            ("a", "/shoot/a.jpg"),
+            ("b", "/shoot/b.jpg"),
+            ("c", "/other/c.jpg"),
+        ] {
+            sqlx::query("INSERT INTO media_items (id, path) VALUES (?, ?)")
+                .bind(id)
+                .bind(path)
+                .execute(&db)
+                .await
+                .expect("insert media row");
+        }
+
+        let removed = remove_catalog_rows(&db, &["/shoot/a.jpg".to_string()])
+            .await
+            .expect("remove matched rows");
+        assert_eq!(removed, ["a"]);
+
+        let left: Vec<String> = sqlx::query_scalar("SELECT id FROM media_items ORDER BY id")
+            .fetch_all(&db)
+            .await
+            .expect("read remaining rows");
+        assert_eq!(left, ["b", "c"]);
     }
 }

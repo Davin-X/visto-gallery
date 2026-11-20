@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import DuplicatesScreen from "./DuplicatesScreen";
 import type { MediaItem } from "../engine/types/media";
@@ -184,7 +184,7 @@ describe("DuplicatesScreen", () => {
     expect(screen.getByRole("button", { name: "Scan again" })).toBeTruthy();
   });
 
-  it("offers an any-file scan for one folder and defaults to the first source", () => {
+  it("offers an any-file scan for one folder without touching the media scope", () => {
     const onChangeScope = vi.fn();
     renderScreen([], false, {
       folders: [
@@ -197,11 +197,15 @@ describe("DuplicatesScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Any file type" }));
 
-    expect(onChangeScope).toHaveBeenCalledWith("/shoots/rain");
+    // Previewing the mode must not narrow the media scan or clear its results.
+    expect(onChangeScope).not.toHaveBeenCalled();
     expect(screen.getByRole("heading", { name: "Duplicate files" })).toBeTruthy();
     // One folder at a time: "All folders" has no meaning for this scan, and the
     // first source stands in so the screen never asks for a folder it already has.
     expect(screen.queryByRole("option", { name: "All folders" })).toBeNull();
+    expect(
+      (screen.getByLabelText("Only compare files in this folder") as HTMLSelectElement).value,
+    ).toBe("/shoots/rain");
     expect(screen.getByRole("heading", { name: "Find duplicate files" })).toBeTruthy();
   });
 
@@ -261,5 +265,205 @@ describe("DuplicatesScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Confirm: move 1 to Trash" }));
     await waitFor(() => expect(fileScanMock.trash).toHaveBeenCalledWith(["copy"]));
+  });
+
+  it("reloads the library after a file trash so catalogued rows disappear", async () => {
+    fileScanMock.scan.mockResolvedValue({
+      scope: "/shoots/rain",
+      filesScanned: 2,
+      filesCompared: 2,
+      bytesHashed: 10,
+      stoppedEarly: null,
+      cancelled: false,
+      groups: [
+        {
+          id: "sha-2",
+          size: 5,
+          items: [
+            {
+              id: "keep-2",
+              path: "/shoots/rain/b.jpg",
+              name: "b.jpg",
+              extension: "jpg",
+              size: 5,
+              keeper: true,
+            },
+            {
+              id: "copy-2",
+              path: "/shoots/rain/old/b.jpg",
+              name: "b.jpg",
+              extension: "jpg",
+              size: 5,
+              keeper: false,
+            },
+          ],
+        },
+      ],
+    });
+    fileScanMock.trash.mockResolvedValue({ trashed: ["copy-2"], failed: [] });
+    const onFilesTrashed = vi.fn();
+
+    renderScreen([], false, {
+      folders: [makeLibraryFolder({ path: "/shoots/rain", name: "Rain" })],
+      scope: "/shoots/rain",
+      onChangeScope: vi.fn(),
+      onFilesTrashed,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Any file type" }));
+    fireEvent.click(screen.getByRole("button", { name: "Scan folder" }));
+    expect(await screen.findAllByText("b.jpg")).toHaveLength(2);
+
+    fireEvent.click(screen.getByLabelText(/Select b\.jpg in \/shoots\/rain\/old/));
+    fireEvent.click(screen.getByRole("button", { name: /Move to Trash/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm: move 1 to Trash" }));
+
+    await waitFor(() => expect(onFilesTrashed).toHaveBeenCalled());
+  });
+
+  it("does not call a cancelled scan unique", async () => {
+    fileScanMock.scan.mockResolvedValue({
+      scope: "/shoots/rain",
+      filesScanned: 3,
+      filesCompared: 0,
+      bytesHashed: 0,
+      stoppedEarly: null,
+      cancelled: true,
+      groups: [],
+    });
+
+    renderScreen([], false, {
+      folders: [makeLibraryFolder({ path: "/shoots/rain", name: "Rain" })],
+      scope: "/shoots/rain",
+      onChangeScope: vi.fn(),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Any file type" }));
+    fireEvent.click(screen.getByRole("button", { name: "Scan folder" }));
+
+    expect(await screen.findByRole("heading", { name: "Scan cancelled" })).toBeTruthy();
+    expect(screen.queryByText(/No two files have the same contents/)).toBeNull();
+    expect(screen.getByText(/before the scan stopped/)).toBeTruthy();
+  });
+
+  it("leaves the first copy unselected when a group has no keeper", async () => {
+    fileScanMock.scan.mockResolvedValue({
+      scope: "/shoots/rain",
+      filesScanned: 2,
+      filesCompared: 2,
+      bytesHashed: 8,
+      stoppedEarly: null,
+      cancelled: false,
+      groups: [
+        {
+          id: "sha-4",
+          size: 4,
+          items: [
+            {
+              id: "first-4",
+              path: "/shoots/rain/d.json",
+              name: "d.json",
+              extension: "json",
+              size: 4,
+              keeper: false,
+            },
+            {
+              id: "second-4",
+              path: "/shoots/rain/old/d.json",
+              name: "d.json",
+              extension: "json",
+              size: 4,
+              keeper: false,
+            },
+          ],
+        },
+      ],
+    });
+
+    renderScreen([], false, {
+      folders: [makeLibraryFolder({ path: "/shoots/rain", name: "Rain" })],
+      scope: "/shoots/rain",
+      onChangeScope: vi.fn(),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Any file type" }));
+    fireEvent.click(screen.getByRole("button", { name: "Scan folder" }));
+    await screen.findAllByText("d.json");
+
+    // The selection bar renders before the groups, so its button comes first.
+    fireEvent.click(screen.getAllByRole("button", { name: "Select copies" })[0]);
+
+    const first = screen.getByLabelText(/Select d\.json in \/shoots\/rain$/);
+    const second = screen.getByLabelText(/Deselect d\.json in \/shoots\/rain\/old/);
+    expect(first.getAttribute("aria-pressed")).toBe("false");
+    expect(second.getAttribute("aria-pressed")).toBe("true");
+    // The header counts what the button would actually move.
+    expect(screen.getByText(/1 extra copy/)).toBeTruthy();
+  });
+
+  it("drops a scan that finishes after the folder changed", async () => {
+    const staleScan = {
+      scope: "/shoots/rain",
+      filesScanned: 2,
+      filesCompared: 2,
+      bytesHashed: 10,
+      stoppedEarly: null,
+      cancelled: false,
+      groups: [
+        {
+          id: "sha-3",
+          size: 4,
+          items: [
+            {
+              id: "keep-3",
+              path: "/shoots/rain/c.xmp",
+              name: "c.xmp",
+              extension: "xmp",
+              size: 4,
+              keeper: true,
+            },
+            {
+              id: "copy-3",
+              path: "/shoots/rain/old/c.xmp",
+              name: "c.xmp",
+              extension: "xmp",
+              size: 4,
+              keeper: false,
+            },
+          ],
+        },
+      ],
+    };
+    let resolveScan: (value: typeof staleScan) => void = () => {};
+    fileScanMock.scan.mockReturnValueOnce(
+      new Promise<typeof staleScan>((resolve) => {
+        resolveScan = resolve;
+      }),
+    );
+
+    const { props, rerender } = renderScreen([], false, {
+      folders: [
+        makeLibraryFolder({ path: "/shoots/rain", name: "Rain" }),
+        makeLibraryFolder({ path: "/shoots/snow", name: "Snow" }),
+      ],
+      scope: "/shoots/rain",
+      onChangeScope: vi.fn(),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Any file type" }));
+    fireEvent.click(screen.getByRole("button", { name: "Scan folder" }));
+    // The picker cannot be changed mid-scan; a store-driven change still must
+    // not paint the old folder's results under the new one.
+    expect(
+      (screen.getByLabelText("Only compare files in this folder") as HTMLSelectElement).disabled,
+    ).toBe(true);
+
+    rerender(<DuplicatesScreen {...props} scope="/shoots/snow" />);
+    await act(async () => {
+      resolveScan(staleScan);
+    });
+
+    expect(screen.queryByText("c.xmp")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Find duplicate files" })).toBeTruthy();
   });
 });
