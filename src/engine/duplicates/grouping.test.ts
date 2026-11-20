@@ -70,6 +70,32 @@ describe("orderGroup", () => {
     expect(first).toEqual(second);
   });
 
+  test("among identical copies, best keeps the plain name, then the oldest", () => {
+    const plain = makeItem({
+      id: "plain",
+      name: "IMG_1.HEIC",
+      path: "/z/long/folder/IMG_1.HEIC",
+      createdAt: 900,
+    });
+    const numbered = makeItem({
+      id: "n",
+      name: "IMG_1 (3).HEIC",
+      path: "/a/IMG_1 (3).HEIC",
+      createdAt: 10,
+    });
+    const copy = makeItem({
+      id: "c",
+      name: "IMG_1 copy.HEIC",
+      path: "/a/IMG_1 copy.HEIC",
+      createdAt: 5,
+    });
+    expect(orderGroup([numbered, copy, plain], "best")[0].id).toBe("plain");
+
+    const older = makeItem({ id: "older", createdAt: 10 });
+    const newer = makeItem({ id: "newer", createdAt: 900 });
+    expect(orderGroup([newer, older], "best")[0].id).toBe("older");
+  });
+
   test("does not mutate the input array", () => {
     const items = [makeItem({ id: "a", createdAt: 10 }), makeItem({ id: "b", createdAt: 900 })];
     const snapshot = items.map((item) => item.id);

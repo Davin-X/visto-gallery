@@ -51,6 +51,12 @@ export function keeperQuality(item: MediaItem): [number, number, number] {
   return [format, pixels, item.size];
 }
 
+/** "IMG_1 (3).jpg", "IMG_1 copy.jpg", "IMG_1-2.jpg" look like copies of "IMG_1.jpg". */
+const COPY_SUFFIX = /(\s\(\d+\)|\scopy(\s\d+)?|-\d)$/i;
+export function looksLikeCopy(item: MediaItem): boolean {
+  return COPY_SUFFIX.test(item.name.replace(/\.[^.]+$/, ""));
+}
+
 /**
  * The backend stores hash groups in query order, so the first item is not
  * necessarily the original file. Order every group explicitly: the keeper
@@ -58,7 +64,8 @@ export function keeperQuality(item: MediaItem): [number, number, number] {
  * stable between scans.
  */
 export function orderGroup(items: MediaItem[], keeperMode: KeeperMode): MediaItem[] {
-  const direction = keeperMode === "oldest" ? 1 : -1;
+  // "best" falls back to the oldest copy: that is usually the original.
+  const direction = keeperMode === "newest" ? -1 : 1;
   return [...items].sort((a, b) => {
     if (keeperMode === "best") {
       const left = keeperQuality(a);
@@ -66,6 +73,8 @@ export function orderGroup(items: MediaItem[], keeperMode: KeeperMode): MediaIte
       for (let index = 0; index < left.length; index += 1) {
         if (left[index] !== right[index]) return right[index] - left[index];
       }
+      const byCopyName = Number(looksLikeCopy(a)) - Number(looksLikeCopy(b));
+      if (byCopyName !== 0) return byCopyName;
     }
     const byAge = (copyOrderValue(a) - copyOrderValue(b)) * direction;
     if (byAge !== 0) return byAge;

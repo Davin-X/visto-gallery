@@ -565,6 +565,27 @@ test("cancelScan routes the library-scan phase to the library cancel command", a
   expect(tauri.duplicates.cancel).not.toHaveBeenCalled();
 });
 
+test("a scan uses the chosen folder scope, and changing scope clears stale groups", async () => {
+  useLibraryStore.setState({
+    duplicates: [{ id: "g1", sha256: "abc", size: 10, items: [] }],
+    duplicatesScanned: true,
+  });
+  vi.mocked(tauri.duplicates.scan).mockResolvedValueOnce([]);
+
+  useLibraryStore.getState().setDuplicateScope("/shoots/rain");
+
+  // Groups from the previous scope must not stay on screen for this one.
+  expect(useLibraryStore.getState().duplicates).toEqual([]);
+  expect(useLibraryStore.getState().duplicatesScanned).toBe(false);
+
+  await useLibraryStore.getState().scanDuplicates();
+  expect(tauri.duplicates.scan).toHaveBeenCalledWith("/shoots/rain");
+
+  useLibraryStore.getState().setDuplicateScope(null);
+  await useLibraryStore.getState().scanDuplicates();
+  expect(tauri.duplicates.scan).toHaveBeenLastCalledWith(null);
+});
+
 test("inspectItem accepts hidden item IDs", () => {
   const visible = makeItem("visible", "photo.jpg");
   const hidden = makeItem("hidden", "secret.jpg", false, "photo");

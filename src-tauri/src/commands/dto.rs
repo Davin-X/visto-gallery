@@ -260,6 +260,54 @@ pub struct DuplicateGroup {
     pub items: Vec<MediaItem>,
 }
 
+/// One file from an any-file duplicate scan. Ids are only valid for the scan
+/// that produced them; the backend resolves them back to paths.
+#[derive(Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileDuplicateItem {
+    pub id: String,
+    pub path: String,
+    pub name: String,
+    pub extension: String,
+    pub size: i64,
+    /// The copy closest to the folder root: the one to keep by default.
+    pub keeper: bool,
+}
+
+/// Files that are byte-for-byte identical, found inside one folder.
+#[derive(Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileDuplicateGroup {
+    pub id: String,
+    pub size: i64,
+    pub items: Vec<FileDuplicateItem>,
+}
+
+/// Result of scanning one folder for duplicates of any file type. The hashes
+/// stay on the backend, in memory, and are never persisted.
+#[derive(Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(optional_fields = nullable)]
+pub struct FileDuplicateScan {
+    pub scope: String,
+    pub groups: Vec<FileDuplicateGroup>,
+    /// Regular files walked inside the folder.
+    pub files_scanned: u64,
+    /// Files whose contents were compared byte for byte.
+    pub files_compared: u64,
+    pub bytes_hashed: u64,
+    /// Set when a limit stopped the scan early, phrased for the user.
+    pub stopped_early: Option<String>,
+    pub cancelled: bool,
+}
+
+#[derive(Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FileDuplicateTrashResult {
+    pub trashed: Vec<String>,
+    pub failed: Vec<TrashError>,
+}
+
 macro_rules! string_enum {
     (
         $(#[$meta:meta])*

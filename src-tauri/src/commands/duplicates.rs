@@ -14,11 +14,55 @@ pub async fn cancel_find_duplicates(state: State<'_, crate::AppState>) -> Result
     Ok(())
 }
 
+/// The catalog rows a scan may compare. `scope` restricts it to one folder and
+/// everything under it, so cleaning up a single shoot never pairs its files
+/// with copies elsewhere in the catalog.
+///
+/// The match is on the folder boundary (`/shoot/` does not cover
+/// `/shoot-2024/`), and a scope the catalog has nothing under simply yields no
+/// candidates rather than falling back to the whole library.
+async fn catalog_items(
+    db: &sqlx::SqlitePool,
+    scope: Option<&str>,
+) -> Result<Vec<MediaItem>, CommandError> {
+    let scope = scope.map(str::trim).filter(|value| !value.is_empty());
+    let items = match scope {
+        // "/" is the only path with nothing to strip; everything under it is
+        // inside the scope.
+        Some("/") => {
+            sqlx::query_as::<_, MediaItem>(
+                "SELECT * FROM media_items WHERE substr(path, 1, 1) = '/'",
+            )
+            .fetch_all(db)
+            .await?
+        }
+        Some(folder) => {
+            let folder = folder.trim_end_matches('/');
+            sqlx::query_as::<_, MediaItem>(
+                "SELECT * FROM media_items WHERE substr(path, 1, length(?) + 1) = ? || '/'",
+            )
+            .bind(folder)
+            .bind(folder)
+            .fetch_all(db)
+            .await?
+        }
+        None => {
+            sqlx::query_as::<_, MediaItem>("SELECT * FROM media_items")
+                .fetch_all(db)
+                .await?
+        }
+    };
+    Ok(items)
+}
+
 #[tauri::command]
 pub async fn find_duplicates(
     catalog: State<'_, crate::Catalog>,
     state: State<'_, crate::AppState>,
     window: Window,
+    // Optional library folder to scan on its own; absent means the whole
+    // catalog, which is what earlier callers expect.
+    scope: Option<String>,
 ) -> Result<Vec<DuplicateGroup>, CommandError> {
     // This scan's own flag: another duplicate scan cannot clear it, and a
     // Cancel only reaches the scans that were running when it arrived.
@@ -27,10 +71,9 @@ pub async fn find_duplicates(
     let db = super::get_db(&catalog)?;
 
     // Load the catalog (hidden items included — a duplicate doesn't stop being
-    // one just because it was hidden).
-    let mut items: Vec<MediaItem> = sqlx::query_as::<_, MediaItem>("SELECT * FROM media_items")
-        .fetch_all(&db)
-        .await?;
+    // one just because it was hidden), narrowed to the chosen folder when one
+    // was given.
+    let mut items = catalog_items(&db, scope.as_deref()).await?;
 
     // Only files that share a size with at least one other file can be exact
     // duplicates, so hash only those — this keeps a full-library scan cheap.
@@ -342,4 +385,79 @@ fn hash_file_content(
     }
 
     Some(hex::encode(ctx.finish().as_ref()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::catalog_items;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn scan_db() -> sqlx::SqlitePool {
+        let db = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("open in-memory duplicate database");
+        sqlx::query(
+            "CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, sha256 TEXT, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, import_session_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, rating INTEGER, color_label TEXT)",
+        )
+        .execute(&db)
+        .await
+        .expect("create media table");
+        db
+    }
+
+    async fn insert_item(db: &sqlx::SqlitePool, path: &str) {
+        let name = path.rsplit('/').next().unwrap_or(path);
+        sqlx::query(
+            "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, created_at, updated_at) VALUES (?, ?, ?, 'jpg', 'photo', 10, 1, 1, 1)",
+        )
+        .bind(path)
+        .bind(path)
+        .bind(name)
+        .execute(db)
+        .await
+        .expect("insert media row");
+    }
+
+    #[tokio::test]
+    async fn a_scope_only_returns_files_inside_that_folder() {
+        let db = scan_db().await;
+        for path in [
+            "/shoots/rain/a.jpg",
+            "/shoots/rain/sub/b.jpg",
+            "/shoots/rain-2024/c.jpg",
+            "/other/d.jpg",
+        ] {
+            insert_item(&db, path).await;
+        }
+
+        // A trailing slash and a subfolder both belong to the scope; a sibling
+        // folder whose name merely starts the same way does not.
+        let mut paths: Vec<String> = catalog_items(&db, Some("/shoots/rain/"))
+            .await
+            .expect("scoped catalog query")
+            .into_iter()
+            .map(|item| item.path)
+            .collect();
+        paths.sort();
+        assert_eq!(paths, ["/shoots/rain/a.jpg", "/shoots/rain/sub/b.jpg"]);
+    }
+
+    #[tokio::test]
+    async fn no_scope_and_blank_scope_still_scan_the_whole_catalog() {
+        let db = scan_db().await;
+        for path in ["/shoots/rain/a.jpg", "/other/b.jpg"] {
+            insert_item(&db, path).await;
+        }
+
+        let all = catalog_items(&db, None).await.expect("unscoped query");
+        assert_eq!(all.len(), 2);
+        let blank = catalog_items(&db, Some("   ")).await.expect("blank scope");
+        assert_eq!(blank.len(), 2);
+        let missing = catalog_items(&db, Some("/nowhere"))
+            .await
+            .expect("missing scope");
+        assert!(missing.is_empty(), "out-of-catalog scope must not widen");
+    }
 }

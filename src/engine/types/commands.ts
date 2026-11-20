@@ -29,6 +29,10 @@ export type {
   TrashRestoreFailure,
   TrashRestoreResult,
   DuplicateGroup,
+  FileDuplicateItem,
+  FileDuplicateGroup,
+  FileDuplicateScan,
+  FileDuplicateTrashResult,
   SmartAlbumFilter,
   SmartAlbum,
   BackupInfo,
@@ -97,6 +101,19 @@ export interface FinderTagCopyResult {
 /** Phases the Rust backend emits on the `import-progress` event. */
 export type BackendProgressPhase =
   "scanning" | "reading" | "hashing" | "indexing" | "trashing" | "complete";
+
+/**
+ * Progress the any-file duplicate scan emits on `file-duplicates-progress`. A
+ * separate stream from imports, so an unrelated library operation cannot
+ * overwrite it.
+ */
+export interface FileDuplicatesProgressEvent {
+  phase: "walking" | "hashing";
+  processed: number;
+  total: number;
+  currentFile?: string;
+  bytesProcessed?: number;
+}
 
 /**
  * Outcome of a trash request, as the store reports it to the UI. Status is

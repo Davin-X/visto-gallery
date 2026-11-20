@@ -368,7 +368,7 @@ where
 
 /// Delete the catalog rows for `trashed` ids in one transaction, returning the
 /// journaled edit originals that were attached to them.
-async fn remove_trashed_rows(
+pub(crate) async fn remove_trashed_rows(
     db: &sqlx::SqlitePool,
     trashed: &[String],
 ) -> Result<Vec<String>, CommandError> {

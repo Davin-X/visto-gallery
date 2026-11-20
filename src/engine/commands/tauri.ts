@@ -22,6 +22,8 @@ import type {
   BatchExportResult,
   BatchProgressEvent,
   DuplicateGroup,
+  FileDuplicateScan,
+  FileDuplicateTrashResult,
   LibraryFolder,
   OpenPath,
   LibraryChangedEvent,
@@ -54,6 +56,7 @@ import type {
   DefaultAppTarget,
   SetDefaultOutcome,
   DisplayPreview,
+  FileDuplicatesProgressEvent,
 } from "../types/commands";
 
 // Type-safe command wrappers
@@ -275,9 +278,25 @@ export const tauri = {
   },
 
   duplicates: {
-    scan: (): Promise<DuplicateGroup[]> => invoke("find_duplicates"),
+    /** Compare the whole catalog, or only the files inside one folder. */
+    scan: (scope?: string | null): Promise<DuplicateGroup[]> =>
+      invoke("find_duplicates", { scope: scope ?? null }),
 
     cancel: (): Promise<void> => invoke("cancel_find_duplicates"),
+  },
+
+  /**
+   * Duplicates of every file type inside one folder. The backend lists the
+   * folder, compares contents with the same header-then-SHA-256 strategy as
+   * the media scan, and keeps paths and hashes in memory only: nothing here
+   * touches the media catalog.
+   */
+  fileDuplicates: {
+    scan: (scope: string): Promise<FileDuplicateScan> => invoke("find_file_duplicates", { scope }),
+
+    /** Move files from the last scan to the Finder Trash, by scan id. */
+    trash: (ids: string[]): Promise<FileDuplicateTrashResult> =>
+      invoke("trash_file_duplicates", { ids }),
   },
 
   finder: {
@@ -425,6 +444,11 @@ export const events = {
 
   onImportProgress: (callback: (event: ImportProgressEvent) => void) =>
     listen<ImportProgressEvent>("import-progress", (e) => callback(e.payload)),
+
+  /** Progress for the any-file duplicate scan. A separate stream from imports,
+   *  so an unrelated library operation cannot overwrite it. */
+  onFileDuplicatesProgress: (callback: (event: FileDuplicatesProgressEvent) => void) =>
+    listen<FileDuplicatesProgressEvent>("file-duplicates-progress", (e) => callback(e.payload)),
 
   onThumbnailReady: (callback: (event: ThumbnailReadyEvent) => void) =>
     listen<ThumbnailReadyEvent>("thumbnail-ready", (e) => callback(e.payload)),
