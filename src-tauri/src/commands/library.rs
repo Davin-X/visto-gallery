@@ -726,7 +726,7 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
             // push_bind writes its own `?`, so the IN list is built from binds
             // only; writing literal placeholders as well produced `IN (?)) ?`.
             qb.push(
-                " AND id IN (SELECT mt.media_id FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE t.name IN (",
+                " AND id IN (SELECT mt.media_id FROM media_tags mt JOIN tags t ON t.id = mt.tag_id WHERE t.name COLLATE NOCASE IN (",
             );
             let mut names = qb.separated(", ");
             for tag in tags {
@@ -734,9 +734,14 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
             }
             qb.push(")");
             if f.tag_match.as_deref() == Some("all") {
-                // Duplicate names in the request must not raise the bar.
-                let needed = tags.iter().collect::<std::collections::HashSet<_>>().len() as i64;
-                qb.push(" GROUP BY mt.media_id HAVING COUNT(DISTINCT t.name) = ")
+                // Tags are unique ignoring case (ASCII, like NOCASE), so
+                // `Beach` and `beach` in one request count as one tag.
+                let needed = tags
+                    .iter()
+                    .map(|tag| tag.to_ascii_lowercase())
+                    .collect::<std::collections::HashSet<_>>()
+                    .len() as i64;
+                qb.push(" GROUP BY mt.media_id HAVING COUNT(DISTINCT lower(t.name)) = ")
                     .push_bind(needed);
             }
             qb.push(")");
@@ -781,6 +786,11 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
     if let Some(query) = &f.query {
         // `%` and `_` typed by the user are literal characters, not wildcards.
         let like = format!("%{}%", escape_like(query));
+        // A file picked on its own has no registered root, so only the name of
+        // the folder it sits in is searchable: never the home-directory prefix.
+        let dir = "rtrim(rtrim(media_items.path, replace(media_items.path, '/', '')), '/')";
+        let loose_parent =
+            format!("substr({dir}, length(rtrim({dir}, replace({dir}, '/', ''))) + 1)");
         qb.push(" AND (name LIKE ")
             .push_bind(like.clone())
             .push(" ESCAPE '\\'")
@@ -789,6 +799,10 @@ fn push_library_filters(qb: &mut QueryBuilder<Sqlite>, f: &super::LibraryFilterD
             // `dev` hit the home-directory prefix and return the library.
             .push(" OR EXISTS (SELECT 1 FROM library_folders lf WHERE substr(media_items.path, 1, length(rtrim(lf.path, '/')))")
             .push(" = rtrim(lf.path, '/') AND substr(media_items.path, length(rtrim(lf.path, '/')) + 2) LIKE ")
+            .push_bind(like.clone())
+            .push(" ESCAPE '\\')")
+            .push(" OR (NOT EXISTS (SELECT 1 FROM library_folders lf WHERE substr(media_items.path, 1, length(rtrim(lf.path, '/'))) = rtrim(lf.path, '/'))")
+            .push(format!(" AND {loose_parent} LIKE "))
             .push_bind(like.clone())
             .push(" ESCAPE '\\')")
             .push(" OR extension LIKE ")
@@ -3244,14 +3258,19 @@ mod filter_and_scale_tests {
                 .expect("tag item");
         }
 
-        for (tags, expected) in [
-            (vec!["travel"], vec!["beach"]),
-            (vec!["travel", "family"], vec!["beach", "party"]),
+        for (tags, tag_match, expected) in [
+            (vec!["travel"], None, vec!["beach"]),
+            (vec!["travel", "family"], None, vec!["beach", "party"]),
+            // Tags are unique ignoring case, so a typed name matches either way…
+            (vec!["TRAVEL"], None, vec!["beach"]),
+            // …and two spellings of one tag do not demand a second tag.
+            (vec!["Travel", "travel"], Some("all"), vec!["beach"]),
         ] {
             let page = get_library_items_page(
                 &db,
                 LibraryFilterDTO {
                     tags: Some(tags.iter().map(|t| t.to_string()).collect()),
+                    tag_match: tag_match.map(str::to_string),
                     limit: Some(10),
                     ..Default::default()
                 },
@@ -3377,6 +3396,10 @@ mod filter_and_scale_tests {
         assert_eq!(search("dev").await, Vec::<String>::new());
         // Folders inside a library folder stay searchable.
         assert_eq!(search("2024").await, ["trip"]);
+        // A file imported on its own has no root: the folder it sits in is
+        // searchable, the folders above it are not.
+        assert_eq!(search("Documents").await, ["outside"]);
+        assert_eq!(search("Users").await, Vec::<String>::new());
     }
 
     #[tokio::test]
