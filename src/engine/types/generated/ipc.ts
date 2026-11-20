@@ -210,6 +210,30 @@ export type TrashRestoreResult = { restored: Array<string>, failed: Array<TrashR
 
 export type DuplicateGroup = { id: string, sha256: string, size: number, items: Array<MediaItem>, };
 
+export type FileDuplicateItem = { id: string, path: string, name: string, extension: string, size: number, 
+/**
+ * The copy closest to the folder root: the one to keep by default.
+ */
+keeper: boolean, };
+
+export type FileDuplicateGroup = { id: string, size: number, items: Array<FileDuplicateItem>, };
+
+export type FileDuplicateScan = { scope: string, groups: Array<FileDuplicateGroup>, 
+/**
+ * Regular files walked inside the folder.
+ */
+filesScanned: number, 
+/**
+ * Files whose contents were compared byte for byte.
+ */
+filesCompared: number, bytesHashed: number, 
+/**
+ * Set when a limit stopped the scan early, phrased for the user.
+ */
+stoppedEarly?: string | null, cancelled: boolean, };
+
+export type FileDuplicateTrashResult = { trashed: Array<string>, failed: Array<TrashError>, };
+
 export type SmartAlbumFilter = { kind?: "photo" | "video" | "raw", favorite?: boolean | null, query?: string | null, tags?: Array<string> | null, 
 /**
  * `any` (default) matches one of the tags, `all` requires every one.
