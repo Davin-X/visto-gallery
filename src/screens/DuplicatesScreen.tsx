@@ -9,6 +9,7 @@ import {
   FolderIcon,
   GridIcon,
   TrashIcon,
+  XIcon,
 } from "../design/components/icons";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import { KindBadge } from "../design/components/KindBadge";
@@ -110,6 +111,22 @@ function parentFolder(path: string): string {
   return index > 0 ? path.slice(0, index) : path;
 }
 
+function folderName(path: string): string {
+  const trimmed = path.replace(/\/+$/, "");
+  return trimmed.slice(trimmed.lastIndexOf("/") + 1) || trimmed;
+}
+
+/** The row's folder relative to the folder being scanned, so one scan does not
+ *  print the same absolute prefix on every line. */
+function folderWithin(path: string, scope: string | undefined): string {
+  const folder = parentFolder(path);
+  if (!scope) return folder;
+  const base = scope.replace(/\/+$/, "");
+  if (folder === base) return "This folder";
+  if (folder.startsWith(`${base}/`)) return folder.slice(base.length + 1);
+  return folder;
+}
+
 /** The item to keep in a group. The first item stands in when no keeper is
  *  marked, so a group can never offer every copy for deletion. */
 function keeperIdOf(group: FileDuplicateGroup): string | undefined {
@@ -166,11 +183,17 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     [folders, scope],
   );
   const scopeLabel = scopeFolder?.name ?? "this folder";
+  // A folder picked with "Choose folder…" that is not a library source. It is
+  // kept apart from `scope`, so an any-file scan never narrows the media scan,
+  // and it is session-only like the rest of this screen.
+  const [pickedFolder, setPickedFolder] = useState<string | null>(null);
   // An any-file scan always compares one folder, so it never offers "All
   // folders": with none chosen it uses the first source instead of showing a
   // screen with nothing to scan.
-  const fileScope = scope ?? folders[0]?.path ?? null;
-  const fileScopeLabel = folders.find((folder) => folder.path === fileScope)?.name ?? "this folder";
+  const fileScope = pickedFolder ?? scope ?? folders[0]?.path ?? null;
+  const fileScopeLabel =
+    folders.find((folder) => folder.path === fileScope)?.name ??
+    (fileScope ? folderName(fileScope) : "this folder");
 
   const kindCounts = useMemo(() => {
     const counts: Record<KindFilter, number> = { all: groups.length, photo: 0, video: 0, raw: 0 };
@@ -572,17 +595,30 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   useEffect(() => {
     let disposed = false;
     let stop: (() => void) | undefined;
+    let frame: number | null = null;
+    let pending: { phase?: string; processed?: number; total?: number; currentFile?: string } | null = null;
+
     void events
-      .onFileDuplicatesProgress((event) => setFileProgress(event))
+      .onFileDuplicatesProgress((event) => {
+        pending = event;
+        if (frame === null) {
+          frame = window.requestAnimationFrame(() => {
+            frame = null;
+            if (!disposed && pending) {
+              setFileProgress(pending);
+              pending = null;
+            }
+          });
+        }
+      })
       .then((unlisten) => {
-        // The window can close before `listen` resolves; there is no cleanup
-        // function to call yet, so drop the listener here instead.
         if (disposed) unlisten();
         else stop = unlisten;
       });
     return () => {
       disposed = true;
       stop?.();
+      if (frame !== null) window.cancelAnimationFrame(frame);
     };
   }, []);
 
@@ -594,6 +630,13 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     setFileSelected(new Set());
     setConfirmFileTrash(false);
     if (fileBusyRef.current) void tauri.duplicates.cancel();
+  }, [fileScope]);
+
+  // A folder picked for the any-file scan is session-only; narrowing the
+  // library scope means the user is choosing a source again, so the pick
+  // falls away instead of silently winning over the new scope.
+  useEffect(() => {
+    setPickedFolder(null);
   }, [scope]);
 
   const fileGroups = useMemo(() => fileScan?.groups ?? [], [fileScan]);
@@ -777,31 +820,56 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     ),
   ]);
 
-  const modeTabs =
-    folders.length > 0 && onChangeScope ? (
-      <div className="duplicate-filter-tabs" role="group" aria-label="What to compare">
-        <button
-          type="button"
-          aria-pressed={mode === "media"}
-          className={mode === "media" ? "is-active" : ""}
-          onClick={() => switchMode("media")}
-        >
-          Photos &amp; videos
-        </button>
-        <button
-          type="button"
-          aria-pressed={mode === "files"}
-          className={mode === "files" ? "is-active" : ""}
-          title="Compare every file type inside one folder, in memory only"
-          onClick={() => switchMode("files")}
-        >
-          Any file type
-        </button>
-      </div>
-    ) : null;
+  const chooseFileFolder = useCallback(async () => {
+    try {
+      const chosen = await tauri.fileDuplicates.chooseFolder();
+      if (chosen) setPickedFolder(chosen);
+    } catch (error) {
+      onError?.(error, "Could not open that folder");
+    }
+  }, [onError]);
+
+  // A picked folder belongs to the any-file scan only, so clearing it must not
+  // touch the library scope the user set for photos and videos.
+  const clearPickedFolder = useCallback(() => {
+    setPickedFolder(null);
+  }, []);
+
+  // Scanned files need not be catalog entries, so they cannot go through the
+  // catalog-only reveal command: the backend resolves the scan id instead.
+  const revealFileItem = useCallback(
+    (id: string) => {
+      void tauri.fileDuplicates
+        .reveal(id)
+        .catch((error: unknown) => onError?.(error, "Could not show that file in Finder"));
+    },
+    [onError],
+  );
+
+  const modeTabs = onChangeScope ? (
+    <div className="duplicate-filter-tabs" role="group" aria-label="What to compare">
+      <button
+        type="button"
+        aria-pressed={mode === "media"}
+        className={mode === "media" ? "is-active" : ""}
+        onClick={() => switchMode("media")}
+      >
+        Photos &amp; videos
+      </button>
+      <button
+        type="button"
+        aria-pressed={mode === "files"}
+        className={mode === "files" ? "is-active" : ""}
+        title="Compare every file type inside one folder, in memory only"
+        onClick={() => switchMode("files")}
+      >
+        Any file type
+      </button>
+    </div>
+  ) : null;
 
   const folderPicker =
-    folders.length > 0 && onChangeScope ? (
+    onChangeScope && (mode === "files" || folders.length > 0) ? (
       <label
         className="source-select"
         title={
@@ -816,19 +884,48 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
         <span className="source-select-label">Folder</span>
         <select
           value={mode === "files" ? (fileScope ?? "") : (scope ?? "")}
-          onChange={(e) => onChangeScope(e.target.value || null)}
+          onChange={(e) => {
+            const value = e.target.value;
+            // The empty slot means "no folder chosen yet" and opens the picker;
+            // any folder on disk can be compared, not just a library source.
+            if (mode === "files" && value === "") {
+              void chooseFileFolder();
+              return;
+            }
+            // A picked folder belongs to the any-file scan only; going back to
+            // a library source chooses one scope for both modes.
+            setPickedFolder(null);
+            onChangeScope(value || null);
+          }}
           aria-label="Only compare files in this folder"
           // Switching folders mid-scan would land the old folder's results
           // under the new name; Cancel is right there instead.
           disabled={fileBusy}
         >
           {mode === "media" && <option value="">All folders</option>}
+          {mode === "files" && <option value="">Choose a folder…</option>}
           {folders.map((folder) => (
             <option key={folder.path} value={folder.path}>
               {folder.name}
             </option>
           ))}
+          {mode === "files" &&
+            fileScope &&
+            !folders.some((folder) => folder.path === fileScope) && (
+              <option value={fileScope}>{folderName(fileScope)}</option>
+            )}
         </select>
+        {mode === "files" && fileScope && !folders.some((f) => f.path === fileScope) && (
+          <button
+            type="button"
+            className="quiet-button source-select-clear"
+            title="Compare the library folder again"
+            aria-label="Clear the folder picked for this scan"
+            onClick={clearPickedFolder}
+          >
+            <XIcon size={12} />
+          </button>
+        )}
       </label>
     ) : null;
 
@@ -840,7 +937,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           type="button"
           className="file-duplicate-pick"
           aria-pressed={isSelected}
-          aria-label={`${isSelected ? "Deselect" : "Select"} ${item.name} in ${parentFolder(item.path)}`}
+          aria-label={`${isSelected ? "Deselect" : "Select"} ${item.name} in ${folderWithin(item.path, fileScan?.scope)}`}
           onClick={() => toggleFileItem(item.id)}
         >
           <span className={`file-duplicate-check${isSelected ? " is-on" : ""}`} aria-hidden="true">
@@ -854,7 +951,10 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           <span className="file-duplicate-name" title={item.path}>
             {item.name}
           </span>
-          <MiddleTruncate text={parentFolder(item.path)} className="file-duplicate-path" />
+          <MiddleTruncate
+            text={folderWithin(item.path, fileScan?.scope)}
+            className="file-duplicate-path"
+          />
         </span>
         <span className="file-duplicate-size">{formatBytesSimple(item.size)}</span>
         {item.keeper ? <span className="file-duplicate-keep">Keep</span> : null}
@@ -863,7 +963,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           className="duplicate-tile-tool"
           title="Show in Finder"
           aria-label={`Show ${item.name} in Finder`}
-          onClick={() => revealItem(item.path)}
+          onClick={() => revealFileItem(item.id)}
         >
           <FolderIcon size={13} />
         </button>
@@ -909,7 +1009,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
         <h1>Duplicate files</h1>
         <p className="page-subtitle">
           {fileScan && fileGroups.length > 0
-            ? `${fileGroups.length.toLocaleString()} ${fileGroups.length === 1 ? "group" : "groups"} · ${fileTotals.copies.toLocaleString()} extra ${fileTotals.copies === 1 ? "copy" : "copies"} · ${formatBytesSimple(fileTotals.bytes)} reclaimable`
+            ? `${fileGroups.length.toLocaleString()} ${fileGroups.length === 1 ? "group" : "groups"} · ${fileTotals.copies.toLocaleString()} extra ${fileTotals.copies === 1 ? "copy" : "copies"} · ${formatBytesSimple(fileTotals.bytes)} reclaimable · ${fileScan.filesScanned.toLocaleString()} files scanned · ${fileScan.filesCompared.toLocaleString()} compared`
             : fileScan
               ? `${fileScan.filesScanned.toLocaleString()} files scanned · ${fileScan.filesCompared.toLocaleString()} compared byte for byte inside ${fileScopeLabel}.`
               : fileScope
@@ -919,33 +1019,35 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
       </div>
       <div className="duplicate-heading-actions">
         {modeTabs}
-        {folderPicker}
-        {fileScan && !fileBusy && (
-          <button
-            type="button"
-            className="quiet-button"
-            onClick={() => {
-              setFileScan(null);
-              setFileSelected(new Set());
-              setConfirmFileTrash(false);
-            }}
-          >
-            Clear
-          </button>
-        )}
-        {fileBusy ? (
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => void tauri.duplicates.cancel()}
-          >
-            Cancel
-          </button>
-        ) : fileScope && fileScan ? (
-          <button type="button" className="primary-button" onClick={runFileScan}>
-            Rescan
-          </button>
-        ) : null}
+        <div className="duplicate-heading-row">
+          {folderPicker}
+          {fileScan && !fileBusy && (
+            <button
+              type="button"
+              className="quiet-button"
+              onClick={() => {
+                setFileScan(null);
+                setFileSelected(new Set());
+                setConfirmFileTrash(false);
+              }}
+            >
+              Clear
+            </button>
+          )}
+          {fileBusy ? (
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => void tauri.duplicates.cancel()}
+            >
+              Cancel
+            </button>
+          ) : fileScope && fileScan ? (
+            <button type="button" className="primary-button" onClick={runFileScan}>
+              Rescan
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -957,11 +1059,14 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           <span className="duplicate-empty-icon" aria-hidden="true">
             <DuplicatesIcon size={26} />
           </span>
-          <h2>Add a source folder first</h2>
+          <h2>Choose a folder to compare</h2>
           <p>
-            An any-file comparison runs inside one folder. Add the folder you want to clean up as a
-            library source, then pick it here.
+            An any-file comparison runs inside one folder. Pick any folder on this Mac — it does not
+            have to be a library source, because files are only read and never imported.
           </p>
+          <button type="button" className="primary-button" onClick={() => void chooseFileFolder()}>
+            Choose folder…
+          </button>
         </div>
       ) : fileBusy ? (
         <div className="duplicate-empty">
@@ -1115,18 +1220,20 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
       </div>
       <div className="duplicate-heading-actions">
         {modeTabs}
-        {folderPicker}
-        {hasGroups && (
-          <button type="button" className="quiet-button" onClick={onClear} disabled={busy}>
-            Clear
-          </button>
-        )}
-        {/* With no results the empty state carries the only scan button. */}
-        {(hasGroups || busy) && (
-          <button type="button" className="primary-button" onClick={onScan} disabled={busy}>
-            {isTrashing ? "Moving to Trash…" : isDuplicateScan ? "Scanning…" : "Rescan"}
-          </button>
-        )}
+        <div className="duplicate-heading-row">
+          {folderPicker}
+          {hasGroups && (
+            <button type="button" className="quiet-button" onClick={onClear} disabled={busy}>
+              Clear
+            </button>
+          )}
+          {/* With no results the empty state carries the only scan button. */}
+          {(hasGroups || busy) && (
+            <button type="button" className="primary-button" onClick={onScan} disabled={busy}>
+              {isTrashing ? "Moving to Trash…" : isDuplicateScan ? "Scanning…" : "Rescan"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

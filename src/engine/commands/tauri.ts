@@ -292,11 +292,17 @@ export const tauri = {
    * touches the media catalog.
    */
   fileDuplicates: {
+    /** Native folder picker; the folder need not be a library source. */
+    chooseFolder: (): Promise<string | null> => invoke("choose_file_duplicate_folder"),
+
     scan: (scope: string): Promise<FileDuplicateScan> => invoke("find_file_duplicates", { scope }),
 
     /** Move files from the last scan to the Finder Trash, by scan id. */
     trash: (ids: string[]): Promise<FileDuplicateTrashResult> =>
       invoke("trash_file_duplicates", { ids }),
+
+    /** Show one scanned file in Finder, by scan id (never by path). */
+    reveal: (id: string): Promise<void> => invoke("reveal_file_duplicate", { id }),
   },
 
   finder: {

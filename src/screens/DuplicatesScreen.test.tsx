@@ -14,6 +14,8 @@ vi.mock("../design/components/CachedThumbnail", () => ({
 const fileScanMock = vi.hoisted(() => ({
   scan: vi.fn(),
   trash: vi.fn(),
+  chooseFolder: vi.fn(async (): Promise<string | null> => null),
+  reveal: vi.fn(async (): Promise<void> => {}),
   cancel: vi.fn(),
   onProgress: vi.fn(async () => () => {}),
 }));
@@ -23,7 +25,12 @@ vi.mock("../engine/commands/tauri", () => ({
     items: { revealInFinder: vi.fn() },
     system: { revealInFinder: vi.fn() },
     duplicates: { cancel: fileScanMock.cancel },
-    fileDuplicates: { scan: fileScanMock.scan, trash: fileScanMock.trash },
+    fileDuplicates: {
+      chooseFolder: fileScanMock.chooseFolder,
+      scan: fileScanMock.scan,
+      trash: fileScanMock.trash,
+      reveal: fileScanMock.reveal,
+    },
   },
   events: { onFileDuplicatesProgress: fileScanMock.onProgress },
 }));
@@ -209,6 +216,38 @@ describe("DuplicatesScreen", () => {
     expect(screen.getByRole("heading", { name: "Find duplicate files" })).toBeTruthy();
   });
 
+  it("scans a folder picked outside the library sources", async () => {
+    fileScanMock.chooseFolder.mockResolvedValue("/Volumes/archive/scans");
+    fileScanMock.scan.mockResolvedValue({
+      scope: "/Volumes/archive/scans",
+      filesScanned: 2,
+      filesCompared: 2,
+      bytesHashed: 10,
+      stoppedEarly: null,
+      cancelled: false,
+      groups: [],
+    });
+    const onChangeScope = vi.fn();
+
+    renderScreen([], false, {
+      folders: [makeLibraryFolder({ path: "/shoots/rain", name: "Rain" })],
+      scope: "/shoots/rain",
+      onChangeScope,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Any file type" }));
+    // The native picker opens from the folder menu's "Choose a folder…" entry.
+    fireEvent.change(screen.getByRole("combobox", { name: "Only compare files in this folder" }), {
+      target: { value: "" },
+    });
+
+    expect(await screen.findByRole("option", { name: "scans" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Scan folder" }));
+    await waitFor(() => expect(fileScanMock.scan).toHaveBeenCalledWith("/Volumes/archive/scans"));
+    // Picking a folder for this scan must not narrow the media scan.
+    expect(onChangeScope).not.toHaveBeenCalled();
+  });
+
   it("compares every file type and moves only the copies the user confirms", async () => {
     fileScanMock.scan.mockResolvedValue({
       scope: "/shoots/rain",
@@ -258,7 +297,13 @@ describe("DuplicatesScreen", () => {
     expect(fileScanMock.scan).toHaveBeenCalledWith("/shoots/rain");
     expect(screen.getByText("Keep")).toBeTruthy();
 
-    fireEvent.click(screen.getByLabelText(/Select a\.xmp in \/shoots\/rain\/copy/));
+    // A sidecar is not a catalog row: revealing it goes by scan id, not path.
+    fireEvent.click(screen.getAllByLabelText("Show a.xmp in Finder")[1]);
+    expect(fileScanMock.reveal).toHaveBeenCalledWith("copy");
+
+    // The row names its folder relative to the scanned one, not the absolute path.
+    fireEvent.click(screen.getByLabelText("Select a.xmp in copy"));
+    expect(screen.getByLabelText("Select a.xmp in This folder")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Move to Trash/ }));
     // Documents are not photos: one click arms, it does not move.
     expect(fileScanMock.trash).not.toHaveBeenCalled();
@@ -314,7 +359,7 @@ describe("DuplicatesScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Scan folder" }));
     expect(await screen.findAllByText("b.jpg")).toHaveLength(2);
 
-    fireEvent.click(screen.getByLabelText(/Select b\.jpg in \/shoots\/rain\/old/));
+    fireEvent.click(screen.getByLabelText("Select b.jpg in old"));
     fireEvent.click(screen.getByRole("button", { name: /Move to Trash/ }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm: move 1 to Trash" }));
 
@@ -393,8 +438,8 @@ describe("DuplicatesScreen", () => {
     // The selection bar renders before the groups, so its button comes first.
     fireEvent.click(screen.getAllByRole("button", { name: "Select copies" })[0]);
 
-    const first = screen.getByLabelText(/Select d\.json in \/shoots\/rain$/);
-    const second = screen.getByLabelText(/Deselect d\.json in \/shoots\/rain\/old/);
+    const first = screen.getByLabelText("Select d.json in This folder");
+    const second = screen.getByLabelText("Deselect d.json in old");
     expect(first.getAttribute("aria-pressed")).toBe("false");
     expect(second.getAttribute("aria-pressed")).toBe("true");
     // The header counts what the button would actually move.

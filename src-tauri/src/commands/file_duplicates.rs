@@ -31,6 +31,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{Emitter, State, Window};
+use tauri_plugin_dialog::DialogExt;
 use walkdir::WalkDir;
 
 /// Above this many files one scan stops walking and reports a partial result.
@@ -82,6 +83,73 @@ impl FileDuplicateSession {
     fn remove(&mut self, id: &str) {
         self.items.remove(id);
     }
+
+    /// Resolve a row id to its path and the folder that was scanned. Trashing
+    /// and revealing both go through this, so the renderer never supplies a
+    /// path and the two commands cannot drift apart.
+    fn target(&self, id: &str) -> Result<(String, String), CommandError> {
+        self.items
+            .get(id)
+            .map(|path| (path.clone(), self.scope.clone()))
+            .ok_or_else(|| {
+                CommandError::not_found(
+                    "That file is no longer part of the last scan. Scan the folder again.",
+                )
+            })
+    }
+}
+
+/// Native folder picker for an any-file scan. The folder does not have to be a
+/// library source: this scan reads it in memory and never imports it, so the
+/// picker can point anywhere the user chooses. The pick is granted for the
+/// session, like every other folder the app is allowed to open.
+#[tauri::command]
+pub async fn choose_file_duplicate_folder(
+    app: tauri::AppHandle,
+    state: State<'_, crate::AppState>,
+) -> Result<Option<String>, CommandError> {
+    let Some(picked) = app
+        .dialog()
+        .file()
+        .set_title("Choose a folder to compare every file type in")
+        .blocking_pick_folder()
+    else {
+        return Ok(None);
+    };
+    let path = picked
+        .into_path()
+        .map_err(|error| CommandError::new(ErrorCode::Dialog, error.to_string()))?;
+    let canonical = path.canonicalize().unwrap_or(path);
+    state.grants.grant([&canonical]);
+    Ok(Some(canonical.to_string_lossy().into_owned()))
+}
+
+/// Show one file from the last any-file scan in Finder.
+///
+/// The renderer sends a scan id, never a path: the path is resolved from the
+/// in-memory session and re-validated, so a compromised webview cannot ask
+/// Finder to reveal an arbitrary file.
+#[tauri::command]
+pub async fn reveal_file_duplicate(
+    state: State<'_, crate::AppState>,
+    id: String,
+) -> Result<(), CommandError> {
+    let (path, scope) = {
+        let session = state
+            .file_duplicates
+            .lock()
+            .map_err(|_| CommandError::internal("The last file scan is unavailable."))?;
+        session.target(&id)?
+    };
+    // Same boundary as trashing: a regular file, still inside the scanned
+    // folder, never a symlink.
+    validate_trash_target(&path, &scope)?;
+    std::process::Command::new("open")
+        .arg("-R")
+        .arg(&path)
+        .status()
+        .map_err(|error| CommandError::io(format!("Could not show {path} in Finder: {error}")))?;
+    Ok(())
 }
 
 /// Compare every regular file inside `scope`, keeping the hashes in memory.
@@ -407,13 +475,12 @@ pub async fn trash_file_duplicates(
             .lock()
             .map_err(|_| CommandError::internal("The last file scan is unavailable."))?;
         for id in requested {
-            match session.items.get(&id) {
-                Some(path) => targets.push((id, path.clone())),
-                None => failed.push(TrashError {
+            match session.target(&id) {
+                Ok((path, _)) => targets.push((id, path)),
+                Err(error) => failed.push(TrashError {
                     id,
-                    code: ErrorCode::NotFound,
-                    error: "That file is no longer part of the last scan. Scan the folder again."
-                        .to_string(),
+                    code: error.code,
+                    error: error.message,
                 }),
             }
         }
