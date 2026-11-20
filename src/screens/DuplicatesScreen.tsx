@@ -25,6 +25,7 @@ import { buildGroupViews, type GroupView, type KeeperMode } from "../engine/dupl
 import { CompareOverlay } from "../design/components/CompareOverlay";
 import { formatFileDate } from "../engine/utils/mediaDate";
 import { CleanupTabs } from "../design/components/CleanupTabs";
+import { MiddleTruncate } from "../design/components/MiddleTruncate";
 
 interface DuplicatesScreenProps {
   groups: DuplicateGroup[];
@@ -435,9 +436,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               ? ` · ${formatDate(item.createdAt || item.modifiedAt)}`
               : ""}
           </span>
-          <span className="duplicate-tile-path" title={item.path}>
-            {parentFolder(item.path)}
-          </span>
+          <MiddleTruncate text={parentFolder(item.path)} className="duplicate-tile-path" />
         </figcaption>
       </figure>
     );
@@ -855,9 +854,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           <span className="file-duplicate-name" title={item.path}>
             {item.name}
           </span>
-          <span className="file-duplicate-path" title={item.path}>
-            {parentFolder(item.path)}
-          </span>
+          <MiddleTruncate text={parentFolder(item.path)} className="file-duplicate-path" />
         </span>
         <span className="file-duplicate-size">{formatBytesSimple(item.size)}</span>
         {item.keeper ? <span className="file-duplicate-keep">Keep</span> : null}
