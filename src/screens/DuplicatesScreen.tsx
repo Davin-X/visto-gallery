@@ -583,6 +583,9 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   } | null>(null);
   const [fileSelected, setFileSelected] = useState<Set<string>>(new Set());
   const [confirmFileTrash, setConfirmFileTrash] = useState(false);
+  // Progressive render limit for file duplicates (same pattern as media screen).
+  const FILE_GROUP_PAGE = 50;
+  const [fileRenderLimit, setFileRenderLimit] = useState(FILE_GROUP_PAGE);
   // Bumped when the scope changes, so a scan still running for the previous
   // folder cannot paint its results over the new one.
   const fileScanRequest = useRef(0);
@@ -629,6 +632,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     setFileScan(null);
     setFileSelected(new Set());
     setConfirmFileTrash(false);
+    setFileRenderLimit(FILE_GROUP_PAGE);
     if (fileBusyRef.current) void tauri.duplicates.cancel();
   }, [fileScope]);
 
@@ -662,6 +666,12 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     });
     return bytes;
   }, [fileGroups, fileSelected]);
+
+  // Progressive render for file groups to keep DOM small on huge scans.
+  const renderedFileGroups = useMemo(
+    () => fileGroups.slice(0, fileRenderLimit),
+    [fileGroups, fileRenderLimit],
+  );
 
   const switchMode = useCallback((next: ScanMode) => {
     setMode(next);
@@ -1173,7 +1183,23 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               </button>
             </div>
           </div>
-          <div className="duplicate-groups">{fileGroups.map(renderFileGroup)}</div>
+          <div className="duplicate-groups">{renderedFileGroups.map(renderFileGroup)}</div>
+          {fileRenderLimit < fileGroups.length && (
+            <div className="duplicate-load-more">
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={() =>
+                  setFileRenderLimit((limit) =>
+                    Math.min(limit + FILE_GROUP_PAGE, fileGroups.length)
+                  )
+                }
+              >
+                Show {Math.min(FILE_GROUP_PAGE, fileGroups.length - fileRenderLimit).toLocaleString()} more
+                groups
+              </button>
+            </div>
+          )}
         </>
       )}
     </>

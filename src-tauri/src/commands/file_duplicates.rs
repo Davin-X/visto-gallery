@@ -46,6 +46,9 @@ const MAX_HASH_BYTES: u64 = 40 * 1024 * 1024 * 1024;
 const FINGERPRINT_BATCH: usize = 64;
 /// Paths per Finder Trash call.
 const TRASH_BATCH: usize = 200;
+/// Maximum duplicate groups to return. A folder with more returns the largest
+/// saving groups first and reports a partial result.
+const MAX_DUPLICATE_GROUPS: usize = 5_000;
 
 /// Folders whose contents are never worth comparing, even inside a folder the
 /// user picked: they hold caches and installs, not their own files.
@@ -421,6 +424,13 @@ pub async fn find_file_duplicates(
         };
         saving(b).cmp(&saving(a))
     });
+
+    if groups.len() > MAX_DUPLICATE_GROUPS {
+        groups.truncate(MAX_DUPLICATE_GROUPS);
+        stopped_early = Some(format!(
+            "Only the first {MAX_DUPLICATE_GROUPS} duplicate groups (by reclaimable space) are shown. Pick a smaller folder for a complete scan."
+        ));
+    }
 
     remember(&state, &scope_path, session_items);
 
