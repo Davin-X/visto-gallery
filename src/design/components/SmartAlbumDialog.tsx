@@ -60,13 +60,17 @@ function mbToBytes(mb: number | null): number | undefined {
 /** Split the comma-separated field, trimming and dropping duplicates so the
  *  `all` match cannot require the same tag twice. */
 export function parseTags(value: string): string[] {
-  const seen = new Set<string>();
+  // Tags are unique ignoring case, so keep the first spelling of each.
+  const seen = new Map<string, string>();
   value
     .split(",")
     .map((tag) => tag.trim())
     .filter(Boolean)
-    .forEach((tag) => seen.add(tag));
-  return [...seen];
+    .forEach((tag) => {
+      const key = tag.toLowerCase();
+      if (!seen.has(key)) seen.set(key, tag);
+    });
+  return [...seen.values()];
 }
 
 export function editableFrom(filter: SmartAlbumFilter): Editable {
