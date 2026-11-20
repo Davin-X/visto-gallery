@@ -9,7 +9,15 @@
   margin-bottom: var(--space-6);
 }
 
+/* The subtitle wraps inside the title block instead of pushing the
+   actions onto their own row. */
+.duplicates-page > .page-heading > :first-child {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
 .duplicate-heading-actions {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 6px;
