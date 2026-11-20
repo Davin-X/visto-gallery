@@ -870,63 +870,55 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
 
   const folderPicker =
     onChangeScope && (mode === "files" || folders.length > 0) ? (
-      <label
-        className="source-select"
-        title={
-          mode === "files"
-            ? `Comparing every file type inside ${fileScopeLabel}`
-            : scopeFolder
-              ? `Only comparing files inside ${scopeFolder.name}`
-              : "Comparing the whole library"
-        }
-      >
-        <FolderIcon size={14} />
-        <span className="source-select-label">Folder</span>
-        <select
-          value={mode === "files" ? (fileScope ?? "") : (scope ?? "")}
-          onChange={(e) => {
-            const value = e.target.value;
-            // The empty slot means "no folder chosen yet" and opens the picker;
-            // any folder on disk can be compared, not just a library source.
-            if (mode === "files" && value === "") {
-              void chooseFileFolder();
-              return;
-            }
-            // A picked folder belongs to the any-file scan only; going back to
-            // a library source chooses one scope for both modes.
-            setPickedFolder(null);
-            onChangeScope(value || null);
-          }}
-          aria-label="Only compare files in this folder"
-          // Switching folders mid-scan would land the old folder's results
-          // under the new name; Cancel is right there instead.
-          disabled={fileBusy}
-        >
-          {mode === "media" && <option value="">All folders</option>}
-          {mode === "files" && <option value="">Choose a folder…</option>}
-          {folders.map((folder) => (
-            <option key={folder.path} value={folder.path}>
-              {folder.name}
-            </option>
-          ))}
-          {mode === "files" &&
-            fileScope &&
-            !folders.some((folder) => folder.path === fileScope) && (
-              <option value={fileScope}>{folderName(fileScope)}</option>
-            )}
-        </select>
-        {mode === "files" && fileScope && !folders.some((f) => f.path === fileScope) && (
-          <button
-            type="button"
-            className="quiet-button source-select-clear"
-            title="Compare the library folder again"
-            aria-label="Clear the folder picked for this scan"
-            onClick={clearPickedFolder}
+      <div className="duplicate-folder-picker">
+        <label className="source-select" title={scopeFolder ? `Only comparing files inside ${scopeFolder.name}` : "Comparing the whole library"}>
+          <FolderIcon size={14} />
+          <span className="source-select-label">Folder</span>
+          <select
+            value={scope ?? ""}
+            onChange={(e) => {
+              onChangeScope(e.target.value || null);
+            }}
+            aria-label="Only compare files in this folder"
+            disabled={fileBusy}
           >
-            <XIcon size={12} />
-          </button>
+            <option value="">All folders</option>
+            {folders.map((folder) => (
+              <option key={folder.path} value={folder.path}>
+                {folder.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {mode === "files" && (
+          <>
+            <button
+              type="button"
+              className="choose-folder-button"
+              title="Pick any folder on this Mac to compare every file type inside it"
+              onClick={chooseFileFolder}
+              disabled={fileBusy}
+            >
+              <FolderIcon size={14} />
+              Choose folder…
+            </button>
+            {pickedFolder && (
+              <div className="picked-folder-pill">
+                <span>{folderName(pickedFolder)}</span>
+                <button
+                  type="button"
+                  className="picked-folder-clear"
+                  title="Compare the library folder again"
+                  aria-label="Clear the folder picked for this scan"
+                  onClick={clearPickedFolder}
+                >
+                  <XIcon size={12} />
+                </button>
+              </div>
+            )}
+          </>
         )}
-      </label>
+      </div>
     ) : null;
 
   const renderFileRow = (item: FileDuplicateItem) => {

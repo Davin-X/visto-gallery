@@ -399,9 +399,6 @@
   flex: 0 0 auto;
   width: 240px;
   min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
 }
 
 .duplicates-page .duplicate-heading-actions .source-select select {
@@ -412,35 +409,107 @@
   white-space: nowrap;
 }
 
-.duplicates-page .duplicate-heading-actions .source-select-clear {
-  flex: 0 0 auto;
+/* New folder picker layout: dropdown + "Choose folder…" button side by side,
+   with a pill showing the picked folder (only in Any file type mode). */
+.duplicate-folder-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.duplicate-folder-picker .source-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.choose-folder-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  white-space: nowrap;
+}
+
+.choose-folder-button:hover:not(:disabled) {
+  background: var(--surface-4);
+  border-color: var(--line);
+}
+
+.choose-folder-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.choose-folder-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.choose-folder-button svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  flex-shrink: 0;
+}
+
+.picked-folder-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.picked-folder-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.picked-folder-clear {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
+  width: 20px;
+  height: 20px;
   border: none;
   background: transparent;
   color: var(--text-muted);
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
   opacity: 0.7;
-  transition: opacity 0.1s, color 0.1s;
+  transition: opacity 0.1s, color 0.1s, background 0.1s;
 }
 
-.duplicates-page .duplicate-heading-actions .source-select-clear:hover {
+.picked-folder-clear:hover {
   opacity: 1;
   color: var(--text);
   background: var(--surface-2);
 }
 
-.duplicates-page .duplicate-heading-actions .source-select-clear:focus-visible {
+.picked-folder-clear:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.duplicates-page .duplicate-heading-actions .source-select-clear svg {
+.picked-folder-clear svg {
   width: 12px;
   height: 12px;
   stroke: currentColor;

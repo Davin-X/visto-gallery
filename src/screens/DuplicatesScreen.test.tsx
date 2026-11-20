@@ -207,12 +207,14 @@ describe("DuplicatesScreen", () => {
     // Previewing the mode must not narrow the media scan or clear its results.
     expect(onChangeScope).not.toHaveBeenCalled();
     expect(screen.getByRole("heading", { name: "Duplicate files" })).toBeTruthy();
-    // One folder at a time: "All folders" has no meaning for this scan, and the
-    // first source stands in so the screen never asks for a folder it already has.
-    expect(screen.queryByRole("option", { name: "All folders" })).toBeNull();
+    // The library-source dropdown still shows "All folders" (the default),
+    // and a "Choose folder…" button appears next to it for any-file scans.
+    expect(screen.getByRole("option", { name: "All folders" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Choose folder…" })).toBeTruthy();
+    // The library-source dropdown value is empty ("All folders" selected).
     expect(
       (screen.getByLabelText("Only compare files in this folder") as HTMLSelectElement).value,
-    ).toBe("/shoots/rain");
+    ).toBe("");
     expect(screen.getByRole("heading", { name: "Find duplicate files" })).toBeTruthy();
   });
 
@@ -236,12 +238,11 @@ describe("DuplicatesScreen", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Any file type" }));
-    // The native picker opens from the folder menu's "Choose a folder…" entry.
-    fireEvent.change(screen.getByRole("combobox", { name: "Only compare files in this folder" }), {
-      target: { value: "" },
-    });
+    // The native picker opens from the "Choose folder…" button.
+    fireEvent.click(screen.getByRole("button", { name: "Choose folder…" }));
 
-    expect(await screen.findByRole("option", { name: "scans" })).toBeTruthy();
+    // The picked folder appears as a pill with its name ("scans").
+    expect(await screen.findByText("scans")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Scan folder" }));
     await waitFor(() => expect(fileScanMock.scan).toHaveBeenCalledWith("/Volumes/archive/scans"));
     // Picking a folder for this scan must not narrow the media scan.
