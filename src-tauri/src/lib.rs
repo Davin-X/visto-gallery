@@ -393,6 +393,8 @@ pub fn run() {
             set_cleanup_personal_folders,
             // Library
             scan_library,
+            add_source_path,
+            split_source,
             pick_source_folders,
             pick_media_files,
             pick_ambient_audio,

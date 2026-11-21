@@ -6,6 +6,7 @@ import type { SettingsChange } from "./types";
 export function LibraryPanel(props: {
   autoImport: boolean;
   onAddFolder?: () => void;
+  onAddSourcePath?: (path: string) => Promise<void> | void;
   onRemoveFolder?: (folder: LibraryFolder) => void;
   onRescan?: () => void;
   onRescanFolder?: (folder: LibraryFolder) => void;
@@ -42,6 +43,7 @@ export function LibraryPanel(props: {
       <SourcesManager
         variant="inline"
         onAddFolder={props.onAddFolder}
+        onAddSourcePath={props.onAddSourcePath}
         onRemoveFolder={props.onRemoveFolder}
         onRescan={props.onRescan}
         onRescanFolder={props.onRescanFolder}

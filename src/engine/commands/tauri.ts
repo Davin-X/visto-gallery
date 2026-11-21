@@ -65,6 +65,12 @@ export const tauri = {
     scan: (rootPath: string, force = false): Promise<ScanResult> =>
       invoke("scan_library", { rootPath, force }),
 
+    /** Validate and grant a folder path entered directly by the user. */
+    addSourcePath: (path: string): Promise<string> => invoke("add_source_path", { path }),
+
+    splitSource: (path: string): Promise<{ subfolders: string[]; looseMediaCount: number }> =>
+      invoke("split_source", { path }),
+
     cancelScan: (): Promise<void> => invoke("cancel_scan"),
 
     importFiles: (paths: string[]): Promise<ScanResult> => invoke("import_files", { paths }),

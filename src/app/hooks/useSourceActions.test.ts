@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeLibraryFolder } from "../../test/fixtures";
-import { useSourceActions } from "./useSourceActions";
+import { splitWithoutOverlap, useSourceActions } from "./useSourceActions";
 
 const mocks = vi.hoisted(() => {
   const library = {
@@ -65,5 +65,32 @@ describe("useSourceActions rescans", () => {
 
     expect(mocks.scan).toHaveBeenCalledTimes(2);
     expect(mocks.cancelScan).not.toHaveBeenCalled();
+  });
+});
+
+describe("splitWithoutOverlap", () => {
+  const tree: Record<string, { subfolders: string[]; looseMediaCount: number }> = {
+    "/d": { subfolders: ["/d/Docs", "/d/Lib", "/d/New"], looseMediaCount: 2 },
+    "/d/Lib": { subfolders: ["/d/Lib/A", "/d/Lib/B"], looseMediaCount: 1 },
+    "/d/Docs": { subfolders: [], looseMediaCount: 0 },
+  };
+  const split = async (path: string) => tree[path] ?? { subfolders: [], looseMediaCount: 0 };
+
+  it("skips existing sources and splits folders that hold them", async () => {
+    await expect(splitWithoutOverlap("/d", ["/d/Lib/A"], split)).resolves.toEqual({
+      sources: ["/d/Docs", "/d/Lib/B", "/d/New"],
+      looseMediaCount: 3,
+    });
+  });
+
+  it("keeps a leaf folder or one already covered by a source", async () => {
+    await expect(splitWithoutOverlap("/d/Docs", [], split)).resolves.toEqual({
+      sources: ["/d/Docs"],
+      looseMediaCount: 0,
+    });
+    await expect(splitWithoutOverlap("/d/Lib/A/x", ["/d/Lib/A"], split)).resolves.toEqual({
+      sources: ["/d/Lib/A/x"],
+      looseMediaCount: 0,
+    });
   });
 });

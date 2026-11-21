@@ -1374,7 +1374,24 @@
   margin: 10px 0 12px;
 }
 
-.sources-filter input {
+.sources-paste-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 0;
+}
+
+.sources-paste-form .sources-paste-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sources-paste-form button {
+  flex: 0 0 auto;
+}
+
+.sources-filter input,
+.sources-paste-input {
   width: 100%;
   height: 32px;
   padding: 0 10px;
@@ -1385,11 +1402,13 @@
   font-size: 13px;
 }
 
-.sources-filter input:hover {
+.sources-filter input:hover,
+.sources-paste-input:hover {
   border-color: var(--line-strong);
 }
 
-.sources-filter input:focus-visible {
+.sources-filter input:focus-visible,
+.sources-paste-input:focus-visible {
   border-color: var(--accent);
   outline: 2px solid color-mix(in srgb, var(--accent) 24%, transparent);
   outline-offset: 1px;
@@ -1465,6 +1484,10 @@
 .sources-sheet .sources-manager {
   flex: 1 1 auto;
   overflow: hidden;
+}
+
+.sources-sheet .sources-paste-form {
+  flex: 0 0 auto;
 }
 
 .sources-sheet .sources-filter {

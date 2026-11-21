@@ -8,6 +8,7 @@ import { FolderIcon, InfoIcon, MoreIcon, PlusIcon } from "./icons";
 export function SourcesManager(props: {
   variant?: "inline" | "sheet";
   onAddFolder?: () => void;
+  onAddSourcePath?: (path: string) => Promise<void> | void;
   onRemoveFolder?: (folder: LibraryFolder) => void;
   onFilterSource?: (folder: LibraryFolder) => void;
   onRescan?: () => void;
@@ -17,6 +18,7 @@ export function SourcesManager(props: {
   const {
     variant = "inline",
     onAddFolder,
+    onAddSourcePath,
     onRemoveFolder,
     onFilterSource,
     onRescan,
@@ -28,6 +30,9 @@ export function SourcesManager(props: {
   const libraryBusy = useLibraryStore((s) => s.busy);
   const setActiveSource = useLibraryStore((s) => s.setActiveSource);
   const [query, setQuery] = useState("");
+  const [showPastePath, setShowPastePath] = useState(false);
+  const [pastePath, setPastePath] = useState("");
+  const [pasting, setPasting] = useState(false);
   const [menu, setMenu] = useState<{
     folder: LibraryFolder;
     x: number;
@@ -149,12 +154,26 @@ export function SourcesManager(props: {
             className="primary-button"
             type="button"
             onClick={() => onAddFolder?.()}
-            disabled={!onAddFolder}
+            disabled={!onAddFolder || libraryBusy}
             title="Select multiple folders with ⌘-click or ⌘A"
           >
             <PlusIcon size={14} />
             Add source
           </button>
+          {onAddSourcePath && (
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                setShowPastePath((v) => !v);
+                setPastePath("");
+              }}
+              disabled={libraryBusy}
+              title="Paste or type a folder path to index"
+            >
+              Paste path…
+            </button>
+          )}
           {onRescan && (
             <button
               className="secondary-button"
@@ -178,6 +197,53 @@ export function SourcesManager(props: {
           )}
         </div>
       </div>
+
+      {showPastePath && (
+        <form
+          className="sources-paste-form"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const trimmed = pastePath.trim();
+            if (!trimmed || pasting) return;
+            setPasting(true);
+            try {
+              await onAddSourcePath?.(trimmed);
+              setShowPastePath(false);
+              setPastePath("");
+            } finally {
+              setPasting(false);
+            }
+          }}
+        >
+          <input
+            type="text"
+            className="sources-paste-input"
+            value={pastePath}
+            onChange={(e) => setPastePath(e.target.value)}
+            placeholder="e.g. ~/Pictures or /Volumes/Drive/Photos"
+            aria-label="Folder path"
+            autoFocus
+          />
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={!pastePath.trim() || pasting || libraryBusy}
+          >
+            {pasting ? "Adding…" : "Add"}
+          </button>
+          <button
+            type="button"
+            className="quiet-button"
+            disabled={pasting}
+            onClick={() => {
+              setShowPastePath(false);
+              setPastePath("");
+            }}
+          >
+            Cancel
+          </button>
+        </form>
+      )}
 
       {folders.length > 0 && (
         <div className="sources-filter">

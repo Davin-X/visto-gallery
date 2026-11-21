@@ -4,212 +4,276 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="VistoGallery - A fast, private photo & video gallery for macOS. Local-first: no cloud, no tracking. Browse, organize, edit, and de-duplicate your media.">
-  <meta name="theme-color" content="#7c5cff">
+  <meta name="theme-color" content="#0f0f11" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#fbfaf8" media="(prefers-color-scheme: light)">
   <title>VistoGallery - Local-First Photo & Video Gallery for macOS</title>
   <link rel="canonical" href="https://davin-x.github.io/visto-gallery/">
+  <link rel="icon" type="image/png" href="media/icon.png">
+  <link rel="apple-touch-icon" href="media/icon.png">
   <meta property="og:type" content="website">
   <meta property="og:title" content="VistoGallery - Local-First Photo & Video Gallery for macOS">
   <meta property="og:description" content="Browse, organize, edit, and de-duplicate your photos and videos. No cloud, no tracking, no account required. Open source (MIT).">
   <meta property="og:url" content="https://davin-x.github.io/visto-gallery/">
-  <meta property="og:image" content="https://davin-x.github.io/visto-gallery/og-default.jpg">
+  <meta property="og:image" content="https://davin-x.github.io/visto-gallery/media/social-preview.jpg">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="VistoGallery - Local-First Photo & Video Gallery for macOS">
   <meta name="twitter:description" content="Browse, organize, edit, and de-duplicate your photos and videos. No cloud, no tracking, no account required. Open source (MIT).">
-  <link rel="preconnect" href="https://github.com">
-  <link rel="dns-prefetch" href="https://github.com">
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"VistoGallery","operatingSystem":"macOS 13+","applicationCategory":"MultimediaApplication","softwareVersion":"0.6.0","license":"https://opensource.org/licenses/MIT","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"downloadUrl":"https://github.com/Davin-X/visto-gallery/releases/latest","url":"https://davin-x.github.io/visto-gallery/"}
+  </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    :root { --bg: #0d0d0f; --fg: #f0f0f5; --muted: #888; --accent: #7c5cff; --card: #16161a; --border: #2a2a30; --radius: 12px; }
-    @media (prefers-color-scheme: light) { :root { --bg: #fafafa; --fg: #1a1a2e; --muted: #666; --accent: #6b46e8; --card: #fff; --border: #e0e0e6; } }
-    body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; min-height: 100vh; display: flex; flex-direction: column; }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    header { padding: 60px 20px 40px; text-align: center; max-width: 800px; margin: 0 auto; }
-    h1 { font-size: clamp(2.5rem, 5vw, 4rem); font-weight: 700; letter-spacing: -0.02em; margin-bottom: 16px; }
-    .tagline { font-size: clamp(1.1rem, 2vw, 1.4rem); color: var(--muted); max-width: 600px; margin: 0 auto 32px; }
-    .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px; }
-    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 14px 28px; border-radius: 10px; font-weight: 600; font-size: 1rem; transition: transform 0.1s, box-shadow 0.1s; }
-    .btn:active { transform: scale(0.98); }
-    .btn-primary { background: var(--accent); color: #fff; border: none; }
-    .btn-primary:hover { box-shadow: 0 4px 20px var(--accent); text-decoration: none; }
-    .btn-secondary { background: var(--card); color: var(--fg); border: 1px solid var(--border); }
-    .btn-secondary:hover { border-color: var(--accent); text-decoration: none; }
-    main { flex: 1; max-width: 1000px; margin: 0 auto; padding: 0 20px 60px; width: 100%; }
-    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 60px; }
-    .feature { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
-    .feature-icon { width: 40px; height: 40px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
-    .feature h3 { font-size: 1.1rem; margin-bottom: 8px; }
+    /* Light tokens; accent matches the copper accent in the app screenshots. */
+    :root {
+      --bg: #fbfaf8; --fg: #1b1a18; --muted: #5f5b55; --card: #ffffff; --border: #e6e2dc;
+      --accent: #a8521a; --accent-fg: #ffffff; --accent-soft: #f6e9de; --code: #f2efea;
+      --shadow: 0 24px 60px -20px rgba(60, 40, 20, 0.28);
+      --radius: 14px; color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0f0f11; --fg: #f2f0ed; --muted: #a29d96; --card: #18181b; --border: #2a292d;
+        --accent: #f0a860; --accent-fg: #1b1208; --accent-soft: #2b2118; --code: #1f1f23;
+        --shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7); color-scheme: dark;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #0f0f11; --fg: #f2f0ed; --muted: #a29d96; --card: #18181b; --border: #2a292d;
+      --accent: #f0a860; --accent-fg: #1b1208; --accent-soft: #2b2118; --code: #1f1f23;
+      --shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7); color-scheme: dark;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    a { color: var(--accent); }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+
+    nav { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; color: var(--fg); text-decoration: none; }
+    .brand img { width: 28px; height: 28px; }
+    .nav-actions { display: flex; align-items: center; gap: 4px; }
+    .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+    .icon-btn:hover { background: var(--card); color: var(--fg); }
+    .icon-btn svg { width: 20px; height: 20px; }
+    .theme-icon-dark { display: none; }
+    :root[data-theme="dark"] .theme-icon-dark { display: block; }
+    :root[data-theme="dark"] .theme-icon-light { display: none; }
+
+    .hero { text-align: center; padding: 56px 0 40px; }
+    h1 { font-size: clamp(2.2rem, 5.5vw, 3.75rem); line-height: 1.08; font-weight: 750; letter-spacing: -0.03em; max-width: 16ch; margin: 0 auto 18px; }
+    .lede { font-size: clamp(1.05rem, 2vw, 1.25rem); color: var(--muted); max-width: 40rem; margin: 0 auto 30px; }
+    .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 22px; border-radius: 10px; font-weight: 600; font-size: 1rem; text-decoration: none; border: 1px solid transparent; }
+    .btn svg { width: 18px; height: 18px; }
+    .btn-primary { background: var(--accent); color: var(--accent-fg); }
+    .btn-primary:hover { filter: brightness(1.08); }
+    .btn-secondary { background: var(--card); color: var(--fg); border-color: var(--border); }
+    .btn-secondary:hover { border-color: var(--muted); }
+    .meta { margin-top: 18px; font-size: 0.875rem; color: var(--muted); }
+    .meta a { color: inherit; }
+
+    .shot { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); background: var(--card); }
+    .shot img { width: 100%; height: auto; display: block; }
+    .hero-shot { margin: 8px auto 0; box-shadow: var(--shadow); }
+
+    section { padding: 72px 0 0; }
+    h2 { font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -0.02em; line-height: 1.2; margin-bottom: 8px; }
+    .section-lede { color: var(--muted); margin-bottom: 28px; max-width: 40rem; }
+
+    .features { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 28px 32px; }
+    .feature { display: grid; grid-template-columns: 40px 1fr; gap: 4px 14px; }
+    .feature-icon { grid-row: span 2; width: 40px; height: 40px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; }
+    .feature-icon svg { width: 20px; height: 20px; }
+    .feature h3 { font-size: 1rem; line-height: 1.4; padding-top: 2px; }
     .feature p { color: var(--muted); font-size: 0.95rem; }
-    .screenshots { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 60px; }
-    .screenshot { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); background: var(--card); }
-    .screenshot img { width: 100%; height: auto; display: block; }
-    .screenshot figcaption { padding: 12px 16px; font-size: 0.9rem; color: var(--muted); }
-    .badges { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-bottom: 40px; }
-    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--card); border: 1px solid var(--border); border-radius: 20px; font-size: 0.85rem; color: var(--muted); }
-    .badge svg { width: 16px; height: 16px; }
-    footer { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 0.9rem; border-top: 1px solid var(--border); }
-    .links { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
-    @media (max-width: 600px) { header { padding: 40px 16px 30px; } .btn { padding: 12px 24px; } }
+
+    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 20px; }
+    .gallery figcaption { padding: 12px 16px; font-size: 0.9rem; color: var(--muted); border-top: 1px solid var(--border); }
+
+    .steps { list-style: none; counter-reset: step; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; max-width: 44rem; }
+    .steps li { counter-increment: step; position: relative; min-width: 0; padding-left: 44px; }
+    .steps li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; }
+    .steps strong { display: block; }
+    .steps p { color: var(--muted); }
+    code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.875em; }
+    pre { margin-top: 8px; background: var(--code); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; overflow-x: auto; }
+
+    footer { margin-top: 88px; border-top: 1px solid var(--border); padding: 32px 0 40px; color: var(--muted); font-size: 0.9rem; }
+    footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .links { display: flex; gap: 20px; flex-wrap: wrap; }
+    .links a { color: var(--muted); }
+    .links a:hover { color: var(--fg); }
+    @media (max-width: 600px) { .hero { padding: 32px 0 28px; } section { padding-top: 56px; } .btn { flex: 1 1 100%; justify-content: center; } }
   </style>
 </head>
 <body>
-<header>
-    <h1>VistoGallery</h1>
-    <p class="tagline">A fast, private photo & video gallery for macOS. Local-first: no cloud, no tracking, no account.</p>
-    <div class="cta-row">
-      <a class="btn btn-primary" href="https://github.com/Davin-X/visto-gallery/releases/latest" target="_blank" rel="noopener">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Download Latest (v0.6.0)
-      </a>
-      <a class="btn btn-secondary" href="https://github.com/Davin-X/visto-gallery" target="_blank" rel="noopener">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.44 9.79 8.21 11.39.6.11.82-.26.82-.58v-2.19c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.21.08 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1-.32 3.3 1.23A11.51 11.51 0 0112 5.8c1.02.01 2.05.14 3.01.4 2.29-1.55 3.3-1.23 3.3-1.23.65 1.65.24 2.87.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.19.69.8.58C20.57 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/></svg>
-        View on GitHub
-      </a>
-    </div>
-    <div class="badges">
-      <span class="badge"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg> MIT License</span>
-      <span class="badge"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg> Apple Silicon (M1+)</span>
-      <span class="badge"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg> macOS 13+</span>
-      <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v3a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg> No tracking</span>
-      <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Open source</span>
-    </div>
-    <div class="theme-toggle" style="margin-top: 16px;">
-      <button id="themeToggle" class="btn btn-secondary" aria-label="Toggle screenshot theme" style="padding: 8px 16px; font-size: 0.9rem;">
-        <svg id="sunIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-        <svg id="moonIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-        <span id="themeLabel">Dark</span>
-      </button>
-    </div>
-  </header>
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="brand" href="./"><img src="media/icon.png" alt="" width="28" height="28">VistoGallery</a>
+      <div class="nav-actions">
+        <button id="themeToggle" class="icon-btn" type="button" aria-label="Switch to dark theme">
+          <svg class="theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+          <svg class="theme-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        </button>
+        <a class="icon-btn" href="https://github.com/Davin-X/visto-gallery" aria-label="VistoGallery on GitHub">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.44 9.79 8.21 11.39.6.11.82-.26.82-.58v-2.19c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.21.08 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1-.32 3.3 1.23A11.51 11.51 0 0112 5.8c1.02.01 2.05.14 3.01.4 2.29-1.55 3.3-1.23 3.3-1.23.65 1.65.24 2.87.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.19.69.8.58C20.57 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        </a>
+      </div>
+    </nav>
+  </div>
+
   <main>
-    <section class="features" aria-label="Features">
-      <article class="feature">
-        <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
-        <h3>Grid, Details & Timeline</h3>
-        <p>Dense thumbnail grid, metadata-rich list view, and chronological timeline with monthly grouping.</p>
-      </article>
-      <article class="feature">
-        <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg></div>
-        <h3>Albums & Smart Albums</h3>
-        <p>Create albums manually or save filters as Smart Albums that update automatically.</p>
-      </article>
-      <article class="feature">
-        <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>
-        <h3>Tags, Favorites & Hidden</h3>
-        <p>Tag freely, star favorites, hide items. Hidden locks with Touch ID/password.</p>
-      </article>
-      <article class="feature">
-        <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></div>
-        <h3>Metadata Filters</h3>
-        <p>Filter by date, rating, color label, camera, lens, file type, animation, location, orientation.</p>
-      </article>
-      <article class="feature">
-        <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"><line x1="4" y1="10" x2="4" y2="3"><line x1="12" y1="21" x2="12" y2="12"><line x1="12" y1="8" x2="12" y2="3"><line x1="20" y1="21" x2="20" y2="16"><line x1="20" y1="12" x2="20" y2="3"><line x1="1" y1="14" x2="7" y2="14"><line x1="9" y1="8" x2="15" y2="8"><line x1="17" y1="16" x2="23" y2="16"></svg></div>
-        <h3>Non-Destructive Editing</h3>
-        <p>Adjust exposure, contrast, color, crop. Original always preserved; export to JPEG, PNG, HEIC, AVIF.</p>
-      </article>
-      <article class="feature">
-        <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 4v16"/><path d="M14 4v16"/></svg></div>
-        <h3>Duplicate Detection</h3>
-        <p>Exact duplicates by SHA-256 content hash. Side-by-side compare with metadata diff. Undo after trash.</p>
-      </article>
-      <article class="feature">
-        <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
-        <h3>Cleanup (Dev & System Junk)</h3>
-        <p>Scans Xcode, npm, Cargo, Go, pip, Gradle, Homebrew caches, build folders, old installers. Tagged Regenerates/Needs rebuild.</p>
-      </article>
-      <article class="feature">
-        <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
-        <h3>Finder Integration</h3>
-        <p>Open from Finder (double-click, Open With), reveal in Finder, move to macOS Trash (Put Back works).</p>
-      </article>
-      <article class="feature">
-        <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-        <h3>Privacy First</h3>
-        <p>No account, no cloud, no telemetry. Catalog stored locally. Open source (MIT) — audit the code.</p>
-      </article>
-    </section>
-    <section class="screenshots" aria-label="Screenshots">
-      <figure class="screenshot">
-        <img id="ss1" src="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/library-grid-light.jpg" data-dark="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/library-grid-dark.jpg" data-light="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/library-grid-light.jpg" alt="VistoGallery library grid view" loading="lazy">
-        <figcaption>Library grid with type filters and stats sidebar</figcaption>
+    <header class="wrap hero">
+      <h1>Your photo library, kept on your Mac</h1>
+      <p class="lede">VistoGallery is a fast photo and video gallery that works on the folders you already have. No import, no cloud, no account, no tracking.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/Davin-X/visto-gallery/releases/latest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download v0.6.0
+        </a>
+        <a class="btn btn-secondary" href="https://github.com/Davin-X/visto-gallery">View source on GitHub</a>
+      </div>
+      <p class="meta">Free &amp; open source (MIT) · macOS 13+ · Apple Silicon · <a href="#install">Install notes</a></p>
+    </header>
+
+    <div class="wrap">
+      <figure class="shot hero-shot">
+        <img src="screenshots/library-grid-light.jpg" data-dark="screenshots/library-grid-dark.jpg" data-light="screenshots/library-grid-light.jpg" alt="VistoGallery library grid with type filters and a stats sidebar" width="1600" height="1000" fetchpriority="high">
       </figure>
-      <figure class="screenshot">
-        <img id="ss2" src="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/albums-light.jpg" data-dark="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/albums-dark.jpg" data-light="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/albums-light.jpg" alt="Albums screen with smart albums" loading="lazy">
-        <figcaption>Smart Albums & regular albums</figcaption>
-      </figure>
-      <figure class="screenshot">
-        <img id="ss3" src="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/edit-editor-light.jpg" data-dark="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/edit-editor-dark.jpg" data-light="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/edit-editor-light.jpg" alt="Edit screen with adjustment sliders and crop" loading="lazy">
-        <figcaption>Non-destructive editing with crop & color</figcaption>
-      </figure>
-      <figure class="screenshot">
-        <img id="ss4" src="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/viewer-light.jpg" data-dark="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/viewer-dark.jpg" data-light="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/viewer-light.jpg" alt="Full-screen viewer with filmstrip" loading="lazy">
-        <figcaption>Viewer with zoom, pan, filmstrip</figcaption>
-      </figure>
-      <figure class="screenshot">
-        <img id="ss5" src="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/duplicates-compare-light.jpg" data-dark="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/duplicates-compare-dark.jpg" data-light="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/duplicates-compare-light.jpg" alt="Duplicate comparison side by side" loading="lazy">
-        <figcaption>Duplicate compare with metadata diff</figcaption>
-      </figure>
-      <figure class="screenshot">
-        <img id="ss6" src="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/cleanup-light.jpg" data-dark="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/cleanup-dark.jpg" data-light="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/cleanup-light.jpg" alt="Cleanup screen showing dev junk" loading="lazy">
-        <figcaption>Cleanup: dev & system junk</figcaption>
-      </figure>
-      <figure class="screenshot">
-        <img id="ss7" src="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/library-timeline-light.jpg" data-dark="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/library-timeline-dark.jpg" data-light="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/library-timeline-light.jpg" alt="Timeline view grouped by month" loading="lazy">
-        <figcaption>Timeline grouped by month with counts</figcaption>
-      </figure>
-      <figure class="screenshot">
-        <img id="ss8" src="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/sources-light.jpg" data-dark="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/sources-dark.jpg" data-light="https://raw.githubusercontent.com/Davin-X/visto-gallery/main/docs/screenshots/sources-light.jpg" alt="Sources dialog showing library folders" loading="lazy">
-        <figcaption>Add folders — files stay where they are</figcaption>
-      </figure>
-    </section>
+
+      <section aria-labelledby="features-title">
+        <h2 id="features-title">Everything a gallery needs, nothing it doesn't</h2>
+        <p class="section-lede">Your files stay where they are. VistoGallery keeps a local catalog next to them and never uploads anything.</p>
+        <div class="features">
+          <article class="feature">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+            <h3>Grid, details &amp; timeline</h3>
+            <p>Dense thumbnail grid, a metadata-rich list view, and a timeline grouped by month.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg></div>
+            <h3>Albums &amp; Smart Albums</h3>
+            <p>Make albums by hand, or save a filter as a Smart Album that keeps itself up to date.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>
+            <h3>Tags, favorites &amp; Hidden</h3>
+            <p>Tag freely, star favorites, and hide items behind Touch ID or your password.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></div>
+            <h3>Metadata filters</h3>
+            <p>Filter by date, rating, color label, camera, lens, file type, location and orientation.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></div>
+            <h3>Non-destructive editing</h3>
+            <p>Exposure, contrast, color and crop. The original is always kept. Export to JPEG, PNG, HEIC or AVIF.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 00-2-2H5a2 2 0 00-2 2v9a2 2 0 002 2h3"/></svg></div>
+            <h3>Duplicate detection</h3>
+            <p>Finds exact duplicates by content hash, compares them side by side, and lets you undo after trashing.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></div>
+            <h3>Cleanup for dev &amp; system junk</h3>
+            <p>Finds Xcode, npm, Cargo, Go, pip, Gradle and Homebrew caches, build folders and old installers, and marks which ones regenerate.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div>
+            <h3>Works with Finder</h3>
+            <p>Open files from Finder, reveal them in Finder, and move items to the macOS Trash so Put Back still works.</p>
+          </article>
+          <article class="feature">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+            <h3>Private by design</h3>
+            <p>No account, no cloud, no telemetry. The catalog lives on your Mac, and the code is open to audit.</p>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="tour-title">
+        <h2 id="tour-title">A closer look</h2>
+        <p class="section-lede">Screenshots follow the page theme. Use the moon/sun button at the top to switch.</p>
+        <div class="gallery">
+          <figure class="shot">
+            <img src="screenshots/albums-light.jpg" data-dark="screenshots/albums-dark.jpg" data-light="screenshots/albums-light.jpg" alt="Albums screen with smart albums" width="1600" height="1000" loading="lazy">
+            <figcaption>Smart Albums and regular albums</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/edit-editor-light.jpg" data-dark="screenshots/edit-editor-dark.jpg" data-light="screenshots/edit-editor-light.jpg" alt="Edit screen with adjustment sliders and crop" width="1600" height="1000" loading="lazy">
+            <figcaption>Non-destructive editing with crop and color</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/viewer-light.jpg" data-dark="screenshots/viewer-dark.jpg" data-light="screenshots/viewer-light.jpg" alt="Full-screen viewer with filmstrip" width="1600" height="1000" loading="lazy">
+            <figcaption>Viewer with zoom, pan and filmstrip</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/duplicates-compare-light.jpg" data-dark="screenshots/duplicates-compare-dark.jpg" data-light="screenshots/duplicates-compare-light.jpg" alt="Two duplicate photos compared side by side" width="1600" height="1000" loading="lazy">
+            <figcaption>Duplicate compare with a metadata diff</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/cleanup-light.jpg" data-dark="screenshots/cleanup-dark.jpg" data-light="screenshots/cleanup-light.jpg" alt="Cleanup screen listing developer caches" width="1600" height="1004" loading="lazy">
+            <figcaption>Cleanup for dev and system junk</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/library-timeline-light.jpg" data-dark="screenshots/library-timeline-dark.jpg" data-light="screenshots/library-timeline-light.jpg" alt="Timeline view grouped by month" width="1600" height="1000" loading="lazy">
+            <figcaption>Timeline grouped by month</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/sources-light.jpg" data-dark="screenshots/sources-dark.jpg" data-light="screenshots/sources-light.jpg" alt="Sources dialog listing library folders" width="1600" height="1000" loading="lazy">
+            <figcaption>Add folders. Files stay where they are.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="install" aria-labelledby="install-title">
+        <h2 id="install-title">Install</h2>
+        <p class="section-lede">VistoGallery isn't notarized by Apple yet, so macOS blocks it on first launch. It's a one-time step.</p>
+        <ol class="steps">
+          <li><strong>Download the .dmg</strong><p>Get the latest build from <a href="https://github.com/Davin-X/visto-gallery/releases/latest">GitHub Releases</a> and drag VistoGallery to Applications.</p></li>
+          <li><strong>Allow it to open</strong><p>Open it once, then go to System Settings → Privacy &amp; Security and click <em>Open Anyway</em>. Or run this in Terminal:</p>
+            <pre><code>xattr -dr com.apple.quarantine /Applications/VistoGallery.app</code></pre></li>
+          <li><strong>Add a folder</strong><p>Pick a folder of photos (or paste its path). VistoGallery scans it and builds the catalog locally.</p></li>
+        </ol>
+      </section>
+    </div>
   </main>
+
   <footer>
-    <p>Built with Tauri + Rust + TypeScript. <br>© 2026 <a href="https://github.com/Davin-X">Davin-X</a> — MIT License</p>
-    <div class="links">
-      <a href="https://github.com/Davin-X/visto-gallery/releases" target="_blank" rel="noopener">Releases</a>
-      <a href="https://github.com/Davin-X/visto-gallery/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
-      <a href="https://github.com/Davin-X/visto-gallery/issues" target="_blank" rel="noopener">Issues</a>
-      <a href="https://davin-x.github.io/apps-site/apps/vistogallery/" target="_blank" rel="noopener">Full Details</a>
+    <div class="wrap">
+      <p>© 2026 <a href="https://github.com/Davin-X">Davin-X</a> · MIT License · Built with Tauri &amp; Rust</p>
+      <div class="links">
+        <a href="https://github.com/Davin-X/visto-gallery/releases">Releases</a>
+        <a href="https://github.com/Davin-X/visto-gallery/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/Davin-X/visto-gallery/blob/main/docs/VERIFYING_RELEASES.md">Verify a download</a>
+        <a href="https://github.com/Davin-X/visto-gallery/issues">Issues</a>
+      </div>
     </div>
   </footer>
+
   <script>
-    (function() {
-      const toggle = document.getElementById('themeToggle');
-      const sunIcon = document.getElementById('sunIcon');
-      const moonIcon = document.getElementById('moonIcon');
-      const label = document.getElementById('themeLabel');
-      const screenshots = document.querySelectorAll('.screenshots img[data-dark]');
-
-      function applyTheme(dark) {
-        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-        sunIcon.style.display = dark ? 'inline-block' : 'none';
-        moonIcon.style.display = dark ? 'none' : 'inline-block';
-        label.textContent = dark ? 'Light' : 'Dark';
-        screenshots.forEach(img => {
-          img.src = dark ? img.dataset.dark : img.dataset.light;
-        });
+    (function () {
+      var root = document.documentElement;
+      var toggle = document.getElementById('themeToggle');
+      var shots = document.querySelectorAll('img[data-dark]');
+      var media = window.matchMedia('(prefers-color-scheme: dark)');
+      function saved() { try { return localStorage.getItem('theme'); } catch (e) { return null; } }
+      function apply(dark) {
+        root.setAttribute('data-theme', dark ? 'dark' : 'light');
+        toggle.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+        shots.forEach(function (img) { img.src = dark ? img.dataset.dark : img.dataset.light; });
       }
-
-      // Check saved preference or system preference
-      const saved = localStorage.getItem('screenshotTheme');
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      let dark = saved ? saved === 'dark' : systemDark;
-      applyTheme(dark);
-
-      toggle.addEventListener('click', () => {
+      var dark = saved() ? saved() === 'dark' : media.matches;
+      apply(dark);
+      toggle.addEventListener('click', function () {
         dark = !dark;
-        localStorage.setItem('screenshotTheme', dark ? 'dark' : 'light');
-        applyTheme(dark);
+        try { localStorage.setItem('theme', dark ? 'dark' : 'light'); } catch (e) {}
+        apply(dark);
       });
-
-      // Listen for system theme changes (only if user hasn't set a preference)
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-        if (!localStorage.getItem('screenshotTheme')) {
-          dark = e.matches;
-          applyTheme(dark);
-        }
-      });
+      media.addEventListener('change', function (e) { if (!saved()) { dark = e.matches; apply(dark); } });
     })();
   </script>
 </body>
