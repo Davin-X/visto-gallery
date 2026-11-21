@@ -117,13 +117,13 @@ pub(crate) fn now_ms() -> i64 {
     (OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000) as i64
 }
 
+pub use security::paths::{
+    add_source_path, pick_ambient_audio, pick_media_files, pick_source_folders,
+    validate_path_under_registered_roots, GrantedPaths,
+};
 /// Normalize a folder path so comparisons do not depend on a trailing slash.
 pub(crate) use security::paths::{
     authorize_import_path, is_path_under_registered_roots, normalize_root, path_is_inside,
-};
-pub use security::paths::{
-    pick_ambient_audio, pick_media_files, pick_source_folders,
-    validate_path_under_registered_roots, GrantedPaths,
 };
 
 /// Event asking the frontend to re-read catalog-wide counts.

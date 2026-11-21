@@ -12,6 +12,61 @@ use tauri::{State, Window};
 use ts_rs::TS;
 use walkdir::WalkDir;
 
+/// What adding a folder as separate sources would cover.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceSplit {
+    /// Immediate, non-hidden subfolders, sorted. Each becomes its own source.
+    pub subfolders: Vec<String>,
+    /// Media files directly in the folder. Splitting skips them.
+    pub loose_media_count: usize,
+}
+
+/// Symlinked folders are skipped so a link cannot pull a folder from outside
+/// the picked one into the library.
+pub(crate) fn split_source_folder(root: &Path) -> std::io::Result<SourceSplit> {
+    let mut subfolders = Vec::new();
+    let mut loose_media_count = 0;
+    for entry in std::fs::read_dir(root)?.filter_map(Result::ok) {
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        let path = entry.path();
+        if kind.is_dir() && !entry.file_name().to_string_lossy().starts_with('.') {
+            subfolders.push(path.to_string_lossy().into_owned());
+        } else if kind.is_file()
+            && path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| is_media_file(&ext.to_lowercase()))
+        {
+            loose_media_count += 1;
+        }
+    }
+    subfolders.sort();
+    Ok(SourceSplit {
+        subfolders,
+        loose_media_count,
+    })
+}
+
+/// List a chosen folder's subfolders so each can be added as its own source.
+/// The folder must already be granted (picked, pasted or dropped).
+#[tauri::command]
+pub async fn split_source(
+    path: String,
+    catalog: State<'_, crate::Catalog>,
+    state: State<'_, AppState>,
+) -> Result<SourceSplit, CommandError> {
+    let db = super::get_db(&catalog)?;
+    super::authorize_import_path(&path, &db, &state.grants).await?;
+    let root = PathBuf::from(&path);
+    tokio::task::spawn_blocking(move || split_source_folder(&root))
+        .await
+        .map_err(|e| CommandError::internal(format!("Folder listing failed: {e}")))?
+        .map_err(|e| CommandError::io(format!("Cannot read '{path}': {e}")))
+}
+
 #[tauri::command]
 pub async fn scan_library(
     root_path: String,
@@ -2533,6 +2588,35 @@ pub async fn apply_color_label(
         .execute(db)
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod split_source_tests {
+    use super::split_source_folder;
+    use std::fs;
+
+    #[test]
+    fn lists_visible_subfolders_and_counts_loose_media() {
+        let root = std::env::temp_dir().join(format!("visto-split-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(root.join("Trip")).unwrap();
+        fs::create_dir_all(root.join("Album")).unwrap();
+        fs::create_dir_all(root.join(".cache")).unwrap();
+        fs::write(root.join("a.jpg"), b"x").unwrap();
+        fs::write(root.join("b.MOV"), b"x").unwrap();
+        fs::write(root.join("notes.txt"), b"x").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(root.join("Trip"), root.join("Link")).unwrap();
+
+        let split = split_source_folder(&root).unwrap();
+        let names: Vec<_> = split
+            .subfolders
+            .iter()
+            .map(|p| p.rsplit('/').next().unwrap().to_string())
+            .collect();
+        assert_eq!(names, ["Album", "Trip"]);
+        assert_eq!(split.loose_media_count, 2);
+        let _ = fs::remove_dir_all(&root);
+    }
 }
 
 #[cfg(test)]

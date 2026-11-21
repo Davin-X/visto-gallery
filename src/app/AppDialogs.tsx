@@ -94,6 +94,7 @@ interface AppDialogsProps {
   rescanSources: () => Promise<void>;
   rescanSource: (folder: LibraryFolder) => Promise<void>;
   importFolder: () => void;
+  importFolderPath: (path: string) => Promise<void>;
   checkForUpdates: (manual: boolean) => void;
 
   albumDialogRef: RefObject<HTMLFormElement | null>;
@@ -753,6 +754,7 @@ function SourcesSheet({
   open,
   onClose,
   onAddFolder,
+  onAddSourcePath,
   onRemoveFolder,
   onFilterSource,
   onRescan,
@@ -764,6 +766,7 @@ function SourcesSheet({
   open: boolean;
   onClose: () => void;
   onAddFolder: () => void;
+  onAddSourcePath?: (path: string) => Promise<void>;
   onRemoveFolder: (folder: LibraryFolder) => void;
   onFilterSource: () => void;
   onRescan: () => Promise<void>;
@@ -797,6 +800,7 @@ function SourcesSheet({
         <SourcesManager
           variant="sheet"
           onAddFolder={onAddFolder}
+          onAddSourcePath={onAddSourcePath}
           onRemoveFolder={onRemoveFolder}
           onFilterSource={onFilterSource}
           onRescan={() => {
@@ -991,6 +995,7 @@ export function AppDialogs(props: AppDialogsProps) {
     rescanSources,
     rescanSource,
     importFolder,
+    importFolderPath,
     checkForUpdates,
     albumDialogRef,
     updateDialogRef,
@@ -1100,6 +1105,7 @@ export function AppDialogs(props: AppDialogsProps) {
         open={sourcesSheetOpen}
         onClose={() => setSourcesSheetOpen(false)}
         onAddFolder={importFolder}
+        onAddSourcePath={importFolderPath}
         onRemoveFolder={(folder: LibraryFolder) => setFolderPendingRemove(folder)}
         onFilterSource={() => {
           setScreen("Library");

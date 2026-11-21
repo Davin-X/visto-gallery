@@ -22,6 +22,36 @@ interface UseSourceActionsOptions {
 // Rescans never call `cancelScan()` first. That once cleared a single global
 // cancel flag; with per-job flags it would cancel every running scan,
 // including auto-import and the once-per-launch cleanup scan.
+/**
+ * Subfolders of `folder` to add as separate sources. A subfolder that is
+ * already a source is skipped; one that holds sources is split again, so no
+ * new source ever overlaps an existing one.
+ */
+export async function splitWithoutOverlap(
+  folder: string,
+  existing: string[],
+  split = tauri.library.splitSource,
+): Promise<{ sources: string[]; looseMediaCount: number }> {
+  // Already covered by a source: rescan it rather than add overlapping ones.
+  if (existing.some((root) => folder === root || folder.startsWith(`${root}/`))) {
+    return { sources: [folder], looseMediaCount: 0 };
+  }
+  const { subfolders, looseMediaCount } = await split(folder);
+  if (!subfolders.length) return { sources: [folder], looseMediaCount: 0 };
+  const result = { sources: [] as string[], looseMediaCount };
+  for (const sub of subfolders) {
+    if (existing.includes(sub)) continue;
+    if (existing.some((root) => root.startsWith(`${sub}/`))) {
+      const inner = await splitWithoutOverlap(sub, existing, split);
+      result.sources.push(...inner.sources);
+      result.looseMediaCount += inner.looseMediaCount;
+    } else {
+      result.sources.push(sub);
+    }
+  }
+  return result;
+}
+
 export function useSourceActions({
   screen,
   showNotice,
@@ -113,15 +143,40 @@ export function useSourceActions({
           ),
       );
 
+    await scanSourceRoots(rootPaths);
+  };
+
+  const importFolderPath = async (rawPath: string) => {
+    let resolved: string;
+    try {
+      resolved = await tauri.library.addSourcePath(rawPath);
+    } catch (e) {
+      showErrorNotice(e, "Could not add that folder");
+      return;
+    }
+    await scanSourceRoots([resolved]);
+  };
+
+  // One added folder is split so each subfolder can be removed on its own.
+  // Several picked folders are kept as picked: the user chose those sources.
+  const scanSourceRoots = async (rootPaths: string[]) => {
     const library = useLibraryStore.getState();
     try {
-      showNotice(`Scanning ${rootPaths.length.toLocaleString()} source folder(s)…`);
       library.setBusy(true);
       library.setProgress({ phase: "scanning", processed: 0, total: 0 });
+      let sources = rootPaths;
+      let skippedLoose = 0;
+      if (rootPaths.length === 1) {
+        const existing = await tauri.library.getRoots();
+        const split = await splitWithoutOverlap(rootPaths[0], existing);
+        sources = split.sources;
+        skippedLoose = split.looseMediaCount;
+      }
+      showNotice(`Scanning ${sources.length.toLocaleString()} source folder(s)…`);
       let discoveredCount = 0;
       let cancelled = false;
-      for (const rootPath of rootPaths) {
-        const result = await tauri.library.scan(rootPath);
+      for (const source of sources) {
+        const result = await tauri.library.scan(source);
         discoveredCount += result.discoveredCount;
         if (result.cancelled) {
           cancelled = true;
@@ -133,12 +188,15 @@ export function useSourceActions({
       refreshLibraryStats();
       library.setBusy(false);
       library.setProgress(null);
+      const skipped = skippedLoose
+        ? ` Skipped ${skippedLoose.toLocaleString()} loose ${skippedLoose === 1 ? "file" : "files"} at the top level; add them with Import files.`
+        : "";
       showNotice(
-        cancelled
+        (cancelled
           ? `Scan cancelled. Indexed ${discoveredCount.toLocaleString()} file(s) so far; you can resume by scanning these sources again.`
           : discoveredCount
-            ? `Found ${discoveredCount.toLocaleString()} ${discoveredCount === 1 ? "media file" : "media files"} across ${rootPaths.length.toLocaleString()} source folder(s).`
-            : "No media files found in the selected folders.",
+            ? `Found ${discoveredCount.toLocaleString()} ${discoveredCount === 1 ? "media file" : "media files"} across ${sources.length.toLocaleString()} source folder(s).`
+            : "No media files found in the selected folders.") + skipped,
       );
     } catch (e) {
       library.setBusy(false);
@@ -383,6 +441,7 @@ export function useSourceActions({
     importFiles,
     importPaths,
     importFolder,
+    importFolderPath,
     rescanSource,
     rescanSources,
     removeAllSources,

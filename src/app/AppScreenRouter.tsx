@@ -27,6 +27,7 @@ import type { Screen } from "./screen";
 import { buildItemContextMenu, type ItemMenuActions } from "../engine/utils/itemContextMenu";
 
 interface AppScreenRouterProps {
+  importFolderPath: (path: string) => Promise<void>;
   screen: Screen;
   library: LibraryState;
   viewer: ViewerState;
@@ -110,6 +111,7 @@ export function AppScreenRouter({
   rescanSource,
   importFiles,
   importFolder,
+  importFolderPath,
   showNotice,
   showErrorNotice,
   exportToBatch,
@@ -599,6 +601,7 @@ export function AppScreenRouter({
       {screen === "Settings" && (
         <SettingsScreen
           onAddFolder={() => importFolder()}
+          onAddSourcePath={(path) => importFolderPath(path)}
           onRemoveFolder={(folder: LibraryFolder) => setFolderPendingRemove(folder)}
           onRescan={() => {
             void rescanSources();

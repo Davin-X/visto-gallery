@@ -695,6 +695,7 @@ function App() {
             rescanSources={sources.rescanSources}
             rescanSource={sources.rescanSource}
             importFolder={sources.importFolder}
+            importFolderPath={sources.importFolderPath}
             checkForUpdates={updates.checkForUpdates}
             albumDialogRef={albums.albumDialogRef}
             updateDialogRef={updateDialogRef}
@@ -771,6 +772,7 @@ function App() {
         rescanSource={sources.rescanSource}
         importFiles={sources.importFiles}
         importFolder={sources.importFolder}
+        importFolderPath={sources.importFolderPath}
         showNotice={showNotice}
         showErrorNotice={showErrorNotice}
         exportToBatch={exportToBatch}

@@ -278,9 +278,46 @@ pub async fn pick_ambient_audio(
     Ok(Some(path.clone()))
 }
 
+/// Validate and expand a folder path entered directly by the user (e.g. pasted).
+/// Expands `~/` using the user's home directory.
+pub(crate) fn resolve_source_path(path: &str, home: &Path) -> Result<PathBuf, CommandError> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err(CommandError::path("Please enter a folder path."));
+    }
+    let expanded = if let Some(suffix) = trimmed.strip_prefix("~/") {
+        home.join(suffix)
+    } else if trimmed == "~" {
+        home.to_path_buf()
+    } else {
+        PathBuf::from(trimmed)
+    };
+    grantable_root(&expanded.to_string_lossy(), home)
+        .map_err(|error| CommandError::path(format!("Cannot use that folder: {error}.")))
+}
+
+/// Validate and grant a folder path entered directly by the user (e.g. pasted).
+/// The path is authorized for scanning and granted to the asset scope.
+#[tauri::command]
+pub async fn add_source_path(
+    path: String,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<String, CommandError> {
+    let home = app
+        .path()
+        .home_dir()
+        .unwrap_or_else(|_| PathBuf::from("/Users"));
+    let canonical = resolve_source_path(&path, &home)?;
+    let canonical_str = canonical.to_string_lossy().into_owned();
+    state.grants.grant([&canonical]);
+    let _ = app.asset_protocol_scope().allow_directory(&canonical, true);
+    Ok(canonical_str)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{grantable_root, GrantedPaths};
+    use super::{grantable_root, resolve_source_path, GrantedPaths};
     use std::fs;
 
     fn temp_tree() -> std::path::PathBuf {
@@ -336,6 +373,36 @@ mod tests {
         assert!(grantable_root("/Volumes", &home).is_err());
         assert!(grantable_root(&root.join("granted").to_string_lossy(), &home).is_err());
         assert!(grantable_root(&home.join("missing").to_string_lossy(), &home).is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolve_source_path_expands_tilde_and_validates_folders() {
+        let root = temp_tree();
+        let home = root.join("home");
+        let photos = home.join("Photos");
+        fs::create_dir_all(&photos).unwrap();
+
+        // Expanding ~/Photos
+        let resolved = resolve_source_path("~/Photos", &home).expect("resolve ~/Photos");
+        assert_eq!(resolved, photos.canonicalize().unwrap());
+
+        // Expanding ~ directly
+        let resolved_home = resolve_source_path("~", &home).expect("resolve ~");
+        assert_eq!(resolved_home, home.canonicalize().unwrap());
+
+        // Empty path
+        assert!(resolve_source_path("", &home).is_err());
+        assert!(resolve_source_path("   ", &home).is_err());
+
+        // Non-existent path
+        assert!(resolve_source_path("~/NonExistent", &home).is_err());
+
+        // File instead of folder
+        let file = home.join("sample.jpg");
+        fs::write(&file, b"test").unwrap();
+        assert!(resolve_source_path(&file.to_string_lossy(), &home).is_err());
+
         let _ = fs::remove_dir_all(&root);
     }
 }
