@@ -367,6 +367,56 @@ describe("DuplicatesScreen", () => {
     await waitFor(() => expect(onFilesTrashed).toHaveBeenCalled());
   });
 
+  it("renders file duplicate groups a page at a time", async () => {
+    // 51 groups is past one page: the DOM must stop at 50 until it is asked.
+    const groups = Array.from({ length: 51 }, (_, index) => ({
+      id: `sha-${index}`,
+      size: 10,
+      items: [
+        {
+          id: `keep-${index}`,
+          path: `/shoots/rain/keep-${index}.txt`,
+          name: `keep-${index}.txt`,
+          extension: "txt",
+          size: 10,
+          keeper: true,
+        },
+        {
+          id: `copy-${index}`,
+          path: `/shoots/rain/old/keep-${index}.txt`,
+          name: `keep-${index}.txt`,
+          extension: "txt",
+          size: 10,
+          keeper: false,
+        },
+      ],
+    }));
+    fileScanMock.scan.mockResolvedValue({
+      scope: "/shoots/rain",
+      filesScanned: 102,
+      filesCompared: 102,
+      bytesHashed: 1020,
+      stoppedEarly: null,
+      cancelled: false,
+      groups,
+    });
+
+    renderScreen([], false, {
+      folders: [makeLibraryFolder({ path: "/shoots/rain", name: "Rain" })],
+      scope: "/shoots/rain",
+      onChangeScope: vi.fn(),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Any file type" }));
+    fireEvent.click(screen.getByRole("button", { name: "Scan folder" }));
+
+    expect(await screen.findAllByText("2 identical copies")).toHaveLength(50);
+    fireEvent.click(screen.getByRole("button", { name: "Show 1 more group" }));
+    expect(screen.getAllByText("2 identical copies")).toHaveLength(51);
+    // The last group is in the DOM, so the button is gone.
+    expect(screen.queryByRole("button", { name: /more group/ })).toBeNull();
+  });
+
   it("does not call a cancelled scan unique", async () => {
     fileScanMock.scan.mockResolvedValue({
       scope: "/shoots/rain",

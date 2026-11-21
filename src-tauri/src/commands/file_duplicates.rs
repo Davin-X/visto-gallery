@@ -46,9 +46,6 @@ const MAX_HASH_BYTES: u64 = 40 * 1024 * 1024 * 1024;
 const FINGERPRINT_BATCH: usize = 64;
 /// Paths per Finder Trash call.
 const TRASH_BATCH: usize = 200;
-/// Maximum duplicate groups to return. A folder with more returns the largest
-/// saving groups first and reports a partial result.
-const MAX_DUPLICATE_GROUPS: usize = 5_000;
 
 /// Folders whose contents are never worth comparing, even inside a folder the
 /// user picked: they hold caches and installs, not their own files.
@@ -147,18 +144,24 @@ pub async fn reveal_file_duplicate(
     // Same boundary as trashing: a regular file, still inside the scanned
     // folder, never a symlink.
     validate_trash_target(&path, &scope)?;
-    std::process::Command::new("open")
-        .arg("-R")
-        .arg(&path)
-        .status()
-        .map_err(|error| CommandError::io(format!("Could not show {path} in Finder: {error}")))?;
-    Ok(())
+    // `open` is a short-lived process, but do not block a runtime worker on it.
+    tokio::task::spawn_blocking(move || {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(&path)
+            .status()
+            .map(|_| ())
+            .map_err(|error| CommandError::io(format!("Could not show {path} in Finder: {error}")))
+    })
+    .await
+    .map_err(|error| CommandError::internal(format!("Reveal failed: {error}")))?
 }
 
 /// Compare every regular file inside `scope`, keeping the hashes in memory.
 #[tauri::command]
 pub async fn find_file_duplicates(
     state: State<'_, crate::AppState>,
+    catalog: State<'_, crate::Catalog>,
     window: Window,
     scope: String,
 ) -> Result<FileDuplicateScan, CommandError> {
@@ -183,6 +186,14 @@ pub async fn find_file_duplicates(
     } else {
         trimmed_scope
     };
+
+    // The renderer sends the folder, so check the user actually chose it: a
+    // granted pick or a registered library source. Without this a compromised
+    // webview could name any path and, a scan later, trash what is inside it.
+    {
+        let db = super::get_db(&catalog)?;
+        super::authorize_import_path(&scope_path, &db, &state.grants).await?;
+    }
 
     let cancel = state.duplicate_cancel.start();
     let flag = cancel.flag();
@@ -424,13 +435,6 @@ pub async fn find_file_duplicates(
         };
         saving(b).cmp(&saving(a))
     });
-
-    if groups.len() > MAX_DUPLICATE_GROUPS {
-        groups.truncate(MAX_DUPLICATE_GROUPS);
-        stopped_early = Some(format!(
-            "Only the first {MAX_DUPLICATE_GROUPS} duplicate groups (by reclaimable space) are shown. Pick a smaller folder for a complete scan."
-        ));
-    }
 
     remember(&state, &scope_path, session_items);
 

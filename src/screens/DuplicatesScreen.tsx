@@ -66,6 +66,9 @@ interface DuplicatesScreenProps {
 const GROUP_PAGE = 40;
 // Enough tiles to fill one row of a wide window; expansion reveals the rest.
 const INLINE_COPIES = 4;
+// Any-file groups are single rows, so a whole page costs little. The scan can
+// return thousands of them, and rendering all of them at once froze the UI.
+const FILE_GROUP_PAGE = 50;
 
 type ViewMode = "grid" | "list";
 type ScanMode = "media" | "files";
@@ -113,7 +116,7 @@ function parentFolder(path: string): string {
 
 function folderName(path: string): string {
   const trimmed = path.replace(/\/+$/, "");
-  return trimmed.slice(trimmed.lastIndexOf("/") + 1) || trimmed;
+  return trimmed.slice(trimmed.lastIndexOf("/") + 1) || trimmed || "/";
 }
 
 /** The row's folder relative to the folder being scanned, so one scan does not
@@ -583,8 +586,6 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   } | null>(null);
   const [fileSelected, setFileSelected] = useState<Set<string>>(new Set());
   const [confirmFileTrash, setConfirmFileTrash] = useState(false);
-  // Progressive render limit for file duplicates (same pattern as media screen).
-  const FILE_GROUP_PAGE = 50;
   const [fileRenderLimit, setFileRenderLimit] = useState(FILE_GROUP_PAGE);
   // Bumped when the scope changes, so a scan still running for the previous
   // folder cannot paint its results over the new one.
@@ -599,7 +600,12 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     let disposed = false;
     let stop: (() => void) | undefined;
     let frame: number | null = null;
-    let pending: { phase?: string; processed?: number; total?: number; currentFile?: string } | null = null;
+    let pending: {
+      phase?: string;
+      processed?: number;
+      total?: number;
+      currentFile?: string;
+    } | null = null;
 
     void events
       .onFileDuplicatesProgress((event) => {
@@ -692,6 +698,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
       if (request !== fileScanRequest.current) return;
       setFileScan(result);
       setFileSelected(new Set());
+      setFileRenderLimit(FILE_GROUP_PAGE);
     } catch (error) {
       if (request === fileScanRequest.current) onError?.(error, "Could not compare that folder");
     } finally {
@@ -881,7 +888,14 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const folderPicker =
     onChangeScope && (mode === "files" || folders.length > 0) ? (
       <div className="duplicate-folder-picker">
-        <label className="source-select" title={scopeFolder ? `Only comparing files inside ${scopeFolder.name}` : "Comparing the whole library"}>
+        <label
+          className="source-select"
+          title={
+            scopeFolder
+              ? `Only comparing files inside ${scopeFolder.name}`
+              : "Comparing the whole library"
+          }
+        >
           <FolderIcon size={14} />
           <span className="source-select-label">Folder</span>
           <select
@@ -1191,12 +1205,13 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                 className="quiet-button"
                 onClick={() =>
                   setFileRenderLimit((limit) =>
-                    Math.min(limit + FILE_GROUP_PAGE, fileGroups.length)
+                    Math.min(limit + FILE_GROUP_PAGE, fileGroups.length),
                   )
                 }
               >
-                Show {Math.min(FILE_GROUP_PAGE, fileGroups.length - fileRenderLimit).toLocaleString()} more
-                groups
+                Show{" "}
+                {Math.min(FILE_GROUP_PAGE, fileGroups.length - fileRenderLimit).toLocaleString()}{" "}
+                more {fileGroups.length - fileRenderLimit === 1 ? "group" : "groups"}
               </button>
             </div>
           )}
