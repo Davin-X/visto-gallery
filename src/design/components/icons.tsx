@@ -235,6 +235,14 @@ export function MinusIcon({ size = 16, className = "", strokeWidth = 1.9 }: Icon
   );
 }
 
+export function XIcon({ size = 16, className = "", strokeWidth = 1.9 }: IconProps) {
+  return (
+    <Svg size={size} className={className} strokeWidth={strokeWidth}>
+      <path d="M5.4 5.4l13.2 13.2M18.6 5.4L5.4 18.6" />
+    </Svg>
+  );
+}
+
 export function FolderIcon({ size = 16, className = "", strokeWidth = 1.8 }: IconProps) {
   return (
     <Svg size={size} className={className} strokeWidth={strokeWidth}>
