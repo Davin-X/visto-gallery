@@ -1,6 +1,12 @@
 import React from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { SmartAlbumDialog, editableFrom, filterFrom, type Editable } from "./SmartAlbumDialog";
+import {
+  SmartAlbumDialog,
+  editableFrom,
+  filterFrom,
+  parseTags,
+  type Editable,
+} from "./SmartAlbumDialog";
 
 const richFilter = {
   kind: "video" as const,
@@ -374,4 +380,8 @@ test("Escape closes the dialog", () => {
 
   fireEvent.keyDown(window, { key: "Escape" });
   expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+test("parseTags keeps one spelling of each tag, ignoring case", () => {
+  expect(parseTags(" Beach, beach ,family,, BEACH ")).toEqual(["Beach", "family"]);
 });

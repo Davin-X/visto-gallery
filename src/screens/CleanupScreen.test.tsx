@@ -226,6 +226,19 @@ describe("CleanupScreen", () => {
     });
   });
 
+  it("adds regenerable items to what the user already picked", async () => {
+    renderScreen();
+    await screen.findByText("Xcode DerivedData");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Xcode Archives" }));
+    const button = screen.getByRole("button", { name: /select everything that regenerates/i });
+    fireEvent.click(button);
+
+    const bar = screen.getByRole("region", { name: "Cleanup selection" });
+    expect(within(bar).getByText("2 items")).toBeInTheDocument();
+    expect(button).toBeDisabled();
+  });
+
   it("lists what needs rebuilding before trashing it", async () => {
     renderScreen();
     await screen.findByText("Xcode DerivedData");
@@ -263,7 +276,7 @@ describe("CleanupScreen", () => {
   });
 
   it("marks a row Never clean and allows a skipped one again", async () => {
-    renderScreen();
+    const rendered = renderScreen();
     await screen.findByText("Xcode DerivedData");
 
     const row = screen.getByText("Xcode DerivedData").closest(".cleanup-row") as HTMLElement;
@@ -273,6 +286,18 @@ describe("CleanupScreen", () => {
         "xcode-derived-data",
         "Xcode DerivedData",
         true,
+      );
+    });
+    // The notice carries an Undo that lets the row back in.
+    const { showNotice } = rendered;
+    const undo = showNotice.mock.lastCall?.[2] as { label: string; run: () => void };
+    expect(undo.label).toBe("Undo");
+    undo.run();
+    await waitFor(() => {
+      expect(mocks.setIgnored).toHaveBeenCalledWith(
+        "xcode-derived-data",
+        "Xcode DerivedData",
+        false,
       );
     });
 
@@ -357,6 +382,10 @@ describe("CleanupScreen", () => {
       name: /also scan documents, desktop and downloads/i,
     });
     expect(toggle).not.toBeChecked();
+    // The Off card leads to the switch instead of doing nothing.
+    Element.prototype.scrollIntoView = vi.fn();
+    fireEvent.click(screen.getByRole("button", { name: /old installers/i }));
+    expect(toggle).toHaveFocus();
 
     mocks.scan.mockClear();
     fireEvent.click(toggle);
@@ -465,11 +494,10 @@ describe("CleanupScreen", () => {
     const { container } = renderScreen();
     await screen.findByText("Big cache");
 
-    // The big number is everything found; the line under it says what can be
-    // cleaned and why the rest is skipped, in plain words.
+    // The big number is what can be cleaned, matching the free-space gain;
+    // the line under it says why the rest is skipped, in plain words.
     const headline = container.querySelector(".cleanup-hero-number") as HTMLElement;
-    expect(headline).toHaveTextContent("8.0 GB");
-    expect(screen.getByText("4.0 GB ready to clean")).toBeInTheDocument();
+    expect(headline).toHaveTextContent("4.0 GB");
     expect(screen.getByText(/3\.0 GB skipped — a tool is running/)).toBeInTheDocument();
     expect(screen.getByText("1.0 GB held back for safety")).toBeInTheDocument();
   });

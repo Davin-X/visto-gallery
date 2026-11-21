@@ -772,6 +772,12 @@
   cursor: pointer;
 }
 
+/* A locked row (Git, sensitive, Never clean) must not look tickable. */
+.cleanup-check input:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 /* Rows */
 
 .cleanup-list {
@@ -870,6 +876,19 @@
   justify-content: flex-end;
   gap: 12px;
   margin-top: 2px;
+}
+
+/* Shown for the row in hand only; opacity keeps the space and the tab order. */
+@media (hover: hover) {
+  .cleanup-row-actions {
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+
+  .cleanup-row:hover .cleanup-row-actions,
+  .cleanup-row:focus-within .cleanup-row-actions {
+    opacity: 1;
+  }
 }
 
 /* Row actions sit at a readable neutral at rest and take the accent on hover,

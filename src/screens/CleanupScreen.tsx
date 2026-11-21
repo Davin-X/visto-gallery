@@ -12,6 +12,7 @@ import {
 } from "../design/components/icons";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
 import { CleanupTabs } from "../design/components/CleanupTabs";
+import type { ShowNotice } from "../app/types";
 import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import {
@@ -39,7 +40,6 @@ import {
 } from "../engine/utils/junk";
 import type {
   CleanupOverview,
-  ErrorCode,
   JunkCategory,
   JunkCleanResult,
   JunkIgnoredItem,
@@ -48,7 +48,7 @@ import type {
 } from "../engine/types/commands";
 
 interface CleanupScreenProps {
-  showNotice: (text: string, code?: ErrorCode) => void;
+  showNotice: ShowNotice;
   showErrorNotice: (error: unknown, prefix?: string) => void;
   /** Jump to the Duplicates screen from the library card. */
   onOpenDuplicates?: () => void;
@@ -290,8 +290,10 @@ export default function CleanupScreen({
   }, []);
 
   const selectRegenerable = useCallback(() => {
-    setSelected(new Set(regenerable));
+    // Adds to the selection, so rows picked by hand stay picked.
+    setSelected((current) => new Set([...current, ...regenerable]));
   }, [regenerable]);
+  const allRegenerableSelected = regenerable.every((id) => selected.has(id));
 
   const runClean = useCallback(async () => {
     setConfirming(false);
@@ -336,7 +338,10 @@ export default function CleanupScreen({
             next.delete(id);
             return next;
           });
-          showNotice(`${label} will never be offered for cleaning.`);
+          showNotice(`${label} will never be offered for cleaning.`, undefined, {
+            label: "Undo",
+            run: () => void setNeverClean(id, label, false),
+          });
         } else {
           showNotice(`${label} can be cleaned again.`);
         }
@@ -425,7 +430,7 @@ export default function CleanupScreen({
               type="button"
               className="quiet-button cleanup-hero-select"
               onClick={selectRegenerable}
-              disabled={busy}
+              disabled={busy || allRegenerableSelected}
               title="Only items tagged Regenerates: caches and build output that come back on their own. Nothing that would need a rebuild."
             >
               <SparkleIcon size={14} /> Select everything that regenerates
@@ -458,7 +463,7 @@ export default function CleanupScreen({
                 ? incomplete
                   ? "Nothing found"
                   : "All tidy"
-                : "Junk found"}
+                : "Ready to clean"}
           </p>
           <p className="cleanup-hero-number" aria-live="polite">
             {emptyResult && !incomplete ? (
@@ -466,14 +471,12 @@ export default function CleanupScreen({
                 <CheckIcon size={26} /> 0 B
               </span>
             ) : (
-              formatBytesSimple(split.total)
+              // The cleanable amount, so it matches the free-space gain beside it.
+              formatBytesSimple(split.ready)
             )}
           </p>
-          {split.total > 0 && (
+          {split.inUse + split.heldBack > 0 && (
             <p className="cleanup-hero-split">
-              <span className="is-ready">
-                <i aria-hidden="true" /> {formatBytesSimple(split.ready)} ready to clean
-              </span>
               {split.inUse > 0 && (
                 <span
                   className="is-in-use"
@@ -558,6 +561,7 @@ export default function CleanupScreen({
             const count = report?.items.length ?? 0;
             const skipped = report?.skips.length ?? 0;
             const bytes = report?.totalBytes ?? 0;
+            const off = report?.status === "off";
             let status: React.ReactNode;
             if (scan.state === "scanning" || scan.state === "idle") {
               status = (
@@ -587,15 +591,15 @@ export default function CleanupScreen({
                 type="button"
                 key={category}
                 className={`cleanup-card is-${category}`}
-                onClick={() =>
-                  document
-                    .getElementById(`cleanup-${category}`)
-                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
-                }
-                disabled={
-                  (count === 0 && skipped === 0 && !report?.statusMessage) ||
-                  report?.status === "off"
-                }
+                onClick={() => {
+                  // An Off card leads to the switch that turns it on.
+                  const target = document.getElementById(
+                    off ? "cleanup-scope-switch" : `cleanup-${category}`,
+                  );
+                  target?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  if (off) target?.focus({ preventScroll: true });
+                }}
+                disabled={off ? !overview : count === 0 && skipped === 0 && !report?.statusMessage}
               >
                 <span className="cleanup-card-title">
                   <i className={`cleanup-dot is-${category}`} />
@@ -612,6 +616,7 @@ export default function CleanupScreen({
       {overview && (
         <label className="cleanup-scope">
           <input
+            id="cleanup-scope-switch"
             type="checkbox"
             role="switch"
             checked={personalFolders}
@@ -1091,7 +1096,7 @@ function SkippedList({
         {anyOverridable && (
           <span className="cleanup-skips-hint">Tick a row to include it anyway</span>
         )}
-        <span className="cleanup-skips-bytes">{formatBytesSimple(sumBytes(skips))} held back</span>
+        <span className="cleanup-skips-bytes">{formatBytesSimple(sumBytes(skips))}</span>
       </summary>
       <ul>
         {skips.map((skip) => {
