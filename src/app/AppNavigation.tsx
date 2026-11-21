@@ -307,6 +307,28 @@ export function AppSidebar({
   onOpenSources,
   onOpenUpdate,
 }: AppSidebarProps) {
+  // A catalog upgraded from an older build (and the browser harness) can
+  // briefly return a partial stats object. The sidebar is rendered before any
+  // interaction handlers, so never let a missing counter crash the whole app.
+  const count = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value) ? value : 0;
+  const displayStats = {
+    photos: count(stats?.photos),
+    videos: count(stats?.videos),
+    raws: count(stats?.raws),
+    animations: count(stats?.animations),
+    animationsSize: count(stats?.animationsSize),
+    uncategorized: count(stats?.uncategorized),
+    favorites: count(stats?.favorites),
+    hidden: count(stats?.hidden),
+    photoSize: count(stats?.photoSize),
+    videoSize: count(stats?.videoSize),
+    rawSize: count(stats?.rawSize),
+    uncategorizedSize: count(stats?.uncategorizedSize),
+    favoriteSize: count(stats?.favoriteSize),
+    hiddenSize: count(stats?.hiddenSize),
+    totalSize: count(stats?.totalSize),
+  };
   const folderCount = folders.length;
   const folderItems = folders.reduce((total, folder) => total + folder.itemCount, 0);
   const hiddenLocked = useHiddenLockStore((s) => isHiddenLocked(s.status));
@@ -397,43 +419,43 @@ export function AppSidebar({
         <GridIcon className="stat-icon is-photo" size={13} strokeWidth={1.7} />
         <span className="stat-label">Photos</span>
         <span className="stat-value">
-          {stats.photos.toLocaleString()}
-          <span className="stat-size">· {formatBytesSimple(stats.photoSize)}</span>
+          {displayStats.photos.toLocaleString()}
+          <span className="stat-size">· {formatBytesSimple(displayStats.photoSize)}</span>
         </span>
       </div>
       <div className="stat-row">
         <PlayIcon className="stat-icon is-video" size={13} strokeWidth={1.7} />
         <span className="stat-label">Videos</span>
         <span className="stat-value">
-          {stats.videos.toLocaleString()}
-          <span className="stat-size">· {formatBytesSimple(stats.videoSize)}</span>
+          {displayStats.videos.toLocaleString()}
+          <span className="stat-size">· {formatBytesSimple(displayStats.videoSize)}</span>
         </span>
       </div>
       <div className="stat-row">
         <CropIcon className="stat-icon is-raw" size={13} strokeWidth={1.7} />
         <span className="stat-label">RAW</span>
         <span className="stat-value">
-          {stats.raws.toLocaleString()}
-          <span className="stat-size">· {formatBytesSimple(stats.rawSize)}</span>
+          {displayStats.raws.toLocaleString()}
+          <span className="stat-size">· {formatBytesSimple(displayStats.rawSize)}</span>
         </span>
       </div>
       <div className="stat-row">
         <SparkleIcon className="stat-icon" size={13} strokeWidth={1.7} />
         <span className="stat-label">Animations</span>
         <span className="stat-value">
-          {stats.animations.toLocaleString()}
-          <span className="stat-size">· {formatBytesSimple(stats.animationsSize)}</span>
+          {displayStats.animations.toLocaleString()}
+          <span className="stat-size">· {formatBytesSimple(displayStats.animationsSize)}</span>
         </span>
       </div>
       {/* The catalog only stores photo, video and raw kinds, so this row
           only appears if an older catalog holds something else. */}
-      {stats.uncategorized > 0 && (
+      {displayStats.uncategorized > 0 && (
         <div className="stat-row">
           <TagIcon className="stat-icon" size={13} strokeWidth={1.7} />
           <span className="stat-label">Uncategorized</span>
           <span className="stat-value">
-            {stats.uncategorized.toLocaleString()}
-            <span className="stat-size">· {formatBytesSimple(stats.uncategorizedSize)}</span>
+            {displayStats.uncategorized.toLocaleString()}
+            <span className="stat-size">· {formatBytesSimple(displayStats.uncategorizedSize)}</span>
           </span>
         </div>
       )}
@@ -441,13 +463,13 @@ export function AppSidebar({
         <span className="stat-label">Total</span>
         <span className="stat-value">
           {(
-            stats.photos +
-            stats.videos +
-            stats.raws +
-            stats.animations +
-            stats.uncategorized
+            displayStats.photos +
+            displayStats.videos +
+            displayStats.raws +
+            displayStats.animations +
+            displayStats.uncategorized
           ).toLocaleString()}{" "}
-          · {formatBytesSimple(stats.totalSize)}
+          · {formatBytesSimple(displayStats.totalSize)}
         </span>
       </div>
       {/* Favorites and Hidden are views, not kinds: favorites are already in
@@ -457,8 +479,8 @@ export function AppSidebar({
         <HeartIcon className="stat-icon" size={13} strokeWidth={1.7} />
         <span className="stat-label">Favorites</span>
         <span className="stat-value">
-          {stats.favorites.toLocaleString()}
-          <span className="stat-size">· {formatBytesSimple(stats.favoriteSize)}</span>
+          {displayStats.favorites.toLocaleString()}
+          <span className="stat-size">· {formatBytesSimple(displayStats.favoriteSize)}</span>
         </span>
       </div>
       {/* While Hidden is locked its count and size are not shown at all. */}
@@ -467,8 +489,8 @@ export function AppSidebar({
           <EyeOffIcon className="stat-icon" size={13} strokeWidth={1.7} />
           <span className="stat-label">Hidden</span>
           <span className="stat-value">
-            {stats.hidden.toLocaleString()}
-            <span className="stat-size">· {formatBytesSimple(stats.hiddenSize)}</span>
+            {displayStats.hidden.toLocaleString()}
+            <span className="stat-size">· {formatBytesSimple(displayStats.hiddenSize)}</span>
           </span>
         </div>
       )}

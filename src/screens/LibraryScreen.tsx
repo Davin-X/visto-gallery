@@ -1204,11 +1204,25 @@ function LibraryScreen(props: LibraryScreenProps) {
     lastClickedRef.current = item.id;
   };
 
-  const handleTileDoubleClick = (item: MediaItem) => {
+  // Keep activation on the tile rather than only on the transparent focus
+  // button. Some tile children establish their own stacking context, so
+  // relying on the overlay made double-click delivery unreliable.
+  const handleTileActivate = (item: MediaItem, e: React.MouseEvent<HTMLElement>) => {
+    if (e.type === "click") {
+      // Preserve keyboard navigation after clicking the visible thumbnail.
+      (e.currentTarget.querySelector(".tile-open-button") as HTMLButtonElement | null)?.focus();
+      handleTileClick(item, e);
+      return;
+    }
     lastClickedRef.current = item.id;
     props.onInspectItem?.(item.id);
     props.onOpenViewer?.(item.id);
   };
+
+  const tileActivationHandlers = (item: MediaItem) => ({
+    onClick: (e: React.MouseEvent<HTMLElement>) => handleTileActivate(item, e),
+    onDoubleClick: (e: React.MouseEvent<HTMLElement>) => handleTileActivate(item, e),
+  });
 
   const tileClass = (item: MediaItem) =>
     `gallery-tile${props.layout === "details" ? " list-view-row" : ""}${
@@ -1858,12 +1872,17 @@ function LibraryScreen(props: LibraryScreenProps) {
                       key={item.id}
                       className={tileClass(item)}
                       role="row"
+                      {...tileActivationHandlers(item)}
                       onContextMenu={(e) => {
                         concealItem(item.id);
                         props.onContextMenu(itemContextMenu(item), e);
                       }}
                     >
-                      <div className="tile-select-check">
+                      <div
+                        className="tile-select-check"
+                        onClick={(e) => e.stopPropagation()}
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
                         <input
                           type="checkbox"
                           checked={selectedIdSet.has(item.id)}
@@ -1882,11 +1901,6 @@ function LibraryScreen(props: LibraryScreenProps) {
                         className="tile-open-button"
                         data-item-id={item.id}
                         aria-label={`Open ${tileAlt(item)}`}
-                        onClick={(e) => {
-                          e.currentTarget.focus();
-                          handleTileClick(item, e);
-                        }}
-                        onDoubleClick={() => handleTileDoubleClick(item)}
                         {...holdHandlers(item.id)}
                       />
                       <span className="tile-image" role="gridcell">
@@ -2136,12 +2150,17 @@ function LibraryScreen(props: LibraryScreenProps) {
                                 <article
                                   key={item.id}
                                   className={tileClass(item)}
+                                  {...tileActivationHandlers(item)}
                                   onContextMenu={(e) => {
                                     concealItem(item.id);
                                     props.onContextMenu(itemContextMenu(item), e);
                                   }}
                                 >
-                                  <div className="tile-select-check">
+                                  <div
+                                    className="tile-select-check"
+                                    onClick={(e) => e.stopPropagation()}
+                                    onDoubleClick={(e) => e.stopPropagation()}
+                                  >
                                     <input
                                       type="checkbox"
                                       checked={selectedIdSet.has(item.id)}
@@ -2160,11 +2179,6 @@ function LibraryScreen(props: LibraryScreenProps) {
                                     className="tile-open-button"
                                     data-item-id={item.id}
                                     aria-label={`Open ${tileAlt(item)}`}
-                                    onClick={(e) => {
-                                      e.currentTarget.focus();
-                                      handleTileClick(item, e);
-                                    }}
-                                    onDoubleClick={() => handleTileDoubleClick(item)}
                                     {...holdHandlers(item.id)}
                                   />
                                   <span className="tile-image">
@@ -2305,12 +2319,17 @@ function LibraryScreen(props: LibraryScreenProps) {
                   <article
                     key={item.id}
                     className={tileClass(item)}
+                    {...tileActivationHandlers(item)}
                     onContextMenu={(e) => {
                       concealItem(item.id);
                       props.onContextMenu(itemContextMenu(item), e);
                     }}
                   >
-                    <div className="tile-select-check">
+                    <div
+                      className="tile-select-check"
+                      onClick={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => e.stopPropagation()}
+                    >
                       <input
                         type="checkbox"
                         checked={selectedIdSet.has(item.id)}
@@ -2327,11 +2346,6 @@ function LibraryScreen(props: LibraryScreenProps) {
                       className="tile-open-button"
                       data-item-id={item.id}
                       aria-label={`Open ${tileAlt(item)}`}
-                      onClick={(e) => {
-                        e.currentTarget.focus();
-                        handleTileClick(item, e);
-                      }}
-                      onDoubleClick={() => handleTileDoubleClick(item)}
                       {...holdHandlers(item.id)}
                     />
                     <span className="tile-image">

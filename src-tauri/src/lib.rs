@@ -119,12 +119,27 @@ fn normalize_open_paths(raw_paths: Vec<String>) -> Vec<commands::OpenPath> {
     entries
 }
 
+/// Make an existing VistoGallery window visible when Finder opens media.
+/// `RunEvent::Opened` is delivered independently from the single-instance
+/// callback, so it must restore focus itself instead of relying on that route.
+fn focus_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 /// Grant and queue the paths Finder opened, then wake the frontend.
 fn push_open_paths(app: &tauri::AppHandle, raw_paths: Vec<String>) {
     let entries = normalize_open_paths(raw_paths);
     if entries.is_empty() {
         return;
     }
+    // Finder can deliver an existing-instance open through `RunEvent::Opened`
+    // without invoking the single-instance callback. Restore the window here
+    // so opening a file never happens invisibly in the background.
+    focus_main_window(app);
     let state: State<'_, AppState> = app.state();
     for entry in &entries {
         let path = PathBuf::from(&entry.path);
@@ -190,11 +205,7 @@ pub fn run() {
         // instance instead of spawning a duplicate process that plays the same
         // media at the same time.
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            focus_main_window(app);
             // A second launch carrying files ("Open With" while the app is
             // already running) hands them over as arguments.
             let paths: Vec<String> = args

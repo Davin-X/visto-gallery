@@ -4,6 +4,13 @@ All notable changes to VistoGallery are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- **Finder open focus**: opening files from Finder when VistoGallery is already running now brings the main window forward and unminimizes it.
+- **Library stats robustness**: sidebar counters safely tolerate partial or loading stats without crashing.
+- **Gallery tile double-click**: double-clicking a thumbnail opens the viewer reliably even when nested tile elements establish their own stacking contexts.
+
 ## [0.6.0] - 2026-11-21
 
 ### Added

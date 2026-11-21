@@ -115,6 +115,17 @@ function renderSidebar(overrides: Partial<React.ComponentProps<typeof AppSidebar
 }
 
 describe("Clean up sidebar entry", () => {
+  test("does not crash while a partial stats response is loading", () => {
+    // Old catalogs and the browser harness can briefly omit newly added
+    // counters. Rendering navigation must remain safe so the app can recover.
+    const partialStats = {
+      photos: 2,
+    } as unknown as React.ComponentProps<typeof AppSidebar>["stats"];
+
+    expect(() => renderSidebar({ stats: partialStats })).not.toThrow();
+    expect(screen.getByText("Photos")).toBeInTheDocument();
+  });
+
   test("replaces the separate Duplicates and Cleanup entries", () => {
     renderSidebar();
 
