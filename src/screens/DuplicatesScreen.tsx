@@ -226,9 +226,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
 
   const kindCounts = useMemo(() => {
     const currentItems =
-      mode === "bursts"
-        ? burstGroups.map((bg) => bg.items)
-        : groups.map((g) => g.items);
+      mode === "bursts" ? burstGroups.map((bg) => bg.items) : groups.map((g) => g.items);
     const counts: Record<KindFilter, number> = {
       all: currentItems.length,
       photo: 0,
@@ -311,9 +309,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     let copies = 0;
     let bytes = 0;
     const activeItems =
-      mode === "bursts"
-        ? burstGroups.map((bg) => bg.items)
-        : groups.map((g) => g.items);
+      mode === "bursts" ? burstGroups.map((bg) => bg.items) : groups.map((g) => g.items);
     activeItems.forEach((items) => {
       copies += Math.max(0, items.length - 1);
       bytes += items.slice(1).reduce((sum, item) => sum + item.size, 0);
@@ -576,21 +572,23 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                     </span>
                   </span>
                   <span className="duplicate-group-sub">
-                    {burstMap.get(group.id)!.reason} ·{" "}
-                    <b>{formatBytesSimple(view.reclaimable)}</b> reclaimable
+                    {burstMap.get(group.id)!.reason} · <b>{formatBytesSimple(view.reclaimable)}</b>{" "}
+                    reclaimable
                   </span>
                 </>
               ) : (
                 <>
                   <span
                     className="duplicate-group-title"
-                    title={group.sha256 ? `Content fingerprint (SHA-256): ${group.sha256}` : undefined}
+                    title={
+                      group.sha256 ? `Content fingerprint (SHA-256): ${group.sha256}` : undefined
+                    }
                   >
                     {view.ordered.length} identical copies
                   </span>
                   <span className="duplicate-group-sub">
-                    {formatBytesSimple(group.size)} each · <b>{formatBytesSimple(view.reclaimable)}</b>{" "}
-                    reclaimable
+                    {formatBytesSimple(group.size)} each ·{" "}
+                    <b>{formatBytesSimple(view.reclaimable)}</b> reclaimable
                   </span>
                 </>
               )}
@@ -752,7 +750,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     setBurstGroups([]);
     setBurstScanned(false);
     setBurstProgress(null);
-  }, [scope]);
+  }, [scope, setBurstGroups, setBurstScanned]);
 
   // A folder picked for the any-file scan is session-only; narrowing the
   // library scope means the user is choosing a source again, so the pick
@@ -791,9 +789,10 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     [fileGroups, fileRenderLimit],
   );
 
+  const { onScanSimilar, onSetBurstGroups, onSetBurstScanned } = props;
   const runBurstScan = useCallback(async () => {
-    if (props.onScanSimilar) {
-      await props.onScanSimilar(scope);
+    if (onScanSimilar) {
+      await onScanSimilar(scope);
       return;
     }
     const request = burstScanRequest.current + 1;
@@ -814,8 +813,8 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
       if (request !== burstScanRequest.current) return;
       setBurstGroups(result);
       setBurstScanned(true);
-      props.onSetBurstGroups?.(result);
-      props.onSetBurstScanned?.(true);
+      onSetBurstGroups?.(result);
+      onSetBurstScanned?.(true);
       setSelected(new Set());
     } catch (error) {
       if (request === burstScanRequest.current) {
@@ -827,7 +826,15 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
         setBurstProgress(null);
       }
     }
-  }, [props.onScanSimilar, props.onSetBurstGroups, props.onSetBurstScanned, scope, onError]);
+  }, [
+    onScanSimilar,
+    onSetBurstGroups,
+    onSetBurstScanned,
+    scope,
+    onError,
+    setBurstGroups,
+    setBurstScanned,
+  ]);
 
   const switchMode = useCallback((next: ScanMode) => {
     setMode(next);
@@ -1629,7 +1636,8 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                 <p>
                   {burstProgress && burstProgress.total
                     ? `${(burstProgress.processed ?? 0).toLocaleString()} of ${burstProgress.total.toLocaleString()} photos analyzed (${Math.round(((burstProgress.processed ?? 0) / burstProgress.total) * 100)}%)…`
-                    : burstProgress?.currentFile ?? "Finding camera bursts and visually similar photos…"}
+                    : (burstProgress?.currentFile ??
+                      "Finding camera bursts and visually similar photos…")}
                 </p>
                 {burstProgress && burstProgress.total ? (
                   <div
@@ -1713,7 +1721,11 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               </p>
               {!isCurrentBusy &&
                 (hasGroups ? (
-                  <button type="button" className="quiet-button" onClick={() => changeFilter("all")}>
+                  <button
+                    type="button"
+                    className="quiet-button"
+                    onClick={() => changeFilter("all")}
+                  >
                     Show all {groups.length.toLocaleString()} groups
                   </button>
                 ) : (
@@ -1732,7 +1744,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               <span className="duplicate-burst-progress-text">
                 {burstProgress && burstProgress.total
                   ? `Analyzing bursts: ${(burstProgress.processed ?? 0).toLocaleString()} of ${burstProgress.total.toLocaleString()} photos (${Math.round(((burstProgress.processed ?? 0) / burstProgress.total) * 100)}%)`
-                  : burstProgress?.currentFile ?? "Finding camera bursts…"}
+                  : (burstProgress?.currentFile ?? "Finding camera bursts…")}
               </span>
               {burstProgress && burstProgress.total ? (
                 <div
