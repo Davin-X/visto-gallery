@@ -369,7 +369,7 @@ pub async fn find_similar_photos(
         let items_arc = std::sync::Arc::new(uncached_items);
         let thumbs_arc = std::sync::Arc::new(item_thumbnails);
         let (tx, rx) = std::sync::mpsc::channel();
-        let chunk_size = (items_arc.len() + num_workers - 1) / num_workers;
+        let chunk_size = items_arc.len().div_ceil(num_workers);
 
         for w in 0..num_workers {
             let items_clone = std::sync::Arc::clone(&items_arc);

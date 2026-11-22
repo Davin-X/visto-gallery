@@ -16,9 +16,11 @@ use image::DynamicImage;
 use std::path::Path;
 
 /// Maximum Hamming distance out of 64 bits to qualify as a visual match (legacy).
+#[allow(dead_code)]
 pub const BURST_MAX_HAMMING_DISTANCE: u32 = 14;
 
 /// Strict match threshold for near-duplicate detection (legacy).
+#[allow(dead_code)]
 pub const NEAR_DUPLICATE_MAX_HAMMING_DISTANCE: u32 = 6;
 
 /// 2D visual gradient hash (128 bits) plus average RGB color tone.
@@ -63,11 +65,13 @@ impl VisualFingerprint {
 
 /// Calculate Hamming distance (number of differing bits) between two 64-bit hashes.
 #[inline]
+#[allow(dead_code)]
 pub fn hamming_distance(hash_a: u64, hash_b: u64) -> u32 {
     (hash_a ^ hash_b).count_ones()
 }
 
 /// Calculate 2D fingerprint (128-bit gradient + color) from an in-memory `DynamicImage`.
+#[allow(clippy::needless_range_loop)]
 pub fn compute_fingerprint_from_image(img: &DynamicImage) -> VisualFingerprint {
     // Resize to 9x9 using bilinear filtering
     let small = img.resize_exact(9, 9, FilterType::Triangle).to_rgb8();
@@ -145,6 +149,7 @@ pub fn compute_fingerprint_from_path(path: &Path) -> Option<VisualFingerprint> {
 }
 
 /// Calculate 64-bit dHash from a file on disk (legacy wrapper).
+#[allow(dead_code)]
 pub fn compute_dhash_from_path(path: &Path) -> Option<u64> {
     compute_fingerprint_from_path(path).map(|f| f.h_hash)
 }
