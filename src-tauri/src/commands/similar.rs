@@ -2,8 +2,8 @@
 //!
 //! Unlike naive timestamp/filename clustering (which false-matches unrelated
 //! photos downloaded or copied together), this module pairs capture-time
-//! proximity with visual difference hashing (`dhash`). Photos are only grouped
-//! if they are confirmed to be visually similar (Hamming distance <= 10).
+//! proximity with 2D difference hashing and mean RGB color profiling (`VisualFingerprint`).
+//! Photos are only grouped if their visual structure and color profiles match.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -12,7 +12,7 @@ use std::time::Instant;
 use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager, State, Window};
 
-use super::dhash::{self, BURST_MAX_HAMMING_DISTANCE};
+use super::dhash::{self, VisualFingerprint, BURST_MAX_HAMMING_DISTANCE};
 use super::dto::{SimilarGroup, SimilarScanOptions};
 use super::MediaItem;
 use crate::errors::CommandError;
@@ -26,9 +26,101 @@ fn parent_dir(path: &str) -> &str {
     path.rsplit_once('/').map(|(d, _)| d).unwrap_or("")
 }
 
+fn parse_filename_timestamp(name: &str) -> Option<i64> {
+    use time::{Date, Month, PrimitiveDateTime, Time};
+
+    let bytes = name.as_bytes();
+    for i in 0..bytes.len().saturating_sub(18) {
+        // Pattern: YYYY-MM-DD[_ -]HH-MM-SS
+        if bytes[i..i + 4].iter().all(u8::is_ascii_digit)
+            && (bytes[i + 4] == b'-' || bytes[i + 4] == b'_')
+            && bytes[i + 5..i + 7].iter().all(u8::is_ascii_digit)
+            && (bytes[i + 7] == b'-' || bytes[i + 7] == b'_')
+            && bytes[i + 8..i + 10].iter().all(u8::is_ascii_digit)
+        {
+            let sep = bytes[i + 10];
+            if (sep == b'_' || sep == b'-' || sep == b' ' || sep == b'T')
+                && bytes[i + 11..i + 13].iter().all(u8::is_ascii_digit)
+                && (bytes[i + 13] == b'-' || bytes[i + 13] == b':' || bytes[i + 13] == b'_')
+                && bytes[i + 14..i + 16].iter().all(u8::is_ascii_digit)
+                && (bytes[i + 16] == b'-' || bytes[i + 16] == b':' || bytes[i + 16] == b'_')
+                && bytes[i + 17..i + 19].iter().all(u8::is_ascii_digit)
+            {
+                let y: i32 = std::str::from_utf8(&bytes[i..i + 4]).ok()?.parse().ok()?;
+                let m: u8 = std::str::from_utf8(&bytes[i + 5..i + 7])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+                let d: u8 = std::str::from_utf8(&bytes[i + 8..i + 10])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+                let hh: u8 = std::str::from_utf8(&bytes[i + 11..i + 13])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+                let mm: u8 = std::str::from_utf8(&bytes[i + 14..i + 16])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+                let ss: u8 = std::str::from_utf8(&bytes[i + 17..i + 19])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+
+                let month = Month::try_from(m).ok()?;
+                let date = Date::from_calendar_date(y, month, d).ok()?;
+                let time = Time::from_hms(hh, mm, ss).ok()?;
+                let dt = PrimitiveDateTime::new(date, time);
+                return Some(dt.assume_utc().unix_timestamp() * 1000);
+            }
+        }
+        // Pattern: YYYYMMDD_HHMMSS
+        if bytes[i..i + 8].iter().all(u8::is_ascii_digit)
+            && (bytes[i + 8] == b'_' || bytes[i + 8] == b'-')
+            && bytes[i + 9..i + 15].iter().all(u8::is_ascii_digit)
+        {
+            let y: i32 = std::str::from_utf8(&bytes[i..i + 4]).ok()?.parse().ok()?;
+            let m: u8 = std::str::from_utf8(&bytes[i + 4..i + 6])
+                .ok()?
+                .parse()
+                .ok()?;
+            let d: u8 = std::str::from_utf8(&bytes[i + 6..i + 8])
+                .ok()?
+                .parse()
+                .ok()?;
+            let hh: u8 = std::str::from_utf8(&bytes[i + 9..i + 11])
+                .ok()?
+                .parse()
+                .ok()?;
+            let mm: u8 = std::str::from_utf8(&bytes[i + 11..i + 13])
+                .ok()?
+                .parse()
+                .ok()?;
+            let ss: u8 = std::str::from_utf8(&bytes[i + 13..i + 15])
+                .ok()?
+                .parse()
+                .ok()?;
+
+            let month = Month::try_from(m).ok()?;
+            let date = Date::from_calendar_date(y, month, d).ok()?;
+            let time = Time::from_hms(hh, mm, ss).ok()?;
+            let dt = PrimitiveDateTime::new(date, time);
+            return Some(dt.assume_utc().unix_timestamp() * 1000);
+        }
+    }
+    None
+}
+
 #[inline]
-fn item_time(item: &MediaItem) -> i64 {
-    item.captured_at.unwrap_or(item.modified_at)
+fn item_time(item: &MediaItem) -> (i64, bool) {
+    if let Some(t) = item.captured_at {
+        return (t, true);
+    }
+    if let Some(t) = parse_filename_timestamp(&item.name) {
+        return (t, true);
+    }
+    (item.modified_at, false)
 }
 
 #[inline]
@@ -59,11 +151,11 @@ fn keeper_score(item: &MediaItem) -> (i32, i64, i64) {
 fn choose_keeper(items: &[MediaItem]) -> (String, String) {
     let mut best = &items[0];
     let mut best_score = keeper_score(best);
-    let mut best_time = best.captured_at.unwrap_or(best.modified_at);
+    let mut best_time = item_time(best).0;
 
     for item in &items[1..] {
         let score = keeper_score(item);
-        let time = item.captured_at.unwrap_or(item.modified_at);
+        let time = item_time(item).0;
         if score > best_score
             || (score == best_score && time < best_time)
             || (score == best_score && time == best_time && item.path < best.path)
@@ -86,14 +178,17 @@ fn choose_keeper(items: &[MediaItem]) -> (String, String) {
 }
 
 #[inline]
-fn compute_item_hash(item: &MediaItem, item_thumbnails: &HashMap<String, PathBuf>) -> Option<u64> {
+fn compute_item_fingerprint(
+    item: &MediaItem,
+    item_thumbnails: &HashMap<String, PathBuf>,
+) -> Option<VisualFingerprint> {
     if let Some(thumb_path) = item_thumbnails.get(&item.id) {
-        if let Some(h) = dhash::compute_dhash_from_path(thumb_path) {
-            return Some(h);
+        if let Some(fp) = dhash::compute_fingerprint_from_path(thumb_path) {
+            return Some(fp);
         }
     }
     let path = Path::new(&item.path);
-    dhash::compute_dhash_from_path(path)
+    dhash::compute_fingerprint_from_path(path)
 }
 
 #[tauri::command]
@@ -114,10 +209,6 @@ pub async fn find_similar_photos(
     });
 
     let time_window_ms = opts.time_window_ms.unwrap_or(3500).clamp(500, 15_000);
-    let max_dist = opts
-        .max_hamming_distance
-        .unwrap_or(BURST_MAX_HAMMING_DISTANCE)
-        .clamp(0, 20);
 
     emit_progress(
         &window,
@@ -129,11 +220,13 @@ pub async fn find_similar_photos(
         }),
     );
 
-    // Create visual_hashes cache table if it doesn't exist
+    // Create visual_fingerprints cache table if it doesn't exist
     sqlx::query(
-        "CREATE TABLE IF NOT EXISTS visual_hashes (
+        "CREATE TABLE IF NOT EXISTS visual_fingerprints (
             item_id TEXT PRIMARY KEY,
-            hash INTEGER NOT NULL,
+            h_hash INTEGER NOT NULL,
+            v_hash INTEGER NOT NULL,
+            rgb INTEGER NOT NULL,
             modified_at INTEGER NOT NULL
         )",
     )
@@ -191,20 +284,31 @@ pub async fn find_similar_photos(
             "phase": "analyzing",
             "processed": 0,
             "total": total,
-            "currentFile": "Reading visual hash index…",
+            "currentFile": "Reading visual fingerprint index…",
         }),
     );
 
-    // Load existing cached hashes from SQLite
-    let cached_rows: Vec<(String, i64, i64)> =
-        sqlx::query_as("SELECT item_id, hash, modified_at FROM visual_hashes")
+    // Load existing cached fingerprints from SQLite
+    let cached_rows: Vec<(String, i64, i64, i64, i64)> =
+        sqlx::query_as("SELECT item_id, h_hash, v_hash, rgb, modified_at FROM visual_fingerprints")
             .fetch_all(&db)
             .await
             .unwrap_or_default();
 
-    let mut cached_map: HashMap<String, (u64, i64)> = HashMap::with_capacity(cached_rows.len());
-    for (id, h, m) in cached_rows {
-        cached_map.insert(id, (h as u64, m));
+    let mut cached_map: HashMap<String, (VisualFingerprint, i64)> =
+        HashMap::with_capacity(cached_rows.len());
+    for (id, h, v, rgb, m) in cached_rows {
+        cached_map.insert(
+            id,
+            (
+                VisualFingerprint {
+                    h_hash: h as u64,
+                    v_hash: v as u64,
+                    rgb: rgb as u32,
+                },
+                m,
+            ),
+        );
     }
 
     // Pre-index existing rendered thumbnails and previews once
@@ -226,15 +330,15 @@ pub async fn find_similar_photos(
         }
     }
 
-    let mut hashes: HashMap<String, u64> = HashMap::with_capacity(total);
+    let mut fingerprints: HashMap<String, VisualFingerprint> = HashMap::with_capacity(total);
     let mut uncached_items: Vec<MediaItem> = Vec::new();
     let mut processed = 0usize;
     let mut last_emit = Instant::now();
 
     for item in &items {
-        if let Some(&(cached_h, cached_mtime)) = cached_map.get(&item.id) {
+        if let Some(&(cached_fp, cached_mtime)) = cached_map.get(&item.id) {
             if cached_mtime == item.modified_at {
-                hashes.insert(item.id.clone(), cached_h);
+                fingerprints.insert(item.id.clone(), cached_fp);
                 processed += 1;
                 continue;
             }
@@ -249,12 +353,12 @@ pub async fn find_similar_photos(
                 "phase": "analyzing",
                 "processed": processed,
                 "total": total,
-                "currentFile": "Restored visual index from database cache…",
+                "currentFile": "Restored visual fingerprints from cache…",
             }),
         );
     }
 
-    let mut new_hashes_to_persist: Vec<(String, u64, i64)> = Vec::new();
+    let mut new_fps_to_persist: Vec<(String, VisualFingerprint, i64)> = Vec::new();
 
     if !uncached_items.is_empty() && !cancel.is_cancelled() {
         let num_workers = std::thread::available_parallelism()
@@ -278,23 +382,23 @@ pub async fn find_similar_photos(
                 std::thread::spawn(move || {
                     for i in start..end {
                         let it = &items_clone[i];
-                        let h_opt = compute_item_hash(it, &thumbs_clone);
+                        let fp_opt = compute_item_fingerprint(it, &thumbs_clone);
                         let _ =
-                            tx_clone.send((it.id.clone(), h_opt, it.modified_at, it.name.clone()));
+                            tx_clone.send((it.id.clone(), fp_opt, it.modified_at, it.name.clone()));
                     }
                 });
             }
         }
         drop(tx);
 
-        while let Ok((id, h_opt, mtime, name)) = rx.recv() {
+        while let Ok((id, fp_opt, mtime, name)) = rx.recv() {
             if cancel.is_cancelled() {
                 break;
             }
 
-            if let Some(h) = h_opt {
-                hashes.insert(id.clone(), h);
-                new_hashes_to_persist.push((id, h, mtime));
+            if let Some(fp) = fp_opt {
+                fingerprints.insert(id.clone(), fp);
+                new_fps_to_persist.push((id, fp, mtime));
             }
 
             processed += 1;
@@ -313,14 +417,18 @@ pub async fn find_similar_photos(
         }
     }
 
-    // Persist new hashes in chunks to SQLite
-    if !new_hashes_to_persist.is_empty() {
-        for chunk in new_hashes_to_persist.chunks(500) {
+    // Persist new fingerprints in chunks to SQLite
+    if !new_fps_to_persist.is_empty() {
+        for chunk in new_fps_to_persist.chunks(500) {
             let mut qb = sqlx::QueryBuilder::<sqlx::Sqlite>::new(
-                "INSERT OR REPLACE INTO visual_hashes (item_id, hash, modified_at) ",
+                "INSERT OR REPLACE INTO visual_fingerprints (item_id, h_hash, v_hash, rgb, modified_at) ",
             );
-            qb.push_values(chunk, |mut b, (id, h, mtime)| {
-                b.push_bind(id).push_bind(*h as i64).push_bind(*mtime);
+            qb.push_values(chunk, |mut b, (id, fp, mtime)| {
+                b.push_bind(id)
+                    .push_bind(fp.h_hash as i64)
+                    .push_bind(fp.v_hash as i64)
+                    .push_bind(fp.rgb as i64)
+                    .push_bind(*mtime);
             });
             let _ = qb.build().execute(&db).await;
         }
@@ -340,10 +448,9 @@ pub async fn find_similar_photos(
     let mut clustered_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     // -------------------------------------------------------------
-    // PASS 1: Cross-Folder & Same-Scene Near-Duplicates (strict dist <= 6)
-    // Detects original vs enhanced vs edited copies across folders.
+    // PASS 1: Cross-Folder & Same-Scene Near-Duplicates
+    // Uses 128-bit 2D dHash + Mean RGB color profile
     // -------------------------------------------------------------
-    let near_dup_threshold = dhash::NEAR_DUPLICATE_MAX_HAMMING_DISTANCE.min(max_dist);
     let mut quality_ordered_items = items.clone();
     quality_ordered_items.sort_by(|a, b| {
         keeper_score(b)
@@ -355,27 +462,30 @@ pub async fn find_similar_photos(
         if clustered_ids.contains(&anchor.id) {
             continue;
         }
-        let Some(&anchor_hash) = hashes.get(&anchor.id) else {
+        let Some(&anchor_fp) = fingerprints.get(&anchor.id) else {
             continue;
         };
 
         let mut dup_cluster: Vec<MediaItem> = vec![anchor.clone()];
-        let mut max_observed_dist = 0u32;
+        let mut min_confidence = 1.0f64;
 
         for other in &quality_ordered_items {
             if other.id == anchor.id || clustered_ids.contains(&other.id) {
                 continue;
             }
-            let Some(&other_hash) = hashes.get(&other.id) else {
+            let Some(&other_fp) = fingerprints.get(&other.id) else {
                 continue;
             };
 
-            let dist = dhash::hamming_distance(anchor_hash, other_hash);
-            if dist <= near_dup_threshold {
-                dup_cluster.push(other.clone());
-                if dist > max_observed_dist {
-                    max_observed_dist = dist;
+            if anchor_fp.is_near_duplicate(&other_fp) {
+                let (grad_dist, color_diff) = anchor_fp.distance(&other_fp);
+                let pair_conf =
+                    (1.0 - (grad_dist as f64 / 128.0) * 0.7 - (color_diff as f64 / 255.0) * 0.3)
+                        .clamp(0.0, 1.0);
+                if pair_conf < min_confidence {
+                    min_confidence = pair_conf;
                 }
+                dup_cluster.push(other.clone());
             }
         }
 
@@ -383,13 +493,6 @@ pub async fn find_similar_photos(
             for it in &dup_cluster {
                 clustered_ids.insert(it.id.clone());
             }
-
-            let confidence = ((64 - max_observed_dist) as f64) / 64.0;
-            let status = if max_observed_dist <= 2 {
-                "definite_duplicate".to_string()
-            } else {
-                "near_duplicate".to_string()
-            };
 
             let (keeper_id, keeper_reason) = choose_keeper(&dup_cluster);
             let count = dup_cluster.len();
@@ -402,10 +505,16 @@ pub async fn find_similar_photos(
                 String::new()
             };
 
+            let status = if min_confidence >= 0.94 {
+                "definite_duplicate".to_string()
+            } else {
+                "near_duplicate".to_string()
+            };
+
             let reason = format!(
                 "Near-duplicate: {} visually matching photos ({:.0}% match){}. {}",
                 count,
-                confidence * 100.0,
+                min_confidence * 100.0,
                 folder_context,
                 keeper_reason
             );
@@ -417,7 +526,7 @@ pub async fn find_similar_photos(
                 status,
                 reason,
                 keeper_id,
-                confidence,
+                confidence: min_confidence,
                 time_span_ms: None,
                 items: dup_cluster,
             });
@@ -429,14 +538,14 @@ pub async fn find_similar_photos(
     // -------------------------------------------------------------
     let mut burst_candidates: Vec<MediaItem> = items
         .into_iter()
-        .filter(|it| !clustered_ids.contains(&it.id) && hashes.contains_key(&it.id))
+        .filter(|it| !clustered_ids.contains(&it.id) && fingerprints.contains_key(&it.id))
         .collect();
 
     burst_candidates.sort_by(|a, b| {
         a.camera
             .cmp(&b.camera)
             .then_with(|| parent_dir(&a.path).cmp(parent_dir(&b.path)))
-            .then_with(|| item_time(a).cmp(&item_time(b)))
+            .then_with(|| item_time(a).0.cmp(&item_time(b).0))
             .then_with(|| a.path.cmp(&b.path))
     });
 
@@ -447,29 +556,31 @@ pub async fn find_similar_photos(
         }
 
         let first = &burst_candidates[i];
-        let start_time = item_time(first);
+        let (start_time, first_is_capture) = item_time(first);
         let start_camera = &first.camera;
         let start_dir = parent_dir(&first.path);
-        let first_hash = hashes[&first.id];
+        let first_fp = fingerprints[&first.id];
 
         let has_next_candidate = (i + 1 < burst_candidates.len()) && {
             let next = &burst_candidates[i + 1];
-            next.camera == *start_camera
+            let (next_time, next_is_capture) = item_time(next);
+            (first_is_capture || next_is_capture || start_camera.is_some())
+                && next.camera == *start_camera
                 && parent_dir(&next.path) == start_dir
                 && same_dimensions(first, next)
-                && item_time(next).saturating_sub(start_time) <= time_window_ms
+                && next_time.saturating_sub(start_time) <= time_window_ms
         };
 
         if has_next_candidate {
             let mut verified_cluster: Vec<MediaItem> = vec![first.clone()];
-            let mut verified_hashes: Vec<u64> = vec![first_hash];
+            let mut verified_fps: Vec<VisualFingerprint> = vec![first_fp];
             let mut j = i + 1;
 
             while j < burst_candidates.len() {
                 let prev = &burst_candidates[j - 1];
                 let cur = &burst_candidates[j];
-                let prev_time = item_time(prev);
-                let cur_time = item_time(cur);
+                let (prev_time, _) = item_time(prev);
+                let (cur_time, _) = item_time(cur);
 
                 if cur.camera != *start_camera
                     || parent_dir(&cur.path) != start_dir
@@ -480,14 +591,13 @@ pub async fn find_similar_photos(
                     break;
                 }
 
-                let cur_hash = hashes[&cur.id];
-                let prev_hash = *verified_hashes.last().unwrap();
-                let dist_prev = dhash::hamming_distance(prev_hash, cur_hash);
-                let dist_first = dhash::hamming_distance(first_hash, cur_hash);
+                let cur_fp = fingerprints[&cur.id];
+                let prev_fp = *verified_fps.last().unwrap();
+                let (dist_first, color_first) = first_fp.distance(&cur_fp);
 
-                if dist_prev <= max_dist && dist_first <= max_dist + 3 {
+                if prev_fp.is_burst_similar(&cur_fp) && dist_first <= 28 && color_first <= 26 {
                     verified_cluster.push(cur.clone());
-                    verified_hashes.push(cur_hash);
+                    verified_fps.push(cur_fp);
                     j += 1;
                 } else {
                     break;
@@ -497,20 +607,30 @@ pub async fn find_similar_photos(
             if verified_cluster.len() >= 2 {
                 let first_item = &verified_cluster[0];
                 let last_item = verified_cluster.last().unwrap();
-                let time_span_ms = item_time(last_item).saturating_sub(item_time(first_item));
+                let time_span_ms = item_time(last_item)
+                    .0
+                    .saturating_sub(item_time(first_item).0);
 
-                let mut max_observed_dist = 0u32;
-                for a in 0..verified_hashes.len() {
-                    for b in (a + 1)..verified_hashes.len() {
-                        let d = dhash::hamming_distance(verified_hashes[a], verified_hashes[b]);
-                        if d > max_observed_dist {
-                            max_observed_dist = d;
+                let mut max_observed_grad = 0u32;
+                let mut max_observed_color = 0u32;
+                for a in 0..verified_fps.len() {
+                    for b in (a + 1)..verified_fps.len() {
+                        let (g, c) = verified_fps[a].distance(&verified_fps[b]);
+                        if g > max_observed_grad {
+                            max_observed_grad = g;
+                        }
+                        if c > max_observed_color {
+                            max_observed_color = c;
                         }
                     }
                 }
 
-                let confidence = ((64 - max_observed_dist) as f64) / 64.0;
-                let status = if max_observed_dist <= 6 {
+                let confidence = (1.0
+                    - (max_observed_grad as f64 / 128.0) * 0.7
+                    - (max_observed_color as f64 / 255.0) * 0.3)
+                    .clamp(0.0, 1.0);
+
+                let status = if max_observed_grad <= 12 && max_observed_color <= 10 {
                     "definite_burst".to_string()
                 } else {
                     "likely_similar".to_string()
@@ -564,6 +684,16 @@ pub async fn find_similar_photos(
 mod tests {
     use super::*;
     use crate::media_kind::MediaKind;
+
+    #[test]
+    fn test_parse_filename_timestamp() {
+        let ts = parse_filename_timestamp("2026-07-12_14-18-40_Devansh_On_Bed_edited.jpg");
+        assert!(ts.is_some());
+        let ts2 = parse_filename_timestamp("IMG_20260712_141840.jpg");
+        assert!(ts2.is_some());
+        let none = parse_filename_timestamp("unrelated_photo.jpg");
+        assert!(none.is_none());
+    }
 
     #[test]
     fn test_keeper_choice_prioritizes_resolution() {
