@@ -225,15 +225,24 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     (fileScope ? folderName(fileScope) : "this folder");
 
   const kindCounts = useMemo(() => {
-    const counts: Record<KindFilter, number> = { all: groups.length, photo: 0, video: 0, raw: 0 };
-    groups.forEach((group) => {
-      const kinds = new Set(group.items.map((item) => item.kind));
+    const currentItems =
+      mode === "bursts"
+        ? burstGroups.map((bg) => bg.items)
+        : groups.map((g) => g.items);
+    const counts: Record<KindFilter, number> = {
+      all: currentItems.length,
+      photo: 0,
+      video: 0,
+      raw: 0,
+    };
+    currentItems.forEach((items) => {
+      const kinds = new Set(items.map((item) => item.kind));
       if (kinds.has("photo")) counts.photo += 1;
       if (kinds.has("video")) counts.video += 1;
       if (kinds.has("raw")) counts.raw += 1;
     });
     return counts;
-  }, [groups]);
+  }, [mode, burstGroups, groups]);
 
   // Describes what the scan did find so a filtered-empty view still points
   // somewhere instead of dead-ending on "no results". Phrased without a verb
@@ -783,6 +792,10 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   );
 
   const runBurstScan = useCallback(async () => {
+    if (props.onScanSimilar) {
+      await props.onScanSimilar(scope);
+      return;
+    }
     const request = burstScanRequest.current + 1;
     burstScanRequest.current = request;
     setBurstBusy(true);
@@ -790,17 +803,19 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
       phase: "analyzing",
       processed: 0,
       total: 0,
-      currentFile: "Loading photos for visual burst scan…",
+      currentFile: "Loading photos for visual scan…",
     });
     try {
       const result = await tauri.duplicates.scanSimilar({
         scope: scope ?? null,
-        timeWindowMs: 2000,
-        maxHammingDistance: 10,
+        timeWindowMs: 3500,
+        maxHammingDistance: 14,
       });
       if (request !== burstScanRequest.current) return;
       setBurstGroups(result);
       setBurstScanned(true);
+      props.onSetBurstGroups?.(result);
+      props.onSetBurstScanned?.(true);
       setSelected(new Set());
     } catch (error) {
       if (request === burstScanRequest.current) {
@@ -812,7 +827,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
         setBurstProgress(null);
       }
     }
-  }, [scope, onError]);
+  }, [props.onScanSimilar, props.onSetBurstGroups, props.onSetBurstScanned, scope, onError]);
 
   const switchMode = useCallback((next: ScanMode) => {
     setMode(next);

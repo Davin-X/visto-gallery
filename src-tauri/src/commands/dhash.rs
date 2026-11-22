@@ -13,11 +13,10 @@ use image::DynamicImage;
 use std::path::Path;
 
 /// Maximum Hamming distance out of 64 bits to qualify as a visual match.
-/// Distance <= 10 corresponds to >= 84.4% visual structure match.
-pub const BURST_MAX_HAMMING_DISTANCE: u32 = 10;
+/// Distance <= 14 corresponds to >= 78.1% visual structure match for camera bursts.
+pub const BURST_MAX_HAMMING_DISTANCE: u32 = 14;
 
 /// Strict match threshold for near-duplicate / recompressed / resized detection.
-#[allow(dead_code)]
 pub const NEAR_DUPLICATE_MAX_HAMMING_DISTANCE: u32 = 6;
 
 /// Calculate Hamming distance (number of differing bits) between two 64-bit hashes.
@@ -29,7 +28,9 @@ pub fn hamming_distance(hash_a: u64, hash_b: u64) -> u32 {
 /// Calculate dHash from an in-memory `DynamicImage`.
 pub fn compute_dhash_from_image(img: &DynamicImage) -> u64 {
     // 9 columns by 8 rows allows 8 horizontal comparisons per row = 64 bits total.
-    let small = img.resize_exact(9, 8, FilterType::Nearest).to_luma8();
+    // Use Triangle (bilinear) filtering to compute smooth area averages rather
+    // than noisy single-pixel nearest neighbor sampling.
+    let small = img.resize_exact(9, 8, FilterType::Triangle).to_luma8();
     let mut hash = 0u64;
 
     for y in 0..8 {

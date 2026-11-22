@@ -1990,8 +1990,8 @@ export const useLibraryStore = create<LibraryState>()(
         try {
           const result = await tauri.duplicates.scanSimilar({
             scope: scope ?? null,
-            timeWindowMs: 2000,
-            maxHammingDistance: 10,
+            timeWindowMs: 3500,
+            maxHammingDistance: 14,
           });
           const cancelled = get().canceling;
           set({

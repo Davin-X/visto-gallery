@@ -128,11 +128,11 @@ pub async fn find_similar_photos(
         scope_item_ids: None,
     });
 
-    let time_window_ms = opts.time_window_ms.unwrap_or(2000).clamp(500, 10_000);
+    let time_window_ms = opts.time_window_ms.unwrap_or(3500).clamp(500, 15_000);
     let max_dist = opts
         .max_hamming_distance
         .unwrap_or(BURST_MAX_HAMMING_DISTANCE)
-        .clamp(0, 16);
+        .clamp(0, 20);
 
     emit_progress(
         &window,
@@ -140,11 +140,22 @@ pub async fn find_similar_photos(
             "phase": "analyzing",
             "processed": 0,
             "total": 0,
-            "currentFile": "Loading photos for visual burst scan…",
+            "currentFile": "Loading photos for visual scan…",
         }),
     );
 
-    // Query candidate photos and RAW originals (using capture time with modified_at fallback)
+    // Create visual_hashes cache table if it doesn't exist
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS visual_hashes (
+            item_id TEXT PRIMARY KEY,
+            hash INTEGER NOT NULL,
+            modified_at INTEGER NOT NULL
+        )",
+    )
+    .execute(&db)
+    .await?;
+
+    // Query candidate photos and RAW originals
     let items: Vec<MediaItem> = if let Some(ids) = &opts.scope_item_ids {
         if ids.is_empty() {
             return Ok(vec![]);
@@ -188,26 +199,28 @@ pub async fn find_similar_photos(
         return Ok(vec![]);
     }
 
-    let mut sorted_items = items;
-    // Sort by camera model, parent folder, then capture timestamp and path
-    sorted_items.sort_by(|a, b| {
-        a.camera
-            .cmp(&b.camera)
-            .then_with(|| parent_dir(&a.path).cmp(parent_dir(&b.path)))
-            .then_with(|| item_time(a).cmp(&item_time(b)))
-            .then_with(|| a.path.cmp(&b.path))
-    });
-
-    let total = sorted_items.len();
+    let total = items.len();
     emit_progress(
         &window,
         json!({
             "phase": "analyzing",
             "processed": 0,
             "total": total,
-            "currentFile": "Comparing visual gradients across bursts…",
+            "currentFile": "Reading visual hash index…",
         }),
     );
+
+    // Load existing cached hashes from SQLite
+    let cached_rows: Vec<(String, i64, i64)> =
+        sqlx::query_as("SELECT item_id, hash, modified_at FROM visual_hashes")
+            .fetch_all(&db)
+            .await
+            .unwrap_or_default();
+
+    let mut cached_map: HashMap<String, (u64, i64)> = HashMap::with_capacity(cached_rows.len());
+    for (id, h, m) in cached_rows {
+        cached_map.insert(id, (h as u64, m));
+    }
 
     let thumbnail_cache_dir = app
         .path()
@@ -215,7 +228,7 @@ pub async fn find_similar_photos(
         .ok()
         .map(|p| p.join(super::storage::THUMBNAILS_DIR));
 
-    // Pre-index existing rendered thumbnails once to avoid scanning directory in tight loop
+    // Pre-index existing rendered thumbnails once
     let mut item_thumbnails: HashMap<String, PathBuf> = HashMap::new();
     if let Some(dir) = &thumbnail_cache_dir {
         if let Ok(entries) = std::fs::read_dir(dir) {
@@ -229,34 +242,197 @@ pub async fn find_similar_photos(
         }
     }
 
-    let mut dhash_cache: HashMap<String, u64> = HashMap::new();
-    let mut groups: Vec<SimilarGroup> = Vec::new();
-    let mut i = 0usize;
+    let mut hashes: HashMap<String, u64> = HashMap::with_capacity(total);
+    let mut new_hashes_to_persist: Vec<(String, u64, i64)> = Vec::new();
     let mut last_emit = Instant::now();
 
-    while i < sorted_items.len() {
+    for (idx, item) in items.iter().enumerate() {
         if cancel.is_cancelled() {
+            emit_progress(
+                &window,
+                json!({ "phase": "analyzing", "processed": idx, "total": total, "cancelled": true }),
+            );
+            return Ok(vec![]);
+        }
+
+        if let Some(&(cached_h, cached_mtime)) = cached_map.get(&item.id) {
+            if cached_mtime == item.modified_at {
+                hashes.insert(item.id.clone(), cached_h);
+                if last_emit.elapsed().as_millis() >= 150 || idx + 1 == total {
+                    emit_progress(
+                        &window,
+                        json!({
+                            "phase": "analyzing",
+                            "processed": idx + 1,
+                            "total": total,
+                            "currentFile": &item.name,
+                        }),
+                    );
+                    last_emit = Instant::now();
+                }
+                continue;
+            }
+        }
+
+        if let Some(h) = item_dhash(item, &item_thumbnails, &mut hashes) {
+            new_hashes_to_persist.push((item.id.clone(), h, item.modified_at));
+        }
+
+        if last_emit.elapsed().as_millis() >= 150 || idx + 1 == total {
             emit_progress(
                 &window,
                 json!({
                     "phase": "analyzing",
-                    "processed": i,
+                    "processed": idx + 1,
                     "total": total,
-                    "cancelled": true,
+                    "currentFile": &item.name,
                 }),
             );
-            return Ok(groups);
+            last_emit = Instant::now();
+        }
+    }
+
+    // Persist new hashes in chunks to SQLite
+    if !new_hashes_to_persist.is_empty() {
+        for chunk in new_hashes_to_persist.chunks(500) {
+            let mut qb = sqlx::QueryBuilder::<sqlx::Sqlite>::new(
+                "INSERT OR REPLACE INTO visual_hashes (item_id, hash, modified_at) ",
+            );
+            qb.push_values(chunk, |mut b, (id, h, mtime)| {
+                b.push_bind(id).push_bind(*h as i64).push_bind(*mtime);
+            });
+            let _ = qb.build().execute(&db).await;
+        }
+    }
+
+    emit_progress(
+        &window,
+        json!({
+            "phase": "analyzing",
+            "processed": total,
+            "total": total,
+            "currentFile": "Clustering near-duplicates and camera bursts…",
+        }),
+    );
+
+    let mut groups: Vec<SimilarGroup> = Vec::new();
+    let mut clustered_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    // -------------------------------------------------------------
+    // PASS 1: Cross-Folder & Same-Scene Near-Duplicates (strict dist <= 6)
+    // Detects original vs enhanced vs edited copies across folders.
+    // -------------------------------------------------------------
+    let near_dup_threshold = dhash::NEAR_DUPLICATE_MAX_HAMMING_DISTANCE.min(max_dist);
+    let mut quality_ordered_items = items.clone();
+    quality_ordered_items.sort_by(|a, b| {
+        keeper_score(b)
+            .cmp(&keeper_score(a))
+            .then_with(|| a.path.cmp(&b.path))
+    });
+
+    for anchor in &quality_ordered_items {
+        if clustered_ids.contains(&anchor.id) {
+            continue;
+        }
+        let Some(&anchor_hash) = hashes.get(&anchor.id) else {
+            continue;
+        };
+
+        let mut dup_cluster: Vec<MediaItem> = vec![anchor.clone()];
+        let mut max_observed_dist = 0u32;
+
+        for other in &quality_ordered_items {
+            if other.id == anchor.id || clustered_ids.contains(&other.id) {
+                continue;
+            }
+            let Some(&other_hash) = hashes.get(&other.id) else {
+                continue;
+            };
+
+            let dist = dhash::hamming_distance(anchor_hash, other_hash);
+            if dist <= near_dup_threshold {
+                dup_cluster.push(other.clone());
+                if dist > max_observed_dist {
+                    max_observed_dist = dist;
+                }
+            }
         }
 
-        let first = &sorted_items[i];
+        if dup_cluster.len() >= 2 {
+            for it in &dup_cluster {
+                clustered_ids.insert(it.id.clone());
+            }
+
+            let confidence = ((64 - max_observed_dist) as f64) / 64.0;
+            let status = if max_observed_dist <= 2 {
+                "definite_duplicate".to_string()
+            } else {
+                "near_duplicate".to_string()
+            };
+
+            let (keeper_id, keeper_reason) = choose_keeper(&dup_cluster);
+            let count = dup_cluster.len();
+            let distinct_folders: std::collections::HashSet<&str> =
+                dup_cluster.iter().map(|it| parent_dir(&it.path)).collect();
+
+            let folder_context = if distinct_folders.len() > 1 {
+                format!(" across {} folders", distinct_folders.len())
+            } else {
+                String::new()
+            };
+
+            let reason = format!(
+                "Near-duplicate: {} visually matching photos ({:.0}% match){}. {}",
+                count,
+                confidence * 100.0,
+                folder_context,
+                keeper_reason
+            );
+
+            let group_id = format!("dup:{}", keeper_id);
+            groups.push(SimilarGroup {
+                id: group_id,
+                group_type: "duplicate".to_string(),
+                status,
+                reason,
+                keeper_id,
+                confidence,
+                time_span_ms: None,
+                items: dup_cluster,
+            });
+        }
+    }
+
+    // -------------------------------------------------------------
+    // PASS 2: Camera Bursts (time-proximate rapid shooting)
+    // -------------------------------------------------------------
+    let mut burst_candidates: Vec<MediaItem> = items
+        .into_iter()
+        .filter(|it| !clustered_ids.contains(&it.id) && hashes.contains_key(&it.id))
+        .collect();
+
+    burst_candidates.sort_by(|a, b| {
+        a.camera
+            .cmp(&b.camera)
+            .then_with(|| parent_dir(&a.path).cmp(parent_dir(&b.path)))
+            .then_with(|| item_time(a).cmp(&item_time(b)))
+            .then_with(|| a.path.cmp(&b.path))
+    });
+
+    let mut i = 0usize;
+    while i < burst_candidates.len() {
+        if cancel.is_cancelled() {
+            break;
+        }
+
+        let first = &burst_candidates[i];
         let start_time = item_time(first);
         let start_camera = &first.camera;
         let start_dir = parent_dir(&first.path);
+        let first_hash = hashes[&first.id];
 
-        // Fast check: does the immediate next photo share camera/dir, matching dimensions, and time <= time_window_ms?
-        // Standalone photos with no neighbor in time window are skipped with zero disk reads!
-        let has_next_candidate = (i + 1 < sorted_items.len()) && {
-            let next = &sorted_items[i + 1];
+        let has_next_candidate = (i + 1 < burst_candidates.len()) && {
+            let next = &burst_candidates[i + 1];
             next.camera == *start_camera
                 && parent_dir(&next.path) == start_dir
                 && same_dimensions(first, next)
@@ -264,121 +440,90 @@ pub async fn find_similar_photos(
         };
 
         if has_next_candidate {
-            if let Some(h1) = item_dhash(first, &item_thumbnails, &mut dhash_cache) {
-                let mut verified_cluster: Vec<MediaItem> = vec![first.clone()];
-                let mut verified_hashes: Vec<u64> = vec![h1];
-                let mut j = i + 1;
+            let mut verified_cluster: Vec<MediaItem> = vec![first.clone()];
+            let mut verified_hashes: Vec<u64> = vec![first_hash];
+            let mut j = i + 1;
 
-                while j < sorted_items.len() {
-                    let prev = &sorted_items[j - 1];
-                    let cur = &sorted_items[j];
-                    let prev_time = item_time(prev);
-                    let cur_time = item_time(cur);
+            while j < burst_candidates.len() {
+                let prev = &burst_candidates[j - 1];
+                let cur = &burst_candidates[j];
+                let prev_time = item_time(prev);
+                let cur_time = item_time(cur);
 
-                    if cur.camera != *start_camera
-                        || parent_dir(&cur.path) != start_dir
-                        || !same_dimensions(first, cur)
-                        || cur_time.saturating_sub(prev_time) > time_window_ms
-                        || cur_time.saturating_sub(start_time) > time_window_ms.saturating_mul(10)
-                    {
-                        break;
-                    }
+                if cur.camera != *start_camera
+                    || parent_dir(&cur.path) != start_dir
+                    || !same_dimensions(first, cur)
+                    || cur_time.saturating_sub(prev_time) > time_window_ms
+                    || cur_time.saturating_sub(start_time) > time_window_ms.saturating_mul(10)
+                {
+                    break;
+                }
 
-                    if let Some(h_cur) = item_dhash(cur, &item_thumbnails, &mut dhash_cache) {
-                        let prev_hash = *verified_hashes.last().unwrap();
-                        let dist_prev = dhash::hamming_distance(prev_hash, h_cur);
-                        let first_hash = verified_hashes[0];
-                        let dist_first = dhash::hamming_distance(first_hash, h_cur);
+                let cur_hash = hashes[&cur.id];
+                let prev_hash = *verified_hashes.last().unwrap();
+                let dist_prev = dhash::hamming_distance(prev_hash, cur_hash);
+                let dist_first = dhash::hamming_distance(first_hash, cur_hash);
 
-                        if dist_prev <= max_dist && dist_first <= max_dist + 2 {
-                            verified_cluster.push(cur.clone());
-                            verified_hashes.push(h_cur);
-                            j += 1;
-                        } else {
-                            break;
+                if dist_prev <= max_dist && dist_first <= max_dist + 3 {
+                    verified_cluster.push(cur.clone());
+                    verified_hashes.push(cur_hash);
+                    j += 1;
+                } else {
+                    break;
+                }
+            }
+
+            if verified_cluster.len() >= 2 {
+                let first_item = &verified_cluster[0];
+                let last_item = verified_cluster.last().unwrap();
+                let time_span_ms = item_time(last_item).saturating_sub(item_time(first_item));
+
+                let mut max_observed_dist = 0u32;
+                for a in 0..verified_hashes.len() {
+                    for b in (a + 1)..verified_hashes.len() {
+                        let d = dhash::hamming_distance(verified_hashes[a], verified_hashes[b]);
+                        if d > max_observed_dist {
+                            max_observed_dist = d;
                         }
-                    } else {
-                        break;
                     }
                 }
 
-                if verified_cluster.len() >= 2 {
-                    let first_item = &verified_cluster[0];
-                    let last_item = verified_cluster.last().unwrap();
-                    let time_span_ms = item_time(last_item).saturating_sub(item_time(first_item));
+                let confidence = ((64 - max_observed_dist) as f64) / 64.0;
+                let status = if max_observed_dist <= 6 {
+                    "definite_burst".to_string()
+                } else {
+                    "likely_similar".to_string()
+                };
 
-                    let mut max_observed_dist = 0u32;
-                    for a in 0..verified_hashes.len() {
-                        for b in (a + 1)..verified_hashes.len() {
-                            let d = dhash::hamming_distance(verified_hashes[a], verified_hashes[b]);
-                            if d > max_observed_dist {
-                                max_observed_dist = d;
-                            }
-                        }
-                    }
+                let (keeper_id, keeper_reason) = choose_keeper(&verified_cluster);
+                let count = verified_cluster.len();
+                let span_secs = (time_span_ms as f64) / 1000.0;
+                let reason = format!(
+                    "Burst: {} photos in {:.1}s ({:.0}% visual match). {}",
+                    count,
+                    span_secs,
+                    confidence * 100.0,
+                    keeper_reason
+                );
 
-                    let confidence = ((64 - max_observed_dist) as f64) / 64.0;
-                    let status = if max_observed_dist <= 6 {
-                        "definite_burst".to_string()
-                    } else {
-                        "likely_similar".to_string()
-                    };
+                let group_id = format!("burst:{}:{}", keeper_id, start_time);
+                groups.push(SimilarGroup {
+                    id: group_id,
+                    group_type: "burst".to_string(),
+                    status,
+                    reason,
+                    keeper_id,
+                    confidence,
+                    time_span_ms: Some(time_span_ms),
+                    items: verified_cluster,
+                });
 
-                    let (keeper_id, keeper_reason) = choose_keeper(&verified_cluster);
-                    let count = verified_cluster.len();
-                    let span_secs = (time_span_ms as f64) / 1000.0;
-                    let reason = format!(
-                        "Burst: {} photos in {:.1}s ({:.0}% visual match). {}",
-                        count,
-                        span_secs,
-                        confidence * 100.0,
-                        keeper_reason
-                    );
-
-                    let group_id = format!("burst:{}:{}", keeper_id, start_time);
-                    groups.push(SimilarGroup {
-                        id: group_id,
-                        group_type: "burst".to_string(),
-                        status,
-                        reason,
-                        keeper_id,
-                        confidence,
-                        time_span_ms: Some(time_span_ms),
-                        items: verified_cluster,
-                    });
-
-                    i = j;
-                    if last_emit.elapsed().as_millis() >= 150 || i >= total {
-                        emit_progress(
-                            &window,
-                            json!({
-                                "phase": "analyzing",
-                                "processed": i.min(total),
-                                "total": total,
-                                "currentFile": "Comparing visual gradients across bursts…",
-                            }),
-                        );
-                        last_emit = Instant::now();
-                    }
-                    continue;
-                }
+                i = j;
+                continue;
             }
         }
 
         i += 1;
-
-        if last_emit.elapsed().as_millis() >= 150 || i >= total {
-            emit_progress(
-                &window,
-                json!({
-                    "phase": "analyzing",
-                    "processed": i.min(total),
-                    "total": total,
-                    "currentFile": "Comparing visual gradients across bursts…",
-                }),
-            );
-            last_emit = Instant::now();
-        }
     }
 
     emit_progress(
