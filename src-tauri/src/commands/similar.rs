@@ -85,30 +85,15 @@ fn choose_keeper(items: &[MediaItem]) -> (String, String) {
     (best.id.clone(), reason)
 }
 
-fn item_dhash(
-    item: &MediaItem,
-    item_thumbnails: &HashMap<String, PathBuf>,
-    hash_cache: &mut HashMap<String, u64>,
-) -> Option<u64> {
-    if let Some(&h) = hash_cache.get(&item.id) {
-        return Some(h);
-    }
-
+#[inline]
+fn compute_item_hash(item: &MediaItem, item_thumbnails: &HashMap<String, PathBuf>) -> Option<u64> {
     if let Some(thumb_path) = item_thumbnails.get(&item.id) {
         if let Some(h) = dhash::compute_dhash_from_path(thumb_path) {
-            hash_cache.insert(item.id.clone(), h);
             return Some(h);
         }
     }
-
-    // Direct compute from source file
     let path = Path::new(&item.path);
-    if let Some(h) = dhash::compute_dhash_from_path(path) {
-        hash_cache.insert(item.id.clone(), h);
-        Some(h)
-    } else {
-        None
-    }
+    dhash::compute_dhash_from_path(path)
 }
 
 #[tauri::command]
@@ -222,73 +207,109 @@ pub async fn find_similar_photos(
         cached_map.insert(id, (h as u64, m));
     }
 
-    let thumbnail_cache_dir = app
-        .path()
-        .app_cache_dir()
-        .ok()
-        .map(|p| p.join(super::storage::THUMBNAILS_DIR));
-
-    // Pre-index existing rendered thumbnails once
+    // Pre-index existing rendered thumbnails and previews once
     let mut item_thumbnails: HashMap<String, PathBuf> = HashMap::new();
-    if let Some(dir) = &thumbnail_cache_dir {
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let name = entry.file_name();
-                let name_str = name.to_string_lossy();
-                if let Some((item_id, _)) = name_str.split_once('.') {
-                    item_thumbnails.insert(item_id.to_string(), entry.path());
+    if let Ok(cache_root) = app.path().app_cache_dir() {
+        for sub in [super::storage::THUMBNAILS_DIR, super::storage::PREVIEWS_DIR] {
+            let dir = cache_root.join(sub);
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let name = entry.file_name();
+                    let name_str = name.to_string_lossy();
+                    if let Some((item_id, _)) = name_str.split_once('.') {
+                        item_thumbnails
+                            .entry(item_id.to_string())
+                            .or_insert_with(|| entry.path());
+                    }
                 }
             }
         }
     }
 
     let mut hashes: HashMap<String, u64> = HashMap::with_capacity(total);
-    let mut new_hashes_to_persist: Vec<(String, u64, i64)> = Vec::new();
+    let mut uncached_items: Vec<MediaItem> = Vec::new();
+    let mut processed = 0usize;
     let mut last_emit = Instant::now();
 
-    for (idx, item) in items.iter().enumerate() {
-        if cancel.is_cancelled() {
-            emit_progress(
-                &window,
-                json!({ "phase": "analyzing", "processed": idx, "total": total, "cancelled": true }),
-            );
-            return Ok(vec![]);
-        }
-
+    for item in &items {
         if let Some(&(cached_h, cached_mtime)) = cached_map.get(&item.id) {
             if cached_mtime == item.modified_at {
                 hashes.insert(item.id.clone(), cached_h);
-                if last_emit.elapsed().as_millis() >= 150 || idx + 1 == total {
-                    emit_progress(
-                        &window,
-                        json!({
-                            "phase": "analyzing",
-                            "processed": idx + 1,
-                            "total": total,
-                            "currentFile": &item.name,
-                        }),
-                    );
-                    last_emit = Instant::now();
-                }
+                processed += 1;
                 continue;
             }
         }
+        uncached_items.push(item.clone());
+    }
 
-        if let Some(h) = item_dhash(item, &item_thumbnails, &mut hashes) {
-            new_hashes_to_persist.push((item.id.clone(), h, item.modified_at));
+    if processed > 0 {
+        emit_progress(
+            &window,
+            json!({
+                "phase": "analyzing",
+                "processed": processed,
+                "total": total,
+                "currentFile": "Restored visual index from database cache…",
+            }),
+        );
+    }
+
+    let mut new_hashes_to_persist: Vec<(String, u64, i64)> = Vec::new();
+
+    if !uncached_items.is_empty() && !cancel.is_cancelled() {
+        let num_workers = std::thread::available_parallelism()
+            .map(|p| p.get())
+            .unwrap_or(4)
+            .clamp(2, 8);
+
+        let items_arc = std::sync::Arc::new(uncached_items);
+        let thumbs_arc = std::sync::Arc::new(item_thumbnails);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let chunk_size = (items_arc.len() + num_workers - 1) / num_workers;
+
+        for w in 0..num_workers {
+            let items_clone = std::sync::Arc::clone(&items_arc);
+            let thumbs_clone = std::sync::Arc::clone(&thumbs_arc);
+            let tx_clone = tx.clone();
+            let start = w * chunk_size;
+            let end = (start + chunk_size).min(items_clone.len());
+
+            if start < end {
+                std::thread::spawn(move || {
+                    for i in start..end {
+                        let it = &items_clone[i];
+                        let h_opt = compute_item_hash(it, &thumbs_clone);
+                        let _ =
+                            tx_clone.send((it.id.clone(), h_opt, it.modified_at, it.name.clone()));
+                    }
+                });
+            }
         }
+        drop(tx);
 
-        if last_emit.elapsed().as_millis() >= 150 || idx + 1 == total {
-            emit_progress(
-                &window,
-                json!({
-                    "phase": "analyzing",
-                    "processed": idx + 1,
-                    "total": total,
-                    "currentFile": &item.name,
-                }),
-            );
-            last_emit = Instant::now();
+        while let Ok((id, h_opt, mtime, name)) = rx.recv() {
+            if cancel.is_cancelled() {
+                break;
+            }
+
+            if let Some(h) = h_opt {
+                hashes.insert(id.clone(), h);
+                new_hashes_to_persist.push((id, h, mtime));
+            }
+
+            processed += 1;
+            if last_emit.elapsed().as_millis() >= 150 || processed >= total {
+                emit_progress(
+                    &window,
+                    json!({
+                        "phase": "analyzing",
+                        "processed": processed,
+                        "total": total,
+                        "currentFile": &name,
+                    }),
+                );
+                last_emit = Instant::now();
+            }
         }
     }
 
