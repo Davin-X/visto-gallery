@@ -540,6 +540,12 @@ export function AppScreenRouter({
         <DuplicatesScreen
           groups={library.duplicates}
           scanned={library.duplicatesScanned}
+          burstGroups={library.burstGroups}
+          burstScanned={library.burstScanned}
+          onSetBurstGroups={library.setBurstGroups}
+          onSetBurstScanned={library.setBurstScanned}
+          onClearBursts={library.clearBurstGroups}
+          onScanSimilar={library.scanSimilar}
           items={library.items}
           onScan={library.scanDuplicates}
           onClear={library.clearDuplicates}

@@ -5,7 +5,7 @@ import type { BackendProgressPhase } from "./types/commands";
  * This is not the same vocabulary as `BackendProgressPhase`: an import is shown
  * as `importing`, but `importFiles` emits its progress as `scanning`.
  */
-export type OperationPhase = "scanning" | "importing" | "hashing" | "trashing";
+export type OperationPhase = "scanning" | "importing" | "hashing" | "analyzing" | "trashing";
 
 /**
  * Backend phases that belong to each running operation.
@@ -19,6 +19,7 @@ export const OPERATION_PHASES: Record<OperationPhase, readonly BackendProgressPh
   importing: ["scanning"],
   scanning: ["scanning"],
   hashing: ["hashing"],
+  analyzing: ["analyzing"],
   trashing: ["trashing"],
 };
 

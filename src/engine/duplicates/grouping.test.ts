@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { DuplicateGroup, MediaItem } from "../types/media";
-import { buildGroupViews, keeperQuality, orderGroup } from "./grouping";
+import { buildBurstGroupViews, buildGroupViews, keeperQuality, orderGroup } from "./grouping";
+import type { SimilarGroup } from "../types/media";
 
 function makeItem(overrides: Partial<MediaItem> & { id: string }): MediaItem {
   const { id, ...rest } = overrides;
@@ -144,5 +145,33 @@ describe("buildGroupViews", () => {
     });
 
     expect(views.map((view) => view.group.id)).toEqual([large.id, small.id]);
+  });
+
+  test("buildBurstGroupViews converts SimilarGroup into GroupView correctly", () => {
+    const burstItem1 = makeItem({ id: "b1", size: 5000, width: 4000, height: 3000 });
+    const burstItem2 = makeItem({ id: "b2", size: 4800, width: 4000, height: 3000 });
+    const similarGroup: SimilarGroup = {
+      id: "burst:b1:1000",
+      groupType: "burst",
+      status: "definite_burst",
+      reason: "Burst: 2 photos in 0.5s",
+      keeperId: "b1",
+      confidence: 0.95,
+      timeSpanMs: 500,
+      items: [burstItem1, burstItem2],
+    };
+
+    const views = buildBurstGroupViews([similarGroup], {
+      filterKind: "all",
+      keeperMode: "best",
+      sortBy: "saving",
+    });
+
+    expect(views).toHaveLength(1);
+    expect(views[0].group.id).toBe("burst:b1:1000");
+    expect(views[0].keeper.id).toBe("b1");
+    expect(views[0].copies).toHaveLength(1);
+    expect(views[0].copies[0].id).toBe("b2");
+    expect(views[0].reclaimable).toBe(4800);
   });
 });

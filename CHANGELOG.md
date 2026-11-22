@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **Visual similarity and camera burst detection**: Duplicates screen now detects near-duplicates across folders and rapid camera bursts using persistent 128-bit 2D difference hashing (dHash) and RGB color profiling; multi-core parallel fingerprinting with persistent SQLite cache; manual scan trigger with live progress reporting and true capture-time extraction.
+- **Split sources on folder add**: adding or pasting a folder path in Sources adds its immediate subfolders as independent sources, so any subfolder can be removed without dropping the rest; subfolders already registered are skipped, and loose top-level media files are reported in the notice (PR #329).
+- **GitHub Pages landing page**: interactive product showcase in `docs/` with dark/light screenshot switching, feature tour, sitemap, and responsive navigation.
+
 ### Fixed
 - **Finder open focus**: opening files from Finder when VistoGallery is already running now brings the main window forward and unminimizes it.
 - **Library stats robustness**: sidebar counters safely tolerate partial or loading stats without crashing.

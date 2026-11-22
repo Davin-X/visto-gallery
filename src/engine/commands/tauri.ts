@@ -58,6 +58,7 @@ import type {
   DisplayPreview,
   FileDuplicatesProgressEvent,
 } from "../types/commands";
+import type { SimilarGroup, SimilarScanOptions } from "../types/media";
 
 // Type-safe command wrappers
 export const tauri = {
@@ -289,6 +290,12 @@ export const tauri = {
       invoke("find_duplicates", { scope: scope ?? null }),
 
     cancel: (): Promise<void> => invoke("cancel_find_duplicates"),
+
+    /** Find bursts and visually similar photos verified via dHash. */
+    scanSimilar: (options?: SimilarScanOptions): Promise<SimilarGroup[]> =>
+      invoke("find_similar_photos", { options: options ?? null }),
+
+    cancelSimilar: (): Promise<void> => invoke("cancel_find_similar_photos"),
   },
 
   /**
@@ -456,6 +463,10 @@ export const events = {
 
   onImportProgress: (callback: (event: ImportProgressEvent) => void) =>
     listen<ImportProgressEvent>("import-progress", (e) => callback(e.payload)),
+
+  /** Progress for the visual burst & similar photos scan. */
+  onSimilarProgress: (callback: (event: ImportProgressEvent) => void) =>
+    listen<ImportProgressEvent>("similar-photos-progress", (e) => callback(e.payload)),
 
   /** Progress for the any-file duplicate scan. A separate stream from imports,
    *  so an unrelated library operation cannot overwrite it. */

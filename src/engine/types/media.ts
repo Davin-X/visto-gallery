@@ -27,6 +27,24 @@ export type MediaItem = GeneratedMediaItem & {
   duration?: number;
 };
 
+export interface SimilarGroup {
+  id: string;
+  groupType: string;
+  status: string;
+  reason: string;
+  keeperId: string;
+  confidence: number;
+  timeSpanMs?: number | null;
+  items: MediaItem[];
+}
+
+export interface SimilarScanOptions {
+  timeWindowMs?: number | null;
+  maxHammingDistance?: number | null;
+  scope?: string | null;
+  scopeItemIds?: string[] | null;
+}
+
 export interface ImportSession {
   id: string;
   rootPath: string;

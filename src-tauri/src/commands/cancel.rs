@@ -96,6 +96,12 @@ pub async fn cancel_move_to_trash(state: State<'_, AppState>) -> Result<(), Comm
     Ok(())
 }
 
+#[tauri::command]
+pub async fn cancel_find_similar_photos(state: State<'_, AppState>) -> Result<(), CommandError> {
+    state.similar_cancel.cancel_all();
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::CancelGroup;

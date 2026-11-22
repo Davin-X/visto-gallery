@@ -15,14 +15,19 @@ import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import { KindBadge } from "../design/components/KindBadge";
 import { events, tauri } from "../engine/commands/tauri";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
-import type { DuplicateGroup, MediaItem } from "../engine/types/media";
+import type { DuplicateGroup, MediaItem, SimilarGroup } from "../engine/types/media";
 import type {
   FileDuplicateGroup,
   FileDuplicateItem,
   FileDuplicateScan,
   LibraryFolder,
 } from "../engine/types/commands";
-import { buildGroupViews, type GroupView, type KeeperMode } from "../engine/duplicates/grouping";
+import {
+  buildBurstGroupViews,
+  buildGroupViews,
+  type GroupView,
+  type KeeperMode,
+} from "../engine/duplicates/grouping";
 import { CompareOverlay } from "../design/components/CompareOverlay";
 import { formatFileDate } from "../engine/utils/mediaDate";
 import { CleanupTabs } from "../design/components/CleanupTabs";
@@ -61,6 +66,12 @@ interface DuplicatesScreenProps {
   onError?: (error: unknown, prefix?: string) => void;
   /** Called after files were trashed, so the library drops matching rows. */
   onFilesTrashed?: () => void;
+  burstGroups?: SimilarGroup[];
+  burstScanned?: boolean;
+  onSetBurstGroups?: (groups: SimilarGroup[]) => void;
+  onSetBurstScanned?: (scanned: boolean) => void;
+  onClearBursts?: () => void;
+  onScanSimilar?: (scope?: string | null) => Promise<void>;
 }
 
 const GROUP_PAGE = 40;
@@ -71,7 +82,7 @@ const INLINE_COPIES = 4;
 const FILE_GROUP_PAGE = 50;
 
 type ViewMode = "grid" | "list";
-type ScanMode = "media" | "files";
+type ScanMode = "media" | "bursts" | "files";
 type KindFilter = "all" | "photo" | "video" | "raw";
 type SortBy = "saving" | "copies" | "newest" | "name";
 
@@ -174,6 +185,21 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const [keeperMode, setKeeperMode] = useState<KeeperMode>("best");
   const [filterKind, setFilterKind] = useState<KindFilter>("all");
   const [sortBy, setSortBy] = useState<SortBy>("saving");
+  const [mode, setMode] = useState<ScanMode>("media");
+  const [localBurstGroups, setLocalBurstGroups] = useState<SimilarGroup[]>([]);
+  const [localBurstScanned, setLocalBurstScanned] = useState(false);
+  const burstGroups = props.burstGroups ?? localBurstGroups;
+  const burstScanned = props.burstScanned ?? localBurstScanned;
+  const setBurstGroups = props.onSetBurstGroups ?? setLocalBurstGroups;
+  const setBurstScanned = props.onSetBurstScanned ?? setLocalBurstScanned;
+  const [burstBusy, setBurstBusy] = useState(false);
+  const [burstProgress, setBurstProgress] = useState<{
+    phase?: string;
+    processed?: number;
+    total?: number;
+    currentFile?: string;
+  } | null>(null);
+  const burstScanRequest = useRef(0);
   // Which copy is open in the side-by-side inspector, addressed by group so a
   // rescan that reorders groups can't point the overlay at the wrong pair.
   const [compare, setCompare] = useState<{ sha: string; copyId: string } | null>(null);
@@ -199,15 +225,22 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     (fileScope ? folderName(fileScope) : "this folder");
 
   const kindCounts = useMemo(() => {
-    const counts: Record<KindFilter, number> = { all: groups.length, photo: 0, video: 0, raw: 0 };
-    groups.forEach((group) => {
-      const kinds = new Set(group.items.map((item) => item.kind));
+    const currentItems =
+      mode === "bursts" ? burstGroups.map((bg) => bg.items) : groups.map((g) => g.items);
+    const counts: Record<KindFilter, number> = {
+      all: currentItems.length,
+      photo: 0,
+      video: 0,
+      raw: 0,
+    };
+    currentItems.forEach((items) => {
+      const kinds = new Set(items.map((item) => item.kind));
       if (kinds.has("photo")) counts.photo += 1;
       if (kinds.has("video")) counts.video += 1;
       if (kinds.has("raw")) counts.raw += 1;
     });
     return counts;
-  }, [groups]);
+  }, [mode, burstGroups, groups]);
 
   // Describes what the scan did find so a filtered-empty view still points
   // somewhere instead of dead-ending on "no results". Phrased without a verb
@@ -228,10 +261,20 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     return `${otherKinds.slice(0, -1).join(", ")} and ${otherKinds[otherKinds.length - 1]}`;
   }, [otherKinds]);
 
-  const groupViews = useMemo<GroupView[]>(
-    () => buildGroupViews(groups, { filterKind, keeperMode, sortBy }),
-    [groups, filterKind, keeperMode, sortBy],
-  );
+  const burstMap = useMemo(() => {
+    const map = new Map<string, SimilarGroup>();
+    for (const bg of burstGroups) {
+      map.set(bg.id, bg);
+    }
+    return map;
+  }, [burstGroups]);
+
+  const groupViews = useMemo<GroupView[]>(() => {
+    if (mode === "bursts") {
+      return buildBurstGroupViews(burstGroups, { filterKind, keeperMode, sortBy });
+    }
+    return buildGroupViews(groups, { filterKind, keeperMode, sortBy });
+  }, [mode, burstGroups, groups, filterKind, keeperMode, sortBy]);
 
   const totalCopies = useMemo(
     () => groupViews.reduce((sum, view) => sum + view.copies.length, 0),
@@ -265,12 +308,14 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const libraryTotals = useMemo(() => {
     let copies = 0;
     let bytes = 0;
-    groups.forEach((group) => {
-      copies += Math.max(0, group.items.length - 1);
-      bytes += group.items.slice(1).reduce((sum, item) => sum + item.size, 0);
+    const activeItems =
+      mode === "bursts" ? burstGroups.map((bg) => bg.items) : groups.map((g) => g.items);
+    activeItems.forEach((items) => {
+      copies += Math.max(0, items.length - 1);
+      bytes += items.slice(1).reduce((sum, item) => sum + item.size, 0);
     });
     return { copies, bytes };
-  }, [groups]);
+  }, [mode, burstGroups, groups]);
 
   useEffect(() => {
     setRenderLimit(GROUP_PAGE);
@@ -515,16 +560,38 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               <span className="duplicate-stack-count">{view.ordered.length}</span>
             </span>
             <span className="duplicate-group-copy">
-              <span
-                className="duplicate-group-title"
-                title={group.sha256 ? `Content fingerprint (SHA-256): ${group.sha256}` : undefined}
-              >
-                {view.ordered.length} identical copies
-              </span>
-              <span className="duplicate-group-sub">
-                {formatBytesSimple(group.size)} each · <b>{formatBytesSimple(view.reclaimable)}</b>{" "}
-                reclaimable
-              </span>
+              {mode === "bursts" && burstMap.get(group.id) ? (
+                <>
+                  <span className="duplicate-group-title">
+                    {view.ordered.length} photos ·{" "}
+                    {burstMap.get(group.id)!.timeSpanMs != null
+                      ? `${(burstMap.get(group.id)!.timeSpanMs! / 1000).toFixed(1)}s burst`
+                      : "burst"}
+                    <span className="duplicate-group-burst-badge">
+                      {Math.round(burstMap.get(group.id)!.confidence * 100)}% match
+                    </span>
+                  </span>
+                  <span className="duplicate-group-sub">
+                    {burstMap.get(group.id)!.reason} · <b>{formatBytesSimple(view.reclaimable)}</b>{" "}
+                    reclaimable
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span
+                    className="duplicate-group-title"
+                    title={
+                      group.sha256 ? `Content fingerprint (SHA-256): ${group.sha256}` : undefined
+                    }
+                  >
+                    {view.ordered.length} identical copies
+                  </span>
+                  <span className="duplicate-group-sub">
+                    {formatBytesSimple(group.size)} each ·{" "}
+                    <b>{formatBytesSimple(view.reclaimable)}</b> reclaimable
+                  </span>
+                </>
+              )}
             </span>
             <span className={`duplicate-group-chevron${expanded ? " is-open" : ""}`}>
               <ChevronDownIcon size={14} />
@@ -575,7 +642,6 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   // A separate scan from the media one: the backend walks the chosen folder,
   // keeps every hash in memory and never touches the media catalog. Results
   // live here, so leaving the screen throws them away.
-  const [mode, setMode] = useState<ScanMode>("media");
   const [fileScan, setFileScan] = useState<FileDuplicateScan | null>(null);
   const [fileBusy, setFileBusy] = useState(false);
   const [fileProgress, setFileProgress] = useState<{
@@ -631,6 +697,43 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     };
   }, []);
 
+  useEffect(() => {
+    let disposed = false;
+    let stop: (() => void) | undefined;
+    let frame: number | null = null;
+    let pending: {
+      phase?: string;
+      processed?: number;
+      total?: number;
+      currentFile?: string;
+    } | null = null;
+
+    if (typeof events.onSimilarProgress !== "function") return;
+
+    void events
+      .onSimilarProgress((event) => {
+        pending = event;
+        if (frame === null) {
+          frame = window.requestAnimationFrame(() => {
+            frame = null;
+            if (!disposed && pending) {
+              setBurstProgress(pending);
+              pending = null;
+            }
+          });
+        }
+      })
+      .then((unlisten) => {
+        if (disposed) unlisten();
+        else stop = unlisten;
+      });
+    return () => {
+      disposed = true;
+      stop?.();
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
   // Results belong to the folder they came from; a new scope invalidates them,
   // and a scan for the old folder is stopped rather than left running.
   useEffect(() => {
@@ -641,6 +744,13 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     setFileRenderLimit(FILE_GROUP_PAGE);
     if (fileBusyRef.current) void tauri.duplicates.cancel();
   }, [fileScope]);
+
+  useEffect(() => {
+    burstScanRequest.current += 1;
+    setBurstGroups([]);
+    setBurstScanned(false);
+    setBurstProgress(null);
+  }, [scope, setBurstGroups, setBurstScanned]);
 
   // A folder picked for the any-file scan is session-only; narrowing the
   // library scope means the user is choosing a source again, so the pick
@@ -679,11 +789,57 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     [fileGroups, fileRenderLimit],
   );
 
+  const { onScanSimilar, onSetBurstGroups, onSetBurstScanned } = props;
+  const runBurstScan = useCallback(async () => {
+    if (onScanSimilar) {
+      await onScanSimilar(scope);
+      return;
+    }
+    const request = burstScanRequest.current + 1;
+    burstScanRequest.current = request;
+    setBurstBusy(true);
+    setBurstProgress({
+      phase: "analyzing",
+      processed: 0,
+      total: 0,
+      currentFile: "Loading photos for visual scan…",
+    });
+    try {
+      const result = await tauri.duplicates.scanSimilar({
+        scope: scope ?? null,
+        timeWindowMs: 3500,
+        maxHammingDistance: 14,
+      });
+      if (request !== burstScanRequest.current) return;
+      setBurstGroups(result);
+      setBurstScanned(true);
+      onSetBurstGroups?.(result);
+      onSetBurstScanned?.(true);
+      setSelected(new Set());
+    } catch (error) {
+      if (request === burstScanRequest.current) {
+        onError?.(error, "Could not find burst photos");
+      }
+    } finally {
+      if (request === burstScanRequest.current) {
+        setBurstBusy(false);
+        setBurstProgress(null);
+      }
+    }
+  }, [
+    onScanSimilar,
+    onSetBurstGroups,
+    onSetBurstScanned,
+    scope,
+    onError,
+    setBurstGroups,
+    setBurstScanned,
+  ]);
+
   const switchMode = useCallback((next: ScanMode) => {
     setMode(next);
     setConfirmFileTrash(false);
-    // The any-file scan falls back to the first folder on its own; changing
-    // modes must not narrow the media scan or throw its results away.
+    setSelected(new Set());
   }, []);
 
   const runFileScan = useCallback(async () => {
@@ -872,6 +1028,15 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
         onClick={() => switchMode("media")}
       >
         Photos &amp; videos
+      </button>
+      <button
+        type="button"
+        aria-pressed={mode === "bursts"}
+        className={mode === "bursts" ? "is-active" : ""}
+        title="Find camera bursts and visually similar photos verified with dHash"
+        onClick={() => switchMode("bursts")}
+      >
+        Bursts &amp; Similar
       </button>
       <button
         type="button"
@@ -1231,24 +1396,36 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     );
   }
 
-  const hasGroups = groups.length > 0;
+  const hasGroups = mode === "bursts" ? burstGroups.length > 0 : groups.length > 0;
   const hasVisibleGroups = groupViews.length > 0;
-  const isDuplicateScan = busy && progress?.phase === "hashing";
-  const isTrashing = busy && progress?.phase === "trashing";
-  const canAct = !busy && selected.size > 0;
+  const isCurrentBusy = mode === "bursts" ? burstBusy : busy;
+  const isCurrentScanned = mode === "bursts" ? burstScanned : scanned;
+  const currentOnScan = mode === "bursts" ? runBurstScan : onScan;
+  const isDuplicateScan =
+    isCurrentBusy && (progress?.phase === "hashing" || progress?.phase === "analyzing");
+  const isTrashing = isCurrentBusy && progress?.phase === "trashing";
+  const canAct = !isCurrentBusy && selected.size > 0;
   const allCopiesSelected = totalCopies > 0 && selectedCopyCount >= totalCopies;
 
   const pageHeading = (
     <div className="page-heading">
       <div>
         <p className="eyebrow">CLEANUP</p>
-        <h1>Duplicate media</h1>
+        <h1>{mode === "bursts" ? "Burst & similar photos" : "Duplicate media"}</h1>
         <p className="page-subtitle">
           {hasGroups
-            ? `${groups.length.toLocaleString()} ${groups.length === 1 ? "group" : "groups"} · ${libraryTotals.copies.toLocaleString()} extra ${libraryTotals.copies === 1 ? "copy" : "copies"} · ${formatBytesSimple(libraryTotals.bytes)} reclaimable`
-            : scope
-              ? `Find exact copies of the same photo or video inside ${scopeLabel} and free up the space they take.`
-              : "Find exact copies of the same photo or video in your library and free up the space they take."}
+            ? `${(mode === "bursts" ? burstGroups : groups).length.toLocaleString()} ${
+                (mode === "bursts" ? burstGroups : groups).length === 1 ? "group" : "groups"
+              } · ${libraryTotals.copies.toLocaleString()} extra ${
+                libraryTotals.copies === 1 ? "shot" : "shots"
+              } · ${formatBytesSimple(libraryTotals.bytes)} reclaimable`
+            : mode === "bursts"
+              ? scope
+                ? `Find camera bursts and visually similar photos inside ${scopeLabel} verified by dHash.`
+                : "Find camera bursts and visually similar photos in your library verified by dHash."
+              : scope
+                ? `Find exact copies of the same photo or video inside ${scopeLabel} and free up the space they take.`
+                : "Find exact copies of the same photo or video in your library and free up the space they take."}
         </p>
       </div>
       <div className="duplicate-heading-actions">
@@ -1256,14 +1433,43 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
         <div className="duplicate-heading-row">
           {folderPicker}
           {hasGroups && (
-            <button type="button" className="quiet-button" onClick={onClear} disabled={busy}>
+            <button
+              type="button"
+              className="quiet-button"
+              onClick={
+                mode === "bursts"
+                  ? () => (props.onClearBursts ? props.onClearBursts() : setBurstGroups([]))
+                  : onClear
+              }
+              disabled={isCurrentBusy}
+            >
               Clear
             </button>
           )}
           {/* With no results the empty state carries the only scan button. */}
-          {(hasGroups || busy) && (
-            <button type="button" className="primary-button" onClick={onScan} disabled={busy}>
-              {isTrashing ? "Moving to Trash…" : isDuplicateScan ? "Scanning…" : "Rescan"}
+          {(hasGroups || isCurrentBusy) && (
+            <button
+              type="button"
+              className="primary-button"
+              onClick={currentOnScan}
+              disabled={isCurrentBusy}
+            >
+              {isTrashing
+                ? "Moving to Trash…"
+                : mode === "bursts" && burstBusy
+                  ? "Analyzing bursts…"
+                  : isDuplicateScan
+                    ? "Scanning…"
+                    : "Rescan"}
+            </button>
+          )}
+          {mode === "bursts" && burstBusy && (
+            <button
+              type="button"
+              className="quiet-button"
+              onClick={() => void tauri.duplicates.cancelSimilar()}
+            >
+              Cancel
             </button>
           )}
         </div>
@@ -1423,45 +1629,151 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           <span className="duplicate-empty-icon" aria-hidden="true">
             <DuplicatesIcon size={26} />
           </span>
-          <h2>
-            {isTrashing
-              ? "Moving selected files to Trash"
-              : isDuplicateScan
-                ? "Scanning your library"
-                : !hasGroups && !scanned
-                  ? "Find duplicate media"
-                  : EMPTY_TITLES[hasGroups ? filterKind : "all"]}
-          </h2>
-          <p>
-            {isTrashing
-              ? "The selected copies are being moved to Finder Trash. You can use Put Back in Finder if needed."
-              : isDuplicateScan
-                ? "Comparing files byte for byte. Large libraries can take a moment."
-                : !hasGroups && !scanned
-                  ? scope
-                    ? `The scan compares the contents of every photo and video inside ${scopeLabel} — nothing outside it. Nothing is moved until you choose which copies to remove.`
-                    : "The scan compares the contents of every photo and video in your library — nothing outside it. Nothing is moved until you choose which copies to remove."
-                  : hasGroups
-                    ? otherKinds.length > 0
-                      ? `Found ${otherKindsLabel} instead. Use the media tabs above to switch.`
-                      : "Nothing in this scan matches the selected media type."
-                    : scope
-                      ? `Every photo and video inside ${scopeLabel} is unique by content. Identical-looking shots that differ by even one byte are not flagged.`
-                      : "Every photo and video in your library is unique by content. Identical-looking shots that differ by even one byte are not flagged."}
-          </p>
-          {!busy &&
-            (hasGroups ? (
-              <button type="button" className="quiet-button" onClick={() => changeFilter("all")}>
-                Show all {groups.length.toLocaleString()} groups
-              </button>
+          {mode === "bursts" ? (
+            burstBusy ? (
+              <>
+                <h2>Analyzing camera bursts</h2>
+                <p>
+                  {burstProgress && burstProgress.total
+                    ? `${(burstProgress.processed ?? 0).toLocaleString()} of ${burstProgress.total.toLocaleString()} photos analyzed (${Math.round(((burstProgress.processed ?? 0) / burstProgress.total) * 100)}%)…`
+                    : (burstProgress?.currentFile ??
+                      "Finding camera bursts and visually similar photos…")}
+                </p>
+                {burstProgress && burstProgress.total ? (
+                  <div
+                    className="busy-indicator-progress-track"
+                    role="progressbar"
+                    aria-label="Burst scan progress"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(
+                      ((burstProgress.processed ?? 0) / burstProgress.total) * 100,
+                    )}
+                    style={{ width: 280, maxWidth: "100%", margin: "14px auto" }}
+                  >
+                    <span
+                      style={{
+                        width: `${Math.round(((burstProgress.processed ?? 0) / burstProgress.total) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  className="quiet-button"
+                  onClick={() => void tauri.duplicates.cancelSimilar()}
+                >
+                  Cancel
+                </button>
+              </>
+            ) : !burstScanned ? (
+              <>
+                <h2>Find burst & similar photos</h2>
+                <p>
+                  {scope
+                    ? `Find camera bursts and visually similar photos inside ${scopeLabel} verified by visual hashing. Nothing is moved until you review the shots.`
+                    : "Find camera bursts and visually similar photos in your library verified by visual hashing. Nothing is moved until you review the shots."}
+                </p>
+                <button type="button" className="primary-button" onClick={runBurstScan}>
+                  {scope ? "Scan folder for bursts" : "Scan library for bursts"}
+                </button>
+              </>
             ) : (
-              <button type="button" className="primary-button" onClick={onScan}>
-                {scanned ? "Scan again" : scope ? "Scan folder" : "Scan library"}
-              </button>
-            ))}
+              <>
+                <h2>No burst photos found</h2>
+                <p>
+                  {scope
+                    ? `Every photo inside ${scopeLabel} appears visually distinct or outside burst time windows.`
+                    : "Every photo in your library appears visually distinct or outside burst time windows."}
+                </p>
+                <button type="button" className="primary-button" onClick={runBurstScan}>
+                  Scan again
+                </button>
+              </>
+            )
+          ) : (
+            <>
+              <h2>
+                {isTrashing
+                  ? "Moving selected files to Trash"
+                  : isDuplicateScan
+                    ? "Scanning your library"
+                    : !hasGroups && !scanned
+                      ? "Find duplicate media"
+                      : EMPTY_TITLES[hasGroups ? filterKind : "all"]}
+              </h2>
+              <p>
+                {isTrashing
+                  ? "The selected copies are being moved to Finder Trash. You can use Put Back in Finder if needed."
+                  : isDuplicateScan
+                    ? "Comparing files byte for byte. Large libraries can take a moment."
+                    : !hasGroups && !scanned
+                      ? scope
+                        ? `The scan compares the contents of every photo and video inside ${scopeLabel} — nothing outside it. Nothing is moved until you choose which copies to remove.`
+                        : "The scan compares the contents of every photo and video in your library — nothing outside it. Nothing is moved until you choose which copies to remove."
+                      : hasGroups
+                        ? otherKinds.length > 0
+                          ? `Found ${otherKindsLabel} instead. Use the media tabs above to switch.`
+                          : "Nothing in this scan matches the selected media type."
+                        : scope
+                          ? `Every photo and video inside ${scopeLabel} is unique by content. Identical-looking shots that differ by even one byte are not flagged.`
+                          : "Every photo and video in your library is unique by content. Identical-looking shots that differ by even one byte are not flagged."}
+              </p>
+              {!isCurrentBusy &&
+                (hasGroups ? (
+                  <button
+                    type="button"
+                    className="quiet-button"
+                    onClick={() => changeFilter("all")}
+                  >
+                    Show all {groups.length.toLocaleString()} groups
+                  </button>
+                ) : (
+                  <button type="button" className="primary-button" onClick={currentOnScan}>
+                    {isCurrentScanned ? "Scan again" : scope ? "Scan folder" : "Scan library"}
+                  </button>
+                ))}
+            </>
+          )}
         </div>
       ) : (
         <>
+          {mode === "bursts" && burstBusy && (
+            <div className="duplicate-burst-progress-banner" role="status">
+              <span className="spinner" />
+              <span className="duplicate-burst-progress-text">
+                {burstProgress && burstProgress.total
+                  ? `Analyzing bursts: ${(burstProgress.processed ?? 0).toLocaleString()} of ${burstProgress.total.toLocaleString()} photos (${Math.round(((burstProgress.processed ?? 0) / burstProgress.total) * 100)}%)`
+                  : (burstProgress?.currentFile ?? "Finding camera bursts…")}
+              </span>
+              {burstProgress && burstProgress.total ? (
+                <div
+                  className="busy-indicator-progress-track"
+                  role="progressbar"
+                  aria-label="Burst scan progress"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(
+                    ((burstProgress.processed ?? 0) / burstProgress.total) * 100,
+                  )}
+                  style={{ width: 140, flexShrink: 0 }}
+                >
+                  <span
+                    style={{
+                      width: `${Math.round(((burstProgress.processed ?? 0) / burstProgress.total) * 100)}%`,
+                    }}
+                  />
+                </div>
+              ) : null}
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={() => void tauri.duplicates.cancelSimilar()}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
           <div className="duplicate-groups">
             {groupViews.slice(0, renderLimit).map((view) => renderGroup(view))}
           </div>
