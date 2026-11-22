@@ -100,13 +100,7 @@ export interface FinderTagCopyResult {
 
 /** Phases the Rust backend emits on the `import-progress` event. */
 export type BackendProgressPhase =
-  | "scanning"
-  | "reading"
-  | "hashing"
-  | "analyzing"
-  | "indexing"
-  | "trashing"
-  | "complete";
+  "scanning" | "reading" | "hashing" | "analyzing" | "indexing" | "trashing" | "complete";
 
 /**
  * Progress the any-file duplicate scan emits on `file-duplicates-progress`. A
