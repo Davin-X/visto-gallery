@@ -80,3 +80,8 @@ filetime = "0.2"
 
 [patch.crates-io]
 wry = { path = "vendor/wry" }
+
+[profile.dev.package.image]
+opt-level = 3
+
+

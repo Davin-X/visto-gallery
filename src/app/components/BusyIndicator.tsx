@@ -23,7 +23,39 @@ export function BusyIndicator() {
       role="status"
     >
       <span className="spinner" />
-      {library.progress.phase === "hashing"
+      {library.progress.phase === "analyzing"
+        ? (() => {
+            const processed = library.progress.processed ?? 0;
+            const total = library.progress.total ?? 0;
+            const percent = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+            return (
+              <div className="busy-indicator-progress-copy">
+                <b>{total > 0 ? `Analyzing bursts · ${percent}%` : "Finding camera bursts…"}</b>
+                <small>
+                  {processed.toLocaleString()} of {total.toLocaleString()} photos analyzed
+                </small>
+                <div
+                  className="busy-indicator-progress-track"
+                  role="progressbar"
+                  aria-label="Burst scan progress"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={percent}
+                >
+                  <span style={{ width: `${percent}%` }} />
+                </div>
+                {library.progress.currentFile && (
+                  <small
+                    className="busy-indicator-current-file"
+                    title={library.progress.currentFile}
+                  >
+                    {library.progress.currentFile}
+                  </small>
+                )}
+              </div>
+            );
+          })()
+        : library.progress.phase === "hashing"
         ? (() => {
             const bytesProcessed = library.progress.bytesProcessed ?? 0;
             const bytesTotal = library.progress.bytesTotal ?? 0;

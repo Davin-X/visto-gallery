@@ -308,6 +308,30 @@ pub struct FileDuplicateTrashResult {
     pub failed: Vec<TrashError>,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(optional_fields = nullable)]
+pub struct SimilarScanOptions {
+    pub time_window_ms: Option<i64>,
+    pub max_hamming_distance: Option<u32>,
+    pub scope: Option<String>,
+    pub scope_item_ids: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(optional_fields = nullable)]
+pub struct SimilarGroup {
+    pub id: String,
+    pub group_type: String,
+    pub status: String,
+    pub reason: String,
+    pub keeper_id: String,
+    pub confidence: f64,
+    pub time_span_ms: Option<i64>,
+    pub items: Vec<MediaItem>,
+}
+
 macro_rules! string_enum {
     (
         $(#[$meta:meta])*

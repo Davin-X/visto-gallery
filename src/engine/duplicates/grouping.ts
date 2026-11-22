@@ -1,4 +1,4 @@
-import type { DuplicateGroup, MediaItem } from "../types/media";
+import type { DuplicateGroup, MediaItem, SimilarGroup } from "../types/media";
 
 /**
  * Pure duplicate-group logic: which copy is the keeper, how the copies are
@@ -112,4 +112,18 @@ export function buildGroupViews(
     return b.reclaimable - a.reclaimable;
   });
   return views;
+}
+
+/** Build displayed group views from burst / visual similarity scan results. */
+export function buildBurstGroupViews(
+  burstGroups: SimilarGroup[],
+  options: GroupViewOptions,
+): GroupView[] {
+  const duplicateGroups: DuplicateGroup[] = burstGroups.map((bg) => ({
+    id: bg.id,
+    sha256: bg.id,
+    size: bg.items.reduce((sum, item) => sum + item.size, 0),
+    items: bg.items,
+  }));
+  return buildGroupViews(duplicateGroups, options);
 }

@@ -24,7 +24,7 @@ vi.mock("../engine/commands/tauri", () => ({
   tauri: {
     items: { revealInFinder: vi.fn() },
     system: { revealInFinder: vi.fn() },
-    duplicates: { cancel: fileScanMock.cancel },
+    duplicates: { cancel: fileScanMock.cancel, cancelSimilar: vi.fn() },
     fileDuplicates: {
       chooseFolder: fileScanMock.chooseFolder,
       scan: fileScanMock.scan,
@@ -32,7 +32,10 @@ vi.mock("../engine/commands/tauri", () => ({
       reveal: fileScanMock.reveal,
     },
   },
-  events: { onFileDuplicatesProgress: fileScanMock.onProgress },
+  events: {
+    onFileDuplicatesProgress: fileScanMock.onProgress,
+    onSimilarProgress: vi.fn(async () => () => {}),
+  },
 }));
 
 function item(overrides: Partial<MediaItem> & { id: string }): MediaItem {

@@ -61,6 +61,7 @@ pub(crate) struct AppState {
     pub(crate) trash_cancel: commands::CancelGroup,
     pub(crate) batch_cancel: commands::CancelGroup,
     pub(crate) duplicate_cancel: commands::CancelGroup,
+    pub(crate) similar_cancel: commands::CancelGroup,
     /// The last any-file duplicate scan (id -> path), kept in memory only.
     pub(crate) file_duplicates: Mutex<commands::FileDuplicateSession>,
     /// Files and folders Finder handed to the app ("Open With" or a
@@ -79,6 +80,7 @@ impl Default for AppState {
             trash_cancel: commands::CancelGroup::default(),
             batch_cancel: commands::CancelGroup::default(),
             duplicate_cancel: commands::CancelGroup::default(),
+            similar_cancel: commands::CancelGroup::default(),
             file_duplicates: Mutex::new(commands::FileDuplicateSession::default()),
             pending_open_paths: Mutex::new(Vec::new()),
         }
@@ -401,6 +403,7 @@ pub fn run() {
             cancel_scan,
             cancel_move_to_trash,
             cancel_find_duplicates,
+            cancel_find_similar_photos,
             choose_file_duplicate_folder,
             find_file_duplicates,
             trash_file_duplicates,
@@ -496,6 +499,7 @@ pub fn run() {
             cancel_batch_export,
             // Duplicates
             find_duplicates,
+            find_similar_photos,
             // Finder
             write_finder_tags,
             read_finder_tags,

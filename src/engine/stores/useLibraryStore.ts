@@ -7,6 +7,7 @@ import type {
   Tag,
   LibraryFilter,
   DuplicateGroup,
+  SimilarGroup,
   Filter,
   LayoutMode,
   Screen,
@@ -64,6 +65,8 @@ export interface LibraryState {
   /** True once a duplicate scan has finished (or been cancelled) this
    *  session. Until then the screen must not claim there are no duplicates. */
   duplicatesScanned: boolean;
+  burstGroups: SimilarGroup[];
+  burstScanned: boolean;
   /** Library folder the last scan was limited to, or null for the whole
    *  catalog. Results belong to the scope they were scanned in. */
   duplicateScope: string | null;
@@ -259,8 +262,12 @@ export interface LibraryState {
 
   // Actions - Duplicates
   scanDuplicates: () => Promise<void>;
+  scanSimilar: (overrideScope?: string | null) => Promise<void>;
   cancelScan: () => Promise<void>;
   clearDuplicates: () => void;
+  setBurstGroups: (groups: SimilarGroup[]) => void;
+  setBurstScanned: (scanned: boolean) => void;
+  clearBurstGroups: () => void;
   /** Limit the next scan to one folder (or back to the whole catalog). */
   setDuplicateScope: (path: string | null) => void;
 
@@ -587,6 +594,8 @@ export const useLibraryStore = create<LibraryState>()(
       tags: [],
       duplicates: [],
       duplicatesScanned: false,
+      burstGroups: [],
+      burstScanned: false,
       duplicateScope: null,
       folders: [],
       inspectedId: null,
@@ -1971,13 +1980,49 @@ export const useLibraryStore = create<LibraryState>()(
         }
       },
 
+      scanSimilar: async (overrideScope?: string | null) => {
+        const scope = overrideScope !== undefined ? overrideScope : get().duplicateScope;
+        set({
+          busy: true,
+          canceling: false,
+          progress: { phase: "analyzing", processed: 0, total: 0 },
+        });
+        try {
+          const result = await tauri.duplicates.scanSimilar({
+            scope: scope ?? null,
+            timeWindowMs: 2000,
+            maxHammingDistance: 10,
+          });
+          const cancelled = get().canceling;
+          set({
+            burstGroups: cancelled ? [] : result,
+            burstScanned: true,
+            busy: false,
+            canceling: false,
+            progress: null,
+          });
+          get().showNotice(
+            cancelled
+              ? "Burst scan cancelled."
+              : result.length
+                ? `Found ${result.length} burst & similar group${result.length === 1 ? "" : "s"}`
+                : "No burst photos found",
+          );
+        } catch (e) {
+          const cancelled = get().canceling;
+          set({ busy: false, canceling: false, progress: null });
+          if (cancelled) get().showNotice("Burst scan cancelled.");
+          else get().showNotice("Burst scan failed", errorCode(e) ?? "internal");
+        }
+      },
+
       cancelScan: async () => {
         set({ canceling: true });
         try {
-          // Duplicate scanning reports its phase as "hashing"; route its
-          // cancellation to the duplicates command instead of the scanner's.
+          // Route cancellation to the right command based on active phase
           const phase = get().progress?.phase;
           if (phase === "hashing") await tauri.duplicates.cancel();
+          else if (phase === "analyzing") await tauri.duplicates.cancelSimilar();
           else await tauri.library.cancelScan();
         } catch (e) {
           set({ canceling: false });
@@ -2000,11 +2045,21 @@ export const useLibraryStore = create<LibraryState>()(
 
       clearDuplicates: () => set({ duplicates: [], duplicatesScanned: false }),
 
+      setBurstGroups: (burstGroups) => set({ burstGroups }),
+      setBurstScanned: (burstScanned) => set({ burstScanned }),
+      clearBurstGroups: () => set({ burstGroups: [], burstScanned: false }),
+
       setDuplicateScope: (path) => {
         if (get().duplicateScope === path) return;
         // Groups found in another folder say nothing about this one, and
         // keeping them would offer copies for deletion that are out of scope.
-        set({ duplicateScope: path, duplicates: [], duplicatesScanned: false });
+        set({
+          duplicateScope: path,
+          duplicates: [],
+          duplicatesScanned: false,
+          burstGroups: [],
+          burstScanned: false,
+        });
       },
 
       // UI

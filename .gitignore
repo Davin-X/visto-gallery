@@ -42,6 +42,9 @@ untracked/
 # Cline workspace rules (local)
 .clinerules
 
+# Claude Desktop / Code local settings
+.claude/
+
 .kilo
 
 # Local knowledge graph (graphify), rebuilt per machine and never committed
