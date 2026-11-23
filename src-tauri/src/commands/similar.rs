@@ -40,6 +40,78 @@ fn item_time(item: &MediaItem) -> (i64, bool) {
 }
 
 #[inline]
+fn normalize_stem(stem: &str) -> &str {
+    let s = stem.trim_start_matches('_');
+    if s.len() > 4
+        && (s.starts_with("IMG_")
+            || s.starts_with("img_")
+            || s.starts_with("DSC_")
+            || s.starts_with("dsc_"))
+    {
+        &s[4..]
+    } else if s.len() > 3 && (s.starts_with("MG_") || s.starts_with("mg_")) {
+        &s[3..]
+    } else {
+        s
+    }
+}
+
+/// Detects whether two items represent a camera RAW + JPEG/HEIC companion pair of the same capture.
+/// Such pairs are related formats, not duplicates or burst candidates to be pruned.
+pub fn is_raw_jpeg_pair(a: &MediaItem, b: &MediaItem) -> bool {
+    let one_raw = (a.kind == "raw" && b.kind == "photo") || (a.kind == "photo" && b.kind == "raw");
+    if !one_raw {
+        return false;
+    }
+
+    if let (Some(c1), Some(c2)) = (&a.camera, &b.camera) {
+        if !c1.is_empty() && !c2.is_empty() && c1 != c2 {
+            return false;
+        }
+    }
+
+    let stem_a = Path::new(&a.name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+    let stem_b = Path::new(&b.name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+    let norm_a = normalize_stem(stem_a);
+    let norm_b = normalize_stem(stem_b);
+    let same_stem = !norm_a.is_empty() && norm_a.eq_ignore_ascii_case(norm_b);
+
+    let (time_a, _) = item_time(a);
+    let (time_b, _) = item_time(b);
+    let time_diff_ms = (time_a - time_b).abs();
+
+    let same_folder = parent_dir(&a.path) == parent_dir(&b.path);
+
+    if same_stem {
+        if same_folder {
+            return time_diff_ms <= 10_000;
+        } else {
+            return time_diff_ms <= 3_000;
+        }
+    }
+
+    if same_folder && time_diff_ms <= 1_000 {
+        if let (Some(w1), Some(h1), Some(w2), Some(h2)) = (a.width, a.height, b.width, b.height) {
+            if w1 > 0 && h1 > 0 && w2 > 0 && h2 > 0 {
+                let ratio1 = (w1 as f64) / (h1 as f64);
+                let ratio2 = (w2 as f64) / (h2 as f64);
+                if (ratio1 - ratio2).abs() < 0.05 {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
+#[inline]
 fn same_dimensions(a: &MediaItem, b: &MediaItem) -> bool {
     match (a.width, a.height, b.width, b.height) {
         (Some(w1), Some(h1), Some(w2), Some(h2)) => w1 == w2 && h1 == h2,
@@ -117,6 +189,10 @@ pub async fn find_similar_photos(
 ) -> Result<Vec<SimilarGroup>, CommandError> {
     let cancel = state.similar_cancel.start();
     let db = super::get_db(&catalog)?;
+    let settings = super::settings::load_persisted_settings(&db)
+        .await
+        .unwrap_or_default();
+    let guard_raw_jpeg = settings.pair_raw_jpeg;
     let opts = options.unwrap_or(SimilarScanOptions {
         time_window_ms: Some(2000),
         max_hamming_distance: Some(BURST_MAX_HAMMING_DISTANCE),
@@ -389,6 +465,13 @@ pub async fn find_similar_photos(
             if other.id == anchor.id || clustered_ids.contains(&other.id) {
                 continue;
             }
+            if guard_raw_jpeg
+                && dup_cluster
+                    .iter()
+                    .any(|existing| is_raw_jpeg_pair(existing, other))
+            {
+                continue;
+            }
             let Some(&other_fp) = fingerprints.get(&other.id) else {
                 continue;
             };
@@ -505,6 +588,11 @@ pub async fn find_similar_photos(
                     || cur_time.saturating_sub(start_time) > time_window_ms.saturating_mul(10)
                 {
                     break;
+                }
+
+                if guard_raw_jpeg && verified_cluster.iter().any(|it| is_raw_jpeg_pair(it, cur)) {
+                    j += 1;
+                    continue;
                 }
 
                 let cur_fp = fingerprints[&cur.id];
@@ -636,5 +724,68 @@ mod tests {
         let (keeper_id, reason) = choose_keeper(&cluster);
         assert_eq!(keeper_id, "2");
         assert!(reason.contains("highest resolution"));
+    }
+
+    #[test]
+    fn test_is_raw_jpeg_pair() {
+        let raw = MediaItem::new(
+            "/photos/Trip/IMG_0001.CR2".into(),
+            "IMG_0001.CR2".into(),
+            "cr2".into(),
+            MediaKind::Raw,
+            25_000_000,
+            1700000000000,
+        );
+        let mut jpg = MediaItem::new(
+            "/photos/Trip/IMG_0001.JPG".into(),
+            "IMG_0001.JPG".into(),
+            "jpg".into(),
+            MediaKind::Photo,
+            5_000_000,
+            1700000000000,
+        );
+        jpg.captured_at = Some(1700000000000);
+
+        let mut raw_with_time = raw.clone();
+        raw_with_time.captured_at = Some(1700000000000);
+
+        // 1. Identical stem in same folder: true
+        assert!(is_raw_jpeg_pair(&raw_with_time, &jpg));
+        assert!(is_raw_jpeg_pair(&jpg, &raw_with_time));
+
+        // 2. Canon AdobeRGB prefix _MG_ vs IMG_: true
+        let mut canon_raw = raw_with_time.clone();
+        canon_raw.name = "_MG_0001.CR2".into();
+        canon_raw.path = "/photos/Trip/_MG_0001.CR2".into();
+        assert!(is_raw_jpeg_pair(&canon_raw, &jpg));
+
+        // 3. Cross-folder (e.g. RAW/ vs JPG/): true when close in time
+        let mut cross_folder_raw = raw_with_time.clone();
+        cross_folder_raw.path = "/photos/Trip/RAW/IMG_0001.CR2".into();
+        let mut cross_folder_jpg = jpg.clone();
+        cross_folder_jpg.path = "/photos/Trip/JPG/IMG_0001.JPG".into();
+        assert!(is_raw_jpeg_pair(&cross_folder_raw, &cross_folder_jpg));
+
+        // 4. Reject if both are raw or both are photo
+        let mut raw_copy = raw_with_time.clone();
+        raw_copy.path = "/photos/Trip/IMG_0001_copy.CR2".into();
+        assert!(!is_raw_jpeg_pair(&raw_with_time, &raw_copy));
+
+        let mut jpg_copy = jpg.clone();
+        jpg_copy.path = "/photos/Trip/IMG_0001_copy.JPG".into();
+        assert!(!is_raw_jpeg_pair(&jpg, &jpg_copy));
+
+        // 5. Reject if capture time differs significantly (> 10s)
+        let mut distant_jpg = jpg.clone();
+        distant_jpg.captured_at = Some(1700000050000);
+        distant_jpg.modified_at = 1700000050000;
+        assert!(!is_raw_jpeg_pair(&raw_with_time, &distant_jpg));
+
+        // 6. Reject if cameras explicitly differ
+        let mut cam_raw = raw_with_time.clone();
+        cam_raw.camera = Some("Canon EOS 5D Mark IV".into());
+        let mut cam_jpg = jpg.clone();
+        cam_jpg.camera = Some("Sony A7R V".into());
+        assert!(!is_raw_jpeg_pair(&cam_raw, &cam_jpg));
     }
 }
