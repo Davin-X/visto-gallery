@@ -4,7 +4,7 @@ The screenshots and videos in `docs/screenshots` and `docs/media` show a demo li
 
 - **NASA** images and video: public domain ([NASA media guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/)).
 - **rawpixel / Openverse** photos: CC0.
-- **RAW samples** from [raw.pixls.us](https://raw.pixls.us/): CC0. [Canon EOS 5D Mark II, IMG_0051.CR2](https://raw.pixls.us/data/Canon/EOS%205D%20Mark%20II/) (in `viewer-raw-zoom-*`) and [Nikon D750, lossless_compressed_12_bit.NEF](https://raw.pixls.us/data/Nikon/D750/).
+- **RAW samples** from [raw.pixls.us](https://raw.pixls.us/): CC0. [Canon EOS 5D Mark II, IMG_0051.CR2](https://raw.pixls.us/data/Canon/EOS%205D%20Mark%20II/) and [Nikon D750, lossless_compressed_12_bit.NEF](https://raw.pixls.us/data/Nikon/D750/).
 - **Wikimedia Commons** photos and video: licenses listed below, each linked to its file page.
 
 ## Wikimedia Commons

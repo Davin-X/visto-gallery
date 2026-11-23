@@ -42,15 +42,15 @@ VistoGallery points at the folders you already have. It never copies, moves or u
 ## Features
 
 - **Private by default.** No account, no cloud, no telemetry. Update checks are off unless you turn them on.
-- **Your folders, in place.** Add folders as sources; files are read where they are. Moved or renamed files keep their favorites, tags and albums.
+- **Your folders, in place.** Add folders as sources; files are read where they are. Adding a folder automatically registers its immediate subfolders as independent removable sources. Moved or renamed files keep their favorites, tags and albums.
 - **Browse your way.** Grid, Details, Timeline, Filmstrip and Overview layouts, sorted by capture date, name, size or type.
 - **Find anything.** Search names, tags, camera and lens. Filter by capture date, rating, color label, camera, lens, source and type (photos, videos, RAW, animations).
 - **Organize.** Albums, Smart Albums that update themselves, tags, favorites, ratings, color labels and hidden items.
 - **Edit without fear.** Exposure, contrast, highlights, shadows, warmth, saturation, crop, rotate and flip. Edits are drafts until you save, and the original is kept so you can restore it.
-- **Clean up duplicates.** SHA-256 matching finds exact copies, then a side-by-side compare shows what differs before anything moves to the Trash.
+- **Clean up duplicates and bursts.** Find exact copies with SHA-256 matching, detect rapid camera bursts and visually similar photos with 2D difference hashing and color profiles, or scan any folder on your Mac for duplicate files. A side-by-side compare shows what differs with smart keeper recommendations before anything moves to the Trash.
 - **Clean up your Mac.** Find Xcode and developer caches (npm, pnpm, Cargo, Homebrew and more), build folders in your projects (`node_modules`, `target`, `.venv` and others) and, if you allow it, old installers in Downloads. Anything in use, tracked by Git or marked Never clean is skipped with the reason; the rest moves to the Trash so Put Back works, after a fresh check in Rust. A library folder is never touched.
 - **Export in batches.** Convert to JPEG, PNG or WebP, or keep the original format, with naming patterns, resizing and metadata stripping.
-- **Feels like a Mac app.** Finder tags, Reveal in Finder, Trash with Put Back, light, dark and system themes, and accent colors.
+- **Feels like a Mac app.** Set as default viewer for photos and videos in Settings, Finder tags, Reveal in Finder, Trash with Put Back, light, dark and system themes, and accent colors.
 - **Portable catalog.** Back up and restore the catalog, or point it at a library that moved to a new drive.
 
 ## Tour
@@ -134,7 +134,7 @@ Videos play in the app, including MKV and HEVC files that the system web view ca
 
 Adjustments are saved as drafts, and the Edit screen lists every saved draft so you can pick up where you left off. Save a copy, or replace the file knowing the original is kept and can be restored.
 
-### Duplicates
+### Duplicates and camera bursts
 
 <table>
   <tr>
@@ -147,7 +147,22 @@ Adjustments are saved as drafts, and the Edit screen lists every saved draft so 
   </tr>
 </table>
 
-Compare a keeper and its copies side by side, with synced zoom and only the fields that differ, before moving copies to the Trash. Undo puts them back, even from an external drive.
+Find exact duplicate copies, cluster rapid camera bursts and near-duplicates using 128-bit visual hashing, or scan arbitrary folders across your Mac. Compare shots side by side with synchronized zoom and smart keeper recommendations before moving redundant copies to the Trash. Undo puts them back, even from an external drive.
+
+### Cleanup
+
+<table>
+  <tr>
+    <th>Light</th>
+    <th>Dark</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/cleanup-light.jpg" alt="Cleanup screen showing developer caches, build folders, and system junk with reclaimable space previews (light theme)" width="440"></td>
+    <td><img src="docs/screenshots/cleanup-dark.jpg" alt="Cleanup screen showing developer caches, build folders, and system junk with reclaimable space previews (dark theme)" width="440"></td>
+  </tr>
+</table>
+
+Reclaim disk space by scanning Xcode caches, package manager caches (npm, Yarn, Cargo, pip, Go, Homebrew), project build folders (`node_modules`, `target`, `.venv`), and old downloads. Items in use or Git-tracked are safely skipped, and deleted items move to the Trash so Put Back works.
 
 ### Timeline and Details
 
