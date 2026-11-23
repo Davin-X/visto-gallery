@@ -1,7 +1,11 @@
 # Near-Duplicate & Burst Selection — Plan and Design
 
 ## Status
-Proposed (design). Current app behavior: **exact duplicates only** (SHA-256 byte-identical) via the Duplicates screen. Burst stacking / RAW-JPEG pairing / near-duplicate detection are **not implemented** (see CHANGELOG 0.3.0 limitations).
+Implemented (Phases 1, 1b, 2 & Phase 3 RAW+JPEG pair guard shipped).
+- **Exact Duplicates**, **Camera Bursts**, and **Similar Photos** modes available in Duplicates.
+- 128-bit 2D dHash + Mean RGB color profiling with multi-core parallelism and SQLite caching.
+- Capture-time proximity clustering with EXIF and filename timestamp fallbacks.
+- RAW + JPEG pairing guard protects companion RAW+JPEG pairs from duplicate grouping and burst pruning.
 
 ## Problem
 Users often shoot bursts or take several nearly identical photos and want to:
