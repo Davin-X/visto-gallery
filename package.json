@@ -47,7 +47,7 @@
     "prepare": "sh scripts/setup-hooks.sh"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/api": "^2.12.5",
     "@tauri-apps/plugin-dialog": "^2.8.4",
     "@tauri-apps/plugin-fs": "^2.7.1",
     "exifr": "^7.1.3",
