@@ -96,6 +96,9 @@ impl Database {
         // Re-read EXIF text fields stored with quotes or missing dates (runs once)
         self.backfill_exif_text().await?;
 
+        // Backfill captured_at from filenames for items missing EXIF date (runs once)
+        self.backfill_filename_timestamps().await?;
+
         Ok(())
     }
 
@@ -147,6 +150,43 @@ impl Database {
             .bind(&id)
             .execute(&self.pool)
             .await?;
+        }
+
+        sqlx::query("INSERT OR REPLACE INTO _migration_flags (name, completed_at) VALUES (?, ?)")
+            .bind(FLAG)
+            .bind(now_millis())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// Backfill `captured_at` from filenames for media items where EXIF had no
+    /// capture date (e.g. batch-exported or edited photos).
+    async fn backfill_filename_timestamps(&self) -> Result<()> {
+        const FLAG: &str = "backfill_filename_timestamps_v1";
+        let done: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM _migration_flags WHERE name = ? AND completed_at > 0",
+        )
+        .bind(FLAG)
+        .fetch_optional(&self.pool)
+        .await?;
+        if done.is_some() {
+            return Ok(());
+        }
+
+        let rows = sqlx::query("SELECT id, name FROM media_items WHERE captured_at IS NULL")
+            .fetch_all(&self.pool)
+            .await?;
+        for row in rows {
+            let id: String = row.get("id");
+            let name: String = row.get("name");
+            if let Some(ts) = crate::commands::parse_filename_timestamp(&name) {
+                sqlx::query("UPDATE media_items SET captured_at = ? WHERE id = ?")
+                    .bind(ts)
+                    .bind(&id)
+                    .execute(&self.pool)
+                    .await?;
+            }
         }
 
         sqlx::query("INSERT OR REPLACE INTO _migration_flags (name, completed_at) VALUES (?, ?)")

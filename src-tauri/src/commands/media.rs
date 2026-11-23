@@ -916,6 +916,9 @@ pub(crate) fn extract_exif(path: &std::path::Path) -> ExifData {
         Ok(f) => f,
         Err(e) => {
             data.metadata_error = Some(e.to_string());
+            if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                data.captured_at = parse_filename_timestamp(filename);
+            }
             return data;
         }
     };
@@ -925,6 +928,9 @@ pub(crate) fn extract_exif(path: &std::path::Path) -> ExifData {
         Ok(e) => e,
         Err(e) => {
             data.metadata_error = Some(e.to_string());
+            if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                data.captured_at = parse_filename_timestamp(filename);
+            }
             return data;
         }
     };
@@ -938,7 +944,12 @@ pub(crate) fn extract_exif(path: &std::path::Path) -> ExifData {
         exif::Tag::DateTime,
     ]
     .into_iter()
-    .find_map(|tag| exif_ascii(&exif, tag).and_then(|s| parse_exif_datetime(&s)));
+    .find_map(|tag| exif_ascii(&exif, tag).and_then(|s| parse_exif_datetime(&s)))
+    .or_else(|| {
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .and_then(parse_filename_timestamp)
+    });
     data.camera = camera_name(
         exif_ascii(&exif, exif::Tag::Make),
         exif_ascii(&exif, exif::Tag::Model),
@@ -1053,9 +1064,147 @@ pub(crate) fn parse_exif_datetime(text: &str) -> Option<i64> {
         .map(|dt| dt.unix_timestamp() * 1000)
 }
 
+/// Extract a timestamp from a filename when EXIF metadata is missing (e.g. batch-exported
+/// or edited photos like `2026-08-16_13-01-51_Devansh_Closeup_edited.jpg` or `IMG_20260712_141840.jpg`).
+pub(crate) fn parse_filename_timestamp(name: &str) -> Option<i64> {
+    use time::{Date, Month, PrimitiveDateTime, Time};
+
+    let bytes = name.as_bytes();
+    for i in 0..bytes.len().saturating_sub(9) {
+        // Pattern 1: YYYY-MM-DD[_ -]HH-MM-SS
+        if i + 19 <= bytes.len()
+            && bytes[i..i + 4].iter().all(u8::is_ascii_digit)
+            && (bytes[i + 4] == b'-' || bytes[i + 4] == b'_')
+            && bytes[i + 5..i + 7].iter().all(u8::is_ascii_digit)
+            && (bytes[i + 7] == b'-' || bytes[i + 7] == b'_')
+            && bytes[i + 8..i + 10].iter().all(u8::is_ascii_digit)
+        {
+            let sep = bytes[i + 10];
+            if (sep == b'_' || sep == b'-' || sep == b' ' || sep == b'T')
+                && bytes[i + 11..i + 13].iter().all(u8::is_ascii_digit)
+                && (bytes[i + 13] == b'-' || bytes[i + 13] == b':' || bytes[i + 13] == b'_')
+                && bytes[i + 14..i + 16].iter().all(u8::is_ascii_digit)
+                && (bytes[i + 16] == b'-' || bytes[i + 16] == b':' || bytes[i + 16] == b'_')
+                && bytes[i + 17..i + 19].iter().all(u8::is_ascii_digit)
+            {
+                let y: i32 = std::str::from_utf8(&bytes[i..i + 4]).ok()?.parse().ok()?;
+                let m: u8 = std::str::from_utf8(&bytes[i + 5..i + 7])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+                let d: u8 = std::str::from_utf8(&bytes[i + 8..i + 10])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+                let hh: u8 = std::str::from_utf8(&bytes[i + 11..i + 13])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+                let mm: u8 = std::str::from_utf8(&bytes[i + 14..i + 16])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+                let ss: u8 = std::str::from_utf8(&bytes[i + 17..i + 19])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+
+                let month = Month::try_from(m).ok()?;
+                let date = Date::from_calendar_date(y, month, d).ok()?;
+                let time = Time::from_hms(hh, mm, ss).ok()?;
+                let dt = PrimitiveDateTime::new(date, time);
+                return Some(dt.assume_utc().unix_timestamp() * 1000);
+            }
+        }
+        // Pattern 2: YYYYMMDD_HHMMSS
+        if i + 15 <= bytes.len()
+            && bytes[i..i + 8].iter().all(u8::is_ascii_digit)
+            && (bytes[i + 8] == b'_' || bytes[i + 8] == b'-')
+            && bytes[i + 9..i + 15].iter().all(u8::is_ascii_digit)
+        {
+            let y: i32 = std::str::from_utf8(&bytes[i..i + 4]).ok()?.parse().ok()?;
+            let m: u8 = std::str::from_utf8(&bytes[i + 4..i + 6])
+                .ok()?
+                .parse()
+                .ok()?;
+            let d: u8 = std::str::from_utf8(&bytes[i + 6..i + 8])
+                .ok()?
+                .parse()
+                .ok()?;
+            let hh: u8 = std::str::from_utf8(&bytes[i + 9..i + 11])
+                .ok()?
+                .parse()
+                .ok()?;
+            let mm: u8 = std::str::from_utf8(&bytes[i + 11..i + 13])
+                .ok()?
+                .parse()
+                .ok()?;
+            let ss: u8 = std::str::from_utf8(&bytes[i + 13..i + 15])
+                .ok()?
+                .parse()
+                .ok()?;
+
+            let month = Month::try_from(m).ok()?;
+            let date = Date::from_calendar_date(y, month, d).ok()?;
+            let time = Time::from_hms(hh, mm, ss).ok()?;
+            let dt = PrimitiveDateTime::new(date, time);
+            return Some(dt.assume_utc().unix_timestamp() * 1000);
+        }
+        // Pattern 3: YYYY-MM-DD (date only, e.g. dji_2026-07-26_photo_0003_enhanced.jpg)
+        if i + 10 <= bytes.len()
+            && bytes[i..i + 4].iter().all(u8::is_ascii_digit)
+            && (bytes[i + 4] == b'-' || bytes[i + 4] == b'_')
+            && bytes[i + 5..i + 7].iter().all(u8::is_ascii_digit)
+            && (bytes[i + 7] == b'-' || bytes[i + 7] == b'_')
+            && bytes[i + 8..i + 10].iter().all(u8::is_ascii_digit)
+        {
+            let prev_not_digit = i == 0 || !bytes[i - 1].is_ascii_digit();
+            let next_not_digit = i + 10 == bytes.len() || !bytes[i + 10].is_ascii_digit();
+            if prev_not_digit && next_not_digit {
+                let y: i32 = std::str::from_utf8(&bytes[i..i + 4]).ok()?.parse().ok()?;
+                let m: u8 = std::str::from_utf8(&bytes[i + 5..i + 7])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+                let d: u8 = std::str::from_utf8(&bytes[i + 8..i + 10])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+
+                if (1970..=2100).contains(&y) {
+                    if let Ok(month) = Month::try_from(m) {
+                        if let Ok(date) = Date::from_calendar_date(y, month, d) {
+                            if let Ok(time) = Time::from_hms(0, 0, 0) {
+                                let dt = PrimitiveDateTime::new(date, time);
+                                return Some(dt.assume_utc().unix_timestamp() * 1000);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod exif_text_tests {
-    use super::{camera_name, clean_ascii_parts, parse_exif_datetime};
+    use super::{camera_name, clean_ascii_parts, parse_exif_datetime, parse_filename_timestamp};
+
+    #[test]
+    fn test_parse_filename_timestamp() {
+        assert!(
+            parse_filename_timestamp("2026-08-16_13-01-51_Devansh_Closeup_edited.jpg").is_some()
+        );
+        assert!(parse_filename_timestamp(
+            "2026-08-30_00-45-52_Dev_Devansh_Birthday_Balloons_2_edited.jpg"
+        )
+        .is_some());
+        assert!(parse_filename_timestamp("dji_2026-07-26_photo_0003_enhanced.jpg").is_some());
+        assert!(parse_filename_timestamp("IMG_20260712_141840.jpg").is_some());
+        assert_eq!(parse_filename_timestamp("unrelated_photo.jpg"), None);
+        assert_eq!(parse_filename_timestamp("photo_2026_01.jpg"), None);
+    }
 
     #[test]
     fn ascii_parts_lose_padding_and_empty_components() {

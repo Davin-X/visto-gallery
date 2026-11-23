@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **GitHub Pages landing page**: interactive product showcase in `docs/` with dark/light screenshot switching, feature tour, sitemap, and responsive navigation.
 
 ### Fixed
+- **Catalog capture date fallback from filenames**: media items stripped of EXIF timestamps (e.g. edited or batch-exported photos) now automatically extract capture dates from filename patterns (`YYYY-MM-DD[_ -]HH-MM-SS`, `YYYYMMDD_HHMMSS`, and `YYYY-MM-DD`), preventing fallback to filesystem modification time in library sorting and card subtitles.
 - **Finder open focus**: opening files from Finder when VistoGallery is already running now brings the main window forward and unminimizes it.
 - **Library stats robustness**: sidebar counters safely tolerate partial or loading stats without crashing.
 - **Gallery tile double-click**: double-clicking a thumbnail opens the viewer reliably even when nested tile elements establish their own stacking contexts.
