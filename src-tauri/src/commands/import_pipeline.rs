@@ -115,6 +115,13 @@ pub(crate) fn inspect_media_file_with_metadata(
         }
     }
 
+    if item.captured_at.is_none() {
+        item.captured_at = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .and_then(crate::commands::parse_filename_timestamp);
+    }
+
     // Header-only dimension probe for every kind (image headers, HEIF/AVIF
     // and MP4/MOV boxes, EXIF, then ImageIO). The upsert stores the returned
     // pair, so it must carry every fallback, not just the first probe.
