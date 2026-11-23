@@ -44,7 +44,6 @@ const HELPER_BIN = path.join(WORK_DIR, "macos-window");
 // Steps, in order. `press` matches an accessible label by substring; `fullscreen`
 // toggles the window's native full-screen state.
 const SCREENS = [
-  { name: "library", steps: [{ press: "Grid view" }], expect: "Library" },
   { name: "library-grid", steps: [{ press: "Grid view" }], expect: "Library" },
   { name: "library-list", steps: [{ press: "Details view" }], expect: "Library" },
   { name: "library-timeline", steps: [{ press: "Timeline view" }], expect: "Library" },
@@ -76,6 +75,7 @@ const SCREENS = [
     steps: [{ press: "Duplicates" }, { press: "Scan library", whenAbsent: "Compare" }, { wait: 4 }],
     expect: "Duplicates",
   },
+  { name: "cleanup", steps: [{ press: "Cleanup" }], expect: "Cleanup" },
   { name: "hidden", steps: [{ press: "Hidden" }], expect: "Hidden" },
   { name: "edit", steps: [{ press: "Edit" }], expect: "Edit" },
   {
