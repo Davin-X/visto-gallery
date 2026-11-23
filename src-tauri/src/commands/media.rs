@@ -1088,11 +1088,26 @@ pub(crate) fn parse_filename_timestamp(name: &str) -> Option<i64> {
                 && bytes[i + 17..i + 19].iter().all(u8::is_ascii_digit)
             {
                 let y: i32 = std::str::from_utf8(&bytes[i..i + 4]).ok()?.parse().ok()?;
-                let m: u8 = std::str::from_utf8(&bytes[i + 5..i + 7]).ok()?.parse().ok()?;
-                let d: u8 = std::str::from_utf8(&bytes[i + 8..i + 10]).ok()?.parse().ok()?;
-                let hh: u8 = std::str::from_utf8(&bytes[i + 11..i + 13]).ok()?.parse().ok()?;
-                let mm: u8 = std::str::from_utf8(&bytes[i + 14..i + 16]).ok()?.parse().ok()?;
-                let ss: u8 = std::str::from_utf8(&bytes[i + 17..i + 19]).ok()?.parse().ok()?;
+                let m: u8 = std::str::from_utf8(&bytes[i + 5..i + 7])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+                let d: u8 = std::str::from_utf8(&bytes[i + 8..i + 10])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+                let hh: u8 = std::str::from_utf8(&bytes[i + 11..i + 13])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+                let mm: u8 = std::str::from_utf8(&bytes[i + 14..i + 16])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+                let ss: u8 = std::str::from_utf8(&bytes[i + 17..i + 19])
+                    .ok()?
+                    .parse()
+                    .ok()?;
 
                 let month = Month::try_from(m).ok()?;
                 let date = Date::from_calendar_date(y, month, d).ok()?;
@@ -1108,11 +1123,26 @@ pub(crate) fn parse_filename_timestamp(name: &str) -> Option<i64> {
             && bytes[i + 9..i + 15].iter().all(u8::is_ascii_digit)
         {
             let y: i32 = std::str::from_utf8(&bytes[i..i + 4]).ok()?.parse().ok()?;
-            let m: u8 = std::str::from_utf8(&bytes[i + 4..i + 6]).ok()?.parse().ok()?;
-            let d: u8 = std::str::from_utf8(&bytes[i + 6..i + 8]).ok()?.parse().ok()?;
-            let hh: u8 = std::str::from_utf8(&bytes[i + 9..i + 11]).ok()?.parse().ok()?;
-            let mm: u8 = std::str::from_utf8(&bytes[i + 11..i + 13]).ok()?.parse().ok()?;
-            let ss: u8 = std::str::from_utf8(&bytes[i + 13..i + 15]).ok()?.parse().ok()?;
+            let m: u8 = std::str::from_utf8(&bytes[i + 4..i + 6])
+                .ok()?
+                .parse()
+                .ok()?;
+            let d: u8 = std::str::from_utf8(&bytes[i + 6..i + 8])
+                .ok()?
+                .parse()
+                .ok()?;
+            let hh: u8 = std::str::from_utf8(&bytes[i + 9..i + 11])
+                .ok()?
+                .parse()
+                .ok()?;
+            let mm: u8 = std::str::from_utf8(&bytes[i + 11..i + 13])
+                .ok()?
+                .parse()
+                .ok()?;
+            let ss: u8 = std::str::from_utf8(&bytes[i + 13..i + 15])
+                .ok()?
+                .parse()
+                .ok()?;
 
             let month = Month::try_from(m).ok()?;
             let date = Date::from_calendar_date(y, month, d).ok()?;
@@ -1132,8 +1162,14 @@ pub(crate) fn parse_filename_timestamp(name: &str) -> Option<i64> {
             let next_not_digit = i + 10 == bytes.len() || !bytes[i + 10].is_ascii_digit();
             if prev_not_digit && next_not_digit {
                 let y: i32 = std::str::from_utf8(&bytes[i..i + 4]).ok()?.parse().ok()?;
-                let m: u8 = std::str::from_utf8(&bytes[i + 5..i + 7]).ok()?.parse().ok()?;
-                let d: u8 = std::str::from_utf8(&bytes[i + 8..i + 10]).ok()?.parse().ok()?;
+                let m: u8 = std::str::from_utf8(&bytes[i + 5..i + 7])
+                    .ok()?
+                    .parse()
+                    .ok()?;
+                let d: u8 = std::str::from_utf8(&bytes[i + 8..i + 10])
+                    .ok()?
+                    .parse()
+                    .ok()?;
 
                 if (1970..=2100).contains(&y) {
                     if let Ok(month) = Month::try_from(m) {
@@ -1157,8 +1193,13 @@ mod exif_text_tests {
 
     #[test]
     fn test_parse_filename_timestamp() {
-        assert!(parse_filename_timestamp("2026-08-16_13-01-51_Devansh_Closeup_edited.jpg").is_some());
-        assert!(parse_filename_timestamp("2026-08-30_00-45-52_Dev_Devansh_Birthday_Balloons_2_edited.jpg").is_some());
+        assert!(
+            parse_filename_timestamp("2026-08-16_13-01-51_Devansh_Closeup_edited.jpg").is_some()
+        );
+        assert!(parse_filename_timestamp(
+            "2026-08-30_00-45-52_Dev_Devansh_Birthday_Balloons_2_edited.jpg"
+        )
+        .is_some());
         assert!(parse_filename_timestamp("dji_2026-07-26_photo_0003_enhanced.jpg").is_some());
         assert!(parse_filename_timestamp("IMG_20260712_141840.jpg").is_some());
         assert_eq!(parse_filename_timestamp("unrelated_photo.jpg"), None);
