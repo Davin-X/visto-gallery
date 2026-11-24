@@ -163,7 +163,7 @@ mod thumbnail_cache_tests {
         fs::write(&stale, [0_u8; 10]).expect("write stale temp");
         fs::write(&fresh, [0_u8; 10]).expect("write fresh temp");
         let old = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 60 * 60);
-        filetime::set_file_mtime(&stale, filetime::FileTime::from_system_time(old))
+        std::fs::set_times(&stale, std::fs::FileTimes::new().set_modified(old))
             .expect("age the temp file");
 
         // The budget is not exceeded: only the stale temp may be removed.

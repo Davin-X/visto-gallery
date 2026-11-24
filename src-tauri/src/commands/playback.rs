@@ -1651,7 +1651,7 @@ mod tests {
         std::fs::write(&stale, [0_u8; 4]).expect("write stale partial");
         std::fs::write(&fresh, [0_u8; 4]).expect("write fresh partial");
         let old = std::time::SystemTime::now() - std::time::Duration::from_secs(2 * 60 * 60);
-        filetime::set_file_mtime(&stale, filetime::FileTime::from_system_time(old))
+        std::fs::set_times(&stale, std::fs::FileTimes::new().set_modified(old))
             .expect("age the partial file");
 
         prune_cache(&dir, 1024);
@@ -1680,7 +1680,7 @@ mod tests {
         let old = std::time::SystemTime::now()
             - super::super::storage::PLAYBACK_IN_USE_GRACE
             - std::time::Duration::from_secs(60);
-        filetime::set_file_mtime(&idle, filetime::FileTime::from_system_time(old))
+        std::fs::set_times(&idle, std::fs::FileTimes::new().set_modified(old))
             .expect("age the idle remux");
 
         // A 1-byte budget would delete both if recency were ignored.

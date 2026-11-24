@@ -75,9 +75,6 @@ block2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSError", "NSDistributedNotificationCenter", "NSNotification", "NSOperation", "NSURL", "NSArray", "NSDictionary", "NSValue"] }
 objc2-local-authentication = { version = "0.3", default-features = false, features = ["std", "block2", "LAContext", "LAError", "LABiometryType"] }
 
-[dev-dependencies]
-filetime = "0.2"
-
 [patch.crates-io]
 wry = { path = "vendor/wry" }
 
