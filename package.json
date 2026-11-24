@@ -43,6 +43,7 @@
     "typecheck": "tsc --noEmit",
     "gen:types": "cargo test --manifest-path src-tauri/Cargo.toml --lib export_ipc_types",
     "lint": "eslint src --ext .ts,.tsx --max-warnings 0",
+    "check:sizes": "node scripts/check-file-sizes.mjs",
     "screenshots": "node scripts/capture-all-screenshots.mjs",
     "prepare": "sh scripts/setup-hooks.sh"
   },
