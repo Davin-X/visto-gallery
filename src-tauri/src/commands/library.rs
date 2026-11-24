@@ -3684,8 +3684,8 @@ mod scan_chunk_tests {
         let fresh = root.join(format!("b.tmp-{}", uuid::Uuid::new_v4()));
         fs::write(&stale, b"partial").unwrap();
         fs::write(&fresh, b"in progress").unwrap();
-        let old = filetime::FileTime::from_unix_time(1_000_000_000, 0);
-        filetime::set_file_mtime(&stale, old).unwrap();
+        let old = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+        std::fs::set_times(&stale, std::fs::FileTimes::new().set_modified(old)).unwrap();
 
         // Imports pass None: nothing is removed.
         collect_media_paths(&root, &AtomicBool::new(false), None);

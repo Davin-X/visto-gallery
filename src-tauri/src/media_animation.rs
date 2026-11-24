@@ -320,7 +320,7 @@ mod tests {
     fn isobmff(brands: &[&[u8]]) -> Vec<u8> {
         let mut payload = Vec::new();
         for brand in brands {
-            payload.extend_from_slice(*brand);
+            payload.extend_from_slice(brand);
         }
         let size = 16 + payload.len() as u32;
         let mut bytes = Vec::new();
@@ -336,7 +336,7 @@ mod tests {
     fn gif_with_two_frames_is_animated() {
         for header in [b"GIF87a".as_slice(), b"GIF89a".as_slice()] {
             let path = write_temp("gif", &gif(header, 2));
-            assert_eq!(detect_animation(&path, "gif"), true);
+            assert!(detect_animation(&path, "gif"));
             assert_eq!(probe_file(&path), Some(true));
             let _ = std::fs::remove_file(path);
         }
@@ -346,7 +346,7 @@ mod tests {
     fn single_frame_gif_is_still() {
         let path = write_temp("gif", &gif(b"GIF89a", 1));
         assert_eq!(probe_file(&path), Some(false));
-        assert_eq!(detect_animation(&path, "gif"), false);
+        assert!(!detect_animation(&path, "gif"));
         let _ = std::fs::remove_file(path);
     }
 
@@ -370,7 +370,7 @@ mod tests {
         // reporting "still".
         let path = write_temp("gif", b"GIF89a\x01");
         assert_eq!(probe_file(&path), None);
-        assert_eq!(detect_animation(&path, "gif"), true);
+        assert!(detect_animation(&path, "gif"));
         let _ = std::fs::remove_file(path);
     }
 
@@ -397,7 +397,7 @@ mod tests {
 
         let simple = write_temp("webp", &riff_webp(&[(b"VP8L", vec![0x2f, 1, 2, 3, 4])]));
         assert_eq!(probe_file(&simple), Some(false));
-        assert_eq!(detect_animation(&simple, "webp"), false);
+        assert!(!detect_animation(&simple, "webp"));
 
         let _ = std::fs::remove_file(extended);
         let _ = std::fs::remove_file(simple);
@@ -420,7 +420,7 @@ mod tests {
             &png_chunks(&[(b"IDAT", vec![1, 2, 3]), (b"IEND", vec![])]),
         );
         assert_eq!(probe_file(&still), Some(false));
-        assert_eq!(detect_animation(&still, "png"), false);
+        assert!(!detect_animation(&still, "png"));
 
         let _ = std::fs::remove_file(apng);
         let _ = std::fs::remove_file(still);
@@ -446,13 +446,13 @@ mod tests {
     fn unreadable_or_foreign_files_fall_back_to_the_extension_rule() {
         let garbage = write_temp("png", b"not really an image");
         assert_eq!(probe_file(&garbage), None);
-        assert_eq!(detect_animation(&garbage, "png"), false);
-        assert_eq!(detect_animation(&garbage, "gif"), true);
+        assert!(!detect_animation(&garbage, "png"));
+        assert!(detect_animation(&garbage, "gif"));
 
         let missing = std::env::temp_dir().join("visto-animation-probe-missing.gif");
         let _ = std::fs::remove_file(&missing);
-        assert_eq!(detect_animation(&missing, "gif"), true);
-        assert_eq!(detect_animation(&missing, "webp"), false);
+        assert!(detect_animation(&missing, "gif"));
+        assert!(!detect_animation(&missing, "webp"));
 
         let _ = std::fs::remove_file(garbage);
     }
@@ -461,7 +461,7 @@ mod tests {
     fn formats_without_animation_support_never_open_the_file() {
         for extension in ["jpg", "jpeg", "heic_", "tiff", "cr3", "mp4", ""] {
             assert!(!is_probe_candidate(extension), "{extension}");
-            assert_eq!(detect_animation(Path::new("/nope"), extension), false);
+            assert!(!detect_animation(Path::new("/nope"), extension));
         }
     }
 }

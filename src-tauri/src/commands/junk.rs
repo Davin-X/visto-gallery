@@ -2199,8 +2199,8 @@ mod tests {
     }
 
     fn age(path: &Path, by: Duration) {
-        let when = filetime::FileTime::from_system_time(SystemTime::now() - by);
-        filetime::set_file_mtime(path, when).unwrap();
+        let when = SystemTime::now() - by;
+        std::fs::set_times(path, std::fs::FileTimes::new().set_modified(when)).unwrap();
     }
 
     const OLD: Duration = Duration::from_secs(2 * 60 * 60);

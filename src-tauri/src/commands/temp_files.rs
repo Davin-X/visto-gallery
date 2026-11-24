@@ -259,9 +259,8 @@ mod tests {
         let fresh = dir.join("fresh_edited.jpg");
         fs::write(&old, b"data").unwrap();
         fs::write(&fresh, b"data").unwrap();
-        let age =
-            filetime::FileTime::from_system_time(SystemTime::now() - Duration::from_secs(7200));
-        filetime::set_file_mtime(&old, age).unwrap();
+        let age = SystemTime::now() - Duration::from_secs(7200);
+        std::fs::set_times(&old, std::fs::FileTimes::new().set_modified(age)).unwrap();
 
         let removed = sweep_dir(&dir, stale_temp_cutoff(Duration::from_secs(3600))).unwrap();
         assert_eq!(removed, 1);
@@ -272,9 +271,12 @@ mod tests {
         fs::create_dir_all(&nested).unwrap();
         let nested_old = nested.join("stale.jpg");
         fs::write(&nested_old, b"data").unwrap();
-        let nested_age =
-            filetime::FileTime::from_system_time(SystemTime::now() - Duration::from_secs(7200));
-        filetime::set_file_mtime(&nested_old, nested_age).unwrap();
+        let nested_age = SystemTime::now() - Duration::from_secs(7200);
+        std::fs::set_times(
+            &nested_old,
+            std::fs::FileTimes::new().set_modified(nested_age),
+        )
+        .unwrap();
         assert_eq!(
             sweep_dir(&dir, stale_temp_cutoff(Duration::from_secs(3600))).unwrap(),
             0
@@ -308,9 +310,8 @@ mod tests {
         fs::write(&other, b"").unwrap();
         fs::write(&bak, b"").unwrap();
         // Make stale old enough.
-        let old =
-            filetime::FileTime::from_system_time(SystemTime::now() - Duration::from_secs(3600));
-        filetime::set_file_mtime(&stale, old).unwrap();
+        let old = SystemTime::now() - Duration::from_secs(3600);
+        std::fs::set_times(&stale, std::fs::FileTimes::new().set_modified(old)).unwrap();
 
         let removed = sweep_stale_export_temps(&dir, Duration::from_secs(300));
         assert_eq!(removed, 1);
