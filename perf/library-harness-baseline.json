@@ -11,15 +11,42 @@
   },
   "items": 50000,
   "thresholds": {
-    "firstUsefulScreenMs": { "max": 20000, "unit": "ms", "meaning": "initial library grid render (synthetic scan/page load proxy)" },
-    "albumsOverviewMs": { "max": 15000, "unit": "ms", "meaning": "albums overview page render" },
-    "maxActiveThumbnails": { "max": 6, "unit": "count", "meaning": "concurrent thumbnail request bound" },
-    "mountedTiles": { "min": 1, "unit": "count", "meaning": "sanity: grid rendered tiles" },
-    "albumCards": { "min": 1, "unit": "count", "meaning": "sanity: albums rendered cards" }
+    "firstUsefulScreenMs": {
+      "max": 2000,
+      "unit": "ms",
+      "meaning": "initial library grid render (synthetic scan/page load proxy)"
+    },
+    "albumsOverviewMs": {
+      "max": 1500,
+      "unit": "ms",
+      "meaning": "albums overview page render"
+    },
+    "maxActiveThumbnails": {
+      "max": 6,
+      "unit": "count",
+      "meaning": "concurrent thumbnail request bound"
+    },
+    "mountedTiles": {
+      "min": 20,
+      "unit": "count",
+      "meaning": "sanity: grid rendered tiles"
+    },
+    "albumCards": {
+      "min": 20,
+      "unit": "count",
+      "meaning": "sanity: albums rendered cards"
+    }
   },
   "reference": {
-    "recordedAt": null,
-    "environment": null,
-    "metrics": null
+    "recordedAt": "2026-11-25T08:04:19.989Z",
+    "environment": "local",
+    "items": 50000,
+    "metrics": {
+      "firstUsefulScreenMs": 150.4,
+      "albumsOverviewMs": 130.9,
+      "maxActiveThumbnails": 6,
+      "mountedTiles": 54,
+      "albumCards": 100
+    }
   }
 }
