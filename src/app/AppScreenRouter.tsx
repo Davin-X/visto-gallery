@@ -516,6 +516,7 @@ export function AppScreenRouter({
           onCancelBatch={batch.cancelBatch}
           onReset={batch.reset}
           onOpenLibrary={() => setScreen("Library")}
+          onReloadLibrary={library.loadLibrary}
           onClearSelection={library.clearSelection}
           onSelectAll={library.selectAll}
           onSetSelection={library.setSelectedIds}

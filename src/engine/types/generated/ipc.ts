@@ -21,7 +21,7 @@ export type ViewerZoomBehavior = "fit" | "actual" | "last";
 
 export type MediaKind = "photo" | "video" | "raw";
 
-export type MediaItem = { id: string, path: string, name: string, extension: string, kind: MediaKind, size: number, modifiedAt: number, capturedAt?: number | null, width?: number | null, height?: number | null, camera?: string | null, lens?: string | null, exposure?: string | null, iso?: number | null, latitude?: number | null, longitude?: number | null, sha256?: string | null, favorite: boolean, hidden: boolean, 
+export type MediaItem = { id: string, path: string, name: string, title?: string | null, extension: string, kind: MediaKind, size: number, modifiedAt: number, capturedAt?: number | null, width?: number | null, height?: number | null, camera?: string | null, lens?: string | null, exposure?: string | null, iso?: number | null, latitude?: number | null, longitude?: number | null, sha256?: string | null, favorite: boolean, hidden: boolean, 
 /**
  * Why the item is hidden: 'manual' for app-driven hides, NULL when
  * unknown (rows hidden before this column existed).
@@ -174,6 +174,28 @@ export type BatchExportError = { itemId: string,
  * Stable class of the failure, so the UI can branch without reading text.
  */
 code: ErrorCode, error: string, };
+
+export type BatchMetadataRequest = { itemIds: Array<string>, 
+/**
+ * When `Some`, sets `captured_at` (epoch ms, wall-clock UTC).
+ */
+capturedAt: number | null, 
+/**
+ * When `Some`, sets `title` (empty/whitespace clears it).
+ */
+title: string | null, 
+/**
+ * Keywords to apply according to `keywords_mode`.
+ */
+keywords: Array<string>, 
+/**
+ * `"add"` (default when keywords non-empty), `"replace"`, or `"remove"`.
+ */
+keywordsMode: string | null, latitude: number | null, longitude: number | null, clearLocation: boolean, };
+
+export type BatchMetadataFailure = { itemId: string, path: string, error: string, };
+
+export type BatchMetadataResult = { updated: number, sidecarsWritten: number, failed: Array<BatchMetadataFailure>, };
 
 export type TrashResult = { 
 /**

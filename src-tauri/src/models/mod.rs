@@ -15,6 +15,7 @@ pub struct MediaItem {
     pub id: String,
     pub path: String,
     pub name: String,
+    pub title: Option<String>,
     pub extension: String,
     pub kind: MediaKind,
     pub size: i64,
@@ -111,6 +112,7 @@ impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for MediaItem {
             id: row.try_get("id")?,
             path: row.try_get("path")?,
             name: row.try_get("name")?,
+            title: row.try_get("title").ok().flatten(),
             extension: row.try_get("extension")?,
             kind: {
                 let s: String = row.try_get("kind")?;
@@ -174,6 +176,7 @@ impl MediaItem {
             id: stable_id(&path),
             path,
             name,
+            title: None,
             extension,
             kind,
             size,

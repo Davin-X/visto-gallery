@@ -122,6 +122,19 @@ pub(crate) fn inspect_media_file_with_metadata(
             .and_then(crate::commands::parse_filename_timestamp);
     }
 
+    if let Some(xmp) = crate::commands::xmp::read_xmp_sidecar(path) {
+        if xmp.captured_at.is_some() {
+            item.captured_at = xmp.captured_at;
+        }
+        if xmp.title.is_some() {
+            item.title = xmp.title;
+        }
+        if xmp.latitude.is_some() && xmp.longitude.is_some() {
+            item.latitude = xmp.latitude;
+            item.longitude = xmp.longitude;
+        }
+    }
+
     // Header-only dimension probe for every kind (image headers, HEIF/AVIF
     // and MP4/MOV boxes, EXIF, then ImageIO). The upsert stores the returned
     // pair, so it must carry every fallback, not just the first probe.
@@ -162,13 +175,14 @@ pub(crate) async fn upsert_media_batch(
     }
 
     let mut query = QueryBuilder::<Sqlite>::new(
-        "INSERT INTO media_items (id, path, name, extension, kind, size, modified_at, captured_at, width, height, camera, lens, exposure, iso, latitude, longitude, sha256, created_at, updated_at, favorite, hidden, is_animated, content_signature, rating, color_label) ",
+        "INSERT INTO media_items (id, path, name, title, extension, kind, size, modified_at, captured_at, width, height, camera, lens, exposure, iso, latitude, longitude, sha256, created_at, updated_at, favorite, hidden, is_animated, content_signature, rating, color_label) ",
     );
     query.push_values(rows, |mut values, (item, width, height)| {
         values
             .push_bind(&item.id)
             .push_bind(&item.path)
             .push_bind(&item.name)
+            .push_bind(&item.title)
             .push_bind(&item.extension)
             .push_bind(item.kind.as_str())
             .push_bind(item.size)
@@ -193,7 +207,7 @@ pub(crate) async fn upsert_media_batch(
             .push_bind(&item.color_label);
     });
     query.push(
-        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END, updated_at = excluded.updated_at, favorite = media_items.favorite, hidden = media_items.hidden, is_animated = excluded.is_animated, content_signature = excluded.content_signature, rating = COALESCE(excluded.rating, media_items.rating), color_label = COALESCE(excluded.color_label, media_items.color_label)",
+        " ON CONFLICT(id) DO UPDATE SET path = excluded.path, name = excluded.name, title = COALESCE(excluded.title, media_items.title), extension = excluded.extension, kind = excluded.kind, size = excluded.size, modified_at = excluded.modified_at, captured_at = COALESCE(excluded.captured_at, media_items.captured_at), width = excluded.width, height = excluded.height, camera = COALESCE(excluded.camera, media_items.camera), lens = COALESCE(excluded.lens, media_items.lens), exposure = COALESCE(excluded.exposure, media_items.exposure), iso = COALESCE(excluded.iso, media_items.iso), latitude = COALESCE(excluded.latitude, media_items.latitude), longitude = COALESCE(excluded.longitude, media_items.longitude), sha256 = CASE WHEN excluded.size != media_items.size OR excluded.modified_at != media_items.modified_at THEN NULL ELSE media_items.sha256 END, updated_at = excluded.updated_at, favorite = media_items.favorite, hidden = media_items.hidden, is_animated = excluded.is_animated, content_signature = excluded.content_signature, rating = COALESCE(excluded.rating, media_items.rating), color_label = COALESCE(excluded.color_label, media_items.color_label)",
     );
     query.build().execute(db).await?;
     Ok(())

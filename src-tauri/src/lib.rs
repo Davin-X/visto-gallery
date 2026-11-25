@@ -479,6 +479,7 @@ pub fn run() {
             read_exif,
             backfill_metadata,
             supported_extensions,
+            batch_edit_metadata,
             // Editing
             render_edited,
             save_exported_file,
