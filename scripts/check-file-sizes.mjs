@@ -16,7 +16,7 @@ const OVERSIZED = {
   "src/screens/DuplicatesScreen.tsx": 1586,
   "src/screens/EditScreen.tsx": 1302,
   "src-tauri/src/commands/playback.rs": 1036,
-  "src/design/components/VideoPlayer.tsx": 1510,
+  "src/design/components/VideoPlayer.tsx": 1388,
   "src-tauri/src/commands/backup.rs": 1389,
   "src/engine/stores/useLibraryStore.test.ts": 1338,
   "src-tauri/src/commands/batch.rs": 1304,
