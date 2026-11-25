@@ -4,6 +4,9 @@ async function openApp(page: Page, query: string) {
   await page.setViewportSize({ width: 1500, height: 900 });
   await page.goto(`/harness.html?benchmark=20${query}`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".gallery-tile");
+  const stats = page.locator(".sidebar-library-stats");
+  await expect(stats).not.toHaveAttribute("open", "");
+  await stats.locator("summary").click();
 }
 
 const hiddenNav = (page: Page) =>

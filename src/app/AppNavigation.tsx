@@ -64,12 +64,12 @@ const NAV_ITEMS: Array<{
   { label: "Library", Icon: LibraryIcon, screens: ["Library"] },
   { label: "Albums", Icon: AlbumsIcon, screens: ["Albums"] },
   { label: "Map", Icon: MapPinIcon, screens: ["Map"] },
+  { label: "Hidden", Icon: EyeOffIcon, screens: ["Hidden"] },
   // Duplicates and Cleanup are separate screens behind one entry so the tab
   // strip, Back/Forward and the saved last view all keep working.
   { label: "Clean up", Icon: TrashIcon, screens: ["Duplicates", "Cleanup"] },
   { label: "Edit", Icon: EditIcon, screens: ["Edit"] },
   { label: "Batch", Icon: BatchIcon, screens: ["Batch"] },
-  { label: "Hidden", Icon: EyeOffIcon, screens: ["Hidden"] },
 ];
 
 interface AppTopBarProps {
@@ -332,7 +332,6 @@ export function AppSidebar({
     totalSize: count(stats?.totalSize),
   };
   const folderCount = folders.length;
-  const folderItems = folders.reduce((total, folder) => total + folder.itemCount, 0);
   const hiddenLocked = useHiddenLockStore((s) => isHiddenLocked(s.status));
   const [statsOpen, setStatsOpen] = useState(false);
   const [statsPos, setStatsPos] = useState({ top: 0, left: 0 });
@@ -536,7 +535,7 @@ export function AppSidebar({
                 <button
                   key={label}
                   type="button"
-                  className={`nav-item ${active ? "active" : ""}`}
+                  className={`nav-item ${label === "Clean up" ? "nav-tools-start" : ""} ${active ? "active" : ""}`}
                   aria-label={label}
                   title={label}
                   aria-current={active ? "page" : undefined}
@@ -571,7 +570,7 @@ export function AppSidebar({
               <span className="sources-entry-count">
                 {folderCount === 0
                   ? "No sources yet"
-                  : `${folderCount.toLocaleString()} folder${folderCount === 1 ? "" : "s"} · ${folderItems.toLocaleString()} items`}
+                  : `${folderCount.toLocaleString()} folder${folderCount === 1 ? "" : "s"}`}
               </span>
             </span>
             <span className="sources-entry-action">
@@ -625,8 +624,10 @@ export function AppSidebar({
         <div className="sidebar-divider" aria-hidden="true" />
 
         <div className="sidebar-section">
-          <div className="sidebar-section-label">LIBRARY</div>
-          <div className="library-stats">{libraryStatsRows}</div>
+          <details className="sidebar-library-stats">
+            <summary>Library stats</summary>
+            <div className="library-stats">{libraryStatsRows}</div>
+          </details>
         </div>
       </div>
       <div className="sidebar-footer">

@@ -584,3 +584,22 @@
   outline: none;
 }
 
+.app-frame .sidebar :is(.nav-item, .sources-entry-name) {
+  font-size: 13px;
+  font-weight: 500;
+}
+.nav-tools-start {
+  margin-top: 8px;
+}
+.sidebar-library-stats summary {
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.app-body:not(.sidebar-collapsed) .sources-entry {
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  column-gap: 10px;
+  padding-inline: 11px;
+}
