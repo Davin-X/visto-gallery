@@ -239,6 +239,7 @@ function LibraryScreen(props: LibraryScreenProps) {
     return () => window.clearTimeout(timer);
   }, [library.refreshingLibrary]);
   const draftTransforms = useDraftTransforms();
+  const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
   const thumbnailSize = useThumbnailSize();
   const showExtensions = useSettingsStore((s) => s.showExtensions);
   const updateSettings = useSettingsStore((s) => s.update);
@@ -1340,7 +1341,7 @@ function LibraryScreen(props: LibraryScreenProps) {
             </header>
           )}
 
-          <div className="collection-toolbar">
+          <div className={`collection-toolbar${viewOptionsOpen ? " options-open" : ""}`}>
             <div className="search-field">
               <span className="search-icon">
                 <SearchIcon size={15} />
@@ -1424,6 +1425,14 @@ function LibraryScreen(props: LibraryScreenProps) {
                       );
                     })}
                   </div>
+                  <button
+                    className="compact-view-options"
+                    type="button"
+                    aria-expanded={viewOptionsOpen}
+                    onClick={() => setViewOptionsOpen(!viewOptionsOpen)}
+                  >
+                    View options
+                  </button>
                   {/* Details rows use a fixed thumbnail, so size only matters
                       for the visual layouts. A divider keeps the two icon
                       groups from reading as one six-button control. */}
@@ -1948,7 +1957,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                           if (e.target.value) void jumpToTimelineMonth(e.target.value);
                         }}
                       >
-                        <option value="">Month…</option>
+                        <option value="">Jump to date…</option>
                         {timelineYears.map(({ year }) => (
                           <optgroup key={year} label={year}>
                             {timelineMonths
@@ -2417,7 +2426,7 @@ function LibraryScreen(props: LibraryScreenProps) {
           previewHandlers={inspectedItem ? holdHandlers(inspectedItem.id) : undefined}
           assetUrl={assetUrl}
           draftTransforms={draftTransforms}
-          thumbnailPixels={thumbnailPixels}
+          veiled={veiled}
           canPlayBackground={Boolean(props.onPlayBackground)}
           playingId={playingId}
           isPlaying={isPlaying}

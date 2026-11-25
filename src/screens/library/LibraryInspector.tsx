@@ -52,7 +52,7 @@ interface LibraryInspectorProps {
   previewHandlers?: ComponentProps<"button">;
   assetUrl: LibraryScreenProps["assetUrl"];
   draftTransforms: Map<string, DraftTransform>;
-  thumbnailPixels: ComponentProps<typeof CachedThumbnail>["size"];
+  veiled: boolean;
   canPlayBackground: boolean;
   playingId: string | null;
   isPlaying: boolean;
@@ -70,7 +70,7 @@ export function LibraryInspector({
   previewHandlers,
   assetUrl,
   draftTransforms,
-  thumbnailPixels,
+  veiled,
   canPlayBackground,
   playingId,
   isPlaying,
@@ -115,11 +115,14 @@ export function LibraryInspector({
                   ? "Hold to reveal preview; double-click to open"
                   : `Open ${sel.name} in viewer`
               }
-              onDoubleClick={() => props.onOpenViewer(sel.id)}
+              onClick={veiled ? undefined : () => props.onOpenViewer(sel.id)}
+              onDoubleClick={veiled ? () => props.onOpenViewer(sel.id) : undefined}
               title={
                 masked
                   ? "Hold to reveal preview · double-click to open"
-                  : "Double-click to open in viewer"
+                  : veiled
+                    ? "Double-click to open in viewer"
+                    : "Open in viewer"
               }
               {...previewHandlers}
             >
@@ -171,12 +174,12 @@ export function LibraryInspector({
 
                   name={name}
 
-                  size={thumbnailPixels}
+                  size={512}
 
                   style={draftImageStyle(draftTransforms, sel.id)}
                 />
               )}
-              <span>Double-click to view</span>
+              <span>{veiled ? "Double-click to view" : "Open in viewer"}</span>
               <span className="inspector-type-badge">
                 {sel.kind === "video"
                   ? "Video"

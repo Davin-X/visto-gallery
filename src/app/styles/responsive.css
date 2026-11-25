@@ -236,3 +236,23 @@
   }
 }
 
+.compact-view-options {
+  display: none;
+}
+@media (max-width: 1100px) {
+  .library-header .compact-view-options {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 4px 8px;
+  }
+  .library-header
+    .collection-toolbar:not(.options-open)
+    :is(.zoom-control, .sort-control, .view-controls .toolbar-divider),
+  .timeline-jump .timeline-jump-years {
+    display: none;
+  }
+}

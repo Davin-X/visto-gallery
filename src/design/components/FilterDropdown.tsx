@@ -31,7 +31,7 @@ const COLORS: [string, string][] = [
 export function FilterDropdown(props: FilterDropdownProps) {
   const [open, setOpen] = useState(false);
   const [smartAlbumName, setSmartAlbumName] = useState("");
-  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [position, setPosition] = useState({ top: 0, left: 0, maxHeight: 560 });
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   usePopoverFocus(open, panelRef, buttonRef);
@@ -74,21 +74,24 @@ export function FilterDropdown(props: FilterDropdownProps) {
         padding,
         Math.min(buttonRect.left, window.innerWidth - panelRect.width - padding),
       );
-      let top = buttonRect.bottom + gap;
-      if (
-        top + panelRect.height > window.innerHeight - padding &&
-        buttonRect.top - panelRect.height - gap >= padding
-      ) {
-        top = buttonRect.top - panelRect.height - gap;
-      }
-
-      setPosition({ top, left });
+      const below = window.innerHeight - buttonRect.bottom - gap - padding;
+      const above = buttonRect.top - gap - padding;
+      const placeAbove = panel.scrollHeight > below && above > below;
+      const maxHeight = Math.max(0, Math.min(560, placeAbove ? above : below));
+      const top = placeAbove
+        ? Math.max(padding, buttonRect.top - gap - Math.min(panelRect.height, maxHeight))
+        : buttonRect.bottom + gap;
+      setPosition({ top, left, maxHeight });
     };
 
     positionPanel();
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(positionPanel);
+    if (panelRef.current) observer?.observe(panelRef.current);
     window.addEventListener("resize", positionPanel);
     window.addEventListener("scroll", positionPanel, true);
     return () => {
+      observer?.disconnect();
       window.removeEventListener("resize", positionPanel);
       window.removeEventListener("scroll", positionPanel, true);
     };
@@ -110,7 +113,7 @@ export function FilterDropdown(props: FilterDropdownProps) {
           e.stopPropagation();
           if (!open) {
             const rect = buttonRef.current?.getBoundingClientRect();
-            if (rect) setPosition({ top: rect.bottom + 6, left: rect.left });
+            if (rect) setPosition({ top: rect.bottom + 6, left: rect.left, maxHeight: 560 });
           }
           setOpen(!open);
         }}
@@ -133,6 +136,8 @@ export function FilterDropdown(props: FilterDropdownProps) {
             style={{
               position: "fixed",
               top: position.top,
+              maxHeight: position.maxHeight,
+              boxSizing: "border-box",
               left: position.left,
               zIndex: "var(--z-dropdown)",
             }}
