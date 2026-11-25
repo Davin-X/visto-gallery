@@ -1,4 +1,4 @@
-import type { CSSProperties, RefObject } from "react";
+import type { CSSProperties } from "react";
 import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
 import {
@@ -39,7 +39,6 @@ import {
   libraryViewKey,
   currentLibraryFilter,
   hiddenPageFilter,
-  type LibraryState,
 } from "../engine/stores/useLibraryStore";
 import {
   isMonthCollapsed,
@@ -48,7 +47,6 @@ import {
   useTimelineCollapse,
   useTimelineMonths,
 } from "./timeline/timelineMonths";
-import type { ContextMenuItem } from "../design/components/ContextMenu";
 import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { FilterDropdown } from "../design/components/FilterDropdown";
 import { ActiveRefinements } from "../design/components/ActiveRefinements";
@@ -57,18 +55,15 @@ import { useSettingsStore } from "../engine/stores/useSettingsStore";
 import { useThumbnailSize, useInspectorWidth } from "../engine/stores/useSettingsStore";
 import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple, canPlayVideoInApp } from "../engine/utils/mediaTypes";
-import type { MediaItem, Album, Filter, LayoutMode } from "../engine/types/media";
-import type { DeleteItemsOutcome, LibraryFolder } from "../engine/types/commands";
-import {
-  formatCapturedDateTime,
-  formatFileDateTime,
-  formatItemDate,
-  itemMonth,
-  monthLabel,
-} from "../engine/utils/mediaDate";
+import type { MediaItem, Filter } from "../engine/types/media";
+import type { LibraryFolder } from "../engine/types/commands";
+import { formatItemDate, itemMonth, monthLabel } from "../engine/utils/mediaDate";
 import { displayFileName } from "../engine/utils/fileName";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
 import { buildItemContextMenu } from "../engine/utils/itemContextMenu";
+
+import { LibraryInspector } from "./library/LibraryInspector";
+import type { LibraryScreenProps } from "./library/types";
 
 const GALLERY_PAGE_SIZE = 180;
 const VIRTUAL_GRID_OVERSCAN_ROWS = 6;
@@ -132,18 +127,6 @@ export function calculateVirtualGridWindow(
   };
 }
 
-/** The folder holding `path` ("/a/b/c.jpg" → "/a/b"). */
-function parentFolder(path: string) {
-  const index = path.lastIndexOf("/");
-  return index > 0 ? path.slice(0, index) : path;
-}
-
-/** Just the folder's own name, for a compact Location value. */
-function folderName(path: string) {
-  const folder = parentFolder(path);
-  return folder.slice(folder.lastIndexOf("/") + 1) || folder;
-}
-
 /**
  * The heading above the grid.
  *
@@ -159,86 +142,6 @@ export function libraryHeading(
   if (hiddenView) return "Hidden";
   if (smartAlbumName) return smartAlbumName;
   return filter === "All" ? "All Media" : filter;
-}
-
-interface LibraryScreenProps {
-  activeAlbum: string | null;
-  albumDragOver?: boolean;
-  albums: Album[];
-  assetUrl: (path: string) => string;
-  busy: boolean;
-  filter: Filter;
-  hasItems?: boolean;
-  hiddenCount: number;
-  hiddenView?: boolean;
-  /**
-   * Veil hidden thumbnails behind hold-to-reveal. On by default in the hidden
-   * view; Hidden turns it off once Touch ID or the password unlocked it.
-   */
-  veilHidden?: boolean;
-  /** Extra header control for the hidden view (Hidden's Lock button). */
-  hiddenHeaderAction?: React.ReactNode;
-  inspectedId: string | null;
-  items: MediaItem[];
-  layout: LayoutMode;
-  onAddItems?: (albumId: string) => void;
-  onAlbumMenu?: (e: React.MouseEvent) => void;
-  onBrowseLibrary?: () => void;
-  onChangeFilter: (filter: Filter) => void;
-  onChangeLayout: (layout: LayoutMode) => void;
-  onChangeQuery: (query: string) => void;
-  onClearSelection: () => void;
-  onContextMenu: (items: ContextMenuItem[], e: React.MouseEvent) => void;
-  onCopyTagsToFinder?: (ids: string[]) => void | Promise<void>;
-  onCreateAlbum: (itemIds?: string[]) => void;
-  onImportFiles?: () => void;
-  onImportFolder?: () => void;
-  onInspectItem: (id: string) => void;
-  onOpenAlbumPicker: (itemIds?: string[]) => void;
-  onOpenAlbums: () => void;
-  onOpenBatch?: (ids?: string[]) => void;
-  onOpenEdit: (item: MediaItem) => void;
-  onOpenViewer: (id?: string) => void;
-  /** Start a background session for a video without leaving the grid. */
-  onPlayBackground?: (id: string) => void;
-  onPlaySlideshow: (ids?: string[]) => void;
-  onRequestDeleteItems: (ids: string[]) => void;
-  onRequestRemoveFromAlbum?: (albumId: string, itemIds: string[]) => void;
-  onSelectRange: (startId: string, endId: string) => void;
-  onSetActiveAlbum: (albumId: string | null) => void;
-  onSetFavoriteForIds: (ids: string[], favorite: boolean) => void | Promise<void>;
-  onSetHiddenForIds: (ids: string[], hidden: boolean) => void | Promise<void>;
-  onSetSelection: (ids: string[]) => void;
-  onSetRatingForIds: (ids: string[], rating: number) => void | Promise<void>;
-  onSetColorLabelForIds: (ids: string[], colorLabel: string | null) => void | Promise<void>;
-  onToggleFavorite: (id: string) => void | Promise<void>;
-  onToggleHidden: (id: string) => void | Promise<void>;
-  onToggleInspector: () => void;
-  onToggleSelect: (id: string) => void;
-  onToggleSelectAll: () => void;
-  onDeleteItems: (ids: string[]) => void | Promise<DeleteItemsOutcome>;
-  onUpdateTags: (id: string, tags: string[]) => void | Promise<void>;
-  query: string;
-  minRating: number | null;
-  libraryStats?: {
-    photos: number;
-    videos: number;
-    raws: number;
-    animations?: number;
-    favorites: number;
-  };
-  colorLabelFilter: string | null;
-  dateFrom: number | null;
-  dateTo: number | null;
-  onSetMinRating: (rating: number | null) => void;
-  onSetColorLabelFilter: (colorLabel: string | null) => void;
-  onSetDateRange: (from: number | null, to: number | null) => void;
-  onCreateSmartAlbum?: (name: string) => void;
-  notice: (text: string) => void;
-  progress: LibraryState["progress"];
-  searchInputRef: RefObject<HTMLInputElement | null>;
-  selectedIds: string[];
-  showInspector: boolean;
 }
 
 /**
@@ -283,6 +186,12 @@ function ListRowMeta({ item }: { item: MediaItem }) {
 
 function LibraryScreen(props: LibraryScreenProps) {
   const library = useLibraryStore();
+  const inspectedItem =
+    props.showInspector && props.inspectedId
+      ? (props.hiddenView ? library.hiddenItems : library.items).find(
+          (item) => item.id === props.inspectedId,
+        )
+      : undefined;
   const playingId = usePlaybackStore((state) => state.itemId);
   const isPlaying = usePlaybackStore((state) => state.playing);
   const [copiedPathFor, setCopiedPathFor] = useState<string | null>(null);
@@ -2500,501 +2409,23 @@ function LibraryScreen(props: LibraryScreenProps) {
         />
       )}
       {props.showInspector && (
-        <aside className="photo-inspector">
-          {props.inspectedId &&
-          (props.hiddenView ? library.hiddenItems : library.items).find(
-            (i) => i.id === props.inspectedId,
-          ) ? (
-            (() => {
-              const sel = (props.hiddenView ? library.hiddenItems : library.items).find(
-                (i) => i.id === props.inspectedId,
-              );
-              if (!sel) return null;
-              // Inspection is independent of selection: the Inspector always
-              // shows the inspected item, even when a larger multi-selection
-              // exists (already-selected items stay inspectable).
-              const isSelected = selectedIdSet.has(sel.id);
-              return (
-                <>
-                  <div className="inspector-top">
-                    <div>
-                      <small>
-                        {props.selectedIds.length > 1 && isSelected
-                          ? "SELECTED · INSPECTING"
-                          : "INSPECTING"}
-                      </small>
-                      <h2 title={masked(sel) ? "Hidden item" : sel.name}>
-                        {masked(sel) ? "Hidden item" : sel.name}
-                      </h2>
-                      {props.selectedIds.length > 1 && (
-                        <span className="inspector-selection-note">
-                          {props.selectedIds.length.toLocaleString()} selected · details for this
-                          one
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      className="inspector-close-btn"
-                      onClick={props.onToggleInspector}
-                      title="Close Inspector (⌥⌘I)"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <span className="inspector-image-wrapper">
-                    <button
-                      className={`inspector-image${masked(sel) ? " hidden-obscured" : ""}`}
-                      type="button"
-                      aria-label={
-                        masked(sel)
-                          ? "Hold to reveal preview; double-click to open"
-                          : `Open ${sel.name} in viewer`
-                      }
-                      onDoubleClick={() => props.onOpenViewer(sel.id)}
-                      title={
-                        masked(sel)
-                          ? "Hold to reveal preview · double-click to open"
-                          : "Double-click to open in viewer"
-                      }
-                      {...holdHandlers(sel.id)}
-                    >
-                      {sel.kind === "photo" ? (
-                        (() => {
-                          const ext = (sel.extension || "").toLowerCase();
-                          const isAnimatedPhoto =
-                            !!sel.isAnimated || ext === "gif" || ext === "webp" || ext === "apng";
-                          return isAnimatedPhoto ? (
-                            <span className="inspector-video-preview">
-                              <img
-                                src={assetUrl(sel.path)}
-                                alt={tileAlt(sel)}
-                                draggable={false}
-                                style={draftImageStyle(draftTransforms, sel.id)}
-                              />
-                            </span>
-                          ) : (
-                            // A cached 512px preview, not the original: a 40 MB
-                            // photo does not need a full decode for this frame,
-                            // and a missing or offline file shows "Preview
-                            // unavailable" instead of a broken image.
-                            <CachedThumbnail
-                              itemId={sel.id}
-                              name={tileAlt(sel)}
-                              size={512}
-                              eager
-                              showStatus
-                              fallbackSrc={assetUrl(sel.path)}
-                              style={draftImageStyle(draftTransforms, sel.id)}
-                            />
-                          );
-                        })()
-                      ) : sel.kind === "video" ? (
-                        <span className="inspector-video-preview">
-                          <video
-                            src={assetUrl(sel.path)}
-                            autoPlay
-                            muted
-                            loop
-                            playsInline
-                            preload="metadata"
-                            aria-label={`${tileAlt(sel)} preview`}
-                          />
-                        </span>
-                      ) : (
-                        <CachedThumbnail
-                          itemId={sel.id}
-
-                          name={tileAlt(sel)}
-
-                          size={thumbnailPixels}
-
-                          style={draftImageStyle(draftTransforms, sel.id)}
-                        />
-                      )}
-                      <span>Double-click to view</span>
-                      <span className="inspector-type-badge">
-                        {sel.kind === "video"
-                          ? "Video"
-                          : sel.kind === "raw"
-                            ? "RAW"
-                            : sel.isAnimated ||
-                                ["gif", "webp", "apng"].includes(
-                                  (sel.extension || "").toLowerCase(),
-                                )
-                              ? "Animation"
-                              : "Photo"}
-                      </span>
-                    </button>
-                    {sel.kind === "video" && props.onPlayBackground && (
-                      <button
-                        type="button"
-                        className="inspector-video-play"
-                        aria-label={
-                          playingId === sel.id && isPlaying
-                            ? `Pause ${tileAlt(sel)}`
-                            : `Play ${tileAlt(sel)} in background`
-                        }
-                        aria-pressed={playingId === sel.id && isPlaying}
-                        title={playingId === sel.id && isPlaying ? "Pause" : "Play in background"}
-                        onClick={() => toggleBackground(sel)}
-                      >
-                        {playingId === sel.id && isPlaying ? (
-                          <PauseIcon size={20} />
-                        ) : (
-                          <PlayIcon size={20} />
-                        )}
-                      </button>
-                    )}
-                  </span>
-                  <div className="inspector-actions">
-                    {sel.kind === "video" ? (
-                      <button
-                        className="inspector-action primary"
-                        onClick={() => toggleBackground(sel)}
-                        title={
-                          playingId === sel.id && isPlaying
-                            ? "Pause — the top bar controls the session"
-                            : "Play in background — keep browsing; the top bar shows playback"
-                        }
-                        aria-pressed={playingId === sel.id && isPlaying}
-                      >
-                        {playingId === sel.id && isPlaying ? (
-                          <PauseIcon size={14} />
-                        ) : (
-                          <PlayIcon size={14} />
-                        )}
-                        <span>{playingId === sel.id && isPlaying ? "Pause" : "Play"}</span>
-                      </button>
-                    ) : (
-                      <button
-                        className="inspector-action primary"
-                        onClick={() => props.onOpenViewer(sel.id)}
-                        title="View item"
-                      >
-                        <PlayIcon size={14} />
-                        <span>View</span>
-                      </button>
-                    )}
-                    <button
-                      className={`inspector-action ${sel.favorite ? "favorite active" : ""}`}
-                      onClick={() => props.onToggleFavorite(props.inspectedId as string)}
-                      title={sel.favorite ? "Remove from favorites" : "Add to favorites"}
-                      aria-pressed={!!sel.favorite}
-                    >
-                      {/* The label stays "Favorite"; the filled heart and
-                          pressed state show it is on. "Unfavorite" was too
-                          long for the button and spilled out of it. */}
-                      <HeartIcon size={14} filled={!!sel.favorite} />
-                      <span>Favorite</span>
-                    </button>
-                    <button
-                      className="inspector-action"
-                      onClick={() => props.onToggleHidden(props.inspectedId as string)}
-                      title={sel.hidden ? "Unhide" : "Hide"}
-                    >
-                      {sel.hidden ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
-                      <span>{sel.hidden ? "Show" : "Hide"}</span>
-                    </button>
-                    <button
-                      className={`inspector-action ${isSelected ? "active" : ""}`}
-                      onClick={() => props.onToggleSelect(sel.id)}
-                      title={isSelected ? "Remove from selection" : "Add to selection"}
-                      aria-pressed={isSelected}
-                    >
-                      {isSelected ? <CheckIcon size={14} /> : <PlusIcon size={14} />}
-                      <span>Select</span>
-                    </button>
-                  </div>
-                  {!masked(sel) && (
-                    <div className="inspector-section">
-                      <div className="inspector-section-head">
-                        <b>Rating &amp; Label</b>
-                      </div>
-                      <div className="inspector-star-row" role="group" aria-label="Rating">
-                        {[1, 2, 3, 4, 5].map((value) => {
-                          const active = (sel.rating ?? 0) >= value;
-                          const clears = sel.rating === value;
-                          return (
-                            <button
-                              key={value}
-                              type="button"
-                              className={`inspector-star${active ? " filled" : ""}`}
-                              aria-label={
-                                clears ? "Clear rating" : `${value} star${value === 1 ? "" : "s"}`
-                              }
-                              aria-pressed={clears}
-                              title={
-                                clears
-                                  ? "Clear rating"
-                                  : `Rate ${value} star${value === 1 ? "" : "s"}`
-                              }
-                              onClick={() => props.onSetRatingForIds([sel.id], clears ? 0 : value)}
-                            >
-                              ★
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="inspector-color-row" role="group" aria-label="Color label">
-                        {["red", "yellow", "green", "blue", "purple"].map((color) => {
-                          const active = sel.colorLabel === color;
-                          const label = color[0].toUpperCase() + color.slice(1);
-                          return (
-                            <button
-                              key={color}
-                              type="button"
-                              className={`inspector-color${active ? " active" : ""}`}
-                              aria-label={active ? `Clear ${color} label` : `${label} label`}
-                              aria-pressed={active}
-                              title={active ? `Clear ${color} label` : `${label} label`}
-                              onClick={() =>
-                                props.onSetColorLabelForIds([sel.id], active ? null : color)
-                              }
-                            >
-                              <span className={`ctx-dot ctx-dot-${color}`} />
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  <div className="inspector-section">
-                    <div className="inspector-section-head">
-                      <b>File Info</b>
-                    </div>
-                    <div className="info-card">
-                      {masked(sel) ? (
-                        <div className="inspector-hidden-note">
-                          Hold the preview to reveal file details.
-                        </div>
-                      ) : (
-                        <>
-                          {/* The name is already the inspector heading; repeating
-                              it here was redundant. */}
-                          <div className="info-row">
-                            <span className="info-label">Kind</span>
-                            <span className="info-value">
-                              <KindBadge kind={sel.kind} />
-                            </span>
-                          </div>
-                          <div className="info-row">
-                            <span className="info-label">Format</span>
-                            <span className="info-value">{sel.extension.toUpperCase()}</span>
-                          </div>
-                          <div className="info-row">
-                            <span className="info-label">Dimensions</span>
-                            <span className="info-value">
-                              {sel.width && sel.height ? `${sel.width} × ${sel.height}` : "—"}
-                            </span>
-                          </div>
-                          <div className="info-row">
-                            <span className="info-label">Size</span>
-                            <span className="info-value">{formatBytesSimple(sel.size)}</span>
-                          </div>
-                          {sel.camera && (
-                            <div className="info-row">
-                              <span className="info-label">Camera</span>
-                              <span className="info-value" title={sel.camera}>
-                                {sel.camera}
-                              </span>
-                            </div>
-                          )}
-                          {sel.lens && (
-                            <div className="info-row">
-                              <span className="info-label">Lens</span>
-                              <span className="info-value" title={sel.lens}>
-                                {sel.lens}
-                              </span>
-                            </div>
-                          )}
-                          {sel.exposure && (
-                            <div className="info-row">
-                              <span className="info-label">Exposure</span>
-                              <span className="info-value">{sel.exposure}</span>
-                            </div>
-                          )}
-                          {sel.iso != null && (
-                            <div className="info-row">
-                              <span className="info-label">ISO</span>
-                              <span className="info-value">{sel.iso}</span>
-                            </div>
-                          )}
-                          {typeof sel.latitude === "number" &&
-                            typeof sel.longitude === "number" &&
-                            Number.isFinite(sel.latitude) &&
-                            Number.isFinite(sel.longitude) && (
-                              <div className="info-row">
-                                <span className="info-label">GPS</span>
-                                <button
-                                  type="button"
-                                  className="info-value info-link"
-                                  title="Open in Maps"
-                                  onClick={() =>
-                                    void tauri.app.openExternal(
-                                      `https://maps.apple.com/?ll=${sel.latitude},${sel.longitude}`,
-                                    )
-                                  }
-                                >
-                                  {sel.latitude.toFixed(4)}, {sel.longitude.toFixed(4)}
-                                </button>
-                              </div>
-                            )}
-                          {sel.capturedAt && (
-                            <div className="info-row">
-                              <span className="info-label">Captured</span>
-                              <span className="info-value">
-                                {formatCapturedDateTime(sel.capturedAt)}
-                              </span>
-                            </div>
-                          )}
-                          <div className="info-row">
-                            <span className="info-label">Location</span>
-                            <button
-                              type="button"
-                              className="info-value info-link"
-                              title={`${parentFolder(sel.path)} — Show in Finder`}
-                              onClick={() => void tauri.items.revealInFinder(sel.path)}
-                            >
-                              {folderName(sel.path)}
-                            </button>
-                          </div>
-                          <div className="info-row">
-                            <span className="info-label">Modified</span>
-                            <span className="info-value">{formatFileDateTime(sel.modifiedAt)}</span>
-                          </div>
-                          {sel.hidden && (
-                            <div className="info-row">
-                              <span className="info-label">Hidden</span>
-                              <span className="info-value">
-                                {sel.hiddenReason === "manual"
-                                  ? "Hidden manually"
-                                  : sel.hiddenReason
-                                    ? `Hidden (${sel.hiddenReason})`
-                                    : "No reason recorded"}
-                              </span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  {!masked(sel) && (
-                    <div className="inspector-section">
-                      <div className="inspector-section-head">
-                        <b>File</b>
-                      </div>
-                      <div className="inspector-file-actions">
-                        <button
-                          type="button"
-                          className="inspector-action"
-                          onClick={() => void tauri.items.revealInFinder(sel.path)}
-                          title="Show this file in Finder"
-                        >
-                          <FolderIcon size={14} />
-                          <span>Show in Finder</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="inspector-action"
-                          onClick={() => void tauri.items.openFile(sel.path)}
-                          title="Open in the default app"
-                        >
-                          <PlayIcon size={14} />
-                          <span>Open in default app</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="inspector-action"
-                          onClick={() => copyItemPath(sel.path, sel.id)}
-                          title="Copy the full file path"
-                        >
-                          <DetailsIcon size={14} />
-                          <span>{copiedPathFor === sel.id ? "Path copied" : "Copy path"}</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {!masked(sel) && (
-                    <div className="inspector-tags">
-                      <div className="inspector-section-head">
-                        <b>App Tags</b>
-                      </div>
-                      <div className="tags-list">
-                        {sel.tags?.map((tag: string) => (
-                          <span className="app-tag" key={tag}>
-                            {tag}
-                            <button
-                              type="button"
-                              aria-label={`Remove tag ${tag}`}
-                              title={`Remove tag “${tag}”`}
-                              onClick={() =>
-                                props.onUpdateTags(
-                                  props.inspectedId as string,
-                                  (sel.tags || []).filter((t: string) => t !== tag),
-                                )
-                              }
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                      <input
-                        className="tag-input"
-                        aria-label="Add tag"
-                        placeholder="Add tag and press Enter…"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && e.currentTarget.value.trim()) {
-                            const newTag = e.currentTarget.value.trim();
-                            const currentTags = sel.tags || [];
-                            // "Beach" and "beach" are the same tag.
-                            const known = currentTags.some(
-                              (tag) => tag.toLowerCase() === newTag.toLowerCase(),
-                            );
-                            if (!known) {
-                              props.onUpdateTags(props.inspectedId as string, [
-                                ...currentTags,
-                                newTag,
-                              ]);
-                            }
-                            e.currentTarget.value = "";
-                          }
-                        }}
-                      />
-                    </div>
-                  )}
-                </>
-              );
-            })()
-          ) : (
-            <div className="inspector-empty-state">
-              <div className="inspector-top">
-                <div>
-                  <small>INSPECTOR</small>
-                  <h2>Nothing selected</h2>
-                </div>
-                <button
-                  type="button"
-                  className="inspector-close-btn"
-                  onClick={props.onToggleInspector}
-                  title="Close Inspector"
-                >
-                  ×
-                </button>
-              </div>
-              <div className="inspector-empty-placeholder">
-                <span className="inspector-empty-icon">
-                  <DetailsIcon size={26} />
-                </span>
-                <p>
-                  Click a photo or video to see its details here. To pick several for an action, use
-                  the checkbox on each one.
-                </p>
-              </div>
-            </div>
-          )}
-        </aside>
+        <LibraryInspector
+          item={inspectedItem}
+          isSelected={inspectedItem ? selectedIdSet.has(inspectedItem.id) : false}
+          selectedCount={props.selectedIds.length}
+          masked={inspectedItem ? masked(inspectedItem) : false}
+          previewHandlers={inspectedItem ? holdHandlers(inspectedItem.id) : undefined}
+          assetUrl={assetUrl}
+          draftTransforms={draftTransforms}
+          thumbnailPixels={thumbnailPixels}
+          canPlayBackground={Boolean(props.onPlayBackground)}
+          playingId={playingId}
+          isPlaying={isPlaying}
+          toggleBackground={toggleBackground}
+          copyItemPath={copyItemPath}
+          copiedPathFor={copiedPathFor}
+          actions={props}
+        />
       )}
     </div>
   );
