@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **Map view**: browse geotagged photos and RAW files on a built-in offline map, group nearby photos into thumbnail markers, and open a photo in the viewer or show it in Finder.
 - **RAW + JPEG pair guard**: near-duplicate and camera burst scans now protect companion RAW + JPEG/HEIC pairs (matching stem, capture time, camera) from being flagged as duplicates or pruned in burst selection, honoring the `pair_raw_jpeg` preference.
 - **Visual similarity and camera burst detection**: Duplicates screen now detects near-duplicates across folders and rapid camera bursts using persistent 128-bit 2D difference hashing (dHash) and RGB color profiling; multi-core parallel fingerprinting with persistent SQLite cache; manual scan trigger with live progress reporting and true capture-time extraction.
 - **Split sources on folder add**: adding or pasting a folder path in Sources adds its immediate subfolders as independent sources, so any subfolder can be removed without dropping the rest; subfolders already registered are skipped, and loose top-level media files are reported in the notice (PR #329).

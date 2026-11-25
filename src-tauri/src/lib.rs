@@ -410,6 +410,7 @@ pub fn run() {
             reveal_file_duplicate,
             import_files,
             get_library_items,
+            get_photo_locations,
             get_matching_ids,
             get_display_preview,
             default_apps_status,

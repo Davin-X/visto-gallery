@@ -70,9 +70,12 @@ export function DefaultAppsSection(props: {
 
   const refresh = useCallback(async () => {
     try {
-      setStatus(await tauri.defaultApps.status());
+      const next = await tauri.defaultApps.status();
+      if (!Array.isArray(next?.types)) throw new Error("Default apps response has no file types");
+      setStatus(next);
       setFailed(false);
     } catch {
+      setStatus(null);
       setFailed(true);
     }
   }, []);
@@ -163,49 +166,50 @@ export function DefaultAppsSection(props: {
         </div>
       )}
 
-      {GROUPS.map((group) => {
-        const types = status?.types.filter((t) => t.group === group.id) ?? [];
-        const missing = types.filter((t) => !t.isVisto);
-        const owned = types.filter((t) => t.isVisto);
-        return (
-          <div className="settings-row" key={group.id}>
-            <div className="settings-row-label">
-              <b>{group.label}</b>
-              <span className="settings-row-desc">{types.length ? listLabels(types) : "…"}</span>
+      {(!status || supported) &&
+        GROUPS.map((group) => {
+          const types = status?.types.filter((t) => t.group === group.id) ?? [];
+          const missing = types.filter((t) => !t.isVisto);
+          const owned = types.filter((t) => t.isVisto);
+          return (
+            <div className="settings-row" key={group.id}>
+              <div className="settings-row-label">
+                <b>{group.label}</b>
+                <span className="settings-row-desc">{types.length ? listLabels(types) : "…"}</span>
+              </div>
+              <div className="settings-row-control default-apps-control">
+                <HandlerBadge
+                  text={types.length ? groupStatus(types) : "…"}
+                  isVisto={types.length > 0 && missing.length === 0}
+                />
+                {supported && missing.length > 0 && (
+                  <button
+                    className="primary-button"
+                    type="button"
+                    disabled={running}
+                    onClick={() =>
+                      request({ types: missing, target: "visto", appName: "VistoGallery" })
+                    }
+                  >
+                    Use VistoGallery
+                  </button>
+                )}
+                {supported && missing.length === 0 && owned.length > 0 && (
+                  <button
+                    className="quiet-button"
+                    type="button"
+                    disabled={running}
+                    onClick={() =>
+                      request({ types: owned, target: "system", appName: group.systemApp })
+                    }
+                  >
+                    Use {group.systemApp}
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="settings-row-control default-apps-control">
-              <HandlerBadge
-                text={status ? groupStatus(types) : "…"}
-                isVisto={types.length > 0 && missing.length === 0}
-              />
-              {supported && missing.length > 0 && (
-                <button
-                  className="primary-button"
-                  type="button"
-                  disabled={running}
-                  onClick={() =>
-                    request({ types: missing, target: "visto", appName: "VistoGallery" })
-                  }
-                >
-                  Use VistoGallery
-                </button>
-              )}
-              {supported && missing.length === 0 && owned.length > 0 && (
-                <button
-                  className="quiet-button"
-                  type="button"
-                  disabled={running}
-                  onClick={() =>
-                    request({ types: owned, target: "system", appName: group.systemApp })
-                  }
-                >
-                  Use {group.systemApp}
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
 
       {supported && others.length > 0 && (
         <details className="default-apps-more">

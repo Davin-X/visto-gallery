@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
-import type { MediaItem, DuplicateGroup, Filter } from "../types/media";
-import type { SmartAlbum, SmartAlbumFilter } from "../types/commands";
+import type { MediaItem, Filter } from "../types/media";
+import type { SmartAlbumFilter } from "../types/commands";
 import { describeError } from "../../app/utils/describeError";
 import { errorCode } from "../types/errors";
 import { tauri } from "../commands/tauri";
@@ -11,36 +11,10 @@ import { currentLibraryFilter } from "./library/filters";
 import { createPagingActions } from "./library/paging";
 import { createSelectionActions, resolveInspectedItem } from "./library/selection";
 import type { LibraryState } from "./library/types";
+import { mergeDuplicateGroups, sortSmartAlbums } from "./library/collections";
 
 export { currentLibraryFilter, hiddenPageFilter, libraryViewKey } from "./library/filters";
 export type { LibraryState } from "./library/types";
-
-/** Mirror the server's `ORDER BY name COLLATE NOCASE` so a newly created or
- *  renamed album lands where a reload would put it. */
-function sortSmartAlbums(albums: SmartAlbum[]): SmartAlbum[] {
-  return [...albums].sort((a, b) =>
-    a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
-  );
-}
-
-function mergeDuplicateGroups(
-  previous: DuplicateGroup[],
-  current: DuplicateGroup[],
-): DuplicateGroup[] {
-  // Merge by sha256, preferring groups from current (which has newer hashes)
-  // but keeping any previous groups that aren't in current.
-  const byHash = new Map<string, DuplicateGroup>();
-  for (const g of current) {
-    byHash.set(g.sha256, g);
-  }
-  for (const g of previous) {
-    if (!byHash.has(g.sha256)) {
-      byHash.set(g.sha256, g);
-    }
-  }
-  // Sort: largest groups first, then by size
-  return [...byHash.values()].sort((a, b) => b.items.length - a.items.length || b.size - a.size);
-}
 
 // Each notice gets an id so its dismiss timer clears only that notice, never
 // a newer one shown in the meantime (such as an Undo toast).
@@ -153,6 +127,8 @@ function computeDerived(state: LibraryState) {
       }
       return true;
     });
+  } else if (viewerScope === "map") {
+    viewerItems = state.mapItems;
   } else {
     // Hidden items are excluded by the hidden=false filter sent to the
     // backend, so viewerItems always comes from the visible set.
@@ -215,6 +191,7 @@ export const useLibraryStore = create<LibraryState>()(
       dateTo: null,
       screen: "Library",
       viewerScope: "library",
+      mapItems: [],
       minRating: null,
       colorLabelFilter: null,
       cameraFilter: null,
@@ -450,6 +427,11 @@ export const useLibraryStore = create<LibraryState>()(
         get().refreshDerived();
       },
 
+      setMapItems: (mapItems) => {
+        set({ mapItems });
+        get().refreshDerived();
+      },
+
       getCurrentLibraryFilter: () => currentLibraryFilter(get()),
       toggleInspector: () =>
         set((s) => {
@@ -555,6 +537,7 @@ export const useLibraryStore = create<LibraryState>()(
               ? s.items.filter((i) => !idSet.has(i.id))
               : s.items.map((i) => (idSet.has(i.id) ? { ...i, hidden } : i)),
             hiddenItems: nextHiddenItems,
+            mapItems: hidden ? s.mapItems.filter((i) => !idSet.has(i.id)) : s.mapItems,
             folders,
             albums: s.albums.map((album) => {
               const visibleDelta =
@@ -725,6 +708,7 @@ export const useLibraryStore = create<LibraryState>()(
             return {
               items: s.items.filter((i) => !trashedIds.has(i.id)),
               hiddenItems: remainingHidden,
+              mapItems: s.mapItems.filter((i) => !trashedIds.has(i.id)),
               hiddenCount: Math.max(0, s.hiddenCount - hiddenTrashed),
               selectedIds: s.selectedIds.filter((id) => !trashedIds.has(id)),
               totalCount: Math.max(0, s.totalCount - libraryTrashed),

@@ -106,6 +106,8 @@ export type LibraryItemsPage = { items: Array<MediaItem>, hasMore: boolean, next
  */
 totalCount?: number | null, };
 
+export type PhotoLocation = { id: string, name: string, latitude: number, longitude: number, capturedAt: number | null, modifiedAt: number, };
+
 export type LibraryStats = { photos: number, videos: number, raws: number, 
 /**
  * Animated items. Counted here and not in `photos`, so the kind counts

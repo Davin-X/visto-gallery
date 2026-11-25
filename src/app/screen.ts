@@ -1,6 +1,7 @@
 export type Screen =
   | "Library"
   | "Albums"
+  | "Map"
   | "Viewer"
   | "Video"
   | "Duplicates"

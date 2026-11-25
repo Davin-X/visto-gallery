@@ -7,6 +7,7 @@ import type {
   LibraryFilterDTO,
   LibraryItemsPage,
   AlbumOverview,
+  PhotoLocation,
   SmartAlbum,
   SmartAlbumFilter,
   BackupInfo,
@@ -90,6 +91,8 @@ export const tauri = {
 
     getItems: (filter: LibraryFilterDTO): Promise<LibraryItemsPage> =>
       invoke("get_library_items", { filter }),
+
+    getPhotoLocations: (): Promise<PhotoLocation[]> => invoke("get_photo_locations"),
 
     getMatchingIds: (filter?: LibraryFilterDTO): Promise<string[]> =>
       invoke("get_matching_ids", { filter }),

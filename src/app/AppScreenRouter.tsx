@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import type { MutableRefObject, RefObject } from "react";
 import { tauri } from "../engine/commands/tauri";
 import { clearEditDraft } from "../engine/stores";
@@ -26,6 +27,8 @@ import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { Screen } from "./screen";
 import { buildItemContextMenu, type ItemMenuActions } from "../engine/utils/itemContextMenu";
 
+const MapScreen = lazy(() => import("../screens/MapScreen"));
+
 interface AppScreenRouterProps {
   importFolderPath: (path: string) => Promise<void>;
   screen: Screen;
@@ -35,7 +38,7 @@ interface AppScreenRouterProps {
   batch: BatchState;
   assetUrl: (path: string) => string;
   setScreen: (screen: Screen) => void;
-  openViewer: (id?: string, origin?: Screen, scope?: "library" | "hidden") => void;
+  openViewer: (id?: string, origin?: Screen, scope?: "library" | "hidden" | "map") => void;
   openScreen: (screen: Screen) => void;
   openAlbumDialog: (seedIds?: string[]) => void;
   changeLibraryLayout: (layout: LayoutMode) => void;
@@ -174,6 +177,14 @@ export function AppScreenRouter({
   };
   return (
     <main id="main-content" className="main-content" tabIndex={-1} style={{ position: "relative" }}>
+      {screen === "Map" && (
+        <Suspense fallback={<p role="status">Loading map…</p>}>
+          <MapScreen
+            showErrorNotice={showErrorNotice}
+            onOpenViewer={(id: string) => openViewer(id, "Map", "map")}
+          />
+        </Suspense>
+      )}
       {screen === "Library" && (
         <LibraryScreen
           items={library.visibleItems}

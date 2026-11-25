@@ -8,6 +8,7 @@ import {
   MonitorIcon,
   LibraryIcon,
   AlbumsIcon,
+  MapPinIcon,
   EditIcon,
   BatchIcon,
   FolderIcon,
@@ -62,6 +63,7 @@ const NAV_ITEMS: Array<{
 }> = [
   { label: "Library", Icon: LibraryIcon, screens: ["Library"] },
   { label: "Albums", Icon: AlbumsIcon, screens: ["Albums"] },
+  { label: "Map", Icon: MapPinIcon, screens: ["Map"] },
   // Duplicates and Cleanup are separate screens behind one entry so the tab
   // strip, Back/Forward and the saved last view all keep working.
   { label: "Clean up", Icon: TrashIcon, screens: ["Duplicates", "Cleanup"] },

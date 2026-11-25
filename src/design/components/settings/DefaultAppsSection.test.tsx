@@ -71,6 +71,14 @@ describe("helpers", () => {
 });
 
 describe("DefaultAppsSection", () => {
+  test("shows an error when the backend returns no file type list", async () => {
+    mocks.status.mockResolvedValue([]);
+    render(<DefaultAppsSection showNotice={vi.fn()} />);
+
+    expect(await screen.findByText("Could not read the current default apps.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Use VistoGallery" })).not.toBeInTheDocument();
+  });
+
   test("asks only for the types not already set, after a heads-up, one at a time", async () => {
     mocks.status.mockResolvedValue(status([...photos, ...videos, gif]));
     mocks.set.mockResolvedValue("changed");

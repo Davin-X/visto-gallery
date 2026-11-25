@@ -244,6 +244,7 @@ function App() {
       const item =
         lib.items.find((candidate) => candidate.id === targetId) ??
         lib.hiddenItems.find((candidate) => candidate.id === targetId) ??
+        lib.mapItems.find((candidate) => candidate.id === targetId) ??
         lib.duplicates.flatMap((g) => g.items).find((candidate) => candidate.id === targetId) ??
         null;
       if (!item) return;
