@@ -64,6 +64,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
   const setAmbientMuted = useSlideshowStore((s) => s.setAmbientMuted);
   const setAmbientVolume = useSlideshowStore((s) => s.setAmbientVolume);
 
+  const settingsTrigger = useRef<HTMLButtonElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hudVisible, setHudVisible] = useState(true);
   const [pip, setPip] = useState(false);
@@ -453,6 +454,13 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
       const editable =
         !!target &&
         (target.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT");
+      if (e.key === "Escape" && settingsOpen && tag !== "SELECT") {
+        e.preventDefault();
+        e.stopPropagation();
+        setSettingsOpen(false);
+        settingsTrigger.current?.focus();
+        return;
+      }
       if (editable) {
         if (e.key === "Escape" && tag !== "SELECT") {
           e.preventDefault();
@@ -544,6 +552,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [
     isOpen,
+    settingsOpen,
     close,
     next,
     previous,
@@ -920,6 +929,7 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
 
           <button
             type="button"
+            ref={settingsTrigger}
             className={settingsOpen ? "active" : ""}
             onClick={() => setSettingsOpen((open) => !open)}
             aria-label="Slideshow settings"

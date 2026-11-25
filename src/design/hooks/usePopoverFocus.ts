@@ -15,8 +15,20 @@ export function usePopoverFocus(
   open: boolean,
   panelRef: RefObject<HTMLElement | null>,
   triggerRef: RefObject<HTMLElement | null>,
-  { menu = false }: { menu?: boolean } = {},
+  { menu = false, onEscape }: { menu?: boolean; onEscape?: () => void } = {},
 ) {
+  useEffect(() => {
+    if (!open || !onEscape) return;
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      onEscape();
+    };
+    window.addEventListener("keydown", dismiss, true);
+    return () => window.removeEventListener("keydown", dismiss, true);
+  }, [open, onEscape]);
+
   const wasOpen = useRef(false);
 
   useEffect(() => {
@@ -60,6 +72,7 @@ export function usePopoverFocus(
       else if (event.key === "End") next = items.length - 1;
       if (next < 0) return;
       event.preventDefault();
+      event.stopPropagation();
       items[next].focus();
     };
     panel.addEventListener("keydown", onKeyDown);

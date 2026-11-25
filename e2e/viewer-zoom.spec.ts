@@ -1,6 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function openViewer(page: Page) {
+  // The harness has catalog paths but no original files. Supply a square image
+  // so the zoom measurement cannot race a broken-image fallback.
+  await page.route("**/synthetic/benchmark-*.jpg*", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="900"><rect width="900" height="900" fill="gray"/></svg>',
+    }),
+  );
   await page.setViewportSize({ width: 1500, height: 900 });
   await page.goto("/harness.html?benchmark=10", { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".gallery-tile");
