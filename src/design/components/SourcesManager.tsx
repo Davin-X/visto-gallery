@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { formatBytes, tauri } from "../../engine/commands/tauri";
-import { debugLog, useLibraryStore } from "../../engine/stores";
+import { useLibraryStore } from "../../engine/stores";
 import type { LibraryFolder } from "../../engine/types/commands";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { FolderIcon, InfoIcon, MoreIcon, PlusIcon } from "./icons";
@@ -52,7 +52,9 @@ export function SourcesManager(props: {
 
   const reveal = (folder: LibraryFolder) => {
     void tauri.items.revealInFinder(folder.path).catch((error: unknown) => {
-      debugLog("reveal_in_finder failed:", error);
+      useLibraryStore
+        .getState()
+        .showErrorNotice(error, `Could not reveal “${folder.name}” in Finder`);
     });
   };
 

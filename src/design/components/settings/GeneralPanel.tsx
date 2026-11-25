@@ -76,11 +76,14 @@ export function GeneralPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Show file extensions</b>
+            <b>
+              <label htmlFor="setting-show-file-extensions">Show file extensions</label>
+            </b>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
               <input
+                id="setting-show-file-extensions"
                 type="checkbox"
                 aria-label="Show file extensions"
                 checked={props.showExtensions}
@@ -92,12 +95,15 @@ export function GeneralPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Animate transitions</b>
+            <b>
+              <label htmlFor="setting-animate-transitions">Animate transitions</label>
+            </b>
             <span className="settings-row-desc">Smooth animations for navigation and zoom</span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
               <input
+                id="setting-animate-transitions"
                 type="checkbox"
                 aria-label="Animate transitions"
                 checked={props.animateTransitions}
@@ -140,12 +146,15 @@ export function GeneralPanel(props: {
         {props.startupView === "last" && (
           <div className="settings-row">
             <div className="settings-row-label">
-              <b>Open last library folder</b>
+              <b>
+                <label htmlFor="setting-open-last-library-folder">Open last library folder</label>
+              </b>
               <span className="settings-row-desc">Automatically load the last opened folder</span>
             </div>
             <div className="settings-row-control">
               <label className="toggle-switch">
                 <input
+                  id="setting-open-last-library-folder"
                   type="checkbox"
                   aria-label="Open last library folder"
                   checked={props.openLastFolder}
@@ -158,7 +167,9 @@ export function GeneralPanel(props: {
         )}
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Restore window state</b>
+            <b>
+              <label htmlFor="setting-restore-window-state">Restore window state</label>
+            </b>
             <span className="settings-row-desc">
               Remember window size and position between launches
             </span>
@@ -166,6 +177,7 @@ export function GeneralPanel(props: {
           <div className="settings-row-control">
             <label className="toggle-switch">
               <input
+                id="setting-restore-window-state"
                 type="checkbox"
                 aria-label="Restore window state"
                 checked={props.restoreWindow}

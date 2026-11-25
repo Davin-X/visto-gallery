@@ -13,6 +13,13 @@ export function PrivacyPanel(props: {
   ) => void;
   onChangeAutoLock: (minutes: number) => void;
 }) {
+  const delay = props.hiddenAutoLockMinutes;
+  const lockSummary =
+    delay < 0
+      ? "Leaving Hidden keeps it unlocked."
+      : delay === 0
+        ? "It also locks as soon as you leave Hidden."
+        : `It also locks ${delay} minute${delay === 1 ? "" : "s"} after you leave Hidden.`;
   const unlocking = useHiddenLockStore((s) => s.unlocking);
   // Turning the lock off is itself protected: otherwise anyone at the Mac
   // could switch it off and open Hidden.
@@ -72,9 +79,8 @@ export function PrivacyPanel(props: {
           <b>Require Touch ID or password for Hidden</b>
           <span className="settings-row-desc">
             Hidden asks for Touch ID or your Mac password before it shows anything, and its count is
-            not shown while locked. It locks again when the screen locks, when the window closes,
-            and 5 minutes after you leave it. Hidden files are not encrypted and stay in their
-            folders.
+            not shown while locked. It locks again when the screen locks or the window closes.{" "}
+            {lockSummary} Hidden files are not encrypted and stay in their folders.
           </span>
         </div>
         <div className="settings-row-control">

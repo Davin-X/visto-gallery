@@ -24,13 +24,16 @@ function files(count: number): string {
 export function StorageSection(props: { showNotice: (text: string, code?: ErrorCode) => void }) {
   const { showNotice } = props;
   const [usage, setUsage] = useState<StorageUsage | null>(null);
+  const [failed, setFailed] = useState(false);
   const [clearing, setClearing] = useState<CacheKind | null>(null);
 
   const refresh = useCallback(async () => {
+    setFailed(false);
     try {
       setUsage(await tauri.storage.usage());
     } catch {
       setUsage(null);
+      setFailed(true);
     }
   }, []);
 
@@ -92,7 +95,8 @@ export function StorageSection(props: { showNotice: (text: string, code?: ErrorC
     </div>
   );
 
-  const show = (format: (value: StorageUsage) => string) => (usage ? format(usage) : "…");
+  const show = (format: (value: StorageUsage) => string) =>
+    usage ? format(usage) : failed ? "Unavailable" : "Loading…";
 
   return (
     <section className="settings-section" aria-label="Storage">
@@ -103,6 +107,14 @@ export function StorageSection(props: { showNotice: (text: string, code?: ErrorC
         Space VistoGallery uses on this Mac, outside your library folders. Clearing a cache only
         means thumbnails and converted videos are made again when needed.
       </p>
+      {failed && (
+        <p role="status">
+          Storage usage unavailable.{" "}
+          <button className="quiet-button" type="button" onClick={() => void refresh()}>
+            Retry
+          </button>
+        </p>
+      )}
       {row(
         "Thumbnails",
         "Cached previews for the grid, viewer and editor",

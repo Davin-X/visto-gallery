@@ -81,12 +81,15 @@ export function ViewingPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Shuffle</b>
+            <b>
+              <label htmlFor="setting-shuffle-slideshow">Shuffle</label>
+            </b>
             <span className="settings-row-desc">Randomize slide order</span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
               <input
+                id="setting-shuffle-slideshow"
                 type="checkbox"
                 aria-label="Shuffle slideshow"
                 checked={props.slideshowShuffle}
@@ -98,12 +101,15 @@ export function ViewingPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Loop</b>
+            <b>
+              <label htmlFor="setting-loop-slideshow">Loop</label>
+            </b>
             <span className="settings-row-desc">Restart from beginning when reaching the end</span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
               <input
+                id="setting-loop-slideshow"
                 type="checkbox"
                 aria-label="Loop slideshow"
                 checked={props.slideshowLoop}
@@ -115,7 +121,9 @@ export function ViewingPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Ambient audio</b>
+            <b>
+              <label htmlFor="setting-enable-ambient-audio">Ambient audio</label>
+            </b>
             <span className="settings-row-desc">
               Play a track under the slideshow. Off by default; the track is not cataloged, so it
               never touches your library.
@@ -127,6 +135,7 @@ export function ViewingPanel(props: {
           >
             <label className="toggle-switch">
               <input
+                id="setting-enable-ambient-audio"
                 type="checkbox"
                 aria-label="Enable ambient audio"
                 checked={props.slideshowBackgroundAudio}
@@ -175,12 +184,15 @@ export function ViewingPanel(props: {
         </h2>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Auto-play</b>
+            <b>
+              <label htmlFor="setting-auto-play-videos">Auto-play</label>
+            </b>
             <span className="settings-row-desc">Start playing videos when opened in viewer</span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
               <input
+                id="setting-auto-play-videos"
                 type="checkbox"
                 aria-label="Auto-play videos"
                 checked={props.videoAutoPlay}
@@ -192,12 +204,15 @@ export function ViewingPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Loop videos</b>
+            <b>
+              <label htmlFor="setting-loop-videos">Loop videos</label>
+            </b>
             <span className="settings-row-desc">Restart video when it ends</span>
           </div>
           <div className="settings-row-control">
             <label className="toggle-switch">
               <input
+                id="setting-loop-videos"
                 type="checkbox"
                 aria-label="Loop videos"
                 checked={props.videoLoop}
