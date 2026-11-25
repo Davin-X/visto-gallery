@@ -12,7 +12,7 @@ const OVERSIZED = {
   "src-tauri/src/commands/media.rs": 3608,
   "src-tauri/src/commands/junk.rs": 3175,
   "src/screens/LibraryScreen.tsx": 2434,
-  "src/engine/stores/useLibraryStore.ts": 2134,
+  "src/engine/stores/useLibraryStore.ts": 1353,
   "src/screens/DuplicatesScreen.tsx": 1810,
   "src/screens/EditScreen.tsx": 1769,
   "src-tauri/src/commands/playback.rs": 1697,
