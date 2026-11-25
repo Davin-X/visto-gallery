@@ -9,7 +9,7 @@ const PATTERNS = ["src/*.ts", "src/*.tsx", "src-tauri/src/*.rs", "scripts/*.mjs"
 // Lower a number (or delete the entry) when you split a file. Never raise one.
 const OVERSIZED = {
   "src-tauri/src/commands/library.rs": 1810,
-  "src-tauri/src/commands/media.rs": 2126,
+  "src-tauri/src/commands/media.rs": 2083,
   "src-tauri/src/commands/junk.rs": 1881,
   "src/screens/LibraryScreen.tsx": 2434,
   "src/engine/stores/useLibraryStore.ts": 1337,

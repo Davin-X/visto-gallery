@@ -475,59 +475,6 @@ pub async fn move_to_trash(
     })
 }
 
-#[tauri::command]
-pub async fn reveal_in_finder(
-    path: String,
-    catalog: State<'_, crate::Catalog>,
-) -> Result<(), CommandError> {
-    let db = super::get_db(&catalog)?;
-    let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
-        .bind(&path)
-        .fetch_optional(&db)
-        .await?;
-    if exists.is_none() {
-        return Err(CommandError::path(
-            "Path is not part of the catalog.".to_string(),
-        ));
-    }
-    let status = std::process::Command::new("open")
-        .arg("-R")
-        .arg(&path)
-        .status()
-        .map_err(|e| CommandError::io(format!("Could not reveal {}: {}", path, e)))?;
-    // `open` exits non-zero when the file is gone, e.g. on an unplugged drive.
-    if !status.success() {
-        return Err(CommandError::io(format!("Could not reveal {}.", path)));
-    }
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn open_file(
-    path: String,
-    catalog: State<'_, crate::Catalog>,
-) -> Result<(), CommandError> {
-    let db = super::get_db(&catalog)?;
-    let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
-        .bind(&path)
-        .fetch_optional(&db)
-        .await?;
-    if exists.is_none() {
-        return Err(CommandError::path(
-            "Path is not part of the catalog.".to_string(),
-        ));
-    }
-    let status = std::process::Command::new("open")
-        .arg(&path)
-        .status()
-        .map_err(|e| CommandError::io(format!("Could not open {}: {}", path, e)))?;
-    // `open` exits non-zero when the file is gone or no app can open it.
-    if !status.success() {
-        return Err(CommandError::io(format!("Could not open {}.", path)));
-    }
-    Ok(())
-}
-
 /// A desktop video player that can decode containers WebKit cannot (notably
 /// Matroska/`.mkv` and `.avi`), exposed to the viewer so unsupported videos can
 /// be handed off instead of failing silently.
@@ -2125,7 +2072,9 @@ pub async fn backfill_metadata(catalog: State<'_, crate::Catalog>) -> Result<i64
     Ok(updated)
 }
 
+mod finder;
 mod folder;
+pub use finder::*;
 pub use folder::*;
 
 #[cfg(test)]
