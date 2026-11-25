@@ -1,6 +1,6 @@
 # Vendored `wry` (patch for macOS 27)
 
-This directory is a copy of `wry 0.57.0` (the version locked by `Cargo.lock`) with
+This directory is a copy of `wry 0.57.4` (the version locked by `Cargo.lock`) with
 a single behavioural change, wired in through `[patch.crates-io]` in
 `src-tauri/Cargo.toml`.
 

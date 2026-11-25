@@ -359,7 +359,7 @@ pub(crate) mod android;
 pub use crate::android::android_setup;
 #[cfg(target_os = "android")]
 pub mod prelude {
-  pub use crate::android::{binding::*, dispatch, find_class, Context};
+  pub use crate::android::{Context, binding::*, dispatch, find_class};
   pub use tao_macros::{android_fn, generate_package_name};
 }
 #[cfg(target_os = "android")]
@@ -1171,7 +1171,9 @@ impl<'a> WebViewBuilder<'a> {
   ///
   /// ## Platform-specific
   ///
-  /// - **Linux / Android**: The request URL is not supported on iframes and the main frame URL is used instead.
+  /// - **Linux**: The request URL is not supported on iframes and the main frame URL is used instead.
+  /// - **Android**: Messages from iframes use the iframe's origin instead of its URL, and opaque origins use `about:blank`.
+  ///   WebViews without `WebViewFeature.WEB_MESSAGE_LISTENER` use the tracked main frame URL for every frame, which may be stale or `about:blank` until `onPageStarted` runs.
   pub fn with_ipc_handler<F>(mut self, handler: F) -> Self
   where
     F: Fn(Request<String>) + 'static,
@@ -1472,6 +1474,8 @@ impl<'a> WebViewBuilder<'a> {
 
   /// Specify the webview position relative to its parent if it will be created as a child
   /// or if created using [`WebViewBuilderExtUnix::build_gtk`] with [`gtk::Fixed`].
+  ///
+  /// See [`WebView::set_bounds`] for the Windows and macOS child coordinate space and units.
   ///
   /// Defaults to `x: 0, y: 0, width: 200, height: 200`.
   pub fn with_bounds(mut self, bounds: Rect) -> Self {
@@ -2107,7 +2111,8 @@ impl WebView {
   /// Evaluate and run javascript code with callback function. The evaluation result will be
   /// serialized into a JSON string and passed to the callback function.
   ///
-  /// Exception is ignored because of the limitation on windows. You can catch it yourself and return as string as a workaround.
+  /// Exception is ignored because of the limitation on Android and Windows WebView2 before 121.0.2277.86.
+  /// You can catch it yourself and return as string as a workaround.
   pub fn evaluate_script_with_callback(
     &self,
     js: &str,
@@ -2252,14 +2257,34 @@ impl WebView {
     self.webview.clear_all_browsing_data()
   }
 
+  /// Get the webview bounds.
+  ///
+  /// On Windows, a child webview's position is relative to the top-left of its
+  /// parent window's client area. The position and size are returned in physical pixels.
   pub fn bounds(&self) -> Result<Rect> {
     self.webview.bounds()
   }
 
   /// Set the webview bounds.
   ///
-  /// This is only effective if the webview was created as a child
-  /// or created using [`WebViewBuilderExtUnix::build_gtk`] with [`gtk::Fixed`].
+  /// Use this method with a webview created using [`WebViewBuilder::build_as_child`]
+  /// or [`WebViewBuilderExtUnix::build_gtk`] with [`gtk::Fixed`].
+  ///
+  /// # Platform-specific:
+  ///
+  /// - **Windows:** For a child webview, the origin is the top-left of the
+  ///   parent window's client area. Logical position and size are converted
+  ///   using the native webview window's DPI scale factor. Physical values
+  ///   are used directly. If the rectangle comes from CSS pixels relative
+  ///   to the parent client area, convert it using the measuring page's
+  ///   `window.devicePixelRatio` and pass physical values.
+  /// - **macOS:** For a child webview, the origin is the top-left of the parent
+  ///   `NSView`. Physical values are converted to points using the window's
+  ///   `backingScaleFactor`. Logical values are in points. This has no effect
+  ///   on other webviews.
+  /// - **Linux:** Physical values are converted to logical values using the
+  ///   GTK scale factor of the webview. For a child webview created on X11, the
+  ///   origin is the top-left of the parent X11 window.
   pub fn set_bounds(&self, bounds: Rect) -> Result<()> {
     self.webview.set_bounds(bounds)
   }
