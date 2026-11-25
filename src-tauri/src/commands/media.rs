@@ -618,29 +618,15 @@ pub async fn open_with_player(
     }
     let player_path = PathBuf::from(&player);
 
-    std::process::Command::new("open")
+    let status = std::process::Command::new("open")
         .arg("-a")
         .arg(&player_path)
         .arg(&path)
         .status()
         .map_err(|e| CommandError::io(format!("Could not open {} with {}: {}", path, player, e)))?;
-    Ok(())
-}
-
-/// Open a folder in Finder. Used by Batch export results.
-#[tauri::command]
-pub async fn open_folder(path: String) -> Result<(), CommandError> {
-    // Unlike `open -R` (which selects a file in its parent), this opens the
-    // folder itself in Finder. Used by Batch export results.
-    if !std::path::Path::new(&path).is_dir() {
-        return Err(CommandError::invalid(
-            "Path is not a directory.".to_string(),
-        ));
+    if !status.success() {
+        return Err(CommandError::io(format!("Could not open {}.", path)));
     }
-    std::process::Command::new("open")
-        .arg(&path)
-        .status()
-        .map_err(|e| CommandError::io(format!("Could not open {}: {}", path, e)))?;
     Ok(())
 }
 
@@ -2138,6 +2124,9 @@ pub async fn backfill_metadata(catalog: State<'_, crate::Catalog>) -> Result<i64
     }
     Ok(updated)
 }
+
+mod folder;
+pub use folder::*;
 
 #[cfg(test)]
 mod tests;

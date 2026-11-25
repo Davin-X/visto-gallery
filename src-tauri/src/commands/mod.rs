@@ -46,7 +46,7 @@ pub use duplicates::*;
 pub use edit_recipes::*;
 pub(crate) use file_duplicates::FileDuplicateSession;
 pub use file_duplicates::*;
-pub use finder_tags::{merge_finder_tags, read_finder_tags, write_finder_tags};
+pub use finder_tags::merge_finder_tags;
 #[cfg(test)]
 pub use hidden_lock::HiddenLockStatus;
 pub use hidden_lock::{
