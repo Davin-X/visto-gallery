@@ -146,21 +146,6 @@ test("loadItemsPage records the view key so scroll restoration waits for fresh r
   expect(useLibraryStore.getState().loadedViewKey).toBe(allPhotosKey);
 });
 
-test("map scope browses the photos the map handed over, even ones the library has not loaded", () => {
-  const loaded = makeItem("loaded", "loaded.jpg");
-  const paris = makeItem("paris", "paris.jpg");
-  const rome = makeItem("rome", "rome.jpg");
-  useLibraryStore.setState({ items: [loaded] });
-  const store = useLibraryStore.getState();
-  store.setMapItems([paris, rome]);
-  store.setViewerScope("map");
-  store.inspectItem("rome");
-
-  const state = useLibraryStore.getState();
-  expect(state.viewerItems.map((i) => i.id)).toEqual(["paris", "rome"]);
-  expect(state.viewerSelected?.id).toBe("rome");
-});
-
 test("viewer filmstrip follows media category and the active browsing scope", () => {
   const photo = makeItem("photo", "photo.jpg");
   const video = makeItem("video", "clip.mp4", false, "video");

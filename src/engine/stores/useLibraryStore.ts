@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
-import type { MediaItem, DuplicateGroup, Filter } from "../types/media";
-import type { SmartAlbum, SmartAlbumFilter } from "../types/commands";
+import type { MediaItem, Filter } from "../types/media";
+import type { SmartAlbumFilter } from "../types/commands";
 import { describeError } from "../../app/utils/describeError";
 import { errorCode } from "../types/errors";
 import { tauri } from "../commands/tauri";
@@ -11,36 +11,10 @@ import { currentLibraryFilter } from "./library/filters";
 import { createPagingActions } from "./library/paging";
 import { createSelectionActions, resolveInspectedItem } from "./library/selection";
 import type { LibraryState } from "./library/types";
+import { mergeDuplicateGroups, sortSmartAlbums } from "./library/collections";
 
 export { currentLibraryFilter, hiddenPageFilter, libraryViewKey } from "./library/filters";
 export type { LibraryState } from "./library/types";
-
-/** Mirror the server's `ORDER BY name COLLATE NOCASE` so a newly created or
- *  renamed album lands where a reload would put it. */
-function sortSmartAlbums(albums: SmartAlbum[]): SmartAlbum[] {
-  return [...albums].sort((a, b) =>
-    a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
-  );
-}
-
-function mergeDuplicateGroups(
-  previous: DuplicateGroup[],
-  current: DuplicateGroup[],
-): DuplicateGroup[] {
-  // Merge by sha256, preferring groups from current (which has newer hashes)
-  // but keeping any previous groups that aren't in current.
-  const byHash = new Map<string, DuplicateGroup>();
-  for (const g of current) {
-    byHash.set(g.sha256, g);
-  }
-  for (const g of previous) {
-    if (!byHash.has(g.sha256)) {
-      byHash.set(g.sha256, g);
-    }
-  }
-  // Sort: largest groups first, then by size
-  return [...byHash.values()].sort((a, b) => b.items.length - a.items.length || b.size - a.size);
-}
 
 // Each notice gets an id so its dismiss timer clears only that notice, never
 // a newer one shown in the meantime (such as an Undo toast).
