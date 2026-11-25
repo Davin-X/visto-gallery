@@ -27,6 +27,7 @@ pub(crate) mod storage;
 mod system;
 mod temp_files;
 mod update;
+mod xmp;
 use crate::errors::{CommandError, ErrorCode};
 use crate::{models::*, Catalog};
 pub use albums::*;
@@ -83,6 +84,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 pub use storage::{clear_cache, get_storage_usage};
+pub use xmp::*;
 // The DTOs are only named outside `storage` by the IPC type export.
 #[cfg(test)]
 pub use storage::{CacheKind, ClearCacheResult, StorageUsage};
@@ -304,7 +306,7 @@ mod rescan_preservation_tests {
             .connect("sqlite::memory:")
             .await
             .expect("open in-memory database");
-        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, sha256 TEXT, rating INTEGER, color_label TEXT)")
+        sqlx::query("CREATE TABLE media_items (id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, name TEXT NOT NULL, title TEXT, extension TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified_at INTEGER NOT NULL, captured_at INTEGER, width INTEGER, height INTEGER, camera TEXT, lens TEXT, exposure TEXT, iso INTEGER, latitude REAL, longitude REAL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, favorite INTEGER DEFAULT 0, hidden INTEGER DEFAULT 0, is_animated INTEGER NOT NULL DEFAULT 0, content_signature TEXT, sha256 TEXT, rating INTEGER, color_label TEXT)")
             .execute(&db)
             .await
             .expect("create media_items");
