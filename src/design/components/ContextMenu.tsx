@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 export interface ContextMenuItem {
@@ -37,6 +37,27 @@ function ContextMenuContent({
     items: ContextMenuItem[];
   } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    const parent = menu?.parentElement;
+    if (!menu || !parent?.classList.contains("context-menu-submenu")) return;
+    const position = () => {
+      const anchor = parent.getBoundingClientRect();
+      const box = menu.getBoundingClientRect();
+      const left =
+        anchor.right + 6 + box.width <= window.innerWidth - 8 ? anchor.width + 6 : -box.width - 6;
+      menu.style.left = Math.max(8 - anchor.left, left) + "px";
+      menu.style.marginLeft = "0";
+      menu.style.top =
+        Math.max(8, Math.min(anchor.top - 6, window.innerHeight - box.height - 8)) -
+        anchor.top +
+        "px";
+    };
+    position();
+    window.addEventListener("resize", position);
+    return () => window.removeEventListener("resize", position);
+  }, []);
 
   // Child-first registration: this level's handler runs before any parent
   // menu level's, so Escape consumes itself here via stopImmediatePropagation.
@@ -259,6 +280,7 @@ function getPortalRoot(): HTMLElement {
 }
 
 export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
+  const wrapper = useRef<HTMLDivElement>(null);
   const root = typeof window !== "undefined" ? getPortalRoot() : null;
 
   useEffect(() => {
@@ -273,34 +295,29 @@ export function ContextMenu({ items, x, y, onClose }: ContextMenuProps) {
     };
   }, [onClose, root]);
 
-  if (typeof window === "undefined") return null;
+  useLayoutEffect(() => {
+    const el = wrapper.current;
+    if (!el) return;
+    const position = () => {
+      const rect = el.getBoundingClientRect();
+      el.style.left = Math.max(8, Math.min(x, window.innerWidth - rect.width - 8)) + "px";
+      el.style.top = Math.max(8, Math.min(y, window.innerHeight - rect.height - 8)) + "px";
+    };
+    position();
+    window.addEventListener("resize", position);
+    return () => window.removeEventListener("resize", position);
+  }, [x, y, items]);
 
-  // Compute adjusted position BEFORE render to avoid clipping
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const padding = 8;
-
-  // We need menu dimensions - estimate from items count
-  const itemHeight = 36;
-  const menuHeight = items.length * itemHeight + 12; // padding
-  const menuWidth = 240; // typical width
-
-  let adjustedX = x;
-  let adjustedY = y;
-
-  if (x + menuWidth > vw - padding) adjustedX = vw - menuWidth - padding;
-  if (y + menuHeight > vh - padding) adjustedY = vh - menuHeight - padding;
-  if (adjustedX < padding) adjustedX = padding;
-  if (adjustedY < padding) adjustedY = padding;
-
+  if (!root) return null;
   const content = <ContextMenuContent items={items} onClose={onClose} />;
 
   return createPortal(
     <div
+      ref={wrapper}
       style={{
         position: "fixed",
-        left: adjustedX,
-        top: adjustedY,
+        left: x,
+        top: y,
         zIndex: "var(--z-context-menu)",
         pointerEvents: "none",
       }}

@@ -17,7 +17,6 @@ export function NoticeToast() {
       className={`toast ${library.noticeCode ? "toast-warning" : ""}`}
       role={library.noticeCode ? "alert" : "status"}
       aria-live={library.noticeCode ? "assertive" : "polite"}
-      onClick={() => library.showNotice("")}
     >
       <span aria-hidden="true">{library.noticeCode ? "!" : "✓"}</span>
       {library.notice}
@@ -34,6 +33,14 @@ export function NoticeToast() {
           {library.noticeAction.label}
         </button>
       ) : null}
+      <button
+        className="toast-action"
+        type="button"
+        aria-label="Dismiss notice"
+        onClick={() => library.showNotice("")}
+      >
+        ×
+      </button>
     </div>
   );
 }
