@@ -21,16 +21,15 @@ import type {
   SubtitleTrackInfo,
 } from "../../engine/types/commands";
 import { formatDuration } from "../../engine/utils/time";
-import {
-  canPlayVideoInApp,
-  classifyVideoFailure,
-  fileExtension,
-} from "../../engine/utils/mediaTypes";
+import { canPlayVideoInApp } from "../../engine/utils/mediaTypes";
 import {
   observePictureInPicture,
   supportsPictureInPicture,
   togglePictureInPicture,
 } from "../../engine/utils/pictureInPicture";
+
+import { VideoPlaybackFallback } from "./video-player/VideoPlaybackFallback";
+import { VideoTrackSelectors } from "./video-player/VideoTrackSelectors";
 
 type PlaybackSnapshot = ReturnType<typeof usePlaybackStore.getState>;
 
@@ -59,30 +58,6 @@ const TEXT_SUBTITLE_CODECS = new Set([
   "stl",
   "eia_608",
 ]);
-
-function languageLabel(language: string | null): string | null {
-  if (!language || language === "und") return null;
-  try {
-    if (typeof Intl.DisplayNames === "function") {
-      return new Intl.DisplayNames(undefined, { type: "language" }).of(language) ?? null;
-    }
-  } catch {
-    // Older WebKit or an unknown tag: fall back to the tag itself.
-  }
-  return language.toUpperCase();
-}
-
-function trackLabel(
-  track: { language: string | null; title: string | null },
-  fallback: string,
-): string {
-  return track.title ?? languageLabel(track.language) ?? fallback;
-}
-
-function audioTrackLabel(track: AudioTrackInfo, position: number): string {
-  const label = trackLabel(track, `Audio ${position + 1}`);
-  return track.channels && track.channels > 1 ? `${label} · ${track.channels} ch` : label;
-}
 
 function readableError(error: unknown): string {
   if (typeof error === "string") return error;
@@ -1061,93 +1036,22 @@ function VideoPlayer({
   };
 
   if (failed) {
-    const ext = fileExtension(path) || fileExtension(name);
-    // SRC_NOT_SUPPORTED (4) is also what a missing file, an unplugged drive
-    // or a permission error looks like, so only an unsupported extension or
-    // a real decode error (3) may be reported as a format problem.
-    const isFormatFailure = classifyVideoFailure(videoError?.code, path, name) === "format";
-    const player = players[0];
     return (
-      <div className="viewer-video-fallback" role="alert">
-        <div className="viewer-video-fallback-art" aria-hidden="true">
-          <svg
-            width="34"
-            height="34"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect x="2" y="4" width="20" height="16" rx="2" />
-            <path d="M7 4v16M17 4v16M2 9h5M2 15h5M17 9h5M17 15h5" />
-          </svg>
-        </div>
-        <h3 className="viewer-video-fallback-title">{name || "This video"}</h3>
-        <p className="viewer-video-fallback-copy">
-          {canConvert || converting
-            ? "This file uses a codec the built-in player cannot decode directly. VistoGallery can convert it once to H.264 so it plays here."
-            : isFormatFailure
-              ? `${ext ? `.${ext} files` : "This file"} can't be decoded by macOS's built-in web player. Open it in a desktop player that supports this format.`
-              : "VistoGallery couldn't open this video. The file may have been moved, deleted, or be on a disconnected drive — or its codec may not be playable here. Check the source, then try a desktop player."}
-        </p>
-        {converting ? (
-          <div className="viewer-video-converting" role="status" aria-live="polite">
-            <div className="viewer-video-convert-bar" aria-hidden="true">
-              <span
-                style={{
-                  width: `${Math.round((conversionProgress ?? 0) * 100)}%`,
-                }}
-              />
-            </div>
-            <span>
-              {conversionProgress == null
-                ? "Converting…"
-                : `Converting… ${Math.round(conversionProgress * 100)}%`}
-            </span>
-            <button type="button" onClick={() => void cancelConversion()}>
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <div className="viewer-video-fallback-actions">
-            {canConvert ? (
-              <button type="button" className="primary" onClick={() => void startConversion()}>
-                Convert to play here
-              </button>
-            ) : null}
-            {player ? (
-              <button
-                type="button"
-                className={canConvert ? undefined : "primary"}
-                onClick={() => void openExternally(player.path)}
-              >
-                Open in {player.name}
-              </button>
-            ) : null}
-            <button type="button" onClick={() => void openExternally()}>
-              Open in default app
-            </button>
-            <button type="button" onClick={() => path && void tauri.items.revealInFinder(path)}>
-              Show in Finder
-            </button>
-          </div>
-        )}
-        {canConvert && !converting && (
-          <p className="viewer-video-feedback">
-            The converted copy is kept in the playback cache and counts toward its size limit.
-          </p>
-        )}
-        {isFormatFailure && !player && !canConvert && !converting && (
-          <p className="viewer-video-feedback">
-            Tip: IINA, VLC, or Elmedia Video Player all play MKV natively.
-          </p>
-        )}
-        {openError && <p className="viewer-video-feedback error">{openError}</p>}
-        {conversionError && <p className="viewer-video-feedback error">{conversionError}</p>}
-        {failureDetail && <p className="viewer-video-feedback">{failureDetail}</p>}
-      </div>
+      <VideoPlaybackFallback
+        path={path}
+        name={name}
+        videoError={videoError}
+        player={players[0]}
+        canConvert={canConvert}
+        converting={converting}
+        conversionProgress={conversionProgress}
+        openError={openError}
+        conversionError={conversionError}
+        failureDetail={failureDetail}
+        startConversion={startConversion}
+        cancelConversion={cancelConversion}
+        openExternally={openExternally}
+      />
     );
   }
 
@@ -1362,40 +1266,14 @@ function VideoPlayer({
               }}
               aria-label="Volume"
             />
-            {textSubtitles.length > 0 && (
-              <select
-                className="video-track-select"
-                value={String(subtitleTrack)}
-                onChange={(event) => {
-                  const value = event.currentTarget.value;
-                  setSubtitleTrack(value === "off" ? "off" : Number(value));
-                }}
-                aria-label="Subtitles"
-                title="Subtitles"
-              >
-                <option value="off">Subtitles off</option>
-                {textSubtitles.map((track, position) => (
-                  <option key={track.index} value={track.index}>
-                    {trackLabel(track, `Subtitles ${position + 1}`)}
-                  </option>
-                ))}
-              </select>
-            )}
-            {probeTracks.audio.length > 1 && (
-              <select
-                className="video-track-select"
-                value={audioTrack ?? probeTracks.audio[0]?.index ?? ""}
-                onChange={(event) => setAudioTrack(Number(event.currentTarget.value))}
-                aria-label="Audio track"
-                title="Audio track"
-              >
-                {probeTracks.audio.map((track, position) => (
-                  <option key={track.index} value={track.index}>
-                    {audioTrackLabel(track, position)}
-                  </option>
-                ))}
-              </select>
-            )}
+            <VideoTrackSelectors
+              audioTracks={probeTracks.audio}
+              textSubtitles={textSubtitles}
+              audioTrack={audioTrack}
+              subtitleTrack={subtitleTrack}
+              setAudioTrack={setAudioTrack}
+              setSubtitleTrack={setSubtitleTrack}
+            />
             <select
               className="video-playback-rate"
               value={playbackRate}
