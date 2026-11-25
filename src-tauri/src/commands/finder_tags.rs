@@ -3,7 +3,6 @@ use std::collections::HashSet;
 use tauri::State;
 
 use crate::errors::CommandError;
-use crate::AppState;
 
 const FINDER_TAGS_ATTRIBUTE: &str = "com.apple.metadata:_kMDItemUserTags";
 
@@ -71,21 +70,18 @@ fn write_raw_finder_tags(path: &str, tags: &[String]) -> Result<(), CommandError
     xattr::set(path, FINDER_TAGS_ATTRIBUTE, &buf).map_err(CommandError::from)
 }
 
-#[tauri::command]
-pub async fn write_finder_tags(
-    path: String,
-    tags: Vec<String>,
-    _state: State<'_, AppState>,
-) -> Result<(), CommandError> {
-    tokio::task::spawn_blocking(move || {
-        let values: Vec<String> = tags
-            .into_iter()
-            .filter(|tag| !tag.trim().is_empty())
-            .map(|tag| format!("{}\x000", tag.trim()))
-            .collect();
-        write_raw_finder_tags(&path, &values)
-    })
-    .await?
+/// The webview is untrusted: only write tags to files the catalog already holds.
+async fn ensure_cataloged(db: &sqlx::SqlitePool, path: &str) -> Result<(), CommandError> {
+    let exists: Option<String> = sqlx::query_scalar("SELECT path FROM media_items WHERE path = ?")
+        .bind(path)
+        .fetch_optional(db)
+        .await?;
+    if exists.is_none() {
+        return Err(CommandError::path(
+            "Path is not part of the catalog.".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 /// Merge VistoGallery tags into a file's existing Finder tags and return the
@@ -94,8 +90,9 @@ pub async fn write_finder_tags(
 pub async fn merge_finder_tags(
     path: String,
     tags: Vec<String>,
-    _state: State<'_, AppState>,
+    catalog: State<'_, crate::Catalog>,
 ) -> Result<Vec<String>, CommandError> {
+    ensure_cataloged(&super::get_db(&catalog)?, &path).await?;
     tokio::task::spawn_blocking(move || {
         let existing = read_raw_finder_tags(&path)?;
         let merged = merge_finder_tag_values(&existing, &tags);
@@ -107,26 +104,6 @@ pub async fn merge_finder_tags(
                 .filter(|name| !name.is_empty())
                 .collect(),
         )
-    })
-    .await?
-}
-
-#[tauri::command]
-pub async fn read_finder_tags(
-    path: String,
-    _state: State<'_, AppState>,
-) -> Result<Vec<String>, CommandError> {
-    tokio::task::spawn_blocking(move || {
-        let raw = read_raw_finder_tags(&path)?;
-        let mut tags = Vec::new();
-        let mut seen = HashSet::new();
-        for value in raw {
-            let name = finder_tag_name(&value).trim();
-            if !name.is_empty() && seen.insert(name.to_lowercase()) {
-                tags.push(name.to_string());
-            }
-        }
-        Ok(tags)
     })
     .await?
 }
@@ -170,5 +147,25 @@ mod finder_tag_merge_tests {
         let merged = merge_finder_tag_values(&[], &["Albums".into()]);
         assert_eq!(merged, vec![raw("Albums")]);
         assert_eq!(finder_tag_name(&merged[0]), "Albums");
+    }
+
+    #[tokio::test]
+    async fn merge_rejects_a_path_outside_the_catalog() {
+        let db = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::query("CREATE TABLE media_items (path TEXT NOT NULL)")
+            .execute(&db)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO media_items (path) VALUES ('/photos/a.jpg')")
+            .execute(&db)
+            .await
+            .unwrap();
+
+        assert!(super::ensure_cataloged(&db, "/photos/a.jpg").await.is_ok());
+        assert!(super::ensure_cataloged(&db, "/etc/hosts").await.is_err());
     }
 }
