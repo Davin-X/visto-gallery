@@ -610,12 +610,15 @@ pub async fn open_with_player(
     }
     let player_path = PathBuf::from(&player);
 
-    std::process::Command::new("open")
+    let status = std::process::Command::new("open")
         .arg("-a")
         .arg(&player_path)
         .arg(&path)
         .status()
         .map_err(|e| CommandError::io(format!("Could not open {} with {}: {}", path, player, e)))?;
+    if !status.success() {
+        return Err(CommandError::io(format!("Could not open {}.", path)));
+    }
     Ok(())
 }
 
@@ -640,10 +643,13 @@ pub async fn open_folder(path: String) -> Result<(), CommandError> {
             "Path is an app, not a folder.".to_string(),
         ));
     }
-    std::process::Command::new("open")
+    let status = std::process::Command::new("open")
         .arg(&resolved)
         .status()
         .map_err(|e| CommandError::io(format!("Could not open {}: {}", path, e)))?;
+    if !status.success() {
+        return Err(CommandError::io(format!("Could not open {}.", path)));
+    }
     Ok(())
 }
 

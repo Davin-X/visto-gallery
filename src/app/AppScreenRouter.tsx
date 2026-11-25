@@ -495,7 +495,11 @@ export function AppScreenRouter({
               });
           }}
           onOpenFolder={() => {
-            if (batch.outputFolder) tauri.items.openFolder(batch.outputFolder);
+            if (batch.outputFolder) {
+              tauri.items
+                .openFolder(batch.outputFolder)
+                .catch((error) => showErrorNotice(error, "Could not open folder"));
+            }
           }}
           onExportBatch={batch.exportBatch}
           onCancelBatch={batch.cancelBatch}

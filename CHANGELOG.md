@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **GitHub Pages landing page**: interactive product showcase in `docs/` with dark/light screenshot switching, feature tour, sitemap, and responsive navigation.
 
 ### Fixed
+- **Open failures are reported**: opening a video in another player or opening the Batch export folder now shows an error when macOS cannot open it, instead of doing nothing.
 - **Open folder never launches an app**: the Batch export "open folder" action refuses app bundles, which macOS treats as folders but would launch.
 - **Finder tags only touch catalog files**: copying tags to Finder now refuses any file that is not in the library, and the unused raw tag read/write commands are gone.
 - **Catalog capture date fallback from filenames**: media items stripped of EXIF timestamps (e.g. edited or batch-exported photos) now automatically extract capture dates from filename patterns (`YYYY-MM-DD[_ -]HH-MM-SS`, `YYYYMMDD_HHMMSS`, and `YYYY-MM-DD`), preventing fallback to filesystem modification time in library sorting and card subtitles.
