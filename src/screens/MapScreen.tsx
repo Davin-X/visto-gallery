@@ -215,7 +215,9 @@ export default function MapScreen({
       <header className="page-heading photo-map-heading">
         <h1 id="photo-map-title">Map</h1>
         <p>
-          {status === "ready" ? `${photosLabel(photos.length)} with locations` : "Photo locations"}
+          {status === "ready"
+            ? `${photos.length.toLocaleString()} geotagged ${photos.length === 1 ? "photo" : "photos"}`
+            : "Photo locations"}
         </p>
       </header>
       <div className="photo-map-layout">

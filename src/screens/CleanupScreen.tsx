@@ -599,7 +599,14 @@ export default function CleanupScreen({
                   target?.scrollIntoView({ behavior: "smooth", block: "start" });
                   if (off) target?.focus({ preventScroll: true });
                 }}
-                disabled={off ? !overview : count === 0 && skipped === 0 && !report?.statusMessage}
+                disabled={
+                  off
+                    ? !overview
+                    : scan.state !== "failed" &&
+                      count === 0 &&
+                      skipped === 0 &&
+                      !report?.statusMessage
+                }
               >
                 <span className="cleanup-card-title">
                   <i className={`cleanup-dot is-${category}`} />
