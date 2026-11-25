@@ -21,6 +21,8 @@ import type {
   ExportResult,
   BatchExportRequest,
   BatchExportResult,
+  BatchMetadataRequest,
+  BatchMetadataResult,
   BatchProgressEvent,
   DuplicateGroup,
   FileDuplicateScan,
@@ -281,6 +283,9 @@ export const tauri = {
   batch: {
     export: (request: BatchExportRequest): Promise<BatchExportResult> =>
       invoke("batch_export", { request }),
+
+    editMetadata: (request: BatchMetadataRequest): Promise<BatchMetadataResult> =>
+      invoke("batch_edit_metadata", { request }),
 
     chooseFolder: (): Promise<string> => invoke("choose_export_folder"),
 

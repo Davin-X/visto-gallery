@@ -396,6 +396,14 @@ export function LibraryInspector({
                         </button>
                       </div>
                     )}
+                  {sel.title && (
+                    <div className="info-row">
+                      <span className="info-label">Title</span>
+                      <span className="info-value" title={sel.title}>
+                        {sel.title}
+                      </span>
+                    </div>
+                  )}
                   {sel.capturedAt && (
                     <div className="info-row">
                       <span className="info-label">Captured</span>
