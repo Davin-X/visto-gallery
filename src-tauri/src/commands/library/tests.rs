@@ -537,3 +537,116 @@ mod pagination_tests {
         assert_eq!(ids_all, vec!["d".to_string()]);
     }
 }
+
+/// Benchmarks the scanner's backend stages without opening the user's catalog.
+#[tokio::test]
+#[ignore = "manual real-media benchmark"]
+async fn real_library_scan_benchmark() {
+    use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
+    use std::sync::atomic::AtomicBool;
+    use std::time::Instant;
+
+    struct Scratch(PathBuf);
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    let scratch_path = std::env::temp_dir().join(format!("visto-scan-perf-{}", Uuid::new_v4()));
+    std::fs::create_dir(&scratch_path).expect("create an isolated benchmark directory");
+    let scratch = Scratch(scratch_path);
+    let fixture = if let Some(root) = std::env::var_os("VISTOGALLERY_PERF_ROOT") {
+        PathBuf::from(root)
+    } else {
+        let fixture = scratch.0.join("fixtures");
+        std::fs::create_dir(&fixture).expect("create screenshot fixture directory");
+        let screenshots = Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/screenshots");
+        for entry in std::fs::read_dir(screenshots).expect("list screenshot fixtures") {
+            let entry = entry.expect("read screenshot entry");
+            if entry.path().extension().is_some_and(|ext| ext == "jpg") {
+                std::fs::copy(entry.path(), fixture.join(entry.file_name()))
+                    .expect("copy screenshot fixture");
+            }
+        }
+        fixture
+    }
+    .canonicalize()
+    .expect("resolve the media fixture folder");
+    assert!(fixture.is_dir(), "the fixture must be a directory");
+    let db = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(
+            SqliteConnectOptions::new()
+                .filename(scratch.0.join("catalog.db"))
+                .create_if_missing(true)
+                .foreign_keys(true)
+                .journal_mode(SqliteJournalMode::Wal),
+        )
+        .await
+        .expect("open the benchmark catalog");
+    sqlx::migrate!("./migrations")
+        .run(&db)
+        .await
+        .expect("migrate the benchmark catalog");
+
+    let cancel = AtomicBool::new(false);
+    for (label, force, expect_writes) in [
+        ("cold catalog scan", false, true),
+        ("unchanged scan", false, false),
+        ("forced rescan", true, true),
+    ] {
+        let started = Instant::now();
+        let catalog = catalog_rows_under_root(&db, fixture.to_str().expect("UTF-8 fixture path"))
+            .await
+            .expect("read the source catalog rows");
+        let known = catalog
+            .into_iter()
+            .map(|row| (row.path, (row.size, row.modified_at)))
+            .collect();
+        // The benchmark supplies no temp-file sweep. Its source folder is read-only.
+        let (paths, walk_error) = collect_media_paths(&fixture, &cancel, None);
+        assert!(walk_error.is_none(), "fixture walk failed: {walk_error:?}");
+        assert!(!paths.is_empty(), "fixture has no supported media files");
+
+        let now = now_ms();
+        let mut inspected = 0;
+        for chunk in paths.chunks(100) {
+            let scanned = inspect_scan_chunk(chunk, &known, force, now, &cancel);
+            inspected += scanned.batch.len();
+            upsert_media_batch(&db, &scanned.batch)
+                .await
+                .expect("write scanned rows");
+        }
+        let elapsed = started.elapsed();
+        assert_eq!(inspected, if expect_writes { paths.len() } else { 0 });
+        println!(
+            "{label}: {} files, {inspected} inspected and written, {:.2} ms",
+            paths.len(),
+            elapsed.as_secs_f64() * 1000.0
+        );
+    }
+
+    let items: Vec<(String, String, i64, String)> =
+        sqlx::query_as("SELECT id, path, size, kind FROM media_items ORDER BY path")
+            .fetch_all(&db)
+            .await
+            .expect("get indexed thumbnail sources");
+    let started = Instant::now();
+    let mut generated = 0;
+    for (id, source, size, kind) in &items {
+        let target = scratch.0.join(format!("{id}.jpg"));
+        if generate_cached_thumbnail(source, &target, 256, *size, 78, kind).is_ok() {
+            generated += 1;
+        }
+    }
+    let elapsed = started.elapsed();
+    assert!(generated > 0, "fixture generated no thumbnails");
+    println!(
+        "cold 256 px thumbnails: {generated}/{} generated, {:.2} ms",
+        items.len(),
+        elapsed.as_secs_f64() * 1000.0
+    );
+    db.close().await;
+}

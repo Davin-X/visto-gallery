@@ -67,6 +67,16 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 CI also runs `cargo audit` on `src-tauri/Cargo.lock` and `npm audit --omit=dev --audit-level=high`.
 
+### Real-media scan benchmark
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml --release real_library_scan_benchmark -- --ignored --nocapture
+```
+
+The benchmark uses the checked-in screenshot JPEGs by default. Set `VISTOGALLERY_PERF_ROOT` to a fixture directory to measure a different media mix. It times the backend folder walk, file inspection, and SQLite writes for an empty catalog, an unchanged scan, and a forced rescan. It also measures uncached 256 px thumbnail generation and reports how many files produced a thumbnail.
+
+Each run starts with a temporary catalog and thumbnail cache. The fixture files are read-only, and the OS file cache is left intact. The timings exclude frontend and IPC overhead.
+
 ## Project layout
 
 ### Frontend (`src/`)
