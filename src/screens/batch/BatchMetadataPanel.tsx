@@ -34,7 +34,9 @@ export function BatchMetadataPanel({
   const [titleInput, setTitleInput] = React.useState("");
   const [clearTitle, setClearTitle] = React.useState(false);
   const [keywordsInput, setKeywordsInput] = React.useState("");
-  const [keywordsMode, setKeywordsMode] = React.useState<"add" | "replace" | "remove">("add");
+  const [keywordsMode, setKeywordsMode] = React.useState<"add" | "replace" | "remove" | "clear">(
+    "add",
+  );
   const [latInput, setLatInput] = React.useState("");
   const [lonInput, setLonInput] = React.useState("");
   const [clearLocation, setClearLocation] = React.useState(false);
@@ -49,12 +51,11 @@ export function BatchMetadataPanel({
 
   const hasDateChange = Boolean(dateInput.trim());
   const hasTitleChange = clearTitle || Boolean(titleInput.trim());
-  const hasKeywordsChange =
-    parsedKeywords.length > 0 || (keywordsMode === "replace" && keywordsInput.trim() === "");
+  const clearKeywords = keywordsMode === "clear";
+  const hasKeywordsChange = clearKeywords || parsedKeywords.length > 0;
   const hasLocationInput = Boolean(latInput.trim() || lonInput.trim());
   const hasLocationChange = clearLocation || hasLocationInput;
-  const hasAnyChange =
-    hasDateChange || hasTitleChange || parsedKeywords.length > 0 || hasLocationChange;
+  const hasAnyChange = hasDateChange || hasTitleChange || hasKeywordsChange || hasLocationChange;
 
   const existingTags = React.useMemo(() => {
     const set = new Set<string>();
@@ -111,8 +112,8 @@ export function BatchMetadataPanel({
         itemIds: items.map((item) => item.id),
         capturedAt,
         title: clearTitle ? "" : titleInput.trim() ? titleInput.trim() : null,
-        keywords: parsedKeywords,
-        keywordsMode: hasKeywordsChange ? keywordsMode : null,
+        keywords: clearKeywords ? [] : parsedKeywords,
+        keywordsMode: clearKeywords ? "replace" : hasKeywordsChange ? keywordsMode : null,
         latitude,
         longitude,
         clearLocation,
@@ -202,20 +203,23 @@ export function BatchMetadataPanel({
                 <select
                   aria-label="Keywords action"
                   value={keywordsMode}
-                  onChange={(e) => setKeywordsMode(e.target.value as "add" | "replace" | "remove")}
+                  onChange={(e) =>
+                    setKeywordsMode(e.target.value as "add" | "replace" | "remove" | "clear")
+                  }
                   disabled={busy}
                 >
                   <option value="add">Add</option>
                   <option value="replace">Replace</option>
                   <option value="remove">Remove</option>
+                  <option value="clear">Clear all keywords</option>
                 </select>
                 <input
                   type="text"
                   aria-label="Keywords"
                   placeholder="travel, sunset, japan"
-                  value={keywordsInput}
+                  value={clearKeywords ? "" : keywordsInput}
                   onChange={(e) => setKeywordsInput(e.target.value)}
-                  disabled={busy}
+                  disabled={busy || clearKeywords}
                 />
               </div>
               <small>
@@ -297,6 +301,14 @@ export function BatchMetadataPanel({
               <dt>Target</dt>
               <dd>XMP sidecars + catalog</dd>
             </div>
+            {clearKeywords && (
+              <div>
+                <dt>Keywords</dt>
+                <dd>
+                  Clear all keywords from {items.length} {items.length === 1 ? "file" : "files"}
+                </dd>
+              </div>
+            )}
             {items[0]?.capturedAt && (
               <div>
                 <dt>First item date</dt>

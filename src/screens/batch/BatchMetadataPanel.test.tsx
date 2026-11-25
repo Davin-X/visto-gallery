@@ -108,6 +108,25 @@ describe("BatchMetadataPanel", () => {
     expect(onReload).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ["replace", "Updated title", null],
+    ["clear", "", "replace"],
+  ])("submits %s with empty keywords safely", async (action, title, expectedMode) => {
+    render(
+      <BatchMetadataPanel items={[sampleItem]} onReloadLibrary={vi.fn()} onOpenLibrary={vi.fn()} />,
+    );
+    fireEvent.change(screen.getByLabelText("Keywords action"), { target: { value: action } });
+    if (action === "clear")
+      expect(screen.getByText("Clear all keywords from 1 file")).toBeVisible();
+    else expect(screen.getByRole("button", { name: "Apply to 1 file" })).toBeDisabled();
+    if (title) fireEvent.change(screen.getByLabelText("Title"), { target: { value: title } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply to 1 file" }));
+    await screen.findByText(/Updated 1 item/);
+    expect(mockEditMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ keywordsMode: expectedMode, keywords: [] }),
+    );
+  });
+
   it("rejects out-of-range coordinates without calling backend", async () => {
     render(
       <BatchMetadataPanel items={[sampleItem]} onReloadLibrary={vi.fn()} onOpenLibrary={vi.fn()} />,

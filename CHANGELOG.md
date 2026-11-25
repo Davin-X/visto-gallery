@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **GitHub Pages landing page**: interactive product showcase in `docs/` with dark/light screenshot switching, feature tour, sitemap, and responsive navigation.
 
 ### Fixed
+- Batch metadata preserves existing keywords when Replace is empty. Choose **Clear all keywords** to remove them across the selected files.
 - **Gallery navigation and previews**: compact Library view options, collapsible sidebar statistics, keyboard-accessible previews and popup dismissal, and on-demand video queue posters.
 - **Review and recovery**: inspect every batch file, pan duplicate comparisons with the keyboard, retry unavailable editor previews or storage usage, and see Finder and cleanup failures.
 - **Open failures are reported**: opening a video in another player or opening the Batch export folder now shows an error when macOS cannot open it, instead of doing nothing.
