@@ -79,8 +79,10 @@ export interface LibraryState {
   tagsFilter: string[];
   // Which collection the viewer navigates when it opens. Hidden items are
   // deliberately absent from the normal viewer, so the Hidden gallery asks the
-  // viewer to browse the hidden set instead.
-  viewerScope: "library" | "hidden";
+  // viewer to browse the hidden set instead. The Map hands over its own set.
+  viewerScope: "library" | "hidden" | "map";
+  // The photos the Map opened the viewer with, in map order.
+  mapItems: MediaItem[];
 
   // Pagination
   page: number;
@@ -177,7 +179,8 @@ export interface LibraryState {
   setDateRange: (from: number | null, to: number | null) => void;
   setSort: (sortBy: LibraryState["sortBy"], sortOrder: LibraryState["sortOrder"]) => void;
   setScreen: (screen: Screen) => void;
-  setViewerScope: (scope: "library" | "hidden") => void;
+  setViewerScope: (scope: "library" | "hidden" | "map") => void;
+  setMapItems: (items: MediaItem[]) => void;
   getCurrentLibraryFilter: () => LibraryFilterDTO;
   toggleInspector: () => void;
   toggleSidebar: () => void;

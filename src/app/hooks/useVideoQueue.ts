@@ -5,7 +5,7 @@ import type { LibraryFilterDTO } from "../../engine/types/commands";
 import type { MediaItem } from "../../engine/types/media";
 import { getAdjacentVideo } from "../backgroundVideo";
 
-export type ViewerScope = "library" | "hidden";
+export type ViewerScope = "library" | "hidden" | "map";
 
 interface QueuePaging {
   filter: LibraryFilterDTO;

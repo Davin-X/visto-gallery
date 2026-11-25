@@ -15,6 +15,7 @@ mod import_pipeline;
 mod junk;
 mod library;
 mod media;
+mod photo_map;
 mod playback;
 mod preview;
 mod roots;
@@ -66,6 +67,7 @@ pub use junk::*;
 pub use library::*;
 pub use media::*;
 use notify::Watcher;
+pub use photo_map::*;
 pub use playback::*;
 pub use preview::get_display_preview;
 #[cfg(test)]

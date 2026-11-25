@@ -40,6 +40,7 @@ export type {
   RootPathMappingPreview,
   RootPathMappingResult,
   AlbumOverview,
+  PhotoLocation,
   EditRecipe,
   EditPreset,
   ExternalPlayer,

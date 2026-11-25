@@ -13,6 +13,7 @@ export const LAST_ALBUM_KEY = "visto:lastAlbum";
 const RESTORABLE_SCREENS: readonly Screen[] = [
   "Library",
   "Albums",
+  "Map",
   "Duplicates",
   "Cleanup",
   "Batch",

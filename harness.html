@@ -104,6 +104,11 @@
           };
         });
       const items = makeItems();
+      if (params.get("gps") === "1" && items.length >= 3) {
+        Object.assign(items[0], { latitude: 48.8566, longitude: 2.3522 });
+        Object.assign(items[1], { latitude: 48.854, longitude: 2.346 });
+        Object.assign(items[items.length - 1], { latitude: -33.8688, longitude: 151.2093 });
+      }
       // The hidden set spans months and has its own ids, so the Hidden
       // Timeline's month counts and whole-month Select all can be told apart
       // from the Library's.
@@ -409,6 +414,13 @@
           // Slow enough for the low-resolution badge to be seen first.
           await new Promise((resolve) => setTimeout(resolve, 400));
           return { path: null, dataUrl: tinyImage, width: 1, height: 1, full: !!args?.full };
+        }
+        if (command === "get_photo_locations") {
+          return items
+            .filter((item) => item.kind !== "video" && item.latitude != null && item.longitude != null)
+            .map(({ id, name, latitude, longitude, capturedAt, modifiedAt }) => ({
+              id, name, latitude, longitude, capturedAt, modifiedAt,
+            }));
         }
         if (command === "get_items_by_ids") {
           const byId = new Map([...items, ...hiddenItems].map((item) => [item.id, item]));

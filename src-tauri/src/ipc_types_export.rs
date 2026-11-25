@@ -24,12 +24,13 @@ mod tests {
         FileDuplicateScan, FileDuplicateTrashResult, HiddenLockStatus, JunkCategory,
         JunkCategoryReport, JunkCleanResult, JunkFailure, JunkIgnoredItem, JunkItem, JunkSkip,
         JunkTier, LibraryFilterDTO, LibraryFolder, LibraryFootprint, LibraryItemsPage,
-        LibraryStats, MediaProbe, OpenPath, PartialSettings, PlaybackConversionProgress,
-        PlaybackStrategy, PreparedPlayback, RenderRequest, RestoreResult, RootPathMappingPreview,
-        RootPathMappingResult, ScanResult, ScanStatus, SetDefaultOutcome, SkipReason, SmartAlbum,
-        SmartAlbumFilter, StartupView, StorageUsage, SubtitleTrackInfo, ThumbnailRequest,
-        ThumbnailResponse, ThumbnailSize, TimelineMonth, TrashError, TrashRestoreFailure,
-        TrashRestoreItem, TrashRestoreResult, TrashResult, UpdateCheck, ViewerZoomBehavior,
+        LibraryStats, MediaProbe, OpenPath, PartialSettings, PhotoLocation,
+        PlaybackConversionProgress, PlaybackStrategy, PreparedPlayback, RenderRequest,
+        RestoreResult, RootPathMappingPreview, RootPathMappingResult, ScanResult, ScanStatus,
+        SetDefaultOutcome, SkipReason, SmartAlbum, SmartAlbumFilter, StartupView, StorageUsage,
+        SubtitleTrackInfo, ThumbnailRequest, ThumbnailResponse, ThumbnailSize, TimelineMonth,
+        TrashError, TrashRestoreFailure, TrashRestoreItem, TrashRestoreResult, TrashResult,
+        UpdateCheck, ViewerZoomBehavior,
     };
     use crate::errors::{CommandError, ErrorCode};
     use crate::media_kind::MediaKind;
@@ -78,6 +79,7 @@ mod tests {
             OpenPath,
             LibraryFilterDTO,
             LibraryItemsPage,
+            PhotoLocation,
             LibraryStats,
             ThumbnailRequest,
             ThumbnailResponse,

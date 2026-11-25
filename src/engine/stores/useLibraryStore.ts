@@ -153,6 +153,8 @@ function computeDerived(state: LibraryState) {
       }
       return true;
     });
+  } else if (viewerScope === "map") {
+    viewerItems = state.mapItems;
   } else {
     // Hidden items are excluded by the hidden=false filter sent to the
     // backend, so viewerItems always comes from the visible set.
@@ -215,6 +217,7 @@ export const useLibraryStore = create<LibraryState>()(
       dateTo: null,
       screen: "Library",
       viewerScope: "library",
+      mapItems: [],
       minRating: null,
       colorLabelFilter: null,
       cameraFilter: null,
@@ -450,6 +453,11 @@ export const useLibraryStore = create<LibraryState>()(
         get().refreshDerived();
       },
 
+      setMapItems: (mapItems) => {
+        set({ mapItems });
+        get().refreshDerived();
+      },
+
       getCurrentLibraryFilter: () => currentLibraryFilter(get()),
       toggleInspector: () =>
         set((s) => {
@@ -555,6 +563,7 @@ export const useLibraryStore = create<LibraryState>()(
               ? s.items.filter((i) => !idSet.has(i.id))
               : s.items.map((i) => (idSet.has(i.id) ? { ...i, hidden } : i)),
             hiddenItems: nextHiddenItems,
+            mapItems: hidden ? s.mapItems.filter((i) => !idSet.has(i.id)) : s.mapItems,
             folders,
             albums: s.albums.map((album) => {
               const visibleDelta =
@@ -725,6 +734,7 @@ export const useLibraryStore = create<LibraryState>()(
             return {
               items: s.items.filter((i) => !trashedIds.has(i.id)),
               hiddenItems: remainingHidden,
+              mapItems: s.mapItems.filter((i) => !trashedIds.has(i.id)),
               hiddenCount: Math.max(0, s.hiddenCount - hiddenTrashed),
               selectedIds: s.selectedIds.filter((id) => !trashedIds.has(id)),
               totalCount: Math.max(0, s.totalCount - libraryTrashed),
