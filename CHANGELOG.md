@@ -18,6 +18,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Library stats robustness**: sidebar counters safely tolerate partial or loading stats without crashing.
 - **Gallery tile double-click**: double-clicking a thumbnail opens the viewer reliably even when nested tile elements establish their own stacking contexts.
 
+### Changed
+- Updated the embedded webview to Wry 0.57.4 and kept the macOS 27 workaround for loading app assets and previews.
+
 ## [0.6.0] - 2026-11-21
 
 ### Added

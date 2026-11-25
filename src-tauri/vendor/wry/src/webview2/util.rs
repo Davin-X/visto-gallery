@@ -2,20 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-License-Identifier: MIT
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use windows::{
-  core::{HRESULT, HSTRING, PCSTR},
   Win32::{
-    Foundation::{FARPROC, HWND, S_OK},
+    Foundation::{FARPROC, HINSTANCE, HWND, S_OK},
     Graphics::Gdi::{
-      GetDC, GetDeviceCaps, MonitorFromWindow, HMONITOR, LOGPIXELSX, MONITOR_DEFAULTTONEAREST,
+      GetDC, GetDeviceCaps, HMONITOR, LOGPIXELSX, MONITOR_DEFAULTTONEAREST, MonitorFromWindow,
     },
-    System::LibraryLoader::{GetProcAddress, LoadLibraryW},
+    System::{
+      LibraryLoader::{GetProcAddress, LoadLibraryW},
+      SystemServices::IMAGE_DOS_HEADER,
+    },
     UI::{
       HiDpi::{MDT_EFFECTIVE_DPI, MONITOR_DPI_TYPE},
       WindowsAndMessaging::IsProcessDPIAware,
     },
   },
+  core::{HRESULT, HSTRING, PCSTR},
 };
 
 fn get_function_impl(library: &str, function: &str) -> FARPROC {
@@ -29,6 +32,16 @@ fn get_function_impl(library: &str, function: &str) -> FARPROC {
   }
 
   unsafe { GetProcAddress(module, PCSTR::from_raw(function.as_ptr())) }
+}
+
+pub fn get_instance_handle() -> HINSTANCE {
+  // The address of the pseudo-variable the linker creates is the module's base:
+  // https://devblogs.microsoft.com/oldnewthing/20041025-00/?p=37483
+  unsafe extern "C" {
+    static __ImageBase: IMAGE_DOS_HEADER;
+  }
+
+  HINSTANCE(unsafe { &__ImageBase as *const _ as _ })
 }
 
 macro_rules! get_function {
@@ -46,10 +59,10 @@ pub type GetDpiForMonitor = unsafe extern "system" fn(
   dpi_y: *mut u32,
 ) -> HRESULT;
 
-static GET_DPI_FOR_WINDOW: Lazy<Option<GetDpiForWindow>> =
-  Lazy::new(|| get_function!("user32.dll", GetDpiForWindow));
-static GET_DPI_FOR_MONITOR: Lazy<Option<GetDpiForMonitor>> =
-  Lazy::new(|| get_function!("shcore.dll", GetDpiForMonitor));
+static GET_DPI_FOR_WINDOW: LazyLock<Option<GetDpiForWindow>> =
+  LazyLock::new(|| get_function!("user32.dll", GetDpiForWindow));
+static GET_DPI_FOR_MONITOR: LazyLock<Option<GetDpiForMonitor>> =
+  LazyLock::new(|| get_function!("shcore.dll", GetDpiForMonitor));
 
 pub const BASE_DPI: u32 = 96;
 pub fn dpi_to_scale_factor(dpi: u32) -> f64 {
@@ -58,44 +71,46 @@ pub fn dpi_to_scale_factor(dpi: u32) -> f64 {
 
 #[allow(non_snake_case)]
 pub unsafe fn hwnd_dpi(hwnd: HWND) -> u32 {
-  if let Some(GetDpiForWindow) = *GET_DPI_FOR_WINDOW {
-    // We are on Windows 10 Anniversary Update (1607) or later.
-    match GetDpiForWindow(hwnd) {
-      0 => BASE_DPI, // 0 is returned if hwnd is invalid
+  unsafe {
+    if let Some(GetDpiForWindow) = *GET_DPI_FOR_WINDOW {
+      // We are on Windows 10 Anniversary Update (1607) or later.
+      match GetDpiForWindow(hwnd) {
+        0 => BASE_DPI, // 0 is returned if hwnd is invalid
+        #[allow(clippy::unnecessary_cast)]
+        dpi => dpi as u32,
+      }
+    } else if let Some(GetDpiForMonitor) = *GET_DPI_FOR_MONITOR {
+      // We are on Windows 8.1 or later.
+      let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+      if monitor.is_invalid() {
+        return BASE_DPI;
+      }
+
+      let mut dpi_x = 0;
+      let mut dpi_y = 0;
       #[allow(clippy::unnecessary_cast)]
-      dpi => dpi as u32,
-    }
-  } else if let Some(GetDpiForMonitor) = *GET_DPI_FOR_MONITOR {
-    // We are on Windows 8.1 or later.
-    let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-    if monitor.is_invalid() {
-      return BASE_DPI;
-    }
-
-    let mut dpi_x = 0;
-    let mut dpi_y = 0;
-    #[allow(clippy::unnecessary_cast)]
-    if GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y) == S_OK {
-      dpi_x as u32
+      if GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y) == S_OK {
+        dpi_x as u32
+      } else {
+        BASE_DPI
+      }
     } else {
-      BASE_DPI
-    }
-  } else {
-    let hdc = GetDC(Some(hwnd));
-    if hdc.is_invalid() {
-      return BASE_DPI;
-    }
+      let hdc = GetDC(Some(hwnd));
+      if hdc.is_invalid() {
+        return BASE_DPI;
+      }
 
-    // We are on Vista or later.
-    if IsProcessDPIAware().as_bool() {
-      // If the process is DPI aware, then scaling must be handled by the application using
-      // this DPI value.
-      GetDeviceCaps(Some(hdc), LOGPIXELSX) as u32
-    } else {
-      // If the process is DPI unaware, then scaling is performed by the OS; we thus return
-      // 96 (scale factor 1.0) to prevent the window from being re-scaled by both the
-      // application and the WM.
-      BASE_DPI
+      // We are on Vista or later.
+      if IsProcessDPIAware().as_bool() {
+        // If the process is DPI aware, then scaling must be handled by the application using
+        // this DPI value.
+        GetDeviceCaps(Some(hdc), LOGPIXELSX) as u32
+      } else {
+        // If the process is DPI unaware, then scaling is performed by the OS; we thus return
+        // 96 (scale factor 1.0) to prevent the window from being re-scaled by both the
+        // application and the WM.
+        BASE_DPI
+      }
     }
   }
 }

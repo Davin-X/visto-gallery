@@ -26,6 +26,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    pool: "vmThreads",
     setupFiles: "./src/test/setup.ts",
     globals: true,
     // Local worktrees under .kilo/ contain their own copies of these tests;
