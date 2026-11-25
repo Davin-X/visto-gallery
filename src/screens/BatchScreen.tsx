@@ -421,13 +421,7 @@ function BatchScreen(props: BatchScreenProps) {
                 <>
                   <div className="batch-tray">
                     {items.slice(0, 10).map((item, index) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className="batch-thumb"
-                        onClick={() => props.onRemoveItem?.(item.id)}
-                        title={`Remove ${item.name} from this batch`}
-                      >
+                      <div key={item.id} className="batch-thumb" title={item.name}>
                         {item.kind === "photo" ? (
                           <CachedThumbnail itemId={item.id} name={item.name} size={128} />
                         ) : (
@@ -435,14 +429,36 @@ function BatchScreen(props: BatchScreenProps) {
                             {item.kind === "raw" ? "RAW" : "VID"}
                           </span>
                         )}
-                        <span className="batch-thumb-remove" aria-hidden="true">
+                        <button
+                          type="button"
+                          className="batch-thumb-remove"
+                          aria-label={`Remove ${item.name} from batch`}
+                          onClick={() => props.onRemoveItem?.(item.id)}
+                        >
                           ×
-                        </span>
+                        </button>
                         <span className="batch-thumb-number">{index + 1}</span>
-                      </button>
+                      </div>
                     ))}
                     {items.length > 10 && (
-                      <span className="batch-thumb-more">+{items.length - 10}</span>
+                      <details className="batch-all-files">
+                        <summary>View all {items.length} files</summary>
+                        <ul>
+                          {items.map((item) => (
+                            <li key={item.id}>
+                              <span>{item.name}</span>
+                              <button
+                                type="button"
+                                className="quiet-button"
+                                aria-label={`Remove ${item.name}`}
+                                onClick={() => props.onRemoveItem?.(item.id)}
+                              >
+                                Remove
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
                     )}
                   </div>
                   <div className="batch-tray-actions">

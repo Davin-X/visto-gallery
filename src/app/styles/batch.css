@@ -203,7 +203,7 @@
 }
 
 .batch-thumb:hover .batch-thumb-remove,
-.batch-thumb:focus-visible .batch-thumb-remove {
+.batch-thumb:focus-within .batch-thumb-remove {
   opacity: 1;
 }
 
@@ -1162,3 +1162,30 @@
   }
 }
 
+.batch-thumb-remove {
+  opacity: 1;
+  padding: 0;
+  width: 22px;
+  height: 22px;
+}
+.batch-all-files {
+  flex-basis: 100%;
+}
+.batch-all-files summary {
+  cursor: pointer;
+}
+.batch-all-files ul {
+  max-height: 220px;
+  overflow: auto;
+  padding: 0;
+}
+.batch-all-files li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px;
+}
+.batch-all-files li span {
+  overflow-wrap: anywhere;
+}
