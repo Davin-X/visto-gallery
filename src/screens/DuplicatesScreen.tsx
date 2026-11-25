@@ -1,18 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
 import {
   CheckIcon,
-  ChevronDownIcon,
   ColumnsIcon,
   DuplicatesIcon,
-  EyeIcon,
   FolderIcon,
   GridIcon,
   TrashIcon,
   XIcon,
 } from "../design/components/icons";
-import { CachedThumbnail } from "../design/components/CachedThumbnail";
-import { KindBadge } from "../design/components/KindBadge";
 import { events, tauri } from "../engine/commands/tauri";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import type { DuplicateGroup, MediaItem, SimilarGroup } from "../engine/types/media";
@@ -29,9 +25,11 @@ import {
   type KeeperMode,
 } from "../engine/duplicates/grouping";
 import { CompareOverlay } from "../design/components/CompareOverlay";
-import { formatFileDate } from "../engine/utils/mediaDate";
 import { CleanupTabs } from "../design/components/CleanupTabs";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
+
+import { DuplicateGroupCard, INLINE_COPIES } from "./duplicates/DuplicateGroupCard";
+import { parentFolder } from "./duplicates/paths";
 
 interface DuplicatesScreenProps {
   groups: DuplicateGroup[];
@@ -75,8 +73,6 @@ interface DuplicatesScreenProps {
 }
 
 const GROUP_PAGE = 40;
-// Enough tiles to fill one row of a wide window; expansion reveals the rest.
-const INLINE_COPIES = 4;
 // Any-file groups are single rows, so a whole page costs little. The scan can
 // return thousands of them, and rendering all of them at once froze the UI.
 const FILE_GROUP_PAGE = 50;
@@ -120,11 +116,6 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
-function parentFolder(path: string): string {
-  const index = path.lastIndexOf("/");
-  return index > 0 ? path.slice(0, index) : path;
-}
-
 function folderName(path: string): string {
   const trimmed = path.replace(/\/+$/, "");
   return trimmed.slice(trimmed.lastIndexOf("/") + 1) || trimmed || "/";
@@ -151,11 +142,6 @@ function keeperIdOf(group: FileDuplicateGroup): string | undefined {
 function copyIdsOf(group: FileDuplicateGroup): string[] {
   const keeper = keeperIdOf(group);
   return group.items.filter((item) => item.id !== keeper).map((item) => item.id);
-}
-
-function formatDate(timestamp?: number): string {
-  if (!timestamp) return "";
-  return formatFileDate(timestamp);
 }
 
 function DuplicatesScreen(props: DuplicatesScreenProps) {
@@ -411,232 +397,6 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
       setRenderLimit((limit) => Math.min(limit + GROUP_PAGE, groupViews.length));
     }
   }, [groupViews.length, renderLimit]);
-
-  const revealItem = (path: string) => {
-    void tauri.items.revealInFinder(path);
-  };
-
-  const renderTile = (view: GroupView, item: MediaItem) => {
-    const isKeeper = item.id === view.keeper.id;
-    const isSelected = selected.has(item.id);
-
-    return (
-      <figure
-        key={item.id}
-        className={`duplicate-tile${isSelected ? " is-selected" : ""}${isKeeper ? " is-keeper" : ""}`}
-      >
-        <div className="duplicate-tile-frame">
-          <button
-            type="button"
-            className="duplicate-tile-select"
-            aria-pressed={isSelected}
-            aria-label={`${isSelected ? "Deselect" : "Select"} ${item.name} in ${parentFolder(item.path)}`}
-            onClick={() => toggleItem(item.id)}
-          >
-            {item.kind === "raw" ? (
-              <span className="duplicate-tile-raw">
-                <KindBadge kind="raw" />
-              </span>
-            ) : (
-              <CachedThumbnail
-                itemId={item.id}
-                name={item.name}
-                size={256}
-                fallbackSrc={item.kind === "photo" ? assetUrl(item.path) : undefined}
-              />
-            )}
-          </button>
-          <span className={`duplicate-tile-check${isSelected ? " is-on" : ""}`} aria-hidden="true">
-            {isSelected ? <CheckIcon size={11} /> : null}
-          </span>
-          <span className={`duplicate-tile-role${isKeeper ? " is-keeper" : ""}`}>
-            {isKeeper ? "Keep" : "Copy"}
-          </span>
-          {item.kind === "video" && (
-            <span className="duplicate-tile-kind">
-              <KindBadge kind="video" />
-            </span>
-          )}
-          <span className="duplicate-tile-tools">
-            {!isKeeper && view.copies.length > 0 && (
-              <button
-                type="button"
-                className="duplicate-tile-tool"
-                title="Compare with keeper"
-                aria-label={`Compare ${item.name} with the keeper`}
-                onClick={() => setCompare({ sha: view.group.sha256, copyId: item.id })}
-              >
-                <ColumnsIcon size={13} />
-              </button>
-            )}
-            {onOpenItem && (
-              <button
-                type="button"
-                className="duplicate-tile-tool"
-                title="Open in viewer"
-                aria-label={`Open ${item.name}`}
-                onClick={() => onOpenItem(item.id)}
-              >
-                <EyeIcon size={13} />
-              </button>
-            )}
-            <button
-              type="button"
-              className="duplicate-tile-tool"
-              title="Show in Finder"
-              aria-label={`Show ${item.name} in Finder`}
-              onClick={() => revealItem(item.path)}
-            >
-              <FolderIcon size={13} />
-            </button>
-          </span>
-        </div>
-        <figcaption className="duplicate-tile-caption">
-          <span className="duplicate-tile-head">
-            <span className={`duplicate-tile-flag${isKeeper ? " is-keeper" : ""}`}>
-              {isKeeper ? "Keep" : "Copy"}
-            </span>
-            <span className="duplicate-tile-name" title={item.path}>
-              {item.name}
-            </span>
-          </span>
-          <span className="duplicate-tile-meta">
-            {formatBytesSimple(item.size)}
-            {item.width && item.height ? ` · ${item.width}×${item.height}` : ""}
-            {formatDate(item.createdAt || item.modifiedAt)
-              ? ` · ${formatDate(item.createdAt || item.modifiedAt)}`
-              : ""}
-          </span>
-          <MiddleTruncate text={parentFolder(item.path)} className="duplicate-tile-path" />
-        </figcaption>
-      </figure>
-    );
-  };
-
-  const renderStackThumb = (item: MediaItem) =>
-    item.kind === "raw" ? (
-      <span className="duplicate-stack-raw">
-        <KindBadge kind="raw" />
-      </span>
-    ) : (
-      <CachedThumbnail itemId={item.id} name="" size={128} />
-    );
-
-  const renderGroup = (view: GroupView) => {
-    const { group } = view;
-    const expanded = expandedGroups.has(group.sha256);
-    const visible = expanded ? view.ordered : view.ordered.slice(0, INLINE_COPIES);
-    const hiddenCount = view.ordered.length - visible.length;
-    const copyIds = view.copies.map((item) => item.id);
-    const allCopiesSelected = copyIds.length > 0 && copyIds.every((id) => selected.has(id));
-    const groupFullySelected = view.ordered.every((item) => selected.has(item.id));
-
-    return (
-      <section className="duplicate-group" key={group.sha256}>
-        <header className="duplicate-group-head">
-          <button
-            type="button"
-            className="duplicate-group-summary"
-            aria-expanded={expanded}
-            onClick={() => toggleGroupExpand(group.sha256)}
-          >
-            <span className="duplicate-stack" aria-hidden="true">
-              {/* The keeper sits on top; the copies behind it are the same
-                  image dimmed, so the fan shows real thumbnails and still
-                  reads as depth rather than noise. */}
-              {view.copies.slice(0, 2).map((item, index) => (
-                <span
-                  key={item.id}
-                  className={`duplicate-stack-sheet is-back ${
-                    index === 0 ? "is-back-near" : "is-back-far"
-                  }`}
-                >
-                  {renderStackThumb(item)}
-                </span>
-              ))}
-              <span className="duplicate-stack-sheet is-front">
-                {renderStackThumb(view.keeper)}
-              </span>
-              <span className="duplicate-stack-count">{view.ordered.length}</span>
-            </span>
-            <span className="duplicate-group-copy">
-              {mode === "bursts" && burstMap.get(group.id) ? (
-                <>
-                  <span className="duplicate-group-title">
-                    {view.ordered.length} photos ·{" "}
-                    {burstMap.get(group.id)!.timeSpanMs != null
-                      ? `${(burstMap.get(group.id)!.timeSpanMs! / 1000).toFixed(1)}s burst`
-                      : "burst"}
-                    <span className="duplicate-group-burst-badge">
-                      {Math.round(burstMap.get(group.id)!.confidence * 100)}% match
-                    </span>
-                  </span>
-                  <span className="duplicate-group-sub">
-                    {burstMap.get(group.id)!.reason} · <b>{formatBytesSimple(view.reclaimable)}</b>{" "}
-                    reclaimable
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span
-                    className="duplicate-group-title"
-                    title={
-                      group.sha256 ? `Content fingerprint (SHA-256): ${group.sha256}` : undefined
-                    }
-                  >
-                    {view.ordered.length} identical copies
-                  </span>
-                  <span className="duplicate-group-sub">
-                    {formatBytesSimple(group.size)} each ·{" "}
-                    <b>{formatBytesSimple(view.reclaimable)}</b> reclaimable
-                  </span>
-                </>
-              )}
-            </span>
-            <span className={`duplicate-group-chevron${expanded ? " is-open" : ""}`}>
-              <ChevronDownIcon size={14} />
-            </span>
-          </button>
-          <div className="duplicate-group-actions">
-            {groupFullySelected && (
-              <span className="duplicate-group-note">Every copy selected</span>
-            )}
-            <button
-              type="button"
-              className="quiet-button"
-              disabled={busy}
-              onClick={() => toggleGroupCopies(view)}
-            >
-              {allCopiesSelected ? "Deselect copies" : "Select copies"}
-            </button>
-            {view.ordered.length > INLINE_COPIES && (
-              <button
-                type="button"
-                className="quiet-button"
-                disabled={busy}
-                onClick={() => toggleGroupExpand(group.sha256)}
-              >
-                {expanded ? "Show fewer" : `Show all ${view.ordered.length}`}
-              </button>
-            )}
-          </div>
-        </header>
-        <div className={`duplicate-tiles${viewMode === "list" ? " is-list" : ""}`}>
-          {visible.map((item) => renderTile(view, item))}
-          {hiddenCount > 0 && (
-            <button
-              type="button"
-              className="duplicate-tile-more"
-              onClick={() => toggleGroupExpand(group.sha256)}
-            >
-              +{hiddenCount}
-              <small>more</small>
-            </button>
-          )}
-        </div>
-      </section>
-    );
-  };
 
   // ---- Any-file scan --------------------------------------------------
   // A separate scan from the media one: the backend walks the chosen folder,
@@ -1775,7 +1535,23 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
             </div>
           )}
           <div className="duplicate-groups">
-            {groupViews.slice(0, renderLimit).map((view) => renderGroup(view))}
+            {groupViews.slice(0, renderLimit).map((view) => (
+              <DuplicateGroupCard
+                key={view.group.sha256}
+                view={view}
+                expanded={expandedGroups.has(view.group.sha256)}
+                busy={busy}
+                viewMode={viewMode}
+                burst={mode === "bursts" ? burstMap.get(view.group.id) : undefined}
+                selected={selected}
+                toggleGroupCopies={toggleGroupCopies}
+                toggleGroupExpand={toggleGroupExpand}
+                assetUrl={assetUrl}
+                onOpenItem={onOpenItem}
+                toggleItem={toggleItem}
+                onCompare={setCompare}
+              />
+            ))}
           </div>
           {renderLimit < groupViews.length && (
             <div className="duplicate-load-more">
