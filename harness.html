@@ -652,6 +652,13 @@
           return callbackCounter;
         },
         invoke: async (command, args) => {
+          if (command === "default_apps_status") {
+            return {
+              supported: false,
+              unsupportedReason: "Default apps can be set from the installed app.",
+              types: [],
+            };
+          }
           if (command === "plugin:event|listen") {
             const handler = callbacks.get(args?.handler);
             if (handler) eventHandlers.set(args.event, handler);

@@ -25,3 +25,10 @@ test("harness renders the library grid within thumbnail bounds", async ({ page }
 
   expect(pageErrors, `page errors: ${pageErrors.join("; ")}`).toEqual([]);
 });
+
+test("harness General settings exposes the Default apps preview state", async ({ page }) => {
+  await page.goto("/harness.html?benchmark=10");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Default apps" })).toBeVisible();
+  await expect(page.getByText("Default apps can be set from the installed app.")).toBeVisible();
+});
