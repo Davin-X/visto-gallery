@@ -10,15 +10,38 @@ pub async fn open_folder(path: String) -> Result<(), CommandError> {
             "Path is not a directory.".to_string(),
         ));
     }
-    // An app bundle is a directory too, and `open Foo.app` launches it.
-    // Resolve symlinks first so a link named like a folder cannot hide one.
+    // Bundles are directories too, and `open` launches or installs them
+    // instead of showing a folder. Resolve symlinks first so a link named
+    // like a folder cannot hide one.
+    // shortcut: a fixed list of bundle extensions, ask LaunchServices if one slips through.
+    const BUNDLE_EXTENSIONS: &[&str] = &[
+        "app",
+        "appex",
+        "action",
+        "bundle",
+        "component",
+        "framework",
+        "kext",
+        "mdimporter",
+        "mpkg",
+        "pkg",
+        "plugin",
+        "prefpane",
+        "qlgenerator",
+        "saver",
+        "wdgt",
+        "workflow",
+        "xpc",
+    ];
     let resolved = std::fs::canonicalize(&path)?;
-    let is_app = resolved
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("app"));
-    if is_app {
+    let is_bundle = resolved.extension().is_some_and(|ext| {
+        BUNDLE_EXTENSIONS
+            .iter()
+            .any(|bundle| ext.eq_ignore_ascii_case(bundle))
+    });
+    if is_bundle {
         return Err(CommandError::invalid(
-            "Path is an app, not a folder.".to_string(),
+            "Path is an app or bundle, not a folder.".to_string(),
         ));
     }
     let status = std::process::Command::new("open")

@@ -551,12 +551,18 @@ mod open_folder_tests {
     use super::open_folder;
 
     #[tokio::test]
-    async fn refuses_an_app_bundle_or_a_link_to_one() {
+    async fn refuses_a_bundle_or_a_link_to_one() {
         let root = std::env::temp_dir().join(format!("visto-open-{}", uuid::Uuid::new_v4()));
         let app = root.join("Evil.APP");
         std::fs::create_dir_all(&app).unwrap();
         let link = root.join("Exports");
         std::os::unix::fs::symlink(&app, &link).unwrap();
+        let pkg = root.join("Setup.pkg");
+        std::fs::create_dir_all(&pkg).unwrap();
+
+        assert!(open_folder(pkg.to_string_lossy().into_owned())
+            .await
+            .is_err());
 
         assert!(open_folder(app.to_string_lossy().into_owned())
             .await
