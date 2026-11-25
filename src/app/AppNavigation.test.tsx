@@ -123,6 +123,7 @@ describe("Clean up sidebar entry", () => {
     } as unknown as React.ComponentProps<typeof AppSidebar>["stats"];
 
     expect(() => renderSidebar({ stats: partialStats })).not.toThrow();
+    fireEvent.click(screen.getByRole("button", { name: /Library stats/ }));
     expect(screen.getByText("Photos")).toBeInTheDocument();
   });
 

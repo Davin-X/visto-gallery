@@ -4,8 +4,8 @@ import {
   useDraftTransforms,
   draftTransformStyle,
   debugLog,
-  type SlideshowTransition,
 } from "../../engine/stores";
+import { SlideshowSettings } from "./SlideshowSettings";
 import {
   GearIcon,
   PauseIcon,
@@ -947,53 +947,15 @@ export function SlideshowOverlay({ assetUrl }: SlideshowOverlayProps) {
 
       {/* Settings popover */}
       {settingsOpen && (
-        <div className="slideshow-settings-pop" role="dialog" aria-label="Slideshow settings">
-          <div className="slideshow-settings-head">
-            <b>Slideshow</b>
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(false)}
-              aria-label="Close settings"
-            >
-              ×
-            </button>
-          </div>
-
-          <label className="slideshow-setting">
-            <span>
-              Interval <i>{interval}s</i>
-            </span>
-            <input
-              type="range"
-              min={2}
-              max={30}
-              step={1}
-              value={interval}
-              onChange={(e) => setInterval(Number(e.target.value))}
-            />
-          </label>
-
-          <label className="slideshow-setting row">
-            <input
-              type="checkbox"
-              checked={shuffle}
-              onChange={(e) => setShuffle(e.target.checked)}
-            />
-            <span>Shuffle</span>
-          </label>
-
-          <label className="slideshow-setting">
-            <span>Transition</span>
-            <select
-              value={transition}
-              onChange={(e) => setTransition(e.target.value as SlideshowTransition)}
-            >
-              <option value="fade">Fade</option>
-              <option value="slide">Slide</option>
-              <option value="none">None</option>
-            </select>
-          </label>
-        </div>
+        <SlideshowSettings
+          interval={interval}
+          shuffle={shuffle}
+          transition={transition}
+          onIntervalChange={setInterval}
+          onShuffleChange={setShuffle}
+          onTransitionChange={setTransition}
+          onClose={() => setSettingsOpen(false)}
+        />
       )}
 
       {hintsVisible && (

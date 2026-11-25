@@ -10,7 +10,7 @@ import { useFocusTrap } from "../design/hooks/useFocusTrap";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
 import { AlbumsIcon, FolderIcon, PlusIcon, SearchIcon } from "../design/components/icons";
 import { SourcesManager } from "../design/components/SourcesManager";
-import { TypedConfirmDialog } from "../design/components/TypedConfirmDialog";
+import { RemoveAllSourcesDialog } from "./RemoveAllSourcesDialog";
 import { tauri } from "../engine/commands/tauri";
 import type { LibraryFolder, UpdateCheckResult } from "../engine/types/commands";
 import type { DeleteRequest } from "../engine/types/deleteRequest";
@@ -61,6 +61,7 @@ interface AppDialogsProps {
 
   sourcesSheetOpen: boolean;
   setSourcesSheetOpen: (open: boolean) => void;
+  onOpenRestoreBackup: () => void;
 
   removeAllSourcesDialogOpen: boolean;
   setRemoveAllSourcesDialogOpen: (open: boolean) => void;
@@ -760,6 +761,7 @@ function SourcesSheet({
   onRescan,
   onRescanFolder,
   onRequestRemoveAll,
+  onRestoreBackup,
   escapeBlocked,
   library,
 }: {
@@ -772,6 +774,7 @@ function SourcesSheet({
   onRescan: () => Promise<void>;
   onRescanFolder: (folder: LibraryFolder) => Promise<void>;
   onRequestRemoveAll: () => void;
+  onRestoreBackup: () => void;
   /** When a confirmation is stacked on top, it owns Escape instead. */
   escapeBlocked: boolean;
   library: LibraryState;
@@ -803,12 +806,9 @@ function SourcesSheet({
           onAddSourcePath={onAddSourcePath}
           onRemoveFolder={onRemoveFolder}
           onFilterSource={onFilterSource}
-          onRescan={() => {
-            void onRescan();
-          }}
-          onRescanFolder={(folder) => {
-            void onRescanFolder(folder);
-          }}
+          onRescan={() => void onRescan()}
+          onRescanFolder={(folder) => void onRescanFolder(folder)}
+          onRestoreBackup={onRestoreBackup}
         />
         <div className="dialog-actions">
           <button
@@ -826,45 +826,6 @@ function SourcesSheet({
         </div>
       </div>
     </Backdrop>
-  );
-}
-
-function RemoveAllSourcesDialog({
-  open,
-  onClose,
-  onConfirm,
-  busy,
-  sourceCount,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  /** While a removal pass is running the dialog stays up and pinned. */
-  busy: boolean;
-  sourceCount: number;
-}) {
-  return (
-    <TypedConfirmDialog
-      open={open}
-      eyebrow="LIBRARY"
-      title="Remove all sources?"
-      description={
-        <>
-          Unlinks all{" "}
-          <b>
-            {sourceCount} source {sourceCount === 1 ? "folder" : "folders"}
-          </b>{" "}
-          from the library and drops their indexed entries — items, albums, tags, Smart Albums and
-          duplicates. <b>Original files on disk are not affected.</b>
-        </>
-      }
-      requiredPhrase="DELETE"
-      confirmLabel="Remove all"
-      busy={busy}
-      onClose={onClose}
-      onConfirm={onConfirm}
-      titleId="remove-all-sources-title"
-    />
   );
 }
 
@@ -966,6 +927,7 @@ export function AppDialogs(props: AppDialogsProps) {
     addingToAlbumId,
     sourcesSheetOpen,
     setSourcesSheetOpen,
+    onOpenRestoreBackup,
     setAlbumPickerOpen,
     setAlbumPickerSearch,
     removeAllSourcesDialogOpen,
@@ -1114,6 +1076,7 @@ export function AppDialogs(props: AppDialogsProps) {
         onRescan={rescanSources}
         onRescanFolder={rescanSource}
         onRequestRemoveAll={() => setRemoveAllSourcesDialogOpen(true)}
+        onRestoreBackup={onOpenRestoreBackup}
         escapeBlocked={removeAllSourcesDialogOpen || folderPendingRemove != null}
         library={library}
       />

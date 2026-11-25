@@ -103,7 +103,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (key === "sidebarWidth") {
       // Hard clamp so the layout stays within the bounds the CSS was authored
       // for (180px - 360px).
-      value = Math.min(360, Math.max(180, Number(value) || 220)) as AppSettings["sidebarWidth"];
+      value = Math.min(360, Math.max(180, Number(value) || 240)) as AppSettings["sidebarWidth"];
     }
     if (key === "inspectorWidth") {
       // Hard clamp so the inspector stays usable (240px - 480px).
@@ -122,7 +122,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if ("sidebarWidth" in partial) {
       // Hard clamp so the layout stays within the bounds the CSS was
       // authored for (180px - 360px).
-      next.sidebarWidth = Math.min(360, Math.max(180, Number(partial.sidebarWidth) || 220));
+      next.sidebarWidth = Math.min(360, Math.max(180, Number(partial.sidebarWidth) || 240));
     }
     if ("inspectorWidth" in partial) {
       // Hard clamp so the inspector stays usable (240px - 480px).

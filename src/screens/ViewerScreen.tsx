@@ -1,4 +1,5 @@
 import { usePopoverFocus } from "../design/hooks/usePopoverFocus";
+import { buildShortcuts } from "./viewer/shortcuts";
 import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import {
   ChevronLeftIcon,
@@ -1191,24 +1192,3 @@ function ViewerScreen(props: ViewerScreenProps) {
 }
 
 export default ViewerScreen;
-
-// Shortcut list shown from the help button in the bar. Same keys as the strip
-// that used to float over the top of the picture, plus the ones that only apply
-// to stills.
-function buildShortcuts(kind: string | undefined) {
-  const photo = kind === "photo";
-  const still = photo || kind === "raw";
-  const rows: Array<{ keys: string[]; label: string }> = [
-    { keys: ["←", "→", "J", "K", "Space"], label: "Navigate" },
-    { keys: ["↑", "↓"], label: "Zoom" },
-  ];
-  if (photo) rows.push({ keys: ["R", "X"], label: "Rotate / flip" });
-  rows.push({ keys: ["0"], label: "Reset zoom" });
-  if (still) rows.push({ keys: ["1"], label: "200%" });
-  rows.push(
-    { keys: ["L"], label: "Favorite" },
-    { keys: ["F"], label: "Full screen" },
-    { keys: ["Esc"], label: "Close" },
-  );
-  return rows;
-}

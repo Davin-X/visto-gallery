@@ -3,7 +3,7 @@
   .app-body {
     /* Keep whatever width the Sidebar Width setting chose; the main pane can
        spare the difference. */
-    grid-template-columns: var(--sidebar-width, 220px) minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-width, 240px) minmax(0, 1fr);
   }
 }
 

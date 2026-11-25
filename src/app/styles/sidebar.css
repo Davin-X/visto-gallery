@@ -138,70 +138,8 @@
   .app-body.sidebar-collapsed .sources-entry-action {
     display: none;
   }
-  /* Library stats live behind a button in rail mode so the details stay
-     reachable without taking sidebar room. Hidden while expanded. */
-  .sidebar-stats-entry {
-    display: none;
-  }
   .app-body.sidebar-collapsed .sidebar-section:not(.sources-entry-section) {
     display: none;
-  }
-  .app-body.sidebar-collapsed .sidebar-stats-entry {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    position: relative;
-  }
-  /* Footprint only. How a rail item is painted belongs to the shared rail block
-     below, so the button cannot drift from the navigation again. */
-  .app-body.sidebar-collapsed .sidebar-stats-button {
-    display: grid;
-    place-items: center;
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    border-radius: 9px;
-    cursor: pointer;
-  }
-  /* Portaled to .app-frame (see AppNavigation.tsx): fixed positioning with
-     top/left set inline from the button rect. An absolute popup inside the
-     rail would be clipped by .sidebar-scroll and paint under .main-content.
-     z-index 200 sits above the sticky library header (10) and back button
-     (40) but below dialog backdrops (300).
-     Styled as the Sources entry's open state (accent border + blue-soft
-     tint) so the button, popup and Sources share one accent identity. */
-  .sidebar-stats-popup {
-    position: fixed;
-    z-index: 200;
-    width: 230px;
-    padding: 12px;
-    border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--line));
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--blue-soft) 58%, var(--surface));
-    box-shadow:
-      0 12px 32px rgba(0, 0, 0, 0.22),
-      0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
-  }
-  .sidebar-stats-popup .sidebar-section-label {
-    margin: 0 2px 8px;
-    color: var(--accent-text);
-  }
-  .sidebar-stats-popup .library-stats {
-    border-color: color-mix(in srgb, var(--accent) 20%, var(--line));
-    background: color-mix(in srgb, var(--accent) 20%, var(--line));
-  }
-  .sidebar-stats-popup .stat-row {
-    background: color-mix(in srgb, var(--blue-soft) 30%, var(--surface));
-  }
-  .sidebar-stats-popup .stat-row:hover {
-    background: color-mix(in srgb, var(--blue-soft) 52%, var(--surface));
-  }
-  .sidebar-stats-popup .stat-row.size {
-    border-top-color: color-mix(in srgb, var(--accent) 20%, var(--line));
-    background: color-mix(in srgb, var(--blue-soft) 52%, var(--surface));
-  }
-  .sidebar-stats-popup .stat-row.size .stat-value {
-    color: var(--accent-text);
   }
   /* One rail language. Every item is the same slot with a bare glyph; the box is
      a response — hover, focus, or a state — not a permanent frame. Sources and
@@ -392,14 +330,59 @@
   opacity: 0.6;
 }
 
-/* Favorites and Hidden are views of the kinds, not part of the total: a gap
-   sets them apart from the rows that add up. */
-.stat-row.view-start {
-  margin-top: 8px;
+/* Portaled to .app-frame (see AppNavigation.tsx): fixed positioning with
+   top/left set inline from the button rect so it escapes sidebar clipping. */
+.sidebar-stats-popup {
+  position: fixed;
+  z-index: 200;
+  width: 268px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.24),
+    0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.sidebar-stats-popup .sidebar-section-label {
+  margin: 0 2px 8px;
+  color: var(--faint);
 }
 
 .sidebar-stats-popup:focus {
   outline: none;
+}
+
+.sidebar-stats-popup .stat-row.size {
+  background: var(--surface-2);
+}
+
+.sidebar-stats-popup .stat-row.size .stat-label,
+.sidebar-stats-popup .stat-row.size .stat-value {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.sidebar-stats-popup .stat-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sidebar-stats-popup .stat-size {
+  min-width: 48px;
+  text-align: right;
+  color: var(--muted);
+}
+
+/* Favorites and Hidden are views of the kinds, not part of the total: a
+   stronger top rule sets them apart cleanly without exposing a grid gap. */
+.stat-row.view-start {
+  margin-top: 0;
+  border-top: 1px solid var(--line-strong);
 }
 
 /* The stat rows used an 8px colour chip, which said nothing on its own and read
@@ -590,12 +573,6 @@
 }
 .nav-tools-start {
   margin-top: 8px;
-}
-.sidebar-library-stats summary {
-  padding: 8px 10px;
-  font-size: 13px;
-  color: var(--muted);
-  cursor: pointer;
 }
 
 .app-body:not(.sidebar-collapsed) .sources-entry {

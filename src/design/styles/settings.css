@@ -1455,8 +1455,8 @@
 .sources-empty p {
   max-width: 320px;
   margin: 0 0 4px;
-  color: var(--muted);
-  font-size: 11px;
+  color: var(--text);
+  font-size: 12px;
   line-height: 1.5;
 }
 

@@ -4,9 +4,9 @@ async function openApp(page: Page, query: string) {
   await page.setViewportSize({ width: 1500, height: 900 });
   await page.goto(`/harness.html?benchmark=20${query}`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".gallery-tile");
-  const stats = page.locator(".sidebar-library-stats");
-  await expect(stats).not.toHaveAttribute("open", "");
-  await stats.locator("summary").click();
+  const statsBtn = page.locator(".sidebar").getByRole("button", { name: /Library stats/ });
+  await expect(statsBtn).toHaveAttribute("aria-expanded", "false");
+  await statsBtn.click();
 }
 
 const hiddenNav = (page: Page) =>
@@ -32,6 +32,7 @@ test("a locked Hidden asks for Touch ID and keeps its count out of the sidebar",
 
   await unlock.click();
   await expect(page.getByRole("region", { name: "Hidden is locked" })).toHaveCount(0);
+  await page.locator(".sidebar").getByRole("button", { name: /Library stats/ }).click();
   await expect(hiddenStat(page)).toBeVisible();
   await expect(hiddenStat(page)).toContainText("7");
 
