@@ -501,8 +501,6 @@ pub fn run() {
             find_duplicates,
             find_similar_photos,
             // Finder
-            write_finder_tags,
-            read_finder_tags,
             merge_finder_tags,
             // Settings
             get_settings,

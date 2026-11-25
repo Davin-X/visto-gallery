@@ -319,11 +319,6 @@ export const tauri = {
   },
 
   finder: {
-    writeTags: (path: string, tags: string[]): Promise<void> =>
-      invoke("write_finder_tags", { path, tags }),
-
-    readTags: (path: string): Promise<string[]> => invoke("read_finder_tags", { path }),
-
     /** Merge app tags into existing Finder tags without deleting any. */
     mergeTags: (path: string, tags: string[]): Promise<string[]> =>
       invoke("merge_finder_tags", { path, tags }),
