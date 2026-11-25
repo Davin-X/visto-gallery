@@ -19,7 +19,9 @@ test("harness renders the library grid within thumbnail bounds", async ({ page }
   // its configured concurrent-thumbnail bound.
   await page.waitForTimeout(500);
   const maxActive = await page.evaluate(
-    () => (window as unknown as { __benchmark?: { maxActiveThumbnails?: number } }).__benchmark?.maxActiveThumbnails ?? 0,
+    () =>
+      (window as unknown as { __benchmark?: { maxActiveThumbnails?: number } }).__benchmark
+        ?.maxActiveThumbnails ?? 0,
   );
   expect(maxActive).toBeLessThanOrEqual(MAX_ACTIVE_THUMBNAILS);
 
@@ -31,4 +33,11 @@ test("harness General settings exposes the Default apps preview state", async ({
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Default apps" })).toBeVisible();
   await expect(page.getByText("Default apps can be set from the installed app.")).toBeVisible();
+});
+
+test("Advanced settings opens Storage and shows fixture usage", async ({ page }) => {
+  await page.goto("/harness.html?benchmark=10");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("tab", { name: "Advanced" }).click();
+  await expect(page.getByRole("region", { name: "Storage" })).toContainText("8.0 KB");
 });

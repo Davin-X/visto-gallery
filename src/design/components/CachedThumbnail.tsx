@@ -195,7 +195,7 @@ function CachedThumbnail({
     // Scrollable panels clip their contents, so observing against the viewport
     // would ignore the prefetch margin. Use the nearest panel as the root.
     const root = placeholder.closest(
-      ".library-grid-container, .edit-picker-grid, .duplicates-page",
+      ".library-grid-container, .edit-picker-grid, .duplicates-page, .video-player-queue-strip",
     );
     const observer = new IntersectionObserver(
       ([entry]) => {

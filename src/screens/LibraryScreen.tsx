@@ -144,45 +144,7 @@ export function libraryHeading(
   return filter === "All" ? "All Media" : filter;
 }
 
-/**
- * Colour label, favourite and rating for a details row. The preview there is
- * only 36px, so the grid's corner badges were clipped on it; the row states
- * them inline at the end of the name cell instead.
- */
-function ListRowMeta({ item }: { item: MediaItem }) {
-  const rating = Number(item.rating) || 0;
-  if (!item.favorite && !item.colorLabel && rating === 0) return null;
-  return (
-    <span className="list-row-meta">
-      {item.colorLabel ? (
-        <i
-          className={`list-row-color list-row-color--${item.colorLabel}`}
-          role="img"
-          aria-label={`Color label: ${item.colorLabel}`}
-          title={`Color label: ${item.colorLabel}`}
-        />
-      ) : null}
-      {item.favorite ? (
-        <span className="list-row-favorite" role="img" aria-label="Favorite" title="Favorite">
-          <HeartIcon size={11} filled />
-        </span>
-      ) : null}
-      {rating > 0 ? (
-        <span
-          className="list-row-rating"
-          role="img"
-          aria-label={`Rating: ${rating} of 5 stars`}
-          title={`Rating: ${rating} of 5 stars`}
-        >
-          <span className="star" aria-hidden="true">
-            {"\u2605"}
-          </span>
-          {rating}
-        </span>
-      ) : null}
-    </span>
-  );
-}
+import { ListRowMeta } from "./library/ListRowMeta";
 
 function LibraryScreen(props: LibraryScreenProps) {
   const library = useLibraryStore();
@@ -239,6 +201,7 @@ function LibraryScreen(props: LibraryScreenProps) {
     return () => window.clearTimeout(timer);
   }, [library.refreshingLibrary]);
   const draftTransforms = useDraftTransforms();
+  const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
   const thumbnailSize = useThumbnailSize();
   const showExtensions = useSettingsStore((s) => s.showExtensions);
   const updateSettings = useSettingsStore((s) => s.update);
@@ -1340,7 +1303,7 @@ function LibraryScreen(props: LibraryScreenProps) {
             </header>
           )}
 
-          <div className="collection-toolbar">
+          <div className={`collection-toolbar${viewOptionsOpen ? " options-open" : ""}`}>
             <div className="search-field">
               <span className="search-icon">
                 <SearchIcon size={15} />
@@ -1424,6 +1387,14 @@ function LibraryScreen(props: LibraryScreenProps) {
                       );
                     })}
                   </div>
+                  <button
+                    className="compact-view-options"
+                    type="button"
+                    aria-expanded={viewOptionsOpen}
+                    onClick={() => setViewOptionsOpen(!viewOptionsOpen)}
+                  >
+                    View options
+                  </button>
                   {/* Details rows use a fixed thumbnail, so size only matters
                       for the visual layouts. A divider keeps the two icon
                       groups from reading as one six-button control. */}
@@ -1948,7 +1919,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                           if (e.target.value) void jumpToTimelineMonth(e.target.value);
                         }}
                       >
-                        <option value="">Month…</option>
+                        <option value="">Jump to date…</option>
                         {timelineYears.map(({ year }) => (
                           <optgroup key={year} label={year}>
                             {timelineMonths
@@ -2417,7 +2388,7 @@ function LibraryScreen(props: LibraryScreenProps) {
           previewHandlers={inspectedItem ? holdHandlers(inspectedItem.id) : undefined}
           assetUrl={assetUrl}
           draftTransforms={draftTransforms}
-          thumbnailPixels={thumbnailPixels}
+          veiled={veiled}
           canPlayBackground={Boolean(props.onPlayBackground)}
           playingId={playingId}
           isPlaying={isPlaying}

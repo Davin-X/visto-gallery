@@ -174,6 +174,21 @@ export function CompareOverlay({
   // the keys the compare surface handles.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.startsWith("Arrow") && event.target instanceof HTMLInputElement) return;
+      const stage = stageRef.current;
+      if (stage && event.target === stage && zoom > MIN_ZOOM && event.key.startsWith("Arrow")) {
+        event.preventDefault();
+        event.stopPropagation();
+        const dx = event.key === "ArrowLeft" ? 32 : event.key === "ArrowRight" ? -32 : 0;
+        const dy = event.key === "ArrowUp" ? 32 : event.key === "ArrowDown" ? -32 : 0;
+        setPan((current) =>
+          clampPan({ x: current.x + dx, y: current.y + dy }, zoom, {
+            width: stage.clientWidth / 2,
+            height: stage.clientHeight,
+          }),
+        );
+        return;
+      }
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
@@ -376,6 +391,9 @@ export function CompareOverlay({
           className={`compare-stage${dragging ? " is-dragging" : ""}${
             zoom > MIN_ZOOM ? " is-zoomed" : ""
           }`}
+          tabIndex={zoom > MIN_ZOOM ? 0 : -1}
+          role="group"
+          aria-label="Image comparison. Use arrow keys to pan when zoomed in."
           ref={stageRef}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}

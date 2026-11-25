@@ -64,12 +64,12 @@ const NAV_ITEMS: Array<{
   { label: "Library", Icon: LibraryIcon, screens: ["Library"] },
   { label: "Albums", Icon: AlbumsIcon, screens: ["Albums"] },
   { label: "Map", Icon: MapPinIcon, screens: ["Map"] },
+  { label: "Hidden", Icon: EyeOffIcon, screens: ["Hidden"] },
   // Duplicates and Cleanup are separate screens behind one entry so the tab
   // strip, Back/Forward and the saved last view all keep working.
   { label: "Clean up", Icon: TrashIcon, screens: ["Duplicates", "Cleanup"] },
   { label: "Edit", Icon: EditIcon, screens: ["Edit"] },
   { label: "Batch", Icon: BatchIcon, screens: ["Batch"] },
-  { label: "Hidden", Icon: EyeOffIcon, screens: ["Hidden"] },
 ];
 
 interface AppTopBarProps {
@@ -332,7 +332,8 @@ export function AppSidebar({
     totalSize: count(stats?.totalSize),
   };
   const folderCount = folders.length;
-  const folderItems = folders.reduce((total, folder) => total + folder.itemCount, 0);
+  const totalItems =
+    displayStats.photos + displayStats.videos + displayStats.raws + displayStats.animations;
   const hiddenLocked = useHiddenLockStore((s) => isHiddenLocked(s.status));
   const [statsOpen, setStatsOpen] = useState(false);
   const [statsPos, setStatsPos] = useState({ top: 0, left: 0 });
@@ -340,32 +341,19 @@ export function AppSidebar({
   const statsButtonRef = useRef<HTMLButtonElement>(null);
   const statsPopupRef = useRef<HTMLDivElement>(null);
   // The popup is read-only, so it takes focus itself when it opens and
-  // hands it back to the chart button when it closes.
-  usePopoverFocus(statsOpen, statsPopupRef, statsButtonRef);
-  // The popup must escape the rail: .sidebar (overflow hidden) and
-  // .sidebar-scroll (overflow-y auto / overflow-x hidden) clip anything
-  // rendered inside them, and the sibling .main-content paints over
-  // whatever overflows the sidebar. Portaling into .app-frame with fixed
-  // positioning — like FilterDropdown / ContextMenu — is the only way to
-  // paint above the main pane without giving up sidebar scrolling.
-  // .app-frame (not body) so the panel inherits the theme tokens.
+  // hands it back to the stats button when it closes.
+  usePopoverFocus(statsOpen, statsPopupRef, statsButtonRef, {
+    onEscape: () => setStatsOpen(false),
+  });
   const portalRoot =
     typeof document === "undefined"
       ? null
       : (document.querySelector<HTMLElement>(".app-frame") ?? document.body);
 
-  // The popup only makes sense in rail mode; expanding or hiding the
-  // sidebar should close it, and Escape/outside clicks dismiss it.
   useEffect(() => {
     if (!statsOpen) return;
-    if (!sidebarCollapsed) {
-      setStatsOpen(false);
-      return;
-    }
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
-      // The popup is portaled outside statsWrapRef, so clicks inside it
-      // would look like outside clicks unless it is checked too.
       if (
         !(statsWrapRef.current?.contains(target) ?? false) &&
         !(statsPopupRef.current?.contains(target) ?? false)
@@ -373,20 +361,10 @@ export function AppSidebar({
         setStatsOpen(false);
       }
     };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setStatsOpen(false);
-    };
     document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [statsOpen, sidebarCollapsed]);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [statsOpen]);
 
-  // Anchor the portaled popup to the chart button and keep it inside the
-  // viewport (mirrors FilterDropdown's positioning). Re-run on resize and
-  // on any scroll — .sidebar-scroll scrolling moves the button.
   useLayoutEffect(() => {
     if (!statsOpen) return;
     const positionPopup = () => {
@@ -396,14 +374,14 @@ export function AppSidebar({
       const buttonRect = button.getBoundingClientRect();
       const panelRect = panel.getBoundingClientRect();
       const padding = 8;
-      const gap = 10;
-      let left = buttonRect.right + gap;
-      let top = buttonRect.top;
-      left = Math.max(padding, Math.min(left, window.innerWidth - panelRect.width - padding));
-      if (top + panelRect.height > window.innerHeight - padding) {
-        top = window.innerHeight - panelRect.height - padding;
-      }
-      if (top < padding) top = padding;
+      const left = Math.max(
+        padding,
+        Math.min(buttonRect.left, window.innerWidth - panelRect.width - padding),
+      );
+      const top = Math.max(
+        padding,
+        Math.min(buttonRect.bottom + 6, window.innerHeight - panelRect.height - padding),
+      );
       setStatsPos((prev) => (prev.top === top && prev.left === left ? prev : { top, left }));
     };
     positionPopup();
@@ -470,8 +448,8 @@ export function AppSidebar({
             displayStats.raws +
             displayStats.animations +
             displayStats.uncategorized
-          ).toLocaleString()}{" "}
-          · {formatBytesSimple(displayStats.totalSize)}
+          ).toLocaleString()}
+          <span className="stat-size">· {formatBytesSimple(displayStats.totalSize)}</span>
         </span>
       </div>
       {/* Favorites and Hidden are views, not kinds: favorites are already in
@@ -536,7 +514,7 @@ export function AppSidebar({
                 <button
                   key={label}
                   type="button"
-                  className={`nav-item ${active ? "active" : ""}`}
+                  className={`nav-item ${label === "Clean up" ? "nav-tools-start" : ""} ${active ? "active" : ""}`}
                   aria-label={label}
                   title={label}
                   aria-current={active ? "page" : undefined}
@@ -571,7 +549,7 @@ export function AppSidebar({
               <span className="sources-entry-count">
                 {folderCount === 0
                   ? "No sources yet"
-                  : `${folderCount.toLocaleString()} folder${folderCount === 1 ? "" : "s"} · ${folderItems.toLocaleString()} items`}
+                  : `${folderCount.toLocaleString()} folder${folderCount === 1 ? "" : "s"}`}
               </span>
             </span>
             <span className="sources-entry-action">
@@ -582,27 +560,38 @@ export function AppSidebar({
           </button>
         </div>
 
-        <div className="sidebar-stats-entry" ref={statsWrapRef}>
+        <div className="sidebar-section sources-entry-section" ref={statsWrapRef}>
           <button
             ref={statsButtonRef}
             type="button"
-            className="sidebar-stats-button"
+            className={`sources-entry${statsOpen ? " open" : ""}`}
             onClick={() => {
               if (!statsOpen) {
-                // Seed the fixed position before the portal mounts so the
-                // panel doesn't flash at the viewport origin; the layout
-                // effect above then clamps it to the viewport.
                 const rect = statsButtonRef.current?.getBoundingClientRect();
-                if (rect) setStatsPos({ top: rect.top, left: rect.right + 10 });
+                if (rect) setStatsPos({ top: rect.bottom + 6, left: rect.left });
               }
               setStatsOpen((value) => !value);
             }}
-            aria-label="Library stats"
             aria-haspopup="dialog"
             aria-expanded={statsOpen}
             title="Library stats"
           >
-            <ChartIcon size={18} />
+            <span className="sources-entry-icon">
+              <ChartIcon size={16} />
+            </span>
+            <span className="sources-entry-text">
+              <span className="sources-entry-name">Library stats</span>
+              <span className="sources-entry-count">
+                {totalItems === 0
+                  ? "No items yet"
+                  : `${totalItems.toLocaleString()} item${totalItems === 1 ? "" : "s"} · ${formatBytesSimple(displayStats.totalSize)}`}
+              </span>
+            </span>
+            <span className="sources-entry-action">
+              <span className="sources-entry-chevron" aria-hidden="true">
+                ›
+              </span>
+            </span>
           </button>
           {statsOpen &&
             portalRoot &&
@@ -620,13 +609,6 @@ export function AppSidebar({
               </div>,
               portalRoot,
             )}
-        </div>
-
-        <div className="sidebar-divider" aria-hidden="true" />
-
-        <div className="sidebar-section">
-          <div className="sidebar-section-label">LIBRARY</div>
-          <div className="library-stats">{libraryStatsRows}</div>
         </div>
       </div>
       <div className="sidebar-footer">

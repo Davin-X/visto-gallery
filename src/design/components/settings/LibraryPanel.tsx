@@ -11,6 +11,7 @@ export function LibraryPanel(props: {
   onRescan?: () => void;
   onRescanFolder?: (folder: LibraryFolder) => void;
   onRemoveAllSources?: () => void;
+  onRestoreBackup?: () => void;
   onChange: SettingsChange;
 }) {
   return (
@@ -48,6 +49,7 @@ export function LibraryPanel(props: {
         onRescan={props.onRescan}
         onRescanFolder={props.onRescanFolder}
         onRemoveAllSources={props.onRemoveAllSources}
+        onRestoreBackup={props.onRestoreBackup}
       />
 
       <div className="settings-warning">

@@ -18,6 +18,7 @@ import { navigateToBatchExport } from "./exportFlow";
 import { copyTagsToFinder } from "../engine/utils/finderTags";
 import { startConfiguredSlideshow } from "./utils/startConfiguredSlideshow";
 import { AppDialogs, DeleteAlbumDialog } from "./AppDialogs";
+import { useRestoreBackup } from "../design/components/settings/useRestoreBackup";
 import { AppSidebar, AppTopBar, cycleAppearance } from "./AppNavigation";
 import { AppShell } from "./AppShell";
 import { AppScreenRouter } from "./AppScreenRouter";
@@ -185,6 +186,7 @@ function App() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [shortcutsCheatSheetOpen, setShortcutsCheatSheetOpen] = useState(false);
   const [sourcesSheetOpen, setSourcesSheetOpen] = useState(false);
+  const restore = useRestoreBackup();
   const updates = useUpdateCheck({ settingsHydrated, showNotice, showErrorNotice, setAboutOpen });
   const updateDialogRef = useRef<HTMLDivElement | null>(null);
   const aboutDialogRef = useRef<HTMLDivElement | null>(null);
@@ -503,6 +505,7 @@ function App() {
       deletion.itemPendingDeleteCount > 0 ||
       sources.folderPendingRemove ||
       sourcesSheetOpen ||
+      restore.open ||
       updates.updateDialogOpen ||
       shortcutsCheatSheetOpen,
     ),
@@ -668,6 +671,10 @@ function App() {
             setAddingToAlbumId={albums.setAddingToAlbumId}
             sourcesSheetOpen={sourcesSheetOpen}
             setSourcesSheetOpen={setSourcesSheetOpen}
+            onOpenRestoreBackup={() => {
+              setSourcesSheetOpen(false);
+              void restore.chooseRestore();
+            }}
             removeAllSourcesDialogOpen={sources.removeAllSourcesDialogOpen}
             setRemoveAllSourcesDialogOpen={sources.setRemoveAllSourcesDialogOpen}
             removingAllSources={sources.removingAllSources}
@@ -745,6 +752,7 @@ function App() {
               onClose={() => setShortcutsCheatSheetOpen(false)}
             />
           )}
+          {restore.modal}
         </>
       }
     >

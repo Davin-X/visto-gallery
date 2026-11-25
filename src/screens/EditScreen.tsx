@@ -1,3 +1,4 @@
+import { usePopoverFocus } from "../design/hooks/usePopoverFocus";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -32,68 +33,7 @@ import { EditControls } from "./edit/EditControls";
 import { ASPECT_RATIO_OPTIONS } from "./edit/aspectRatios";
 import type { EditScreenProps } from "./edit/types";
 
-function EyeCompareIcon({ size = 14, className = "" }: { size?: number; className?: string }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-function AspectGuideIcon({ size = 14, className = "" }: { size?: number; className?: string }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="M7 9v6M17 9v6" strokeDasharray="2 2" strokeWidth={1.2} />
-    </svg>
-  );
-}
-
-function PaletteToneIcon({ size = 14, className = "" }: { size?: number; className?: string }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <circle cx="13.5" cy="6.5" r="1.5" fill="currentColor" />
-      <circle cx="17.5" cy="10.5" r="1.5" fill="currentColor" />
-      <circle cx="8.5" cy="7.5" r="1.5" fill="currentColor" />
-      <circle cx="6.5" cy="12.5" r="1.5" fill="currentColor" />
-      <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.92 0 1.5-.58 1.5-1.5 0-.42-.16-.8-.44-1.1-.28-.31-.44-.69-.44-1.12 0-.92.75-1.67 1.67-1.67H16c3.31 0 6-2.69 6-6 0-5.52-4.48-10-10-10z" />
-    </svg>
-  );
-}
+import { EyeCompareIcon, AspectGuideIcon, PaletteToneIcon } from "./edit/EditIcons";
 
 const initialEdits: EditValues = {
   exposure: 0,
@@ -141,6 +81,7 @@ function EditScreen(props: EditScreenProps) {
     ),
   ]);
   const [draftTrayOpen, setDraftTrayOpen] = useState(false);
+  const [failedPreview, setFailedPreview] = useState<string | null>(null);
   const [fileRevision, setFileRevision] = useState(0);
   const [showGrid, setShowGrid] = useState(false);
   const [canvasTone, setCanvasTone] = useState<"neutral" | "dark" | "black" | "white">("neutral");
@@ -160,6 +101,9 @@ function EditScreen(props: EditScreenProps) {
     height: number;
   } | null>(null);
 
+  const draftPanel = useRef<HTMLDivElement>(null);
+  const aspectPanel = useRef<HTMLDivElement>(null);
+  const aspectTrigger = useRef<HTMLButtonElement>(null);
   const draftTriggerRef = useRef<HTMLButtonElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [viewportSize, setViewportSize] = useState<{ width: number; height: number } | null>(null);
@@ -216,6 +160,13 @@ function EditScreen(props: EditScreenProps) {
 
   const draftTransforms = useDraftTransforms();
   const draftIds = useDraftIds();
+  usePopoverFocus(draftTrayOpen && Boolean(draftPopoverPos), draftPanel, draftTriggerRef, {
+    onEscape: () => setDraftTrayOpen(false),
+  });
+  usePopoverFocus(aspectMenuOpen, aspectPanel, aspectTrigger, {
+    menu: true,
+    onEscape: () => setAspectMenuOpen(false),
+  });
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState<CropDrag | null>(null);
 
@@ -546,6 +497,9 @@ function EditScreen(props: EditScreenProps) {
     setCanvasTone(tones[nextIdx]);
   };
 
+  const previewKey = `${props.item?.id}-${props.item?.size}-${props.item?.modifiedAt}-${fileRevision}`;
+  const previewFailed = failedPreview === previewKey;
+
   // Close & Return
   const handleDone = async () => {
     await props.onClose?.();
@@ -745,6 +699,8 @@ function EditScreen(props: EditScreenProps) {
                   <>
                     <div className="edit-drafts-backdrop" onClick={() => setDraftTrayOpen(false)} />
                     <div
+                      ref={draftPanel}
+                      role="dialog"
                       className="edit-drafts-popover"
                       style={{
                         position: "fixed",
@@ -930,7 +886,9 @@ function EditScreen(props: EditScreenProps) {
                 ref={(el) => {
                   imgRef.current = el;
                 }}
-                key={`${props.item.id}-${props.item.size}-${props.item.modifiedAt}-${fileRevision}`}
+                key={previewKey}
+                hidden={previewFailed}
+                onError={() => setFailedPreview(previewKey)}
                 src={
                   props.assetUrl(props.item.path) +
                   `?v=${props.item.modifiedAt}-${props.item.size}-${fileRevision}`
@@ -947,14 +905,26 @@ function EditScreen(props: EditScreenProps) {
                   width: "auto",
                   height: "auto",
                   objectFit: "contain",
-                  display: "block",
+                  display: previewFailed ? "none" : "block",
                   transform: `rotate(${rotationMod}deg) scaleX(${previewValues.flip ? -1 : 1})`,
                   filter: previewFilter,
                 }}
               />
 
+              {previewFailed && (
+                <div role="alert">
+                  <p>Original unavailable. Check that the source is connected.</p>
+                  <button
+                    type="button"
+                    className="quiet-button"
+                    onClick={() => setFileRevision((value) => value + 1)}
+                  >
+                    Retry preview
+                  </button>
+                </div>
+              )}
               {/* Composition 3x3 Grid Overlay */}
-              {showGrid && (
+              {showGrid && !previewFailed && (
                 <div className="composition-grid-overlay" aria-hidden="true">
                   <div className="grid-line grid-v-1" />
                   <div className="grid-line grid-v-2" />
@@ -964,7 +934,7 @@ function EditScreen(props: EditScreenProps) {
               )}
 
               {/* Interactive Crop Overlay */}
-              {crop.enabled && !showOriginalPreview && (
+              {crop.enabled && !previewFailed && !showOriginalPreview && (
                 <div
                   className="crop-overlay"
                   style={{
@@ -1040,170 +1010,177 @@ function EditScreen(props: EditScreenProps) {
           </div>
 
           {/* Canvas Floating Action Toolbar */}
-          <div className="canvas-actions" role="toolbar" aria-label="Preview tools">
-            {/* History: Undo / Redo */}
-            <div className="edit-history-controls" aria-label="Edit history">
+          {!previewFailed && (
+            <div className="canvas-actions" role="toolbar" aria-label="Preview tools">
+              {/* History: Undo / Redo */}
+              <div className="edit-history-controls" aria-label="Edit history">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowOriginalPreview(false);
+                    props.onUndo();
+                  }}
+                  disabled={!props.canUndo}
+                  aria-label="Undo edit"
+                  title="Undo (⌘Z)"
+                >
+                  ↶
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowOriginalPreview(false);
+                    props.onRedo();
+                  }}
+                  disabled={!props.canRedo}
+                  aria-label="Redo edit"
+                  title="Redo (⇧⌘Z)"
+                >
+                  ↷
+                </button>
+              </div>
+
+              <span className="canvas-divider" aria-hidden="true" />
+
+              {/* Transform Controls */}
               <button
                 type="button"
                 onClick={() => {
                   setShowOriginalPreview(false);
-                  props.onUndo();
+                  props.onRotate(90);
                 }}
-                disabled={!props.canUndo}
-                aria-label="Undo edit"
-                title="Undo (⌘Z)"
+                title="Rotate 90° clockwise"
               >
-                ↶
+                <RotateIcon size={14} />
+                <span>Rotate</span>
               </button>
               <button
                 type="button"
+                className={values.flip ? "active" : ""}
+                aria-pressed={!!values.flip}
                 onClick={() => {
                   setShowOriginalPreview(false);
-                  props.onRedo();
+                  props.onFlip();
                 }}
-                disabled={!props.canRedo}
-                aria-label="Redo edit"
-                title="Redo (⇧⌘Z)"
+                title="Flip horizontally"
               >
-                ↷
+                <FlipIcon size={14} />
+                <span>Flip</span>
               </button>
-            </div>
-
-            <span className="canvas-divider" aria-hidden="true" />
-
-            {/* Transform Controls */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowOriginalPreview(false);
-                props.onRotate(90);
-              }}
-              title="Rotate 90° clockwise"
-            >
-              <RotateIcon size={14} />
-              <span>Rotate</span>
-            </button>
-            <button
-              type="button"
-              className={values.flip ? "active" : ""}
-              aria-pressed={!!values.flip}
-              onClick={() => {
-                setShowOriginalPreview(false);
-                props.onFlip();
-              }}
-              title="Flip horizontally"
-            >
-              <FlipIcon size={14} />
-              <span>Flip</span>
-            </button>
-            <button
-              type="button"
-              className={props.crop.enabled ? "active" : ""}
-              aria-pressed={!!props.crop.enabled}
-              onClick={() => {
-                setShowOriginalPreview(false);
-                props.crop.enabled ? props.onResetCrop?.() : props.onSetCrop({ enabled: true });
-              }}
-              title="Crop and straighten tool"
-            >
-              <CropIcon size={14} />
-              <span>{props.crop.enabled ? "Reset crop" : "Crop"}</span>
-            </button>
-
-            <span className="canvas-divider" aria-hidden="true" />
-
-            {/* Aspect Ratio Framing Preview Menu */}
-            <div className="aspect-menu-container">
               <button
                 type="button"
-                className={aspectGuide ? "active" : ""}
-                aria-pressed={!!aspectGuide}
-                onClick={() => setAspectMenuOpen((o) => !o)}
-                title="Preview framing in standard aspect ratios"
+                className={props.crop.enabled ? "active" : ""}
+                aria-pressed={!!props.crop.enabled}
+                onClick={() => {
+                  setShowOriginalPreview(false);
+                  props.crop.enabled ? props.onResetCrop?.() : props.onSetCrop({ enabled: true });
+                }}
+                title="Crop and straighten tool"
               >
-                <AspectGuideIcon size={14} />
-                <span>
-                  {aspectGuide
-                    ? ASPECT_RATIO_OPTIONS.find((r) => r.value === aspectGuide)?.label
-                    : "Aspect"}
-                </span>
+                <CropIcon size={14} />
+                <span>{props.crop.enabled ? "Reset crop" : "Crop"}</span>
               </button>
 
-              {aspectMenuOpen && (
-                <>
-                  <div className="menu-dismiss-scrim" onClick={() => setAspectMenuOpen(false)} />
-                  <div className="aspect-ratio-menu-popover" role="menu">
-                    <div className="menu-header">Aspect Ratio Guide</div>
-                    {ASPECT_RATIO_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.label}
-                        type="button"
-                        role="menuitem"
-                        className={aspectGuide === opt.value ? "active" : ""}
-                        onClick={() => {
-                          setAspectGuide(opt.value === aspectGuide ? null : opt.value);
-                          setAspectMenuOpen(false);
-                        }}
-                      >
-                        <b>{opt.label}</b>
-                        <small>{opt.ratioName}</small>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
+              <span className="canvas-divider" aria-hidden="true" />
+
+              {/* Aspect Ratio Framing Preview Menu */}
+              <div className="aspect-menu-container">
+                <button
+                  type="button"
+                  className={aspectGuide ? "active" : ""}
+                  aria-pressed={!!aspectGuide}
+                  ref={aspectTrigger}
+                  aria-expanded={aspectMenuOpen}
+                  aria-haspopup="menu"
+                  onClick={() => setAspectMenuOpen((o) => !o)}
+                  title="Preview framing in standard aspect ratios"
+                >
+                  <AspectGuideIcon size={14} />
+                  <span>
+                    {aspectGuide
+                      ? ASPECT_RATIO_OPTIONS.find((r) => r.value === aspectGuide)?.label
+                      : "Aspect"}
+                  </span>
+                </button>
+
+                {aspectMenuOpen && (
+                  <>
+                    <div className="menu-dismiss-scrim" onClick={() => setAspectMenuOpen(false)} />
+                    <div ref={aspectPanel} className="aspect-ratio-menu-popover" role="menu">
+                      <div className="menu-header">Aspect Ratio Guide</div>
+                      {ASPECT_RATIO_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          role="menuitem"
+                          className={aspectGuide === opt.value ? "active" : ""}
+                          onClick={() => {
+                            setAspectGuide(opt.value === aspectGuide ? null : opt.value);
+                            setAspectMenuOpen(false);
+                          }}
+                        >
+                          <b>{opt.label}</b>
+                          <small>{opt.ratioName}</small>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Grid Overlay Toggle */}
+              <button
+                type="button"
+                className={showGrid ? "active" : ""}
+                aria-pressed={showGrid}
+                onClick={() => setShowGrid((g) => !g)}
+                title="Toggle Rule of Thirds composition grid"
+              >
+                <GridIcon size={14} />
+                <span>Grid</span>
+              </button>
+
+              {/* Canvas Tone Cycler */}
+              <button
+                type="button"
+                onClick={cycleCanvasTone}
+                title={`Background tone: ${canvasTone}. Click to switch between neutral, dark, black, and white.`}
+              >
+                <PaletteToneIcon size={14} />
+                <span>Tone</span>
+              </button>
+
+              <span className="canvas-divider" aria-hidden="true" />
+
+              {/* Before / After Compare Button */}
+              <button
+                type="button"
+                className={`compare-btn ${showOriginalPreview ? "active" : ""}`}
+                aria-pressed={showOriginalPreview}
+                title="Compare with original (unfiltered)"
+                onClick={() => setShowOriginalPreview((v) => !v)}
+              >
+                <EyeCompareIcon size={14} />
+                <span>{showOriginalPreview ? "Show edited" : "Compare"}</span>
+              </button>
             </div>
-
-            {/* Grid Overlay Toggle */}
-            <button
-              type="button"
-              className={showGrid ? "active" : ""}
-              aria-pressed={showGrid}
-              onClick={() => setShowGrid((g) => !g)}
-              title="Toggle Rule of Thirds composition grid"
-            >
-              <GridIcon size={14} />
-              <span>Grid</span>
-            </button>
-
-            {/* Canvas Tone Cycler */}
-            <button
-              type="button"
-              onClick={cycleCanvasTone}
-              title={`Background tone: ${canvasTone}. Click to switch between neutral, dark, black, and white.`}
-            >
-              <PaletteToneIcon size={14} />
-              <span>Tone</span>
-            </button>
-
-            <span className="canvas-divider" aria-hidden="true" />
-
-            {/* Before / After Compare Button */}
-            <button
-              type="button"
-              className={`compare-btn ${showOriginalPreview ? "active" : ""}`}
-              aria-pressed={showOriginalPreview}
-              title="Compare with original (unfiltered)"
-              onClick={() => setShowOriginalPreview((v) => !v)}
-            >
-              <EyeCompareIcon size={14} />
-              <span>{showOriginalPreview ? "Show edited" : "Compare"}</span>
-            </button>
-          </div>
+          )}
         </main>
 
         {/* 3. TACTILE CONTROL PANEL */}
-        <EditControls
-          item={props.item}
-          values={values}
-          crop={crop}
-          hasAdjustments={hasAdjustments}
-          setCropRatio={setCropRatio}
-          onAdjust={() => setShowOriginalPreview(false)}
-          onConfirmReplace={() => setConfirmReplace(true)}
-          onConfirmRevert={() => setConfirmRevert(true)}
-          actions={props}
-        />
+        {!previewFailed && (
+          <EditControls
+            item={props.item}
+            values={values}
+            crop={crop}
+            hasAdjustments={hasAdjustments}
+            setCropRatio={setCropRatio}
+            onAdjust={() => setShowOriginalPreview(false)}
+            onConfirmReplace={() => setConfirmReplace(true)}
+            onConfirmRevert={() => setConfirmRevert(true)}
+            actions={props}
+          />
+        )}
       </div>
 
       {/* CONFIRM REPLACE MODAL */}

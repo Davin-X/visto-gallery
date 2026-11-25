@@ -448,7 +448,7 @@ macro_rules! define_settings {
 define_settings! {
     appearance: Appearance = Appearance::System,
     accent_color: AccentColor = AccentColor::Blue,
-    sidebar_width: i32 = 220,
+    sidebar_width: i32 = 240,
     inspector_width: i32 = 300,
     show_extensions: bool = false,
     animate_transitions: bool = true,

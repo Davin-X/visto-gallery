@@ -190,21 +190,15 @@
   top: 3px;
   right: 3px;
   display: grid;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
   place-items: center;
   border-radius: 50%;
   background: rgba(12, 16, 21, 0.7);
   color: #fff;
   font-size: 12px;
   line-height: 1;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.batch-thumb:hover .batch-thumb-remove,
-.batch-thumb:focus-visible .batch-thumb-remove {
-  opacity: 1;
 }
 
 .batch-thumb:hover {
@@ -1162,3 +1156,24 @@
   }
 }
 
+.batch-all-files {
+  flex-basis: 100%;
+}
+.batch-all-files summary {
+  cursor: pointer;
+}
+.batch-all-files ul {
+  max-height: 220px;
+  overflow: auto;
+  padding: 0;
+}
+.batch-all-files li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px;
+}
+.batch-all-files li span {
+  overflow-wrap: anywhere;
+}

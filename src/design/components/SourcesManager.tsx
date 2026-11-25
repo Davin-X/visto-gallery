@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { formatBytes, tauri } from "../../engine/commands/tauri";
-import { debugLog, useLibraryStore } from "../../engine/stores";
+import { useLibraryStore } from "../../engine/stores";
 import type { LibraryFolder } from "../../engine/types/commands";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { FolderIcon, InfoIcon, MoreIcon, PlusIcon } from "./icons";
@@ -14,6 +14,7 @@ export function SourcesManager(props: {
   onRescan?: () => void;
   onRescanFolder?: (folder: LibraryFolder) => void;
   onRemoveAllSources?: () => void;
+  onRestoreBackup?: () => void;
 }) {
   const {
     variant = "inline",
@@ -24,6 +25,7 @@ export function SourcesManager(props: {
     onRescan,
     onRescanFolder,
     onRemoveAllSources,
+    onRestoreBackup,
   } = props;
   const folders = useLibraryStore((s) => s.folders);
   const activeSource = useLibraryStore((s) => s.activeSource);
@@ -52,7 +54,9 @@ export function SourcesManager(props: {
 
   const reveal = (folder: LibraryFolder) => {
     void tauri.items.revealInFinder(folder.path).catch((error: unknown) => {
-      debugLog("reveal_in_finder failed:", error);
+      useLibraryStore
+        .getState()
+        .showErrorNotice(error, `Could not reveal “${folder.name}” in Finder`);
     });
   };
 
@@ -263,7 +267,12 @@ export function SourcesManager(props: {
             <FolderIcon size={24} />
           </span>
           <b>No sources yet</b>
-          <span>Add a folder to start indexing your library.</span>
+          <p>Add a folder to start indexing your library.</p>
+          {onRestoreBackup && (
+            <button type="button" className="quiet-button" onClick={onRestoreBackup}>
+              Restore from backup…
+            </button>
+          )}
         </div>
       ) : filteredFolders.length === 0 ? (
         <div className="sources-empty">
@@ -271,7 +280,7 @@ export function SourcesManager(props: {
             <FolderIcon size={24} />
           </span>
           <b>No matching sources</b>
-          <span>Try a different search term.</span>
+          <p>Try a different search term.</p>
         </div>
       ) : (
         <div className="sources-table-viewport">

@@ -44,7 +44,7 @@ export function TypedConfirmDialog({
   const localRef = useRef<HTMLDivElement | null>(null);
   const containerRef = dialogRef ?? localRef;
 
-  useFocusTrap(open && !busy, containerRef);
+  useFocusTrap(open, containerRef);
   useKeyboard([
     (e: KeyboardEvent) => {
       if (!open) return;
@@ -54,6 +54,10 @@ export function TypedConfirmDialog({
       }
     },
   ]);
+
+  useEffect(() => {
+    if (open && busy) containerRef.current?.focus();
+  }, [open, busy, containerRef]);
 
   // Reset and focus whenever the dialog opens.
   useEffect(() => {
@@ -78,6 +82,8 @@ export function TypedConfirmDialog({
         ref={containerRef}
         className="album-dialog delete-album-dialog confirm-dialog"
         role="alertdialog"
+        tabIndex={-1}
+        aria-busy={busy}
         aria-modal="true"
         aria-labelledby={labelId}
         onClick={(event) => event.stopPropagation()}

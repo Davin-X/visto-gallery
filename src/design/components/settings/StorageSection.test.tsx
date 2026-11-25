@@ -67,3 +67,10 @@ describe("StorageSection", () => {
     );
   });
 });
+
+test("retries a failed storage read", async () => {
+  mocks.usage.mockRejectedValueOnce(new Error("offline")).mockResolvedValue(usage);
+  render(<StorageSection showNotice={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+  expect(await screen.findByText("82.0 MB · 3,766 files")).toBeInTheDocument();
+});

@@ -212,7 +212,7 @@ export default function VideoPlayerScreen({
                   itemId={video.id}
                   name={video.name}
                   size={128}
-                  eager={active}
+                  eager={active && video.id === item.id}
                   placeholderClassName="video-queue-placeholder"
                 />
                 <span className="video-queue-index">{index + 1}</span>

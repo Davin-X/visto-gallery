@@ -1,3 +1,5 @@
+import { usePopoverFocus } from "../design/hooks/usePopoverFocus";
+import { buildShortcuts } from "./viewer/shortcuts";
 import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import {
   ChevronLeftIcon,
@@ -132,11 +134,15 @@ function ViewerScreen(props: ViewerScreenProps) {
   const [helpOpen, setHelpOpen] = useState(false);
   const helpRef = useRef<HTMLDivElement | null>(null);
 
-  // Rotate, flip and hide live behind one menu in the docked bar instead of
-  // sitting at the same weight as zoom and full screen, and the shortcut list
-  // opens from a help button beside it rather than as a strip pinned over the
-  // picture. Clicking elsewhere closes either; Escape is left to the viewer,
-  // which closes the whole surface.
+  const morePanel = useRef<HTMLDivElement>(null);
+  const helpPanel = useRef<HTMLDivElement>(null);
+  const moreTrigger = useRef<HTMLButtonElement>(null);
+  const helpTrigger = useRef<HTMLButtonElement>(null);
+  usePopoverFocus(moreOpen, morePanel, moreTrigger, {
+    menu: true,
+    onEscape: () => setMoreOpen(false),
+  });
+  usePopoverFocus(helpOpen, helpPanel, helpTrigger, { onEscape: () => setHelpOpen(false) });
   useEffect(() => {
     if (!moreOpen && !helpOpen) return;
     const onPointerDown = (event: PointerEvent) => {
@@ -978,6 +984,7 @@ function ViewerScreen(props: ViewerScreenProps) {
               <div className="media-anchor" ref={moreRef}>
                 <button
                   type="button"
+                  ref={moreTrigger}
                   aria-haspopup="menu"
                   aria-expanded={moreOpen}
                   aria-label="More actions"
@@ -988,7 +995,12 @@ function ViewerScreen(props: ViewerScreenProps) {
                   <MoreIcon size={15} />
                 </button>
                 {moreOpen && (
-                  <div className="media-popover" role="menu" aria-label="More actions">
+                  <div
+                    ref={morePanel}
+                    className="media-popover"
+                    role="menu"
+                    aria-label="More actions"
+                  >
                     {selected.kind === "photo" && (
                       <button
                         type="button"
@@ -1090,6 +1102,7 @@ function ViewerScreen(props: ViewerScreenProps) {
             <div className="media-anchor" ref={helpRef}>
               <button
                 type="button"
+                ref={helpTrigger}
                 aria-haspopup="dialog"
                 aria-expanded={helpOpen}
                 aria-label="Keyboard shortcuts"
@@ -1102,6 +1115,8 @@ function ViewerScreen(props: ViewerScreenProps) {
               </button>
               {helpOpen && (
                 <div
+                  ref={helpPanel}
+                  tabIndex={-1}
                   className="media-popover media-shortcuts"
                   role="dialog"
                   aria-label="Keyboard shortcuts"
@@ -1177,24 +1192,3 @@ function ViewerScreen(props: ViewerScreenProps) {
 }
 
 export default ViewerScreen;
-
-// Shortcut list shown from the help button in the bar. Same keys as the strip
-// that used to float over the top of the picture, plus the ones that only apply
-// to stills.
-function buildShortcuts(kind: string | undefined) {
-  const photo = kind === "photo";
-  const still = photo || kind === "raw";
-  const rows: Array<{ keys: string[]; label: string }> = [
-    { keys: ["←", "→", "J", "K", "Space"], label: "Navigate" },
-    { keys: ["↑", "↓"], label: "Zoom" },
-  ];
-  if (photo) rows.push({ keys: ["R", "X"], label: "Rotate / flip" });
-  rows.push({ keys: ["0"], label: "Reset zoom" });
-  if (still) rows.push({ keys: ["1"], label: "200%" });
-  rows.push(
-    { keys: ["L"], label: "Favorite" },
-    { keys: ["F"], label: "Full screen" },
-    { keys: ["Esc"], label: "Close" },
-  );
-  return rows;
-}

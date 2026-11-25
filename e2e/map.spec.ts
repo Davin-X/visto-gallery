@@ -6,7 +6,7 @@ test("the map groups nearby photos and opens a photo outside the first library p
   await page.goto("/harness.html?benchmark=500&gps=1");
   await page.getByRole("button", { name: "Map", exact: true }).click();
 
-  await expect(page.getByText("3 photos with locations")).toBeVisible();
+  await expect(page.getByText("3 geotagged photos")).toBeVisible();
   const atlas = page.locator(".photo-map-atlas");
   const rail = page.getByRole("complementary", { name: "Map photos" });
   await expect(atlas.getByRole("button", { name: "2 photos in this area" })).toBeVisible();
@@ -46,7 +46,7 @@ test("the map groups nearby photos and opens a photo outside the first library p
   await expect(title).not.toHaveText("benchmark-499.jpg");
   await expect(title).toHaveText(/benchmark-(0|1)\.jpg/);
   await page.keyboard.press("Escape");
-  await expect(page.getByText("3 photos with locations")).toBeVisible();
+  await expect(page.getByText("3 geotagged photos")).toBeVisible();
 });
 
 test("the map explains an empty catalog of geotagged photos", async ({ page }) => {

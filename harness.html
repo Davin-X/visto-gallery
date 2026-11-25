@@ -664,6 +664,10 @@
           return callbackCounter;
         },
         invoke: async (command, args) => {
+          if (command === "get_storage_usage") {
+            return { catalogBytes: 8192, thumbnailBytes: 0, thumbnailFiles: 0, playbackBytes: 0,
+              playbackFiles: 0, editOriginalBytes: 0, editOriginalFiles: 0 };
+          }
           if (command === "default_apps_status") {
             return {
               supported: false,
