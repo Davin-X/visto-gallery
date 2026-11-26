@@ -420,7 +420,9 @@ export function SourcesManager(props: {
 
   return (
     <section className="settings-section">
-      <h2 className="settings-section-title">Sources</h2>
+      <h2 className="settings-section-title">
+        <FolderIcon size={14} /> Sources
+      </h2>
       <p className="settings-section-desc">
         Folders VistoGallery indexes. Your files are read in place and never moved.
       </p>

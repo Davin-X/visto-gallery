@@ -204,9 +204,13 @@
 .albums-page,
 .duplicates-page,
 .edit-page,
-.viewer-screen,
-.settings-page {
+.viewer-screen {
   max-width: 1240px;
+}
+
+/* Keep preference labels and controls within an easy scanning distance. */
+.settings-page {
+  max-width: 880px;
 }
 
 /* Edit screen uses full width for a larger preview canvas */

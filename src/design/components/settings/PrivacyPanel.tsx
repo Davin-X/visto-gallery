@@ -1,4 +1,4 @@
-import { LockIcon, ShieldIcon } from "../icons";
+import { ChevronDownIcon, LockIcon, ShieldIcon } from "../icons";
 import { useHiddenLockStore } from "../../../engine/stores/useHiddenLockStore";
 import { tauri } from "../../../engine/commands/tauri";
 
@@ -108,17 +108,21 @@ export function PrivacyPanel(props: {
               </span>
             </div>
             <div className="settings-row-control">
-              <select
-                aria-label="Lock Hidden again"
-                value={props.hiddenAutoLockMinutes}
-                onChange={(e) => props.onChangeAutoLock(Number(e.target.value))}
-              >
-                <option value={0}>As soon as I leave it</option>
-                <option value={1}>After 1 minute</option>
-                <option value={5}>After 5 minutes</option>
-                <option value={15}>After 15 minutes</option>
-                <option value={-1}>Only when the screen locks</option>
-              </select>
+              <span className="settings-select-wrap">
+                <select
+                  className="settings-select"
+                  aria-label="Lock Hidden again"
+                  value={props.hiddenAutoLockMinutes}
+                  onChange={(e) => props.onChangeAutoLock(Number(e.target.value))}
+                >
+                  <option value={0}>As soon as I leave it</option>
+                  <option value={1}>After 1 minute</option>
+                  <option value={5}>After 5 minutes</option>
+                  <option value={15}>After 15 minutes</option>
+                  <option value={-1}>Only when the screen locks</option>
+                </select>
+                <ChevronDownIcon size={16} className="settings-select-chevron" />
+              </span>
             </div>
           </div>
           <div className="settings-row">

@@ -76,7 +76,7 @@ export function ViewingPanel(props: {
               onChange={(e) => props.onChange("slideshowInterval", Number(e.target.value))}
               aria-label="Slideshow interval in seconds"
             />
-            <span className="settings-slider-value">{props.slideshowInterval}s</span>
+            <span className="settings-slider-value">{props.slideshowInterval} s</span>
           </div>
         </div>
         <div className="settings-row">
