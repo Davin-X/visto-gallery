@@ -6,7 +6,9 @@
 }
 
 .duplicates-page > .page-heading {
-  margin-bottom: var(--space-6);
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 /* The subtitle wraps inside the title block instead of pushing the
@@ -19,7 +21,8 @@
 /* Two rows on the right of the heading: the mode switch on its own line, then
    the folder picker and the scan actions under it. */
 .duplicate-heading-actions {
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -28,6 +31,8 @@
 
 .duplicate-heading-row {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 6px;
 }
@@ -436,7 +441,10 @@
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    border-color 0.1s,
+    color 0.1s;
   white-space: nowrap;
 }
 
@@ -495,7 +503,10 @@
   border-radius: 4px;
   cursor: pointer;
   opacity: 0.7;
-  transition: opacity 0.1s, color 0.1s, background 0.1s;
+  transition:
+    opacity 0.1s,
+    color 0.1s,
+    background 0.1s;
 }
 
 .picked-folder-clear:hover {
