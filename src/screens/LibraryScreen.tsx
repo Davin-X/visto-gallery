@@ -32,7 +32,7 @@ import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
 import VideoThumb from "../design/components/VideoThumb";
 import { useDraftTransforms } from "../engine/stores/useEditStore";
 import { draftImageStyle } from "../engine/utils/draftImage";
-import { searchShortcutLabel } from "../engine/utils/shortcut";
+import { LibrarySearch } from "./library/LibrarySearch";
 import { toDateInputValue } from "../engine/utils/dateRange";
 import {
   useLibraryStore,
@@ -1159,6 +1159,16 @@ function LibraryScreen(props: LibraryScreenProps) {
     props.onSetSelection?.(allVisibleSelected ? [] : props.items.map((item) => item.id));
   };
 
+  const searchInHeading = !inAlbum && !props.hiddenView;
+  const searchField = (
+    <LibrarySearch
+      searchInputRef={props.searchInputRef}
+      hiddenView={props.hiddenView}
+      query={props.query}
+      onChangeQuery={props.onChangeQuery}
+    />
+  );
+
   return (
     <div
       ref={inspectorRef}
@@ -1166,7 +1176,7 @@ function LibraryScreen(props: LibraryScreenProps) {
       style={{ "--inspector-width": `${inspectorWidth}px` } as CSSProperties}
     >
       <section className="library-center">
-        <header className="library-header">
+        <header className={`library-header${searchInHeading ? " library-header-with-search" : ""}`}>
           {inAlbum ? (
             <header className="page-heading album-detail-top">
               <div className="album-detail-head">
@@ -1243,6 +1253,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                   </p>
                 )}
               </div>
+              {searchInHeading && <div className="library-search-row">{searchField}</div>}
               <div className="header-actions">
                 {props.hiddenView && props.hiddenHeaderAction}
                 {!props.hiddenView && (
@@ -1293,40 +1304,7 @@ function LibraryScreen(props: LibraryScreenProps) {
           )}
 
           <div className={`collection-toolbar${viewOptionsOpen ? " options-open" : ""}`}>
-            <div className="search-field">
-              <span className="search-icon">
-                <SearchIcon size={15} />
-              </span>
-              <input
-                ref={props.searchInputRef}
-                value={props.query}
-                onChange={(e) => props.onChangeQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape" && props.query) props.onChangeQuery("");
-                }}
-                placeholder={
-                  props.hiddenView
-                    ? "Search hidden items…"
-                    : "Search filenames, tags, camera, lens…"
-                }
-                aria-label={props.hiddenView ? "Search hidden items" : "Search library"}
-              />
-              {props.query ? (
-                <button
-                  type="button"
-                  className="clear-btn visible"
-                  onClick={() => {
-                    props.onChangeQuery("");
-                  }}
-                  aria-label="Clear search"
-                  title="Clear (Esc)"
-                >
-                  ×
-                </button>
-              ) : (
-                <kbd title="Focus search">{searchShortcutLabel()}</kbd>
-              )}
-            </div>
+            {!searchInHeading && searchField}
             <div className="toolbar-right">
               <div className="toolbar-actions">
                 {/* An album already has a Play button in its header. */}
