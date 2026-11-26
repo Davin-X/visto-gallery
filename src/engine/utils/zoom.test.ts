@@ -7,6 +7,7 @@ import {
   fittedSize,
   MAX_ZOOM,
   MIN_ZOOM,
+  oneToOneZoom,
   stepZoom,
   wheelZoomFactor,
 } from "./zoom";
@@ -66,5 +67,16 @@ describe("viewer zoom", () => {
     expect(clampPan({ x: 900, y: 0 }, 200, stage, content).x).toBe(300);
     // Unknown dimensions fall back to the stage box.
     expect(fittedSize(stage, null)).toEqual(stage);
+  });
+
+  test("1:1 zoom maps one image pixel to one physical display pixel", () => {
+    const stage = { width: 1000, height: 800 };
+    // 4000x3000 fits at 1000x750; at 1x DPR 1:1 is 400%, at 2x Retina it is 200%.
+    expect(oneToOneZoom(stage, { width: 4000, height: 3000 }, 1)).toBeCloseTo(400);
+    expect(oneToOneZoom(stage, { width: 4000, height: 3000 }, 2)).toBeCloseTo(200);
+    // Small 800x600 image at 2x DPR is 400 CSS px wide -> 40% of 1000px fitted width.
+    expect(oneToOneZoom(stage, { width: 800, height: 600 }, 2)).toBeCloseTo(40);
+    // Zero dimensions fall back safely to 100%.
+    expect(oneToOneZoom({ width: 0, height: 800 }, { width: 4000, height: 3000 }, 2)).toBe(100);
   });
 });

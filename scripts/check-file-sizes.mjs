@@ -20,7 +20,7 @@ const OVERSIZED = {
   "src-tauri/src/commands/backup.rs": 1389,
   "src/engine/stores/useLibraryStore.test.ts": 1338,
   "src-tauri/src/commands/batch.rs": 1304,
-  "src/screens/ViewerScreen.tsx": 1194,
+  "src/screens/ViewerScreen.tsx": 1175,
   "src/screens/CleanupScreen.tsx": 1148,
   "src/app/AppDialogs.tsx": 1095,
   "src-tauri/src/commands/edit_recipes.rs": 1101,

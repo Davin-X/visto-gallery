@@ -300,6 +300,14 @@
   opacity: 1;
 }
 
+.viewer-stage > .photo-viewer-backdrop {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  z-index: 0;
+  pointer-events: none;
+}
+
 /* Dragging must track the cursor, so the easing only applies to zoom/rotate. */
 .viewer-stage > .photo-viewer-image.is-panning {
   transition: opacity 180ms ease;

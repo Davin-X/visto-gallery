@@ -76,6 +76,15 @@ function cacheKey(itemId: string, size: CachedThumbnailSize): string {
   return `${itemId}:${size}:${currentQuality()}`;
 }
 
+/** Synchronously return the sharpest already-cached thumbnail data URL for `itemId`, if any. */
+export function getCachedThumbnailUrl(itemId: string): string | null {
+  for (const size of [1024, 512, 256, 128] as const) {
+    const cached = thumbnailCache.get(cacheKey(itemId, size));
+    if (cached) return cached;
+  }
+  return null;
+}
+
 function evictByBytes(targetBytes: number): void {
   while (cachedBytes > targetBytes && thumbnailCache.size > 0) {
     const oldestKey = thumbnailCache.keys().next().value;

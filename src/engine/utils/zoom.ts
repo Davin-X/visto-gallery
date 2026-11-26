@@ -76,6 +76,20 @@ export function fittedSize(stage: Size, aspect: number | null): Size {
 }
 
 /**
+ * Zoom percentage (relative to fitted size) that displays one image pixel per
+ * physical display pixel, accounting for Retina / HiDPI `devicePixelRatio`.
+ */
+export function oneToOneZoom(stage: Size, image: Size, devicePixelRatio = 1): number {
+  if (stage.width <= 0 || stage.height <= 0 || image.width <= 0 || image.height <= 0) {
+    return 100;
+  }
+  const dpr = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
+  const fitted = fittedSize(stage, image.width / image.height);
+  if (fitted.width <= 0) return 100;
+  return clampZoom((image.width / dpr / fitted.width) * 100);
+}
+
+/**
  * Keep a zoomed photo covering the stage. Along an axis where the zoomed photo
  * is still narrower than the stage it stays centred, so no empty band can be
  * dragged into view.

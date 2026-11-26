@@ -1,4 +1,5 @@
 import { usePopoverFocus } from "../design/hooks/usePopoverFocus";
+import { useStageZoomGestures } from "./viewer/useStageZoomGestures";
 import { buildShortcuts } from "./viewer/shortcuts";
 import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import {
@@ -18,8 +19,8 @@ import {
   SlideshowIcon,
   ViewerIcon,
 } from "../design/components/icons";
-import { CachedThumbnail } from "../design/components/CachedThumbnail";
-
+import { CachedThumbnail, getCachedThumbnailUrl } from "../design/components/CachedThumbnail";
+import { useViewerPrefetch } from "../app/hooks/useViewerPrefetch";
 import { KindDot } from "../design/components/KindBadge";
 import { useDraftTransforms, draftTransformStyle } from "../engine/stores/useEditStore";
 import { useSlideshowStore } from "../engine/stores/useSlideshowStore";
@@ -29,14 +30,7 @@ import { formatDuration } from "../engine/utils/time";
 import { draftImageStyle } from "../engine/utils/draftImage";
 import type { MediaItem } from "../engine/types/media";
 import { formatItemDate } from "../engine/utils/mediaDate";
-import {
-  anchoredPan,
-  clampPan,
-  clampZoom,
-  fittedSize,
-  stepZoom,
-  wheelZoomFactor,
-} from "../engine/utils/zoom";
+import { clampPan, fittedSize, oneToOneZoom, stepZoom } from "../engine/utils/zoom";
 
 interface ViewerScreenProps {
   active: boolean;
@@ -102,6 +96,8 @@ function ViewerScreen(props: ViewerScreenProps) {
   const [photoLoadState, setPhotoLoadState] = useState<{
     id: string;
     status: "loading" | "loaded" | "failed";
+    width?: number;
+    height?: number;
   } | null>(null);
   const stripWindowSize = 50;
   // One strip item occupies `stripStride` px. It is measured from the rendered
@@ -175,12 +171,14 @@ function ViewerScreen(props: ViewerScreenProps) {
   const lastRevealedRef = useRef<string | null>(null);
   const loadMoreLockRef = useRef(false);
   const selectedIndex = items.findIndex((item) => item.id === selected?.id);
+  useViewerPrefetch(items, selectedIndex, props.assetUrl);
   const stripEnd = Math.min(items.length, stripStart + stripWindowSize);
   const photoStatus =
     photoLoadState && photoLoadState.id === selected?.id ? photoLoadState.status : "loading";
 
   // Sharp previews for stills the web view cannot show at full quality.
   const [photoFallbackId, setPhotoFallbackId] = useState<string | null>(null);
+  const [oneToOneId, setOneToOneId] = useState<string | null>(null);
   const [preview, setPreview] = useState<{
     id: string;
     src: string;
@@ -190,8 +188,8 @@ function ViewerScreen(props: ViewerScreenProps) {
     fullFailed?: boolean;
   } | null>(null);
   const viaPreview = !!selected && (selected.kind === "raw" || photoFallbackId === selected.id);
-  // Actual Size, or zooming past what the screen-size preview resolves.
-  const wantsFull = props.fitMode === "actual" || props.zoom >= 150;
+  // Actual Size, explicit 1:1 mode, or zooming past what the screen-size preview resolves.
+  const wantsFull = props.fitMode === "actual" || props.zoom >= 150 || oneToOneId === selected?.id;
   const fallBackToThumbnail = useCallback(async (id: string) => {
     try {
       const thumb = await tauri.library.getThumbnail({ itemId: id, size: 1024 });
@@ -239,6 +237,29 @@ function ViewerScreen(props: ViewerScreenProps) {
   }, [photoItems, selected?.id]);
   const shortcutHints = buildShortcuts(selected?.kind);
 
+  const toggleOneToOne = useCallback(() => {
+    if (!selected || (selected.kind !== "photo" && selected.kind !== "raw")) return;
+    const w =
+      selected.width ?? (photoLoadState?.id === selected.id ? photoLoadState.width : undefined);
+    const h =
+      selected.height ?? (photoLoadState?.id === selected.id ? photoLoadState.height : undefined);
+    const stage = stageRef.current?.getBoundingClientRect();
+    if (!w || !h || !stage || stage.width <= 0 || stage.height <= 0) {
+      props.onSetZoom(props.zoom >= 199 ? 100 : 200);
+      return;
+    }
+    const rotated = imageRotation % 180 ? { width: h, height: w } : { width: w, height: h };
+    const target = oneToOneZoom(stage, rotated, window.devicePixelRatio || 1);
+    if (props.fitMode === "fit" && Math.abs(props.zoom - target) < 1) {
+      setOneToOneId(null);
+      props.onResetZoom();
+      return;
+    }
+    setOneToOneId(selected.id);
+    if (props.fitMode !== "fit") props.onResetZoom();
+    props.onSetZoom(target);
+  }, [selected, photoLoadState, imageRotation, props]);
+
   // Hints show on open and on stage movement, then fade via the shared timer.
   const flashHints = useCallback(() => {
     setHintsVisible(true);
@@ -248,6 +269,7 @@ function ViewerScreen(props: ViewerScreenProps) {
   useEffect(() => {
     setPan({ x: 0, y: 0 });
     setPanning(false);
+    setOneToOneId(null);
   }, [selected?.id]);
 
   // The photo's displayed aspect (after rotation) when it is fitted, so pan
@@ -274,100 +296,18 @@ function ViewerScreen(props: ViewerScreenProps) {
     setPan((current) => clampPanTo(current, props.zoom));
   }, [props.zoom, props.fitMode, fittedAspect, clampPanTo]);
 
-  // Trackpad pinch, Ctrl/⌘-scroll and two-finger panning. The listeners are
-  // native and non-passive so they can stop the web view from scrolling or
-  // magnifying itself; refs keep them current without re-registering.
-  const zoomRef = useRef(props.zoom);
-  zoomRef.current = props.zoom;
-  const panRef = useRef(pan);
-  panRef.current = pan;
-  const setZoomRef = useRef(props.onSetZoom);
-  setZoomRef.current = props.onSetZoom;
   const zoomable = selected?.kind === "photo" || selected?.kind === "raw";
-  useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage || !zoomable) return;
-    let settleTimer: number | undefined;
-    // Transforms animate for buttons and keys, but follow a gesture directly.
-    const gesturing = () => {
-      setPanning(true);
-      window.clearTimeout(settleTimer);
-      settleTimer = window.setTimeout(() => setPanning(false), 160);
-    };
-    const zoomAt = (target: number, clientX: number, clientY: number) => {
-      const rect = stage.getBoundingClientRect();
-      const from = zoomRef.current;
-      const to = clampZoom(target);
-      if (Math.abs(to - from) < 0.01) return;
-      const anchor = {
-        x: clientX - (rect.left + rect.width / 2),
-        y: clientY - (rect.top + rect.height / 2),
-      };
-      const next =
-        to <= 100 ? { x: 0, y: 0 } : clampPanTo(anchoredPan(panRef.current, anchor, from, to), to);
-      zoomRef.current = to;
-      panRef.current = next;
-      setPan(next);
-      setZoomRef.current(to);
-    };
-
-    // WebKit reports a trackpad pinch as gesture events with a running scale.
-    let pinchBase: number | null = null;
-    type GestureEventLike = Event & { scale: number; clientX: number; clientY: number };
-    const onGestureStart = (event: Event) => {
-      event.preventDefault();
-      pinchBase = zoomRef.current;
-    };
-    const onGestureChange = (event: Event) => {
-      event.preventDefault();
-      if (pinchBase === null) return;
-      const gesture = event as GestureEventLike;
-      gesturing();
-      zoomAt(pinchBase * gesture.scale, gesture.clientX, gesture.clientY);
-    };
-    const onGestureEnd = (event: Event) => {
-      event.preventDefault();
-      pinchBase = null;
-    };
-
-    const onWheel = (event: WheelEvent) => {
-      // Chromium reports a pinch as Ctrl+wheel; ⌘-scroll zooms with a mouse.
-      if (event.ctrlKey || event.metaKey) {
-        event.preventDefault();
-        if (pinchBase !== null) return;
-        gesturing();
-        zoomAt(
-          zoomRef.current * wheelZoomFactor(event.deltaY, event.deltaMode),
-          event.clientX,
-          event.clientY,
-        );
-        return;
-      }
-      // Two-finger scroll moves around a zoomed photo.
-      if (zoomRef.current > 100) {
-        event.preventDefault();
-        gesturing();
-        const next = clampPanTo(
-          { x: panRef.current.x - event.deltaX, y: panRef.current.y - event.deltaY },
-          zoomRef.current,
-        );
-        panRef.current = next;
-        setPan(next);
-      }
-    };
-
-    stage.addEventListener("wheel", onWheel, { passive: false });
-    stage.addEventListener("gesturestart", onGestureStart);
-    stage.addEventListener("gesturechange", onGestureChange);
-    stage.addEventListener("gestureend", onGestureEnd);
-    return () => {
-      window.clearTimeout(settleTimer);
-      stage.removeEventListener("wheel", onWheel);
-      stage.removeEventListener("gesturestart", onGestureStart);
-      stage.removeEventListener("gesturechange", onGestureChange);
-      stage.removeEventListener("gestureend", onGestureEnd);
-    };
-  }, [zoomable, selected?.id, clampPanTo]);
+  useStageZoomGestures({
+    stageRef,
+    zoomable,
+    itemId: selected?.id,
+    zoom: props.zoom,
+    pan,
+    setPan,
+    setPanning,
+    onSetZoom: props.onSetZoom,
+    clampPanTo,
+  });
 
   const handleStagePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (props.zoom <= 100 || !selected) return;
@@ -541,11 +481,12 @@ function ViewerScreen(props: ViewerScreenProps) {
           break;
         case "0":
           e.preventDefault();
-          props.onSetZoom(100);
+          setOneToOneId(null);
+          props.onResetZoom();
           break;
         case "1":
           e.preventDefault();
-          props.onSetZoom(200);
+          toggleOneToOne();
           break;
         case " ":
         case "k":
@@ -575,7 +516,7 @@ function ViewerScreen(props: ViewerScreenProps) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selected, props]);
+  }, [selected, props, toggleOneToOne]);
 
   if (!selected)
     return (
@@ -769,15 +710,24 @@ function ViewerScreen(props: ViewerScreenProps) {
               const shown = viaPreview && preview?.id === selected.id ? preview : null;
               const src = viaPreview
                 ? (shown?.src ?? null)
-                : props.assetUrl(selected.path) + `?v=${selected.modifiedAt}-${selected.size}`;
+                : `${props.assetUrl(selected.path)}?v=${selected.id}-${selected.modifiedAt}-${selected.size}`;
               const lowRes = viaPreview && (!shown || shown.lowRes);
+              const cachedBackdropSrc =
+                !viaPreview && photoStatus !== "loaded" ? getCachedThumbnailUrl(selected.id) : null;
+              const dpr = window.devicePixelRatio || 1;
+              const actualW =
+                selected.width ??
+                (photoLoadState?.id === selected.id ? photoLoadState.width : undefined);
+              const actualH =
+                selected.height ??
+                (photoLoadState?.id === selected.id ? photoLoadState.height : undefined);
               const stillStyle: React.CSSProperties = {
                 aspectRatio:
                   selected.width && selected.height
                     ? `auto ${selected.width} / ${selected.height}`
                     : undefined,
-                width: props.fitMode === "actual" ? undefined : "100%",
-                height: props.fitMode === "actual" ? undefined : "100%",
+                width: props.fitMode === "actual" ? (actualW ? actualW / dpr : undefined) : "100%",
+                height: props.fitMode === "actual" ? (actualH ? actualH / dpr : undefined) : "100%",
                 maxWidth:
                   props.fitMode === "actual"
                     ? "none"
@@ -805,6 +755,15 @@ function ViewerScreen(props: ViewerScreenProps) {
               };
               return (
                 <>
+                  {cachedBackdropSrc && (
+                    <img
+                      className="photo-viewer-image photo-viewer-backdrop is-loaded"
+                      src={cachedBackdropSrc}
+                      alt=""
+                      aria-hidden="true"
+                      style={stillStyle}
+                    />
+                  )}
                   {src ? (
                     <img
                       key={`${selected.id}-${selected.size}-${selected.modifiedAt}-${viaPreview ? "preview" : "original"}`}
@@ -812,7 +771,14 @@ function ViewerScreen(props: ViewerScreenProps) {
                       src={src}
                       alt={selected.name}
                       decoding="async"
-                      onLoad={() => setPhotoLoadState({ id: selected.id, status: "loaded" })}
+                      onLoad={(e) =>
+                        setPhotoLoadState({
+                          id: selected.id,
+                          status: "loaded",
+                          width: e.currentTarget.naturalWidth || undefined,
+                          height: e.currentTarget.naturalHeight || undefined,
+                        })
+                      }
                       onError={() => {
                         if (!viaPreview) {
                           // The web view cannot decode this file: ask ImageIO.
@@ -845,19 +811,22 @@ function ViewerScreen(props: ViewerScreenProps) {
                       Preview
                     </span>
                   )}
-                  {selected.kind === "photo" && photoStatus !== "loaded" && !lowRes && (
-                    <div
-                      className={`photo-preview-state${photoStatus === "failed" ? " is-failed" : ""}`}
-                      role={photoStatus === "failed" ? "alert" : "status"}
-                    >
-                      <span className="photo-preview-indicator" aria-hidden="true" />
-                      <span>
-                        {photoStatus === "failed"
-                          ? "Could not load this photo preview"
-                          : "Loading full-resolution photo…"}
-                      </span>
-                    </div>
-                  )}
+                  {selected.kind === "photo" &&
+                    photoStatus !== "loaded" &&
+                    !lowRes &&
+                    (photoStatus === "failed" || !cachedBackdropSrc) && (
+                      <div
+                        className={`photo-preview-state${photoStatus === "failed" ? " is-failed" : ""}`}
+                        role={photoStatus === "failed" ? "alert" : "status"}
+                      >
+                        <span className="photo-preview-indicator" aria-hidden="true" />
+                        <span>
+                          {photoStatus === "failed"
+                            ? "Could not load this photo preview"
+                            : "Loading full-resolution photo…"}
+                        </span>
+                      </div>
+                    )}
                 </>
               );
             })()}
@@ -943,7 +912,10 @@ function ViewerScreen(props: ViewerScreenProps) {
                 <button
                   type="button"
                   className="viewer-zoom-value"
-                  onClick={props.onResetZoom}
+                  onClick={() => {
+                    setOneToOneId(null);
+                    props.onResetZoom();
+                  }}
                   aria-label="Reset zoom"
                   title="Reset zoom"
                 >
@@ -956,6 +928,15 @@ function ViewerScreen(props: ViewerScreenProps) {
                   title="Zoom in (↑)"
                 >
                   <PlusIcon size={15} />
+                </button>
+                <button
+                  type="button"
+                  className="viewer-fit-button"
+                  onClick={toggleOneToOne}
+                  aria-label="Actual pixels (1:1)"
+                  title="Actual pixels (1)"
+                >
+                  1:1
                 </button>
                 <button
                   type="button"
