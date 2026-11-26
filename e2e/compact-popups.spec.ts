@@ -42,3 +42,18 @@ test("batch selection lets a user inspect and remove a file past the first ten",
   await expect(entry).toHaveCount(0);
   await expect(page.getByText("View all 15 files", { exact: true })).toBeVisible();
 });
+
+test("Library uses compact controls when the inspector narrows the pane", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/harness.html?benchmark=40");
+  const viewOptions = page.getByRole("button", { name: "View options" });
+  await expect(viewOptions).toBeHidden();
+  const showInspector = page.getByRole("button", { name: "Show inspector", exact: true });
+  await showInspector.click();
+  await expect(viewOptions).toBeVisible();
+  await expect(page.getByRole("button", { name: "Filters", exact: true })).toBeInViewport({
+    ratio: 1,
+  });
+  await page.getByRole("button", { name: "More library actions" }).click();
+  await expect(page.getByRole("menuitem", { name: "New album" })).toBeVisible();
+});

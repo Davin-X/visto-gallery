@@ -1332,7 +1332,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                 {/* An album already has a Play button in its header. */}
                 {!props.activeAlbum && (
                   <button
-                    className="toolbar-button slideshow-action"
+                    className={`toolbar-button slideshow-action${props.hiddenView ? "" : " wide-library-action"}`}
                     type="button"
                     onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
                     disabled={props.busy || props.items.length === 0}
@@ -1346,7 +1346,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                 {/* An album already has Add Items in its header. */}
                 {!props.hiddenView && !inAlbum && (
                   <button
-                    className="toolbar-button"
+                    className="toolbar-button wide-library-action"
                     type="button"
                     aria-label="New album"
                     onClick={() => props.onCreateAlbum?.()}
@@ -1354,6 +1354,25 @@ function LibraryScreen(props: LibraryScreenProps) {
                   >
                     <PlusIcon size={14} /> New album
                   </button>
+                )}
+                {!props.hiddenView && !inAlbum && (
+                  <div className="compact-library-actions">
+                    <SplitButton
+                      label="Slideshow"
+                      icon={PlayIcon}
+                      onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
+                      primaryDisabled={props.busy || props.items.length === 0}
+                      menuLabel="More library actions"
+                      items={[
+                        {
+                          key: "new-album",
+                          label: "New album",
+                          icon: PlusIcon,
+                          onClick: () => props.onCreateAlbum?.(),
+                        },
+                      ]}
+                    />
+                  </div>
                 )}
                 <span className="toolbar-divider" aria-hidden="true" />
                 <div className="view-controls" role="group" aria-label="View controls">
@@ -1478,7 +1497,6 @@ function LibraryScreen(props: LibraryScreenProps) {
           </div>
 
           <div className="filter-cluster" role="group" aria-label="Filter by media type">
-            <span className="smart-label">TYPE</span>
             <div className="segmented-control" role="group" aria-label="Media type">
               {(["All", "Photos", "Videos", "RAW", "Animations", "Favorites"] as const).map((f) => {
                 // Album/collection counts must come from the full collection on

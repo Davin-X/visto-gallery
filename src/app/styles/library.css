@@ -385,14 +385,9 @@
   display: none;
 }
 
-.filter-cluster .smart-label {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  padding-right: var(--space-1);
-  white-space: nowrap;
+.library-header .header-actions .source-select {
+  background: var(--surface);
+  border-color: var(--line);
 }
 
 .library-header .quick-filter {
@@ -1317,7 +1312,6 @@
 .gallery-grid.layout-details .format-label {
   display: none;
 }
-
 
 /* Hidden's lock screen sits in the middle of the content area. */
 .hidden-locked {

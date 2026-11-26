@@ -18,6 +18,7 @@ interface SplitButtonProps {
   onClick: () => void;
   items: SplitButtonItem[];
   disabled?: boolean;
+  primaryDisabled?: boolean;
   menuLabel: string;
   className?: string;
 }
@@ -34,6 +35,7 @@ export default function SplitButton({
   onClick,
   items,
   disabled,
+  primaryDisabled,
   menuLabel,
 }: SplitButtonProps) {
   const [open, setOpen] = useState(false);
@@ -110,7 +112,7 @@ export default function SplitButton({
         className="primary-button split-button-main"
         type="button"
         onClick={onClick}
-        disabled={disabled}
+        disabled={disabled || primaryDisabled}
         title={label}
       >
         <Icon size={15} />
