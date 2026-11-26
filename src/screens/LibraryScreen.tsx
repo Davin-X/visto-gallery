@@ -1376,10 +1376,12 @@ function LibraryScreen(props: LibraryScreenProps) {
                   <button
                     className="compact-view-options"
                     type="button"
+                    aria-label="View options"
+                    title="View options"
                     aria-expanded={viewOptionsOpen}
                     onClick={() => setViewOptionsOpen(!viewOptionsOpen)}
                   >
-                    View options
+                    <MoreIcon size={16} />
                   </button>
                   {/* Details rows use a fixed thumbnail, so size only matters
                       for the visual layouts. A divider keeps the two icon
