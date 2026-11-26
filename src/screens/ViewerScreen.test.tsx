@@ -1,10 +1,14 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ViewerScreen from "./ViewerScreen";
+import { tauri } from "../engine/commands/tauri";
 import { makeMediaItem } from "../test/fixtures";
+
+const getCachedThumbnailUrlMock = vi.hoisted(() => vi.fn<() => string | null>(() => null));
 
 vi.mock("../design/components/CachedThumbnail", () => ({
   CachedThumbnail: () => <span />,
+  getCachedThumbnailUrl: getCachedThumbnailUrlMock,
 }));
 vi.mock("../engine/stores/useEditStore", () => ({
   useDraftTransforms: () => new Map(),
@@ -49,6 +53,8 @@ function renderPhotoViewer(
     extension: "mp4",
     kind: "video",
   });
+  const onSetZoom = vi.fn();
+  const onResetZoom = vi.fn();
   const result = render(
     <ViewerScreen
       active
@@ -60,10 +66,10 @@ function renderPhotoViewer(
       flipX={false}
       onNavigate={onNavigate}
       onSetPhoto={vi.fn()}
-      onSetZoom={vi.fn()}
+      onSetZoom={onSetZoom}
       onZoomIn={vi.fn()}
       onZoomOut={vi.fn()}
-      onResetZoom={vi.fn()}
+      onResetZoom={onResetZoom}
       onToggleFitMode={onToggleFitMode}
       onRotate={vi.fn()}
       onToggleFlip={vi.fn()}
@@ -77,7 +83,7 @@ function renderPhotoViewer(
       assetUrl={(path) => path}
     />,
   );
-  return { ...result, onNavigate, onToggleFavorite, onToggleFullscreen };
+  return { ...result, onNavigate, onToggleFavorite, onToggleFullscreen, onSetZoom, onResetZoom };
 }
 
 describe("photo viewer", () => {
@@ -210,5 +216,116 @@ describe("photo viewer keyboard shortcuts", () => {
     expect(onNavigate).not.toHaveBeenCalled();
     expect(onToggleFavorite).not.toHaveBeenCalled();
     input.remove();
+  });
+
+  it("jumps to Retina-aware 1:1 pixels with 1 or the 1:1 button and resets with 0", () => {
+    const { container, onSetZoom, onResetZoom } = renderPhotoViewer("photo", 1);
+    const stage = container.querySelector(".viewer-stage") as HTMLDivElement;
+    vi.spyOn(stage, "getBoundingClientRect").mockReturnValue({
+      width: 320,
+      height: 180,
+      top: 0,
+      left: 0,
+      right: 320,
+      bottom: 180,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    vi.stubGlobal("devicePixelRatio", 2);
+
+    // 640x360 image on 320x180 stage at 2x Retina DPR -> 1:1 is 100%, at 1x DPR -> 200%.
+    fireEvent.click(screen.getByRole("button", { name: "Actual pixels (1:1)" }));
+    expect(onResetZoom).toHaveBeenCalledOnce();
+
+    vi.stubGlobal("devicePixelRatio", 1);
+    fireEvent.keyDown(window, { key: "1" });
+    expect(onSetZoom).toHaveBeenLastCalledWith(200);
+
+    fireEvent.keyDown(window, { key: "0" });
+    expect(onResetZoom).toHaveBeenCalledTimes(2);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("requests full-resolution RAW render when 1:1 is enabled even below 150% zoom", async () => {
+    const raw = makeMediaItem({
+      id: "raw-1",
+      name: "shot.dng",
+      path: "/tmp/shot.dng",
+      kind: "raw",
+      width: 4000,
+      height: 3000,
+    });
+    const getDisplayPreview = vi
+      .spyOn(tauri.library, "getDisplayPreview")
+      .mockResolvedValue({ path: "/tmp/preview.jpg", dataUrl: null, full: false } as never);
+    const onSetZoom = vi.fn();
+    const { container } = render(
+      <ViewerScreen
+        active
+        items={[raw]}
+        selected={raw}
+        zoom={100}
+        fitMode="fit"
+        rotation={0}
+        flipX={false}
+        onNavigate={vi.fn()}
+        onSetPhoto={vi.fn()}
+        onSetZoom={onSetZoom}
+        onZoomIn={vi.fn()}
+        onZoomOut={vi.fn()}
+        onResetZoom={vi.fn()}
+        onToggleFitMode={vi.fn()}
+        onRotate={vi.fn()}
+        onToggleFlip={vi.fn()}
+        onResetTransform={vi.fn()}
+        onToggleFullscreen={vi.fn()}
+        onClose={vi.fn()}
+        onToggleFavorite={vi.fn()}
+        onToggleHidden={vi.fn()}
+        onOpenEdit={vi.fn()}
+        onContextMenu={vi.fn()}
+        assetUrl={(path) => path}
+      />,
+    );
+    await waitFor(() => expect(getDisplayPreview).toHaveBeenCalledWith("raw-1", false));
+
+    const stage = container.querySelector(".viewer-stage") as HTMLDivElement;
+    vi.spyOn(stage, "getBoundingClientRect").mockReturnValue({
+      width: 1600,
+      height: 1200,
+      top: 0,
+      left: 0,
+      right: 1600,
+      bottom: 1200,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    vi.stubGlobal("devicePixelRatio", 2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Actual pixels (1:1)" }));
+    expect(onSetZoom).toHaveBeenCalledWith(125);
+    await waitFor(() => expect(getDisplayPreview).toHaveBeenCalledWith("raw-1", true));
+
+    getDisplayPreview.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the cached thumbnail backdrop while a photo loads and hides it on load", () => {
+    getCachedThumbnailUrlMock.mockReturnValue("data:image/jpeg;base64,Y2FjaGU=");
+    const { container } = renderPhotoViewer("photo", 1);
+
+    const backdrop = container.querySelector("img.photo-viewer-backdrop");
+    expect(backdrop).not.toBeNull();
+    expect(backdrop?.getAttribute("src")).toBe("data:image/jpeg;base64,Y2FjaGU=");
+
+    const mainImage = container.querySelector("img.photo-viewer-image:not(.photo-viewer-backdrop)");
+    expect(mainImage).not.toBeNull();
+    fireEvent.load(mainImage!);
+
+    expect(container.querySelector("img.photo-viewer-backdrop")).toBeNull();
+    getCachedThumbnailUrlMock.mockReturnValue(null);
   });
 });
