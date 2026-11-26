@@ -44,7 +44,7 @@ export function StorageSection(props: { showNotice: (text: string, code?: ErrorC
   }, []);
 
   useEffect(() => {
-    if (!cachedStorageUsage) void refresh();
+    void refresh();
   }, [refresh]);
 
   const clear = useCallback(
