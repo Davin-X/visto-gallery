@@ -57,4 +57,48 @@ describe("useVideoQueue.beginVideoSession", () => {
     video.remove();
     usePlaybackStore.getState().stop();
   });
+
+  it("rewinds an ended same-session video to 0 before playing", () => {
+    const item = makeVideo("vid-2");
+    useLibraryStore.setState({ items: [item], visibleItems: [item], viewerItems: [item] });
+
+    const video = document.createElement("video");
+    const playSpy = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(video, "paused", { configurable: true, get: () => true });
+    Object.defineProperty(video, "ended", { configurable: true, get: () => true });
+    video.currentTime = 42;
+    video.play = playSpy;
+    document.body.appendChild(video);
+
+    usePlaybackStore.getState().register(video, { itemId: item.id, name: item.name });
+
+    const { result } = renderHook(() => useVideoQueue());
+    act(() => {
+      result.current.beginVideoSession(item, "library");
+    });
+
+    expect(video.currentTime).toBe(0);
+    expect(playSpy).toHaveBeenCalledTimes(1);
+
+    video.remove();
+    usePlaybackStore.getState().stop();
+  });
+
+  it("marks playing true when reopening the same item without a mounted element", () => {
+    const item = makeVideo("vid-3");
+    useLibraryStore.setState({ items: [item], visibleItems: [item], viewerItems: [item] });
+
+    const video = document.createElement("video");
+    usePlaybackStore.getState().register(video, { itemId: item.id, name: item.name });
+    usePlaybackStore.getState().sync({ playing: false, duration: 10 });
+    usePlaybackStore.getState().unregister(video);
+
+    const { result } = renderHook(() => useVideoQueue());
+    act(() => {
+      result.current.beginVideoSession(item, "library");
+    });
+
+    expect(usePlaybackStore.getState().playing).toBe(true);
+    usePlaybackStore.getState().stop();
+  });
 });

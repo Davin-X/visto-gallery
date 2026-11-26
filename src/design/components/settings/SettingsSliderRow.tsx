@@ -22,7 +22,7 @@ export function SettingsSliderRow({
   ariaLabel: string;
   onChange: (value: number) => void;
 }) {
-  const progress = `${((value - min) / (max - min)) * 100}%`;
+  const progress = max > min ? `${((value - min) / (max - min)) * 100}%` : "0%";
   return (
     <div className="settings-row">
       <div className="settings-row-label">
