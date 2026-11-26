@@ -80,7 +80,8 @@
     .meta a { color: inherit; }
 
     .shot { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); background: var(--card); }
-    .shot img { width: 100%; height: auto; display: block; }
+    .shot img, .shot video { width: 100%; height: auto; display: block; }
+    .tour-video { margin-bottom: 20px; }
     .hero-shot { margin: 8px auto 0; box-shadow: var(--shadow); }
 
     section { padding: 72px 0 0; }
@@ -150,7 +151,7 @@
 
       <section aria-labelledby="features-title">
         <h2 id="features-title">Everything a gallery needs, nothing it doesn't</h2>
-        <p class="section-lede">Your files stay where they are. VistoGallery keeps a local catalog next to them and never uploads anything.</p>
+        <p class="section-lede">Your files stay where they are. VistoGallery keeps a catalog on your Mac and never uploads anything.</p>
         <div class="features">
           <article class="feature">
             <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
@@ -203,7 +204,14 @@
       <section aria-labelledby="tour-title">
         <h2 id="tour-title">A closer look</h2>
         <p class="section-lede">Screenshots follow the page theme. Use the moon/sun button at the top to switch.</p>
+        <figure class="shot tour-video" id="tour-video">
+          <video controls playsinline preload="none" poster="screenshots/library-selected-light.jpg" aria-label="VistoGallery feature tour">
+            <source src="media/vistogallery-tour.mp4" type="video/mp4">
+            <a href="media/vistogallery-tour.mp4">Download the VistoGallery tour</a>
+          </video>
+        </figure>
         <div class="gallery">
+
           <figure class="shot">
             <img src="screenshots/albums-light.jpg" data-dark="screenshots/albums-dark.jpg" data-light="screenshots/albums-light.jpg" alt="Albums screen with smart albums" width="1600" height="1000" loading="lazy">
             <figcaption>Smart Albums and regular albums</figcaption>
@@ -221,7 +229,19 @@
             <figcaption>Duplicate &amp; burst compare with smart keeper pick</figcaption>
           </figure>
           <figure class="shot">
-            <img src="screenshots/cleanup-light.jpg" data-dark="screenshots/cleanup-dark.jpg" data-light="screenshots/cleanup-light.jpg" alt="Cleanup screen listing developer caches" width="1600" height="1004" loading="lazy">
+            <img src="screenshots/viewer-compare-light.jpg" data-dark="screenshots/viewer-compare-dark.jpg" data-light="screenshots/viewer-compare-light.jpg" alt="Two photos side by side in the photo viewer" width="1600" height="1000" loading="lazy">
+            <figcaption>Pin a shot and compare it with synchronized zoom and A/B flip</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/map-light.jpg" data-dark="screenshots/map-dark.jpg" data-light="screenshots/map-light.jpg" alt="Map with clustered geotagged photos" width="1600" height="1000" loading="lazy">
+            <figcaption>Browse geotagged photos on the offline map</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/batch-light.jpg" data-dark="screenshots/batch-dark.jpg" data-light="screenshots/batch-light.jpg" alt="Batch export with files and output controls" width="1600" height="1000" loading="lazy">
+            <figcaption>Export copies or write metadata to XMP sidecars</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/cleanup-light.jpg" data-dark="screenshots/cleanup-dark.jpg" data-light="screenshots/cleanup-light.jpg" alt="Cleanup screen listing developer caches" width="1600" height="1000" loading="lazy">
             <figcaption>Cleanup for dev and system junk</figcaption>
           </figure>
           <figure class="shot">

@@ -36,7 +36,9 @@ These do not replace native Finder, permission, VoiceOver, or menu validation.
 - [ ] Grid → Right-click photo; menu opens; Arrow keys move; Home/End jump; Escape closes; invoking focus is predictable.
 - [ ] `File > Export…` and `Cmd/Ctrl+E` open Batch Export; selected items are preserved; empty selection opens an actionable state.
 - [ ] Albums → `Enter`/`Space` opens focused album card.
-- [ ] Viewer → Left/Right navigate; `Escape` closes viewer; focus returns to Library/origin.
+- [ ] Viewer → Left/Right navigate and `Escape` closes the viewer. The inspected item is visible on return, including after browsing beyond the original virtualized grid rows.
+- [ ] Viewer → `1` shows 1:1 physical pixels on a Retina display, and `0` returns to Fit. A RAW uses a full render at 1:1.
+- [ ] Viewer → `C` pins a reference. Split, `\`, and Show A / Show B work at shared zoom, and Favorite and Edit target the visible photo in flip mode.
 - [ ] About dialog → Tab/Shift+Tab stays inside dialog; `Escape` closes; focus returns to the button that opened it.
 - [ ] Reset/Delete/Restore confirmation dialogs → same focus-in/Tab/Shift+Tab/Escape/return behavior.
 - [ ] Settings → Tab order reaches tabs, panel controls, and destructive actions in a sensible order.

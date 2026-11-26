@@ -141,3 +141,5 @@ The screenshots and videos in `docs/screenshots` and `docs/media` show a demo li
 - [Селение Ний.jpg](https://commons.wikimedia.org/wiki/File:Селение_Ний.jpg) — Altushkin, CC BY-SA 4.0
 - [Karkloof Falls.webm](https://commons.wikimedia.org/wiki/File:Karkloof_Falls.webm) — https://www.flickr.com/photos/flowcomm/, CC BY 2.0
 - [Kullaojan putous 7.webm](https://commons.wikimedia.org/wiki/File:Kullaojan_putous_7.webm) — MKFI, Public domain
+
+The animated GIF and MP4 tours are assembled from captures of this same demo library.

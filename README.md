@@ -24,7 +24,7 @@
 </p>
 <p align="center"><sub>Shown in your GitHub theme. Every screen in the <a href="#tour">tour</a> appears in both light and dark.</sub></p>
 
-VistoGallery points at the folders you already have. It never copies, moves or uploads your files; it builds a local catalog next to them so you can browse thousands of photos and videos quickly, organize them, and find duplicates.
+VistoGallery points at the folders you already have. Browsing leaves your files in place. VistoGallery keeps a local catalog on your Mac so you can browse thousands of photos and videos, organize them, and find duplicates.
 
 ## Contents
 
@@ -45,19 +45,23 @@ VistoGallery points at the folders you already have. It never copies, moves or u
 - **Your folders, in place.** Add folders as sources; files are read where they are. Adding a folder automatically registers its immediate subfolders as independent removable sources. Moved or renamed files keep their favorites, tags and albums.
 - **Browse your way.** Grid, Details, Timeline, Filmstrip and Overview layouts, sorted by capture date, name, size or type.
 - **Find anything.** Search names, tags, camera and lens. Filter by capture date, rating, color label, camera, lens, source and type (photos, videos, RAW, animations).
+- **Inspect and compare.** Open photos with a cached preview, zoom to Retina-aware 1:1 pixels, and pin a reference shot for split or A/B flip comparison.
+- **Explore on a map.** Browse geotagged photos and RAW files on an offline map with clustered thumbnail markers.
 - **Organize.** Albums, Smart Albums that update themselves, tags, favorites, ratings, color labels and hidden items.
 - **Edit without fear.** Exposure, contrast, highlights, shadows, warmth, saturation, crop, rotate and flip. Edits are drafts until you save, and the original is kept so you can restore it.
 - **Clean up duplicates and bursts.** Find exact copies with SHA-256 matching, detect rapid camera bursts and visually similar photos with 2D difference hashing and color profiles, or scan any folder on your Mac for duplicate files. A side-by-side compare shows what differs with smart keeper recommendations before anything moves to the Trash.
 - **Clean up your Mac.** Find Xcode and developer caches (npm, pnpm, Cargo, Homebrew and more), build folders in your projects (`node_modules`, `target`, `.venv` and others) and, if you allow it, old installers in Downloads. Anything in use, tracked by Git or marked Never clean is skipped with the reason; the rest moves to the Trash so Put Back works, after a fresh check in Rust. A library folder is never touched.
-- **Export in batches.** Convert to JPEG, PNG or WebP, or keep the original format, with naming patterns, resizing and metadata stripping.
+- **Export in batches.** Convert to JPEG, PNG or WebP, or keep the original format, with naming patterns, resizing and metadata stripping. Batch metadata edits write XMP sidecars beside the originals.
 - **Feels like a Mac app.** Set as default viewer for photos and videos in Settings, Finder tags, Reveal in Finder, Trash with Put Back, light, dark and system themes, and accent colors.
 - **Portable catalog.** Back up and restore the catalog, or point it at a library that moved to a new drive.
 
 ## Tour
 
 <p align="center">
-  <img src="docs/media/vistogallery-tour.gif" alt="A 20-second tour: the library with the Inspector, the photo viewer, the video player, albums, the timeline, the duplicate compare dialog and the editor" width="720">
+  <img src="docs/media/vistogallery-tour.gif" alt="A short tour of the Library, photo comparison, video player, Map, Albums, Timeline, editing, Batch, and duplicate comparison" width="720">
 </p>
+
+[Watch the MP4 tour with playback controls](https://davin-x.github.io/visto-gallery/#tour-video). The tour is assembled from native app captures.
 
 ### Albums and Smart Albums
 
@@ -102,7 +106,27 @@ Open an album to see just its photos, with the same filters, sorting and layouts
   </tr>
 </table>
 
-Zoom, pan, favorite and hide without leaving the photo. The filmstrip pages through the library, and the camera, lens and capture date sit above the photo.
+Zoom, pan, favorite, and hide without leaving the viewer. Press <kbd>1</kbd> for Retina-aware 1:1 pixels or <kbd>0</kbd> to return to Fit. The viewer can show a cached preview while a sharper image loads.
+
+### Compare photos
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/viewer-compare-dark.jpg">
+  <img src="docs/screenshots/viewer-compare-light.jpg" alt="Photo viewer comparing two landscape photos side by side with A and B labels" width="900">
+</picture>
+
+Press <kbd>C</kbd> to pin a reference photo and compare it with another shot. Check details with synchronized zoom and pan, or press <kbd>&#92;</kbd> to flip between A and B at full viewer width. Closing the viewer brings the inspected photo into view in the Library.
+
+### Map and Batch
+
+<table>
+  <tr>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/map-dark.jpg"><img src="docs/screenshots/map-light.jpg" alt="Offline Map with geotagged photo clusters and a thumbnail grid" width="440"></picture></td>
+    <td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/batch-dark.jpg"><img src="docs/screenshots/batch-light.jpg" alt="Batch export with a file selection, output settings, and a summary" width="440"></picture></td>
+  </tr>
+</table>
+
+Use **Map** to find photos by location. Use **Batch → Export copies** to rename, resize, or convert a selection, or **Edit metadata** to write dates, text, keywords, or GPS coordinates to XMP sidecars.
 
 ### Video player
 
@@ -202,6 +226,8 @@ Add, rescan or remove folders. Removing a source only removes it from the catalo
 2. Open it and drag **VistoGallery.app** into **Applications**.
 3. Eject the disk image and open the app.
 
+For updates, use **Help → Check for Updates**. When a newer release is available, download its DMG and replace the app in Applications. Your catalog lives separately in Application Support.
+
 ### macOS Gatekeeper (unsigned build)
 
 VistoGallery is not notarized yet, so macOS may say the app is "damaged" or from an unidentified developer. Either right-click the app, choose **Open**, then **Open** again, or run:
@@ -220,7 +246,7 @@ Every release publishes checksums and a build provenance attestation, and a GPG 
 | RAW | 3FR, ARI, ARW, BAY, CAP, CR2, CR3, DCR, DCS, DNG, DRF, EIP, ERF, FFF, GPR, IIQ, K25, KDC, MDC, MEF, MOS, MRW, NEF, NRW, OBM, ORF, PEF, PTX, PXN, R3D, RAF, RAW, RW2, RWL, SR2, SRF, SRW, X3F |
 | Video | 3GP, 3G2, ASF, AVI, FLV, M2TS, M4V, MKV, MOV, MP4, MPEG/MPG, MTS, OGV, TS, VOB, WebM, WMV |
 
-Videos that WebKit can't play in the app (such as MKV and AVI) open in an installed player like IINA or VLC. Animated GIF, WebP, APNG and AVIF files are detected from their contents and appear under **Animations**.
+VistoGallery can remux or convert many videos that WebKit cannot play directly. If in-app playback is unavailable, open the file in an installed player. Animated GIF, WebP, APNG and AVIF files are detected from their contents and appear under **Animations**.
 
 ## Keyboard shortcuts
 
@@ -235,6 +261,8 @@ Videos that WebKit can't play in the app (such as MKV and AVI) open in an instal
 | <kbd>⌘</kbd> <kbd>⌥</kbd> <kbd>I</kbd> | Toggle inspector |
 | <kbd>⌘</kbd> <kbd>↩</kbd> | Open the inspected item in the viewer |
 | <kbd>←</kbd> <kbd>→</kbd> | Previous or next item in the viewer |
+| <kbd>1</kbd> / <kbd>0</kbd> | View at 1:1 pixels / reset to Fit |
+| <kbd>C</kbd> / <kbd>&#92;</kbd> | Pin or exit comparison / flip A and B |
 | <kbd>Space</kbd> | Play or pause a video |
 | <kbd>Esc</kbd> | Close the viewer, inspector or dialog |
 | <kbd>⌘</kbd> <kbd>/</kbd> | Show all shortcuts |
