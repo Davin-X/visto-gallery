@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
 import {
   CheckIcon,
+  ChevronDownIcon,
   ColumnsIcon,
   DuplicatesIcon,
   FolderIcon,
@@ -764,9 +765,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
 
   // A picked folder belongs to the any-file scan only, so clearing it must not
   // touch the library scope the user set for photos and videos.
-  const clearPickedFolder = useCallback(() => {
-    setPickedFolder(null);
-  }, []);
+  const clearPickedFolder = useCallback(() => setPickedFolder(null), []);
 
   // Scanned files need not be catalog entries, so they cannot go through the
   // catalog-only reveal command: the backend resolves the scan id instead.
@@ -827,11 +826,13 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
         >
           <FolderIcon size={14} />
           <span className="source-select-label">Folder</span>
+          <span className="duplicate-folder-value" aria-hidden="true">
+            {scopeFolder ? <MiddleTruncate text={scopeFolder.name} /> : "All folders"}
+            <ChevronDownIcon size={12} />
+          </span>
           <select
             value={scope ?? ""}
-            onChange={(e) => {
-              onChangeScope(e.target.value || null);
-            }}
+            onChange={(e) => onChangeScope(e.target.value || null)}
             aria-label="Only compare files in this folder"
             disabled={fileBusy}
           >

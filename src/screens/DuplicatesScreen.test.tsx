@@ -174,6 +174,22 @@ describe("DuplicatesScreen", () => {
     expect(onChangeScope).toHaveBeenCalledWith("/shoots/rain");
   });
 
+  it("keeps the distinguishing tail visible for long similar folder names", () => {
+    const alpha = "my-very-long-backup-photos-folder-2025-archive-alpha";
+    const beta = "my-very-long-backup-photos-folder-2025-archive-beta";
+    const { container } = renderScreen([], false, {
+      folders: [
+        makeLibraryFolder({ path: `/archive/${alpha}`, name: alpha }),
+        makeLibraryFolder({ path: `/archive/${beta}`, name: beta }),
+      ],
+      scope: `/archive/${alpha}`,
+      onChangeScope: vi.fn(),
+    });
+
+    const tail = container.querySelector(".duplicate-folder-value .middle-truncate-tail");
+    expect(tail?.textContent).toBe("hive-alpha");
+  });
+
   it("says a scoped scan found nothing in that folder, not the library", () => {
     renderScreen([], true, {
       folders: [makeLibraryFolder({ path: "/shoots/rain", name: "Rain" })],
