@@ -1848,7 +1848,8 @@
 .settings-panel {
   container: settings / inline-size;
   scrollbar-gutter: stable;
-  padding: 0 0 18px;
+  box-sizing: border-box;
+  padding: 0 12px 18px 0;
 }
 
 .settings-row {
