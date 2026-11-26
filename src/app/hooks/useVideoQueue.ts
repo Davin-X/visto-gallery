@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { tauri } from "../../engine/commands/tauri";
-import { useLibraryStore, usePlaybackStore } from "../../engine/stores";
+import { requestVideoPlay, useLibraryStore, usePlaybackStore } from "../../engine/stores";
 import type { LibraryFilterDTO } from "../../engine/types/commands";
 import type { MediaItem } from "../../engine/types/media";
 import { getAdjacentVideo } from "../backgroundVideo";
@@ -124,7 +124,8 @@ export function useVideoQueue() {
       const video = usePlaybackStore.getState().element;
       if (video) {
         video.currentTime = 0;
-        if (video.paused) usePlaybackStore.getState().toggle();
+        const { playing } = usePlaybackStore.getState();
+        if (playing && video.paused) usePlaybackStore.getState().toggle();
       }
       return true;
     }
@@ -200,11 +201,13 @@ export function useVideoQueue() {
   // what plays next.
   const beginVideoSession = useCallback((item: MediaItem, scope: ViewerScope = "library") => {
     useLibraryStore.getState().setViewerScope(scope);
+    const playback = usePlaybackStore.getState();
+    const sameSessionVideo = playback.itemId === item.id ? playback.element : null;
     // Silence every other <video> surface (slideshow, compare, inspector)
     // before this session starts, so the same file can't sound from two
-    // players at once. The inspector preview and thumbnails are muted, so
-    // this only ever hits the slideshow and stale players.
+    // players at once. Keep the active element if re-opening the same video.
     document.querySelectorAll("video").forEach((video) => {
+      if (video === sameSessionVideo) return;
       try {
         video.pause();
       } catch {}
@@ -215,6 +218,12 @@ export function useVideoQueue() {
     setVideoQueue(scopedVideos);
     pagingRef.current = scope === "library" ? libraryPaging() : null;
     setBackgroundVideo(item);
+    if (sameSessionVideo) {
+      if (sameSessionVideo.ended) sameSessionVideo.currentTime = 0;
+      if (sameSessionVideo.paused) requestVideoPlay(sameSessionVideo);
+    } else if (playback.itemId === item.id) {
+      playback.sync({ playing: true });
+    }
   }, []);
 
   /** End the session entirely: stop playback and drop the queue. */
