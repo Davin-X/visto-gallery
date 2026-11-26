@@ -7,15 +7,13 @@ test("marks the showing view as current and leaves the other tab open", () => {
 
   render(<CleanupTabs screen="Cleanup" onOpenDuplicates={onOpenDuplicates} />);
 
-  expect(screen.getByRole("button", { name: "Duplicate media" })).not.toHaveAttribute(
-    "aria-current",
-  );
+  expect(screen.getByRole("button", { name: "Duplicates" })).not.toHaveAttribute("aria-current");
   expect(screen.getByRole("button", { name: "Mac storage" })).toHaveAttribute(
     "aria-current",
     "page",
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "Duplicate media" }));
+  fireEvent.click(screen.getByRole("button", { name: "Duplicates" }));
   expect(onOpenDuplicates).toHaveBeenCalledTimes(1);
 });
 
@@ -24,7 +22,7 @@ test("opens Mac storage from the Duplicates view", () => {
 
   render(<CleanupTabs screen="Duplicates" onOpenCleanup={onOpenCleanup} />);
 
-  expect(screen.getByRole("button", { name: "Duplicate media" })).toHaveAttribute(
+  expect(screen.getByRole("button", { name: "Duplicates" })).toHaveAttribute(
     "aria-current",
     "page",
   );

@@ -793,16 +793,16 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
         type="button"
         aria-pressed={mode === "bursts"}
         className={mode === "bursts" ? "is-active" : ""}
-        title="Find camera bursts and visually similar photos verified with dHash"
+        title="Find camera bursts and visually similar photos in your library"
         onClick={() => switchMode("bursts")}
       >
-        Bursts &amp; Similar
+        Bursts &amp; similar
       </button>
       <button
         type="button"
         aria-pressed={mode === "files"}
         className={mode === "files" ? "is-active" : ""}
-        title="Compare every file type inside one folder, in memory only"
+        title="Compare file contents in a single folder"
         onClick={() => switchMode("files")}
       >
         Any file type
@@ -947,15 +947,13 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     <div className="page-heading">
       <div>
         <h1>Duplicate files</h1>
-        <p className="page-subtitle">
-          {fileScan && fileGroups.length > 0
-            ? `${fileGroups.length.toLocaleString()} ${fileGroups.length === 1 ? "group" : "groups"} · ${fileTotals.copies.toLocaleString()} extra ${fileTotals.copies === 1 ? "copy" : "copies"} · ${formatBytesSimple(fileTotals.bytes)} reclaimable`
-            : fileScan
-              ? `Scan results for ${fileScopeLabel}.`
-              : fileScope
-                ? `Compare every file type inside ${fileScopeLabel} — documents, project files, archives, photos. Hashes stay in memory for this scan and are never saved.`
-                : "Pick a folder to compare every file type inside it."}
-        </p>
+        {fileGroups.length > 0 && (
+          <p className="page-subtitle">
+            {fileGroups.length.toLocaleString()} {fileGroups.length === 1 ? "group" : "groups"} ·{" "}
+            {fileTotals.copies.toLocaleString()} extra {fileTotals.copies === 1 ? "copy" : "copies"}{" "}
+            · {formatBytesSimple(fileTotals.bytes)} reclaimable
+          </p>
+        )}
       </div>
       <div className="duplicate-heading-actions">
         {modeTabs}
@@ -1034,12 +1032,8 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           <span className="duplicate-empty-icon" aria-hidden="true">
             <DuplicatesIcon size={26} />
           </span>
-          <h2>Find duplicate files</h2>
-          <p>
-            Compares every file inside {fileScopeLabel} — text, PDFs, project files, archives,
-            photos. Files are only read: the hashes stay in memory for this scan and are thrown away
-            when you leave this screen.
-          </p>
+          <h2>Ready to scan {fileScopeLabel}</h2>
+          <p>VistoGallery compares file contents without changing your files.</p>
           <button type="button" className="primary-button" onClick={runFileScan}>
             Scan folder
           </button>
@@ -1170,25 +1164,25 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const canAct = !isCurrentBusy && selected.size > 0;
   const allCopiesSelected = totalCopies > 0 && selectedCopyCount >= totalCopies;
 
+  const visibleSummaryCount = (mode === "bursts" ? burstGroups : groups).length;
   const pageHeading = (
     <div className="page-heading">
       <div>
-        <h1>{mode === "bursts" ? "Burst & similar photos" : "Duplicate media"}</h1>
-        <p className="page-subtitle">
-          {hasGroups
-            ? `${(mode === "bursts" ? burstGroups : groups).length.toLocaleString()} ${
-                (mode === "bursts" ? burstGroups : groups).length === 1 ? "group" : "groups"
-              } · ${libraryTotals.copies.toLocaleString()} extra ${
-                libraryTotals.copies === 1 ? "shot" : "shots"
-              } · ${formatBytesSimple(libraryTotals.bytes)} reclaimable`
-            : mode === "bursts"
-              ? scope
-                ? `Find camera bursts and visually similar photos inside ${scopeLabel}.`
-                : "Find camera bursts and visually similar photos in your library."
-              : scope
-                ? `Find exact copies of the same photo or video inside ${scopeLabel} and free up the space they take.`
-                : "Find exact copies of the same photo or video in your library and free up the space they take."}
-        </p>
+        <h1>{mode === "bursts" ? "Bursts & similar photos" : "Duplicate photos & videos"}</h1>
+        {hasGroups && (
+          <p className="page-subtitle">
+            {visibleSummaryCount.toLocaleString()} {visibleSummaryCount === 1 ? "group" : "groups"}{" "}
+            · {libraryTotals.copies.toLocaleString()} extra{" "}
+            {mode === "bursts"
+              ? libraryTotals.copies === 1
+                ? "shot"
+                : "shots"
+              : libraryTotals.copies === 1
+                ? "copy"
+                : "copies"}{" "}
+            · {formatBytesSimple(libraryTotals.bytes)} reclaimable
+          </p>
+        )}
       </div>
       <div className="duplicate-heading-actions">
         {modeTabs}
@@ -1430,11 +1424,10 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               </>
             ) : !burstScanned ? (
               <>
-                <h2>Find burst & similar photos</h2>
+                <h2>Ready to scan {scope ? scopeLabel : "your library"}</h2>
                 <p>
-                  {scope
-                    ? `Find camera bursts and visually similar photos inside ${scopeLabel} verified by visual hashing. Nothing is moved until you review the shots.`
-                    : "Find camera bursts and visually similar photos in your library verified by visual hashing. Nothing is moved until you review the shots."}
+                  Find camera bursts and visually similar photos you can review before removing
+                  anything.
                 </p>
                 <button type="button" className="primary-button" onClick={runBurstScan}>
                   {scope ? "Scan folder for bursts" : "Scan library for bursts"}
@@ -1461,7 +1454,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                   : isDuplicateScan
                     ? "Scanning your library"
                     : !hasGroups && !scanned
-                      ? "Find duplicate media"
+                      ? `Ready to scan ${scope ? scopeLabel : "your library"}`
                       : EMPTY_TITLES[hasGroups ? filterKind : "all"]}
               </h2>
               <p>
@@ -1470,9 +1463,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                   : isDuplicateScan
                     ? "Comparing files byte for byte. Large libraries can take a moment."
                     : !hasGroups && !scanned
-                      ? scope
-                        ? `The scan compares the contents of every photo and video inside ${scopeLabel} — nothing outside it. Nothing is moved until you choose which copies to remove.`
-                        : "The scan compares the contents of every photo and video in your library — nothing outside it. Nothing is moved until you choose which copies to remove."
+                      ? "Find exact copies of photos and videos. You choose which copies to remove."
                       : hasGroups
                         ? otherKinds.length > 0
                           ? `Found ${otherKindsLabel} instead. Use the media tabs above to switch.`

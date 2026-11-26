@@ -19,7 +19,7 @@ export function CleanupTabs({ screen, onOpenDuplicates, onOpenCleanup }: Cleanup
         aria-current={screen === "Duplicates" ? "page" : undefined}
         onClick={onOpenDuplicates}
       >
-        Duplicate media
+        Duplicates
       </button>
       <button
         type="button"

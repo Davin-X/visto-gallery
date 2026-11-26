@@ -992,7 +992,9 @@
 .duplicate-empty {
   display: grid;
   place-items: center;
-  padding: 48px 24px;
+  align-content: center;
+  min-height: 0;
+  padding: 28px 24px;
   border: 1px dashed var(--line-strong);
   border-radius: 16px;
   background: var(--surface-2);
@@ -1012,7 +1014,7 @@
 }
 
 .duplicate-empty.is-compact {
-  padding: 36px 24px;
+  padding: 24px;
 }
 
 .duplicate-empty.is-compact .duplicate-empty-icon {
