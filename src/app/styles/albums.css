@@ -466,15 +466,22 @@ body.is-dragging-albums * {
 }
 .page-heading.album-detail-top .album-detail-copy h1 {
   margin: 0;
-  overflow: hidden;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
   color: var(--ink);
   font-size: var(--heading-1-size);
   font-weight: var(--heading-1-weight);
   letter-spacing: var(--heading-1-letter-spacing);
   line-height: var(--heading-1-line-height);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
+.album-detail-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .page-heading.album-detail-top .album-detail-copy .page-subtitle {
   margin: 6px 0 0;
   font-size: 13px;
@@ -531,7 +538,6 @@ body.is-dragging-albums * {
 }
 
 .album-count-inline {
-  margin-left: 10px;
   color: var(--muted);
   font-size: 15px;
   font-weight: 500;
@@ -690,4 +696,3 @@ body.is-dragging-albums * {
   border-color: var(--blue);
   background: color-mix(in srgb, var(--blue) 6%, var(--surface-2));
 }
-

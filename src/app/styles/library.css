@@ -533,11 +533,18 @@
   white-space: nowrap;
 }
 
-.selection-bar-kinds {
-  color: var(--muted);
-  font-size: 12px;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+.selection-bar-actions .split-button > button {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 8px;
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+.selection-bar-actions .split-button > button:hover {
+  background: var(--surface-2);
 }
 
 .selection-bar-divider {

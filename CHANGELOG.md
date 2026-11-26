@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **GitHub Pages landing page**: interactive product showcase in `docs/` with dark/light screenshot switching, feature tour, sitemap, and responsive navigation.
 
 ### Fixed
+- Simplified selection controls in Library and albums and made Move to Trash explicit. Long album titles can wrap without clipping the item count.
 - Made Settings easier to scan with a narrower content column, tighter spacing, and consistent sliders and menus.
 - Aligned Settings controls and section widths across all five tabs, with stacked rows when the settings pane is narrow.
 - Simplified screen headers to keep titles, useful context, and controls in view.

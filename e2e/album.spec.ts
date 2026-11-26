@@ -20,6 +20,20 @@ test("open album header is compact and still navigates back", async ({ page }) =
   }));
   expect(header.height, "album header must stay compact").toBeLessThanOrEqual(90);
 
+  const firstTile = page.locator(".gallery-tile").first();
+  await firstTile.hover();
+  await firstTile.getByTitle("Add to selection").check();
+  const selection = page.getByRole("toolbar", { name: "Selection actions" });
+  await expect(selection).toContainText("1 photo selected");
+  await selection.getByRole("button", { name: "Select all", exact: true }).click();
+  await expect(selection.getByRole("button", { name: "Clear selection" })).toHaveCount(0);
+  await expect(selection.getByRole("button", { name: "Move to Trash" })).toBeVisible();
+  await selection.getByRole("button", { name: "More selection actions" }).click();
+  await expect(page.getByRole("menuitem", { name: "Unfavorite", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await selection.getByRole("button", { name: "Deselect all" }).click();
+  await expect(selection).toHaveCount(0);
+
   // The inline back action returns to the albums overview.
   await page.locator(".album-back-button").click();
   await expect(page.locator(".album-card").first()).toBeVisible();
