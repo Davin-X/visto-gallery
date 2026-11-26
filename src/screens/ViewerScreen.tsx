@@ -68,6 +68,45 @@ interface ViewerScreenProps {
   onLoadMore?: () => unknown;
 }
 
+function getPreviewBadge(
+  kind: MediaItem["kind"],
+  shown: { full: boolean; lowRes: boolean; fullFailed?: boolean } | null,
+  wantsFull: boolean,
+): { label: string; title: string; tone: "preview" | "loading" | "full" } {
+  const isRaw = kind === "raw";
+  if (!shown || shown.lowRes) {
+    return {
+      label: isRaw ? "RAW preview" : "Preview",
+      title:
+        "Showing a lower-resolution preview while the full image loads, or because it could not be decoded",
+      tone: "preview",
+    };
+  }
+  if (!shown.full) {
+    if (wantsFull && !shown.fullFailed) {
+      return {
+        label: isRaw ? "Rendering full RAW…" : "Loading full render…",
+        title: "Rendering the full-resolution image",
+        tone: "loading",
+      };
+    }
+    return {
+      label: isRaw ? "RAW preview" : "Preview",
+      title: shown.fullFailed
+        ? "Could not render the full-resolution image; showing the screen-size preview"
+        : "Showing a screen-size preview. Zoom to 150%+, switch to Actual, or press 1 for the full render",
+      tone: "preview",
+    };
+  }
+  return {
+    label: "Full render",
+    title: isRaw
+      ? "Showing the full-resolution decoded RAW render"
+      : "Showing the full-resolution render",
+    tone: "full",
+  };
+}
+
 function ViewerScreen(props: ViewerScreenProps) {
   const { hasMore, loadingMore, onLoadMore } = props;
   const items = useMemo(() => props.items.filter((item) => item.kind !== "video"), [props.items]);
@@ -98,6 +137,7 @@ function ViewerScreen(props: ViewerScreenProps) {
     ? String(selected.path).replace(/\\/g, "/").split("/").slice(0, -1).join("/")
     : "";
   const [hintsVisible, setHintsVisible] = useState(true);
+  const [filmstripOpen, setFilmstripOpen] = useState(true);
   const [photoLoadState, setPhotoLoadState] = useState<{
     id: string;
     status: "loading" | "loaded" | "failed";
@@ -367,6 +407,7 @@ function ViewerScreen(props: ViewerScreenProps) {
   // thumbnail size and gap, so a duplicated constant drifts out of step with
   // the spacers and the strip renders the wrong slice of the list.
   useLayoutEffect(() => {
+    if (!filmstripOpen) return;
     const strip = stripRef.current;
     if (!strip) return;
     const button = strip.querySelector<HTMLElement>("button");
@@ -378,7 +419,7 @@ function ViewerScreen(props: ViewerScreenProps) {
       stripStrideRef.current = stride;
       setStripStride(stride);
     }
-  }, [items.length]);
+  }, [items.length, filmstripOpen]);
 
   // Bring the current photo to the middle of the strip when the selection
   // changes, and once on open. Deliberately not keyed on the scroll position:
@@ -399,6 +440,10 @@ function ViewerScreen(props: ViewerScreenProps) {
   }, [items.length]);
 
   useEffect(() => {
+    if (!filmstripOpen) {
+      lastRevealedRef.current = null;
+      return;
+    }
     const strip = stripRef.current;
     if (!strip || selectedIndex < 0) return;
     const currentId = selected?.id ?? null;
@@ -422,7 +467,7 @@ function ViewerScreen(props: ViewerScreenProps) {
       0,
       selectedIndex * stride - Math.max(0, (strip.clientWidth - stride) / 2),
     );
-  }, [selectedIndex, selected?.id, items.length, stripWindowSize]);
+  }, [selectedIndex, selected?.id, items.length, stripWindowSize, filmstripOpen]);
 
   // Slide the rendered window along as the user scrolls. The scroll position
   // needs no correction: a spacer of exactly one stride per skipped item keeps
@@ -520,6 +565,11 @@ function ViewerScreen(props: ViewerScreenProps) {
         case "F":
           e.preventDefault();
           props.onToggleFullscreen();
+          break;
+        case "b":
+        case "B":
+          e.preventDefault();
+          setFilmstripOpen((open) => !open);
           break;
         case "c":
         case "C":
@@ -733,6 +783,10 @@ function ViewerScreen(props: ViewerScreenProps) {
                 ? (shown?.src ?? null)
                 : `${props.assetUrl(selected.path)}?v=${selected.id}-${selected.modifiedAt}-${selected.size}`;
               const lowRes = viaPreview && (!shown || shown.lowRes);
+              const previewBadge =
+                viaPreview && photoStatus !== "failed"
+                  ? getPreviewBadge(selected.kind, shown, wantsFull)
+                  : null;
               const cachedBackdropSrc =
                 !viaPreview && photoStatus !== "loaded" ? getCachedThumbnailUrl(selected.id) : null;
               const stillStyle = buildViewerImageStyle({
@@ -795,12 +849,13 @@ function ViewerScreen(props: ViewerScreenProps) {
                       style={{ ...stillStyle, aspectRatio: undefined, objectFit: "contain" }}
                     />
                   )}
-                  {lowRes && photoStatus !== "failed" && (
+                  {previewBadge && (
                     <span
-                      className="viewer-lowres-badge"
-                      title="A lower-resolution preview is on screen while the full image loads, or because it could not be decoded"
+                      className={`viewer-lowres-badge${previewBadge.tone === "full" ? " is-full" : previewBadge.tone === "loading" ? " is-loading" : ""}`}
+                      title={previewBadge.title}
+                      role={previewBadge.tone === "loading" ? "status" : undefined}
                     >
-                      Preview
+                      {previewBadge.label}
                     </span>
                   )}
                   {selected.kind === "photo" &&
@@ -1095,6 +1150,17 @@ function ViewerScreen(props: ViewerScreenProps) {
             <span className="viewer-divider" />
             <button
               type="button"
+              className={filmstripOpen ? "active" : ""}
+              onClick={() => setFilmstripOpen((open) => !open)}
+              aria-pressed={filmstripOpen}
+              aria-label={filmstripOpen ? "Hide filmstrip" : "Show filmstrip"}
+              title={filmstripOpen ? "Hide filmstrip (B)" : "Show filmstrip (B)"}
+            >
+              <FilmstripIcon size={14} />
+              <span className="viewer-bar-label">Filmstrip</span>
+            </button>
+            <button
+              type="button"
               onClick={() => void props.onToggleFullscreen()}
               aria-label="Toggle full screen"
               title="Full screen (F)"
@@ -1113,20 +1179,22 @@ function ViewerScreen(props: ViewerScreenProps) {
           </div>
         )}
       </div>
-      <ViewerFilmstrip
-        stripRef={stripRef}
-        onScroll={handleFilmstripScroll}
-        items={items}
-        selectedId={props.selected?.id}
-        stripStart={stripStart}
-        stripEnd={stripEnd}
-        stripStride={stripStride}
-        draftTransforms={draftTransforms}
-        hasMore={hasMore}
-        loadingMore={loadingMore}
-        onSelect={props.onSetPhoto}
-        onLoadMore={onLoadMore}
-      />
+      {filmstripOpen && (
+        <ViewerFilmstrip
+          stripRef={stripRef}
+          onScroll={handleFilmstripScroll}
+          items={items}
+          selectedId={props.selected?.id}
+          stripStart={stripStart}
+          stripEnd={stripEnd}
+          stripStride={stripStride}
+          draftTransforms={draftTransforms}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          onSelect={props.onSetPhoto}
+          onLoadMore={onLoadMore}
+        />
+      )}
     </div>
   );
 }

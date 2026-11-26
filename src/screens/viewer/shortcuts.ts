@@ -12,6 +12,7 @@ export function buildShortcuts(kind: string | undefined) {
   if (still) rows.push({ keys: ["C"], label: "Compare A/B" });
   if (still) rows.push({ keys: ["\\"], label: "Flip A/B" });
   rows.push(
+    { keys: ["B"], label: "Filmstrip" },
     { keys: ["L"], label: "Favorite" },
     { keys: ["F"], label: "Full screen" },
     { keys: ["Esc"], label: "Close" },
