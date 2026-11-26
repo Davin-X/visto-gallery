@@ -38,3 +38,29 @@ test("open album header is compact and still navigates back", async ({ page }) =
   await page.locator(".album-back-button").click();
   await expect(page.locator(".album-card").first()).toBeVisible();
 });
+
+for (const view of ["Library", "Albums"]) {
+  test(`selection dropdown stays reachable in ${view} at minimum window size`, async ({ page }) => {
+    await page.setViewportSize({ width: 960, height: 680 });
+    await page.goto("/harness.html?benchmark=40");
+    await page.locator(".gallery-tile").first().waitFor();
+    if (view === "Albums") {
+      await page.getByRole("button", { name: "Albums", exact: true }).click();
+      await page.locator(".album-card").first().click();
+    }
+    const tile = page.locator(".gallery-tile").first();
+    await tile.hover();
+    await tile.getByTitle("Add to selection").check();
+    const trigger = page.getByRole("button", { name: "More selection actions" });
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    const menu = page.getByRole("menu", { name: "More selection actions" });
+    await expect(menu).toBeInViewport({ ratio: 1 });
+    await page.keyboard.press("End");
+    const lastOption = menu.getByRole("menuitem", { name: "Tags to Finder" });
+    await expect(lastOption).toBeFocused();
+    await expect(lastOption).toBeInViewport({ ratio: 1 });
+    await page.keyboard.press("Escape");
+    await expect(trigger).toBeFocused();
+  });
+}
