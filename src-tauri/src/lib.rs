@@ -14,6 +14,7 @@ mod ipc_types_export;
 mod media_animation;
 mod media_dimensions;
 mod media_kind;
+mod media_raw_preview;
 mod media_signature;
 mod media_tools;
 mod menu;
