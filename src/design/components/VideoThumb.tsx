@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
+import { CachedThumbnail, type CachedThumbnailSize } from "./CachedThumbnail";
 function VideoThumb({ src, name, className }: { src: string; name?: string; className?: string }) {
   const ref = useRef<HTMLVideoElement | null>(null);
   const [nearViewport, setNearViewport] = useState(false);
@@ -49,6 +50,28 @@ function VideoThumb({ src, name, className }: { src: string; name?: string; clas
       muted
       playsInline
       preload={nearViewport ? "metadata" : "none"}
+    />
+  );
+}
+
+export function VideoPoster({
+  itemId,
+  name,
+  size,
+  fallbackSrc,
+}: {
+  itemId: string;
+  name: string;
+  size: CachedThumbnailSize;
+  fallbackSrc?: string;
+}) {
+  return (
+    <CachedThumbnail
+      itemId={itemId}
+      name={name}
+      size={size}
+      failedLabel="Video preview unavailable"
+      fallbackElement={fallbackSrc ? <VideoThumb src={fallbackSrc} name={name} /> : undefined}
     />
   );
 }

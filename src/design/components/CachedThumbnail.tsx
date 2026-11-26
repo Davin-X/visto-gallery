@@ -13,7 +13,7 @@ const thumbnailByteSizes = new Map<string, number>();
 const thumbnailRequests = new Map<string, Promise<string>>();
 const thumbnailQueue: Array<() => void> = [];
 const MAX_CONCURRENT_THUMBNAIL_REQUESTS = 6;
-type CachedThumbnailSize = 64 | 128 | 256 | 512 | 1024;
+export type CachedThumbnailSize = 64 | 128 | 256 | 512 | 1024;
 let activeThumbnailRequests = 0;
 let cachedBytes = 0;
 
@@ -150,6 +150,8 @@ function CachedThumbnail({
   showStatus = false,
   placeholderClassName,
   fallbackSrc,
+  fallbackElement,
+  failedLabel,
   eager = false,
 }: {
   itemId: string;
@@ -159,6 +161,8 @@ function CachedThumbnail({
   showStatus?: boolean;
   placeholderClassName?: string;
   fallbackSrc?: string;
+  fallbackElement?: React.ReactNode;
+  failedLabel?: string;
   eager?: boolean;
 }) {
   const placeholderRef = useRef<HTMLSpanElement | null>(null);
@@ -225,6 +229,9 @@ function CachedThumbnail({
     };
   }, [itemId, size, nearViewport, requestKey, eager]);
 
+  if (failed && fallbackElement) {
+    return <>{fallbackElement}</>;
+  }
   if (failed && fallbackSrc) {
     return (
       <img
@@ -247,13 +254,15 @@ function CachedThumbnail({
       className={`cached-thumb-placeholder${failed ? " is-failed" : " is-loading"}${placeholderClassName ? ` ${placeholderClassName}` : ""}`}
       aria-hidden="true"
     >
-      {showStatus
-        ? failed
-          ? "Preview unavailable"
-          : nearViewport
-            ? "Loading preview…"
-            : ""
-        : null}
+      {failed && failedLabel
+        ? failedLabel
+        : showStatus
+          ? failed
+            ? "Preview unavailable"
+            : nearViewport
+              ? "Loading preview…"
+              : ""
+          : null}
     </span>
   );
 }

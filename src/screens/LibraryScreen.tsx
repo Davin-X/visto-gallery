@@ -29,7 +29,7 @@ import { CachedThumbnail } from "../design/components/CachedThumbnail";
 import { PanelResizer } from "../design/components/PanelResizer";
 import { KindBadge, KindDot } from "../design/components/KindBadge";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
-import VideoThumb from "../design/components/VideoThumb";
+import VideoThumb, { VideoPoster } from "../design/components/VideoThumb";
 import { useDraftTransforms } from "../engine/stores/useEditStore";
 import { draftImageStyle } from "../engine/utils/draftImage";
 import { LibrarySearch } from "./library/LibrarySearch";
@@ -2198,13 +2198,18 @@ function LibraryScreen(props: LibraryScreenProps) {
                     />
                     <span className="tile-image">
                       {item.kind === "video" ? (
-                        canPlayVideoInApp(item.path, item.name) ? (
+                        props.layout !== "grid" && canPlayVideoInApp(item.path, item.name) ? (
                           <VideoThumb src={assetUrl(item.path)} name={tileAlt(item)} />
                         ) : (
-                          <CachedThumbnail
+                          <VideoPoster
                             itemId={item.id}
                             name={tileAlt(item)}
                             size={thumbnailPixels}
+                            fallbackSrc={
+                              canPlayVideoInApp(item.path, item.name)
+                                ? assetUrl(item.path)
+                                : undefined
+                            }
                           />
                         )
                       ) : item.kind === "photo" ? (
@@ -2218,11 +2223,8 @@ function LibraryScreen(props: LibraryScreenProps) {
                       ) : (
                         <CachedThumbnail
                           itemId={item.id}
-
                           name={tileAlt(item)}
-
                           size={thumbnailPixels}
-
                           style={draftImageStyle(draftTransforms, item.id)}
                         />
                       )}
@@ -2230,25 +2232,19 @@ function LibraryScreen(props: LibraryScreenProps) {
                         <button
                           type="button"
                           className="tile-play-background"
-
                           aria-label={
                             playingId === item.id && isPlaying
                               ? `Pause ${tileAlt(item)}`
                               : `Play ${tileAlt(item)} in background`
                           }
-
                           title={
                             playingId === item.id && isPlaying ? "Pause" : "Play in background"
                           }
-
                           onClick={(event) => {
                             event.stopPropagation();
-
                             toggleBackground(item);
                           }}
-
                           onDoubleClick={(event) => event.stopPropagation()}
-
                           aria-pressed={playingId === item.id && isPlaying}
                         >
                           {playingId === item.id && isPlaying ? (
@@ -2260,7 +2256,11 @@ function LibraryScreen(props: LibraryScreenProps) {
                       )}
                       {item.kind === "video" && (
                         <span className="video-label">
-                          <PlayIcon size={10} />
+                          {props.layout === "grid" ? (
+                            <KindBadge kind="video" />
+                          ) : (
+                            <PlayIcon size={10} />
+                          )}
                         </span>
                       )}
                       {item.kind === "raw" && (
