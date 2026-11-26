@@ -1982,14 +1982,27 @@
   box-shadow: 0 0 0 3px var(--accent);
 }
 
-.root-mapping-new {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+.settings-catalog-actions .settings-row-control > button {
+  width: 144px;
 }
 
-.root-mapping-new .settings-text-input {
-  flex: 1 1 auto;
+.settings-row > .root-mapping-path {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+  width: 280px;
+  max-width: 100%;
+  justify-self: end;
+}
+
+.root-mapping-path > :is(input, button) {
+  min-width: 0;
+  min-height: 36px;
+}
+
+@container settings (max-width: 580px) {
+  .settings-row > .root-mapping-path {
+    justify-self: start;
+  }
 }
 
 .root-mapping-preview {
