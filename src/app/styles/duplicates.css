@@ -79,6 +79,22 @@
   cursor: pointer;
 }
 
+.duplicate-mode-tabs {
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 100%;
+  min-height: 34px;
+  height: auto;
+  border-radius: 9px;
+}
+
+.duplicate-mode-tabs button {
+  justify-content: center;
+  height: auto;
+  min-height: 28px;
+  text-align: center;
+}
+
 .duplicate-filter-tabs button:hover {
   background: var(--surface-2);
   color: var(--ink);
@@ -389,12 +405,24 @@
   gap: 8px;
 }
 
-.duplicates-page .duplicate-group-actions .quiet-button,
-.duplicates-page .duplicate-heading-actions :is(.quiet-button, .primary-button) {
+.duplicates-page .duplicate-group-actions .quiet-button {
   min-height: 32px;
   padding: 0 10px;
   border-radius: 9px;
   font-size: 11px;
+  font-weight: 600;
+}
+
+.duplicates-page
+  .duplicate-heading-actions
+  :is(.quiet-button, .primary-button, .choose-folder-button, .source-select),
+.duplicates-page .duplicate-empty > :is(.quiet-button, .primary-button) {
+  box-sizing: border-box;
+  height: 34px;
+  min-height: 34px;
+  padding-inline: 10px;
+  border-radius: 9px;
+  font-size: 12px;
   font-weight: 600;
 }
 

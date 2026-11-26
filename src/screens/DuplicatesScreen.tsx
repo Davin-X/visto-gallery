@@ -780,7 +780,11 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   );
 
   const modeTabs = onChangeScope ? (
-    <div className="duplicate-filter-tabs" role="group" aria-label="What to compare">
+    <div
+      className="duplicate-filter-tabs duplicate-mode-tabs"
+      role="group"
+      aria-label="What to compare"
+    >
       <button
         type="button"
         aria-pressed={mode === "media"}
