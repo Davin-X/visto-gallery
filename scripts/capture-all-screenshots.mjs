@@ -58,7 +58,8 @@ const SCREENS = [
     steps: [
       { press: "Grid view" },
       { press: "Show inspector", whenAbsent: "Hide inspector" },
-      { press: "Open Alone in the Unspoilt Wilderness" },
+      { pressPrefix: "All " },
+      { press: "Open Glacier Lake" },
     ],
     restore: [{ press: "Hide inspector", whenAbsent: "Show inspector" }],
     expect: "Library",
@@ -72,10 +73,19 @@ const SCREENS = [
   { name: "albums", steps: [{ press: "Albums" }], expect: "Albums" },
   {
     name: "duplicates",
-    steps: [{ press: "Duplicates" }, { press: "Scan library", whenAbsent: "Compare" }, { wait: 4 }],
-    expect: "Duplicates",
+    steps: [
+      { press: "Clean up" },
+      { press: "Duplicates" },
+      { press: "Scan library", whenPresent: "Scan library" },
+      { wait: 4 },
+    ],
+    expect: "Clean up",
   },
-  { name: "cleanup", steps: [{ press: "Cleanup" }], expect: "Cleanup" },
+  {
+    name: "cleanup",
+    steps: [{ press: "Clean up" }, { press: "Mac storage" }, { wait: 10 }],
+    expect: "Clean up",
+  },
   { name: "hidden", steps: [{ press: "Hidden" }], expect: "Hidden" },
   { name: "edit", steps: [{ press: "Edit" }], expect: "Edit" },
   {
@@ -114,8 +124,9 @@ const SCREENS = [
   {
     name: "duplicates-compare",
     steps: [
+      { press: "Clean up" },
       { press: "Duplicates" },
-      { press: "Scan library", whenAbsent: "Compare" },
+      { press: "Scan library", whenPresent: "Scan library" },
       { wait: 4 },
       { pressPrefix: "Compare " },
     ],
@@ -159,14 +170,35 @@ const SCREENS = [
     modal: true,
     expect: "Sources",
   },
+  { name: "map", steps: [{ press: "Map" }], expect: "Map" },
+  {
+    name: "batch",
+    steps: [{ press: "Batch" }, { press: "Select all visible", whenPresent: "Select all visible" }],
+    expect: "Batch",
+  },
+  {
+    name: "viewer-compare",
+    steps: [
+      { press: "Grid view" },
+      { pressPrefix: "Photos " },
+      { press: "Open Pyrenees Valley" },
+      { key: "return", meta: true },
+      { press: "Compare shots" },
+    ],
+    restore: [{ key: "escape" }],
+    expect: "Viewer",
+  },
   // Last: playback keeps a Now Playing chip in the top bar of every later screen.
   {
     name: "player",
     steps: [
       { press: "Grid view" },
+      { pressPrefix: "Videos " },
       { press: "Open Earth From Orbit" },
       { key: "return", meta: true },
-      { wait: 2 },
+      { wait: 4.5 },
+      { press: "Pause", whenPresent: "Pause" },
+      { key: "right" },
     ],
     restore: [{ key: "escape" }],
   },
@@ -331,6 +363,7 @@ function preflight(options) {
   if (process.platform !== "darwin") die("this script captures a macOS window and only runs on macOS");
   if (run("which", ["screencapture"]).status !== 0) die("screencapture is missing");
 
+  helper(["activate", options.app], { allowFailure: true });
   const window = helper(["find", options.app], { allowFailure: true });
   if (!window.windowId) {
     die(`${APP} is not running with a visible window.\nStart it first (open the installed app, or run \`npm run tauri:dev\`).`);
