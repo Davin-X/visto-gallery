@@ -149,9 +149,6 @@ export function SourcesManager(props: {
             </span>
             {formatBytes(totalSize)}
           </span>
-          <span className="sources-summary-hint">
-            Files stay in place. Select multiple folders with ⌘-click or ⌘A; they scan together.
-          </span>
         </div>
         <div className="sources-summary-actions">
           <button
@@ -187,16 +184,6 @@ export function SourcesManager(props: {
               title={folders.length === 0 ? "Add a source before rescanning" : undefined}
             >
               {libraryBusy ? "Working…" : "Rescan sources"}
-            </button>
-          )}
-          {onRemoveAllSources && folders.length > 0 && (
-            <button
-              className="quiet-button sources-remove-all"
-              type="button"
-              onClick={() => onRemoveAllSources()}
-              disabled={libraryBusy}
-            >
-              Remove all sources…
             </button>
           )}
         </div>
@@ -407,13 +394,22 @@ export function SourcesManager(props: {
       )}
 
       {folders.length > 0 && (
-        <p className="sources-note">
-          <InfoIcon size={14} />
-          <span>
-            Removing a source only clears it from VistoGallery. Your files stay exactly where they
-            are on disk, and adding the folder again brings everything back.
-          </span>
-        </p>
+        <div className="sources-footer">
+          <p className="sources-note">
+            <InfoIcon size={14} />
+            <span>Removing a source leaves its files on disk.</span>
+          </p>
+          {onRemoveAllSources && (
+            <button
+              className="quiet-button sources-remove-all"
+              type="button"
+              onClick={onRemoveAllSources}
+              disabled={libraryBusy}
+            >
+              Remove all sources…
+            </button>
+          )}
+        </div>
       )}
     </>
   );
@@ -424,7 +420,9 @@ export function SourcesManager(props: {
 
   return (
     <section className="settings-section">
-      <h2 className="settings-section-title">Sources</h2>
+      <h2 className="settings-section-title">
+        <FolderIcon size={14} /> Sources
+      </h2>
       <p className="settings-section-desc">
         Folders VistoGallery indexes. Your files are read in place and never moved.
       </p>

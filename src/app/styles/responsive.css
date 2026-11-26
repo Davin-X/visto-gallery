@@ -236,10 +236,45 @@
   }
 }
 
-.compact-view-options {
+.compact-view-options,
+.compact-library-actions {
   display: none;
 }
-@media (max-width: 1100px) {
+@container library-pane (max-width: 850px) {
+  .library-header .wide-library-action {
+    display: none;
+  }
+
+  .library-header .compact-library-actions {
+    display: inline-flex;
+  }
+
+  .compact-library-actions .split-button > button {
+    color: var(--text);
+    background: var(--surface);
+    border-color: var(--line);
+    box-shadow: none;
+  }
+
+  .library-header .toolbar-actions {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .library-header .filter-cluster {
+    overflow: visible;
+  }
+
+  .library-header .filter-cluster .segmented-control {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .library-header .filter-cluster > :last-child {
+    flex-shrink: 0;
+  }
+
   .library-header .compact-view-options {
     display: inline-flex;
     align-items: center;

@@ -151,7 +151,7 @@ describe("DuplicatesScreen", () => {
 
   it("does not claim there are no duplicates before any scan", () => {
     renderScreen([], false);
-    expect(screen.getByRole("heading", { name: "Find duplicate media" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Ready to scan your library" })).toBeTruthy();
     expect(screen.queryByText(/No duplicates found/)).toBeNull();
     expect(screen.queryByText(/unique by content/)).toBeNull();
     // One scan button, in the empty state, not a second one in the header.
@@ -218,7 +218,7 @@ describe("DuplicatesScreen", () => {
     expect(
       (screen.getByLabelText("Only compare files in this folder") as HTMLSelectElement).value,
     ).toBe("");
-    expect(screen.getByRole("heading", { name: "Find duplicate files" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^Ready to scan/ })).toBeTruthy();
   });
 
   it("scans a folder picked outside the library sources", async () => {
@@ -563,6 +563,6 @@ describe("DuplicatesScreen", () => {
     });
 
     expect(screen.queryByText("c.xmp")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Find duplicate files" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^Ready to scan/ })).toBeTruthy();
   });
 });

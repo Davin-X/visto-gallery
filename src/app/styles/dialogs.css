@@ -50,7 +50,7 @@
 .sources-sheet .sources-manager {
   flex: 1 1 auto;
   min-height: 0;
-  margin-top: 16px;
+  margin-top: 6px;
   overflow: hidden;
 }
 

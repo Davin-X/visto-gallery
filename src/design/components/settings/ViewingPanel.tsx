@@ -76,7 +76,7 @@ export function ViewingPanel(props: {
               onChange={(e) => props.onChange("slideshowInterval", Number(e.target.value))}
               aria-label="Slideshow interval in seconds"
             />
-            <span className="settings-slider-value">{props.slideshowInterval}s</span>
+            <span className="settings-slider-value">{props.slideshowInterval} s</span>
           </div>
         </div>
         <div className="settings-row">
@@ -129,10 +129,7 @@ export function ViewingPanel(props: {
               never touches your library.
             </span>
           </div>
-          <div
-            className="settings-row-control"
-            style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}
-          >
+          <div className="settings-row-control settings-ambient-control">
             <label className="toggle-switch">
               <input
                 id="setting-enable-ambient-audio"
@@ -144,10 +141,11 @@ export function ViewingPanel(props: {
               <span className="toggle-track" />
             </label>
             {props.slideshowBackgroundAudio && (
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div className="settings-ambient-track">
                 <span
                   style={{
                     flex: 1,
+                    minWidth: 0,
                     fontSize: 12,
                     color: "var(--text-muted)",
                     overflow: "hidden",

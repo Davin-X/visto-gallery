@@ -125,7 +125,7 @@ export function RootPathMapping(props: {
           <b>Missing source root</b>
           <span className="settings-row-desc">The registered path exactly as shown in Sources</span>
         </div>
-        <div className="settings-row-control">
+        <div className="settings-row-control root-mapping-path">
           <input
             type="text"
             className="settings-text-input"
@@ -144,12 +144,12 @@ export function RootPathMapping(props: {
           <b>New source root</b>
           <span className="settings-row-desc">The folder that now contains the same library</span>
         </div>
-        <div className="settings-row-control root-mapping-new">
+        <div className="settings-row-control root-mapping-path">
           <input
             type="text"
             className="settings-text-input"
             value={newRoot}
-            placeholder="Choose the folder that now contains the library"
+            placeholder="No folder chosen"
             aria-label="New source root"
             readOnly
           />

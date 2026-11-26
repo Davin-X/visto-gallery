@@ -6,7 +6,9 @@
 }
 
 .duplicates-page > .page-heading {
-  margin-bottom: var(--space-6);
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 /* The subtitle wraps inside the title block instead of pushing the
@@ -19,15 +21,20 @@
 /* Two rows on the right of the heading: the mode switch on its own line, then
    the folder picker and the scan actions under it. */
 .duplicate-heading-actions {
-  flex-shrink: 0;
+  flex: 0 1 410px;
+  min-width: min(410px, 100%);
+  max-width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 8px;
 }
 
 .duplicate-heading-row {
   display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-start;
   align-items: center;
   gap: 6px;
 }
@@ -72,6 +79,23 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+}
+
+.duplicate-mode-tabs {
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  max-width: 100%;
+  min-height: 34px;
+  height: auto;
+  border-radius: 9px;
+}
+
+.duplicate-mode-tabs button {
+  justify-content: center;
+  height: auto;
+  min-height: 28px;
+  text-align: center;
 }
 
 .duplicate-filter-tabs button:hover {
@@ -384,12 +408,24 @@
   gap: 8px;
 }
 
-.duplicates-page .duplicate-group-actions .quiet-button,
-.duplicates-page .duplicate-heading-actions :is(.quiet-button, .primary-button) {
+.duplicates-page .duplicate-group-actions .quiet-button {
   min-height: 32px;
   padding: 0 10px;
   border-radius: 9px;
   font-size: 11px;
+  font-weight: 600;
+}
+
+.duplicates-page
+  .duplicate-heading-actions
+  :is(.quiet-button, .primary-button, .choose-folder-button, .source-select),
+.duplicates-page .duplicate-empty > :is(.quiet-button, .primary-button) {
+  box-sizing: border-box;
+  height: 34px;
+  min-height: 34px;
+  padding-inline: 10px;
+  border-radius: 9px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -413,13 +449,15 @@
    with a pill showing the picked folder (only in Any file type mode). */
 .duplicate-folder-picker {
   display: flex;
+  width: 100%;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 
-.duplicate-folder-picker .source-select {
+.duplicates-page .duplicate-folder-picker .source-select {
   flex: 1 1 auto;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -436,7 +474,10 @@
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    border-color 0.1s,
+    color 0.1s;
   white-space: nowrap;
 }
 
@@ -495,7 +536,10 @@
   border-radius: 4px;
   cursor: pointer;
   opacity: 0.7;
-  transition: opacity 0.1s, color 0.1s, background 0.1s;
+  transition:
+    opacity 0.1s,
+    color 0.1s,
+    background 0.1s;
 }
 
 .picked-folder-clear:hover {
@@ -992,7 +1036,9 @@
 .duplicate-empty {
   display: grid;
   place-items: center;
-  padding: 48px 24px;
+  align-content: center;
+  min-height: 0;
+  padding: 28px 24px;
   border: 1px dashed var(--line-strong);
   border-radius: 16px;
   background: var(--surface-2);
@@ -1012,7 +1058,7 @@
 }
 
 .duplicate-empty.is-compact {
-  padding: 36px 24px;
+  padding: 24px;
 }
 
 .duplicate-empty.is-compact .duplicate-empty-icon {

@@ -441,13 +441,14 @@ body.is-dragging-albums * {
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-2);
+  margin-bottom: 12px;
   padding: 0;
   flex-wrap: nowrap;
 }
 .album-detail-head {
   display: flex;
-  align-items: flex-end;
-  gap: var(--space-4);
+  align-items: center;
+  gap: var(--space-3);
   min-width: 0;
 }
 .page-heading.album-detail-top .album-detail-copy {
@@ -466,15 +467,22 @@ body.is-dragging-albums * {
 }
 .page-heading.album-detail-top .album-detail-copy h1 {
   margin: 0;
-  overflow: hidden;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
   color: var(--ink);
   font-size: var(--heading-1-size);
   font-weight: var(--heading-1-weight);
   letter-spacing: var(--heading-1-letter-spacing);
   line-height: var(--heading-1-line-height);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
+.album-detail-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .page-heading.album-detail-top .album-detail-copy .page-subtitle {
   margin: 6px 0 0;
   font-size: 13px;
@@ -531,7 +539,6 @@ body.is-dragging-albums * {
 }
 
 .album-count-inline {
-  margin-left: 10px;
   color: var(--muted);
   font-size: 15px;
   font-weight: 500;
@@ -542,8 +549,8 @@ body.is-dragging-albums * {
 .album-detail-cover {
   position: relative;
   display: grid;
-  width: 104px;
-  height: 76px;
+  width: 76px;
+  height: 56px;
   flex: 0 0 auto;
   place-items: center;
   overflow: hidden;
@@ -690,4 +697,3 @@ body.is-dragging-albums * {
   border-color: var(--blue);
   background: color-mix(in srgb, var(--blue) 6%, var(--surface-2));
 }
-

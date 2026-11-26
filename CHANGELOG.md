@@ -15,6 +15,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **GitHub Pages landing page**: interactive product showcase in `docs/` with dark/light screenshot switching, feature tour, sitemap, and responsive navigation.
 
 ### Fixed
+- Library controls compact to the available pane width and keep Filters visible alongside scrolling media types.
+- Simplified the scan headers and ready states across all three Duplicates modes.
+- Simplified selection controls in Library and albums and made Move to Trash explicit. Long album titles can wrap without clipping the item count.
+- Made Settings easier to scan with a narrower content column, tighter spacing, and consistent sliders and menus.
+- Aligned Settings controls and section widths across all five tabs, with stacked rows when the settings pane is narrow.
+- Simplified screen headers to keep titles, useful context, and controls in view.
+- Clarified the Manage sources dialog, added a scroll cue to long folder lists, and separated bulk removal from everyday actions in Library settings.
 - Batch metadata preserves existing keywords when Replace is empty. Choose **Clear all keywords** to remove them across the selected files.
 - **Gallery navigation and previews**: compact Library view options, collapsible sidebar statistics, keyboard-accessible previews and popup dismissal, and on-demand video queue posters.
 - **Review and recovery**: inspect every batch file, pan duplicate comparisons with the keyboard, retry unavailable editor previews or storage usage, and see Finder and cleanup failures.

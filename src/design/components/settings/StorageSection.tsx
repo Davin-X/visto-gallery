@@ -74,13 +74,8 @@ export function StorageSection(props: { showNotice: (text: string, code?: ErrorC
         <b>{label}</b>
         <span className="settings-row-desc">{desc}</span>
       </div>
-      <div
-        className="settings-row-control"
-        style={{ display: "flex", flexWrap: "nowrap", alignItems: "center" }}
-      >
-        <span className="settings-slider-value" style={{ whiteSpace: "nowrap" }}>
-          {value}
-        </span>
+      <div className="settings-row-control settings-storage-control">
+        <span className="settings-slider-value">{value}</span>
         {action && (
           <button
             className="quiet-button"

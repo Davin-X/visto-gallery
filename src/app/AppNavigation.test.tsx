@@ -162,7 +162,7 @@ describe("Clean up sidebar entry", () => {
     expect(fromCleanup.onOpenScreen).toHaveBeenCalledWith("Cleanup");
   });
 
-  test("starts on Duplicate media before either tab has been opened", () => {
+  test("starts on Duplicates before either tab has been opened", () => {
     const { onOpenScreen } = renderSidebar();
 
     fireEvent.click(screen.getByRole("button", { name: "Clean up" }));

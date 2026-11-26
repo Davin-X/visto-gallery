@@ -336,7 +336,7 @@ describe("CleanupScreen", () => {
       .closest("section") as HTMLElement;
     expect(within(history).getByText("5.0 GB")).toBeInTheDocument();
     // Duplicates is a tab now, so this screen only routes to it.
-    fireEvent.click(screen.getByRole("button", { name: "Duplicate media" }));
+    fireEvent.click(screen.getByRole("button", { name: "Duplicates" }));
     expect(onOpenDuplicates).toHaveBeenCalled();
   });
 

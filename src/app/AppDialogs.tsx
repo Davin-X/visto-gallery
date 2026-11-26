@@ -142,7 +142,7 @@ function DialogHeader({
   onClose,
   disabled,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   titleId: string;
   onClose: () => void;
@@ -151,7 +151,7 @@ function DialogHeader({
   return (
     <div className="dialog-heading">
       <div>
-        <p className="eyebrow">{eyebrow}</p>
+        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h2 id={titleId}>{title}</h2>
       </div>
       <button
@@ -794,12 +794,7 @@ function SourcesSheet({
         aria-modal="true"
         aria-labelledby="sources-sheet-title"
       >
-        <DialogHeader
-          eyebrow="LIBRARY"
-          title="Sources"
-          titleId="sources-sheet-title"
-          onClose={onClose}
-        />
+        <DialogHeader title="Manage sources" titleId="sources-sheet-title" onClose={onClose} />
         <SourcesManager
           variant="sheet"
           onAddFolder={onAddFolder}

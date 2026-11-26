@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDownIcon } from "./icons";
 import { usePopoverFocus } from "../hooks/usePopoverFocus";
@@ -18,6 +18,7 @@ interface SplitButtonProps {
   onClick: () => void;
   items: SplitButtonItem[];
   disabled?: boolean;
+  primaryDisabled?: boolean;
   menuLabel: string;
   className?: string;
 }
@@ -34,10 +35,15 @@ export default function SplitButton({
   onClick,
   items,
   disabled,
+  primaryDisabled,
   menuLabel,
 }: SplitButtonProps) {
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [position, setPosition] = useState({
+    top: 0,
+    left: 0,
+    maxHeight: undefined as number | undefined,
+  });
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const portalRoot =
@@ -66,13 +72,39 @@ export default function SplitButton({
     };
   }, [open]);
 
-  const toggle = () => {
-    if (!open && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setPosition({ top: rect.bottom + 6, left: Math.max(8, rect.right - 210) });
-    }
-    setOpen((value) => !value);
-  };
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const trigger = buttonRef.current?.getBoundingClientRect();
+      const menu = panelRef.current;
+      if (!trigger || !menu) return;
+      const padding = 8;
+      const gap = 6;
+      const below = window.innerHeight - trigger.bottom - gap - padding;
+      const above = trigger.top - gap - padding;
+      const height = menu.scrollHeight + 2;
+      const openAbove = height > below && above > below;
+      const maxHeight = Math.max(0, openAbove ? above : below);
+      setPosition({
+        top: openAbove ? trigger.top - gap - Math.min(height, maxHeight) : trigger.bottom + gap,
+        left: Math.max(
+          padding,
+          Math.min(
+            trigger.right - menu.offsetWidth,
+            window.innerWidth - menu.offsetWidth - padding,
+          ),
+        ),
+        maxHeight,
+      });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, items.length]);
 
   return (
     <div className="split-button">
@@ -80,7 +112,7 @@ export default function SplitButton({
         className="primary-button split-button-main"
         type="button"
         onClick={onClick}
-        disabled={disabled}
+        disabled={disabled || primaryDisabled}
         title={label}
       >
         <Icon size={15} />
@@ -90,7 +122,7 @@ export default function SplitButton({
         ref={buttonRef}
         className="primary-button split-button-toggle"
         type="button"
-        onClick={toggle}
+        onClick={() => setOpen((value) => !value)}
         disabled={disabled}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -107,7 +139,7 @@ export default function SplitButton({
             className="split-button-panel"
             role="menu"
             aria-label={menuLabel}
-            style={{ position: "fixed", top: position.top, left: position.left, zIndex: 100 }}
+            style={{ position: "fixed", ...position, zIndex: 100 }}
           >
             {items.map((item) => {
               const ItemIcon = item.icon;

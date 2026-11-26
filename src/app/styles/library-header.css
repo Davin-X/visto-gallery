@@ -179,7 +179,9 @@
 }
 
 .split-button-panel {
-  min-width: 200px;
+  box-sizing: border-box;
+  width: min(210px, calc(100vw - 16px));
+  overflow-y: auto;
   padding: 4px;
   border: 1px solid var(--line-strong);
   border-radius: 10px;

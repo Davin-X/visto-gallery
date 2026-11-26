@@ -1132,32 +1132,25 @@ function LibraryScreen(props: LibraryScreenProps) {
     if (!props.selectedIds.length) return [];
     const ids = new Set(props.selectedIds);
     const pool = props.hiddenView ? library.hiddenItems : library.items;
-    return pool.filter((i) => ids.has(i.id));
-  }, [props.selectedIds, props.hiddenView, library.items, library.hiddenItems]);
+    const selected = pool.filter((item) => ids.delete(item.id));
+    if (ids.size > 0) {
+      selected.push(...props.items.filter((item) => ids.delete(item.id)));
+    }
+    return selected;
+  }, [props.selectedIds, props.hiddenView, props.items, library.items, library.hiddenItems]);
   const anySelectedFavorite = selectedItems.some((i) => i.favorite);
   const anySelectedHidden = selectedItems.some((i) => i.hidden);
   // Play on a video-only selection opens the player; anything with a photo
   // starts a slideshow. The label follows the action so it is never a surprise.
   const selectionPlaysInViewer =
     selectedItems.length > 0 && selectedItems.every((i) => i.kind === "video");
-  // Say what is actually in the selection: "3 photos · 2 videos" explains the
-  // Play/Slideshow label and avoids surprises when a filter hides some of them.
-  const selectedKindCounts = useMemo(() => {
-    const counts: Record<string, number> = { photo: 0, video: 0, raw: 0 };
-    for (const item of selectedItems) counts[item.kind] = (counts[item.kind] || 0) + 1;
-    return counts;
-  }, [selectedItems]);
-  const selectedKindSummary = [
-    selectedKindCounts.photo
-      ? `${selectedKindCounts.photo} photo${selectedKindCounts.photo === 1 ? "" : "s"}`
-      : "",
-    selectedKindCounts.video
-      ? `${selectedKindCounts.video} video${selectedKindCounts.video === 1 ? "" : "s"}`
-      : "",
-    selectedKindCounts.raw ? `${selectedKindCounts.raw} RAW` : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const hasCompletePhotoSelection =
+    selectedItems.length === props.selectedIds.length &&
+    selectedItems.every((item) => item.kind === "photo");
+  const selectionCount = props.selectedIds.length.toLocaleString();
+  const selectionSummary = hasCompletePhotoSelection
+    ? `${selectionCount} ${props.selectedIds.length === 1 ? "photo" : "photos"} selected`
+    : `${selectionCount} selected`;
   // Select-all now lives in the selection bar and is scoped to the items the
   // screen is actually showing (including the Hidden and album views).
   const allVisibleSelected =
@@ -1194,9 +1187,8 @@ function LibraryScreen(props: LibraryScreenProps) {
                   )}
                 </div>
                 <div className="album-detail-copy">
-                  <p className="eyebrow">ALBUM</p>
                   <h1>
-                    {activeAlbumName}
+                    <span className="album-detail-name">{activeAlbumName}</span>
                     <span className="album-count-inline">
                       {activeAlbumCount.toLocaleString()}{" "}
                       {activeAlbumCount === 1 ? "item" : "items"}
@@ -1240,9 +1232,6 @@ function LibraryScreen(props: LibraryScreenProps) {
           ) : (
             <header className="page-heading">
               <div className="header-left">
-                <p className="eyebrow">
-                  {props.hiddenView ? "OUT OF THE GALLERY" : "YOUR COLLECTION"}
-                </p>
                 <h1>{libraryHeading(props.hiddenView, activeSmartAlbumName, props.filter)}</h1>
                 {/* The hidden-view note lives in the heading instead of a
                     banner row so the sticky header stays short. When nothing is
@@ -1343,7 +1332,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                 {/* An album already has a Play button in its header. */}
                 {!props.activeAlbum && (
                   <button
-                    className="toolbar-button slideshow-action"
+                    className={`toolbar-button slideshow-action${props.hiddenView ? "" : " wide-library-action"}`}
                     type="button"
                     onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
                     disabled={props.busy || props.items.length === 0}
@@ -1357,7 +1346,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                 {/* An album already has Add Items in its header. */}
                 {!props.hiddenView && !inAlbum && (
                   <button
-                    className="toolbar-button"
+                    className="toolbar-button wide-library-action"
                     type="button"
                     aria-label="New album"
                     onClick={() => props.onCreateAlbum?.()}
@@ -1365,6 +1354,25 @@ function LibraryScreen(props: LibraryScreenProps) {
                   >
                     <PlusIcon size={14} /> New album
                   </button>
+                )}
+                {!props.hiddenView && !inAlbum && (
+                  <div className="compact-library-actions">
+                    <SplitButton
+                      label="Slideshow"
+                      icon={PlayIcon}
+                      onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
+                      primaryDisabled={props.busy || props.items.length === 0}
+                      menuLabel="More library actions"
+                      items={[
+                        {
+                          key: "new-album",
+                          label: "New album",
+                          icon: PlusIcon,
+                          onClick: () => props.onCreateAlbum?.(),
+                        },
+                      ]}
+                    />
+                  </div>
                 )}
                 <span className="toolbar-divider" aria-hidden="true" />
                 <div className="view-controls" role="group" aria-label="View controls">
@@ -1489,7 +1497,6 @@ function LibraryScreen(props: LibraryScreenProps) {
           </div>
 
           <div className="filter-cluster" role="group" aria-label="Filter by media type">
-            <span className="smart-label">TYPE</span>
             <div className="segmented-control" role="group" aria-label="Media type">
               {(["All", "Photos", "Videos", "RAW", "Animations", "Favorites"] as const).map((f) => {
                 // Album/collection counts must come from the full collection on
@@ -1586,33 +1593,29 @@ function LibraryScreen(props: LibraryScreenProps) {
           {props.selectedIds.length > 0 && (
             <div className="selection-bar" role="toolbar" aria-label="Selection actions">
               <div className="selection-bar-left">
-                <span className="selection-bar-count">
-                  {props.selectedIds.length.toLocaleString()} selected
-                </span>
-                <span className="selection-bar-divider" aria-hidden="true" />
-                <span className="selection-bar-size">
-                  {formatBytesSimple(
-                    selectedItems.reduce((sum: number, item) => sum + (item.size || 0), 0),
-                  )}{" "}
-                  selected
-                </span>
-                {selectedKindSummary && (
+                <span className="selection-bar-count">{selectionSummary}</span>
+                {selectedItems.length === props.selectedIds.length && (
                   <>
                     <span className="selection-bar-divider" aria-hidden="true" />
-                    <span className="selection-bar-kinds">{selectedKindSummary}</span>
+                    <span className="selection-bar-size">
+                      {formatBytesSimple(
+                        selectedItems.reduce((sum, item) => sum + (item.size || 0), 0),
+                      )}
+                    </span>
                   </>
                 )}
               </div>
               <div className="selection-bar-actions">
-                <button
-                  type="button"
-                  className="selection-bar-action selection-bar-clear"
-                  onClick={() => props.onClearSelection?.()}
-                  title="Clear selection (inspection is kept)"
-                >
-                  Clear
-                </button>
-                <span className="selection-bar-divider" aria-hidden="true" />
+                {!allVisibleSelected && (
+                  <button
+                    type="button"
+                    className="selection-bar-action selection-bar-clear"
+                    onClick={() => props.onClearSelection?.()}
+                    title="Clear selection (inspection is kept)"
+                  >
+                    Clear selection
+                  </button>
+                )}
                 <button
                   type="button"
                   className="selection-bar-action"
@@ -1622,67 +1625,52 @@ function LibraryScreen(props: LibraryScreenProps) {
                   <CheckIcon size={12} />
                   {allVisibleSelected ? "Deselect all" : "Select all"}
                 </button>
-                <button
-                  type="button"
-                  className="selection-bar-action"
+                <SplitButton
+                  label="View"
+                  icon={FullscreenIcon}
                   onClick={() => props.onOpenViewer?.(props.selectedIds[0])}
-                  title="Open the selected item in the viewer (Enter with Cmd/Ctrl)"
-                >
-                  <FullscreenIcon size={13} /> View
-                </button>
-                <button
-                  type="button"
-                  className="selection-bar-action"
-                  onClick={() => props.onPlaySlideshow?.(props.selectedIds)}
-                  title={
-                    selectionPlaysInViewer
-                      ? "Play the selected videos in the viewer"
-                      : "Play selected items as a slideshow"
-                  }
-                >
-                  <PlayIcon size={13} /> {selectionPlaysInViewer ? "Play" : "Slideshow"}
-                </button>
-                <button
-                  type="button"
-                  className="selection-bar-action"
-                  onClick={() => props.onSetFavoriteForIds(props.selectedIds, !anySelectedFavorite)}
-                  title={
-                    anySelectedFavorite
-                      ? "Remove favorite from all selected"
-                      : "Favorite all selected"
-                  }
-                >
-                  <HeartIcon size={13} filled={anySelectedFavorite} />
-                  {anySelectedFavorite ? "Unfavorite" : "Favorite"}
-                </button>
-                <button
-                  type="button"
-                  className="selection-bar-action"
-                  onClick={() => props.onSetHiddenForIds(props.selectedIds, !anySelectedHidden)}
-                  title={anySelectedHidden ? "Unhide all selected" : "Hide all selected"}
-                >
-                  {anySelectedHidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
-                  {anySelectedHidden ? "Unhide" : "Hide"}
-                </button>
-                {!inAlbum && (
-                  <button
-                    type="button"
-                    className="selection-bar-action"
-                    onClick={() => props.onOpenAlbumPicker?.(props.selectedIds)}
-                    title="Add selected items to an album"
-                  >
-                    <AlbumsIcon size={13} /> Add to album
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="selection-bar-action"
-                  onClick={() => props.onCopyTagsToFinder?.(props.selectedIds)}
-                  disabled={!selectedItems.some((item) => item.tags?.length)}
-                  title="Merge VistoGallery tags into each file's Finder tags. Existing Finder tags are kept."
-                >
-                  <TagIcon size={13} /> Tags to Finder
-                </button>
+                  menuLabel="More selection actions"
+                  items={[
+                    {
+                      key: "play",
+                      label: selectionPlaysInViewer ? "Play selected videos" : "Slideshow",
+                      icon: PlayIcon,
+                      onClick: () => props.onPlaySlideshow?.(props.selectedIds),
+                    },
+                    {
+                      key: "favorite",
+                      label: anySelectedFavorite ? "Unfavorite" : "Favorite",
+                      icon: HeartIcon,
+                      onClick: () =>
+                        props.onSetFavoriteForIds(props.selectedIds, !anySelectedFavorite),
+                    },
+                    {
+                      key: "hide",
+                      label: anySelectedHidden ? "Unhide" : "Hide",
+                      icon: anySelectedHidden ? EyeOffIcon : EyeIcon,
+                      onClick: () => props.onSetHiddenForIds(props.selectedIds, !anySelectedHidden),
+                    },
+                    ...(!inAlbum
+                      ? [
+                          {
+                            key: "album",
+                            label: "Add to album",
+                            icon: AlbumsIcon,
+                            onClick: () => props.onOpenAlbumPicker?.(props.selectedIds),
+                          },
+                        ]
+                      : []),
+                    {
+                      key: "tags",
+                      label: "Tags to Finder",
+                      icon: TagIcon,
+                      disabled: !selectedItems.some((item) => item.tags?.length),
+                      title:
+                        "Merge VistoGallery tags into each file's Finder tags. Existing Finder tags are kept.",
+                      onClick: () => props.onCopyTagsToFinder?.(props.selectedIds),
+                    },
+                  ]}
+                />
                 {inAlbum && (
                   <button
                     type="button"
@@ -1713,7 +1701,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                     onClick={() => props.onRequestDeleteItems?.(props.selectedIds)}
                     title="Move selected items to Trash"
                   >
-                    <TrashIcon size={13} /> Delete
+                    <TrashIcon size={13} /> Move to Trash
                   </button>
                 )}
               </div>

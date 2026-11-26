@@ -106,7 +106,7 @@ export function AdvancedPanel(props: {
 
       <StorageSection showNotice={props.showNotice} />
 
-      <section className="settings-section">
+      <section className="settings-section settings-catalog-actions">
         <h2 className="settings-section-title">
           <CpuIcon size={14} /> Catalog backup
         </h2>

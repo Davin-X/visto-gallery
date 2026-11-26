@@ -180,7 +180,6 @@ function BatchScreen(props: BatchScreenProps) {
     <div className="feature-page batch-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">{mode === "metadata" ? "METADATA" : "EXPORT"}</p>
           <h1>{mode === "metadata" ? "Batch metadata" : "Batch export"}</h1>
           <p className="page-subtitle">
             {mode === "metadata"

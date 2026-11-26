@@ -385,14 +385,9 @@
   display: none;
 }
 
-.filter-cluster .smart-label {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  padding-right: var(--space-1);
-  white-space: nowrap;
+.library-header .header-actions .source-select {
+  background: var(--surface);
+  border-color: var(--line);
 }
 
 .library-header .quick-filter {
@@ -483,7 +478,7 @@
   gap: 8px;
   width: 100%;
   max-width: none;
-  margin: 10px 0 0;
+  margin: 10px 0 8px;
   padding: 8px 14px;
   border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
   border-radius: 12px;
@@ -533,11 +528,18 @@
   white-space: nowrap;
 }
 
-.selection-bar-kinds {
-  color: var(--muted);
-  font-size: 12px;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+.selection-bar-actions .split-button > button {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 8px;
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+.selection-bar-actions .split-button > button:hover {
+  background: var(--surface-2);
 }
 
 .selection-bar-divider {
@@ -1310,7 +1312,6 @@
 .gallery-grid.layout-details .format-label {
   display: none;
 }
-
 
 /* Hidden's lock screen sits in the middle of the content area. */
 .hidden-locked {

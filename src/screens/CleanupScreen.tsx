@@ -390,7 +390,6 @@ export default function CleanupScreen({
       <CleanupTabs screen="Cleanup" onOpenDuplicates={onOpenDuplicates} />
       <div className="page-heading">
         <div>
-          <p className="eyebrow">STORAGE</p>
           <h1>Clean up your Mac</h1>
           <p className="page-subtitle">{headingSubtitle}</p>
         </div>

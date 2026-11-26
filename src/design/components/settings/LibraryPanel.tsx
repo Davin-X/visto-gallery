@@ -39,6 +39,15 @@ export function LibraryPanel(props: {
             </label>
           </div>
         </div>
+        <div className="settings-warning">
+          <span className="settings-warning-icon">
+            <ShieldIcon size={15} />
+          </span>
+          <span>
+            Folder watching requires granting Full Disk Access in System Settings → Privacy &
+            Security. Without it, VistoGallery can only import files you explicitly select.
+          </span>
+        </div>
       </section>
 
       <SourcesManager
@@ -51,16 +60,6 @@ export function LibraryPanel(props: {
         onRemoveAllSources={props.onRemoveAllSources}
         onRestoreBackup={props.onRestoreBackup}
       />
-
-      <div className="settings-warning">
-        <span className="settings-warning-icon">
-          <ShieldIcon size={15} />
-        </span>
-        <span>
-          Folder watching requires granting Full Disk Access in System Settings → Privacy &
-          Security. Without it, VistoGallery can only import files you explicitly select.
-        </span>
-      </div>
     </>
   );
 }
