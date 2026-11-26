@@ -18,7 +18,7 @@ test("open album header is compact and still navigates back", async ({ page }) =
   const header = await page.locator(".page-heading").evaluate((element) => ({
     height: Math.round(element.getBoundingClientRect().height),
   }));
-  expect(header.height, "album header must stay compact").toBeLessThanOrEqual(90);
+  expect(header.height, "album header must stay compact").toBeLessThanOrEqual(64);
 
   const firstTile = page.locator(".gallery-tile").first();
   await firstTile.hover();

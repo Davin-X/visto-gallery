@@ -441,13 +441,14 @@ body.is-dragging-albums * {
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-2);
+  margin-bottom: 12px;
   padding: 0;
   flex-wrap: nowrap;
 }
 .album-detail-head {
   display: flex;
-  align-items: flex-end;
-  gap: var(--space-4);
+  align-items: center;
+  gap: var(--space-3);
   min-width: 0;
 }
 .page-heading.album-detail-top .album-detail-copy {
@@ -548,8 +549,8 @@ body.is-dragging-albums * {
 .album-detail-cover {
   position: relative;
   display: grid;
-  width: 104px;
-  height: 76px;
+  width: 76px;
+  height: 56px;
   flex: 0 0 auto;
   place-items: center;
   overflow: hidden;
