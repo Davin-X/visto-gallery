@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **GitHub Pages landing page**: interactive product showcase in `docs/` with dark/light screenshot switching, feature tour, sitemap, and responsive navigation.
 
 ### Fixed
+- Regular grid tiles now use cached video posters (falling back to inline video frames when playable or a clear placeholder otherwise), separate the passive `Video` badge from the hover/focus play button, soften tile captions and gradients, and distinguish inspected tiles from selected tiles.
 - Re-opening a paused video from the Library now resumes playback instead of staying paused.
 - Set default panel widths to `215px` (sidebar) and `280px` (inspector), added an Inspector width slider and `Open on launch` radio buttons in Settings → General, and aligned Settings radio groups and Advanced action buttons.
 - Moved Library search beside the source and import controls, with a full-width search field in narrow panes.
