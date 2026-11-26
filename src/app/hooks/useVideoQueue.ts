@@ -124,7 +124,7 @@ export function useVideoQueue() {
       const video = usePlaybackStore.getState().element;
       if (video) {
         video.currentTime = 0;
-        void video.play().catch(() => {});
+        if (video.paused) usePlaybackStore.getState().toggle();
       }
       return true;
     }

@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **GitHub Pages landing page**: interactive product showcase in `docs/` with dark/light screenshot switching, feature tour, sitemap, and responsive navigation.
 
 ### Fixed
+- Paused videos stay paused when the Mac wakes from sleep.
 - Fixed the `RAW` badge on library thumbnails so it no longer renders a double orange-on-orange pill, and tightened Inspector action buttons (icon-only top bar + single-line `File` rows).
 - Middle-truncated the selected folder name in the Clean up → Duplicates folder picker so long, similar folder names stay distinguishable.
 - Library controls compact to the available pane width and keep Filters visible alongside scrolling media types.

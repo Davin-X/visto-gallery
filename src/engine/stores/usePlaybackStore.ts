@@ -34,6 +34,16 @@ interface PlaybackState extends PlaybackSnapshot {
   stop: () => void;
 }
 
+let nextPlayRequest = 0;
+
+export function requestVideoPlay(video: HTMLVideoElement) {
+  const request = String(++nextPlayRequest);
+  video.dataset.allowPlay = request;
+  void video.play().catch(() => {
+    if (video.dataset.allowPlay === request) delete video.dataset.allowPlay;
+  });
+}
+
 export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
   element: null,
   itemId: null,
@@ -77,7 +87,7 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
       // Pressing play on a finished video should restart it, not sit at the
       // final frame doing nothing.
       if (video.ended) video.currentTime = 0;
-      void video.play().catch(() => {});
+      requestVideoPlay(video);
     } else {
       video.pause();
     }

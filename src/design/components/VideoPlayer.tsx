@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useCallback, useMemo } from "react"
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useSettingsStore } from "../../engine/stores/useSettingsStore";
-import { usePlaybackStore } from "../../engine/stores/usePlaybackStore";
+import { requestVideoPlay, usePlaybackStore } from "../../engine/stores/usePlaybackStore";
 import {
   VolumeIcon,
   StopIcon,
@@ -501,7 +501,7 @@ function VideoPlayer({
       // Handoff between foreground/background players: snapshot survived.
       // Resume playback if it was playing; sync volume/muted from snapshot.
       if (previous.playing && video.paused) {
-        void video.play().catch(() => {});
+        requestVideoPlay(video);
       }
       video.volume = previous.volume;
       video.muted = previous.muted;
@@ -517,12 +517,7 @@ function VideoPlayer({
       // A handoff can have turned the attribute off for the paused case above;
       // a new item asks for playback again.
       video.autoplay = videoAutoPlay || forceAutoPlay;
-      // WKWebView is finicky about autoplay for tiny background hosts: the
-      // attribute alone can stall indefinitely with the host page inert. Ask
-      // for playback explicitly; it happens within the user's gesture when
-      // the click started the session. Unconditional: the user gesture is
-      // the signal, not the attribute.
-      void video.play().catch(() => {});
+      requestVideoPlay(video);
     }
     return () => unregisterPlayback(video);
   }, [
@@ -535,24 +530,17 @@ function VideoPlayer({
     forceAutoPlay,
   ]);
 
-  // A queued video is a different timeline. The shared snapshot keeps the
-  // *controls* (volume, mute, play/pause) across items, never the position,
-  // and the reused <video> element can hold the previous clip's time until the
-  // new source finishes loading — which showed its progress bar on the next
-  // video. Reset both whenever the item itself changes.
+  // Reset position and help overlay when the item changes; keep duration for durationchange.
   const lastItemIdRef = useRef(itemId);
+  const userPausedRef = useRef(false);
   useEffect(() => {
     if (lastItemIdRef.current === itemId) return;
     lastItemIdRef.current = itemId;
-    // The shortcut list was opened for the video that just left.
+    userPausedRef.current = false;
     setHelpOpen(false);
     const video = ref.current;
     if (video) video.currentTime = 0;
     setTime(0);
-    // Only the position belongs to the new item. Duration belongs to the
-    // element, and a source that brings a different one reports it through
-    // durationchange, so resetting it here only threw away a value that was
-    // still correct and left the readout with a zero total.
     syncPlayback({ time: 0 });
   }, [itemId, syncPlayback]);
 
@@ -560,13 +548,7 @@ function VideoPlayer({
     const video = ref.current as HTMLVideoElement | null;
     if (!video) return;
 
-    // Restore the snapshot only when the item was registered as a handoff, and
-    // restore it from that snapshot rather than from the store: registering
-    // points the store at this item, and the retained duration survives a queue
-    // switch on purpose, so reading it back here cannot tell the two apart.
-    // Consumed on read: this effect also re-runs when the source is replaced or
-    // a remux gives up, and a snapshot left in the ref would rewind a session
-    // that has long moved on.
+    // Consume the handoff snapshot once so source/remux re-runs do not rewind.
     const snapshot = handoffSnapshotRef.current;
     handoffSnapshotRef.current = null;
     if (snapshot && snapshot.itemId === itemId && snapshot.duration > 0) {
@@ -575,13 +557,10 @@ function VideoPlayer({
       video.currentTime = time;
       video.volume = volume;
       video.muted = muted;
-      if (playing && !video.paused) {
-        // Already playing, just sync
-      } else if (playing) {
-        void video.play().catch(() => {});
+      if (playing) {
+        if (video.paused) requestVideoPlay(video);
       } else {
-        // The snapshot says paused: defeat the autoPlay attribute so a
-        // handoff between players does not resume a paused video.
+        userPausedRef.current = true;
         video.autoplay = false;
         video.pause();
       }
@@ -749,11 +728,35 @@ function VideoPlayer({
       syncPlayback({ time: video.currentTime });
       checkDecodedFrames();
     };
+    const attemptAutoPlay = () => {
+      if (userPausedRef.current) return;
+      requestVideoPlay(video);
+    };
+    const enforceUserPause = () => {
+      if (!userPausedRef.current) return;
+      video.autoplay = false;
+      if (!video.paused) video.pause();
+      queueMicrotask(() => {
+        if (userPausedRef.current && !video.paused) video.pause();
+      });
+    };
     const onPlay = () => {
+      if (userPausedRef.current && video.dataset.allowPlay === undefined) {
+        // Spurious play (e.g. macOS lid-close/open resuming a paused element).
+        video.pause();
+        enforceUserPause();
+        return;
+      }
+      delete video.dataset.allowPlay;
+      userPausedRef.current = false;
       setPlaying(true);
       syncPlayback({ playing: true });
     };
     const onPause = () => {
+      delete video.dataset.allowPlay;
+      userPausedRef.current = true;
+      video.autoplay = false;
+      video.removeEventListener("canplay", attemptAutoPlay);
       setPlaying(false);
       syncPlayback({ playing: false });
     };
@@ -778,14 +781,12 @@ function VideoPlayer({
     video.addEventListener("canplay", onCanPlay);
     video.addEventListener("timeupdate", onTimeUpdate);
     video.addEventListener("play", onPlaying);
+    video.addEventListener("playing", enforceUserPause);
     video.addEventListener("pause", onPause);
-    // A second, belt-and-suspenders attempt once the media is actually ready:
-    // the mount-time play() can lose the race against the canplay event in
-    // WKWebView, which silently leaves the video idle at 0:00.
-    const attemptAutoPlay = () => void video.play().catch(() => {});
-    if (!snapshot) {
+    document.addEventListener("visibilitychange", enforceUserPause);
+    window.addEventListener("focus", enforceUserPause);
+    if (!snapshot && !userPausedRef.current)
       video.addEventListener("canplay", attemptAutoPlay, { once: true });
-    }
     if (video.readyState >= 1) onMetadata();
     if (video.readyState >= 2) {
       checkVideoTrack();
@@ -795,16 +796,16 @@ function VideoPlayer({
       if (noVideoTrackTimer) window.clearTimeout(noVideoTrackTimer);
       if (noDecodedFramesTimer) window.clearTimeout(noDecodedFramesTimer);
       if (frameWatchdog) window.clearTimeout(frameWatchdog);
-      if (
-        videoFrameCallbackId !== null &&
-        typeof (video as HTMLVideoElement & { cancelVideoFrameCallback?: (id: number) => void })
-          .cancelVideoFrameCallback === "function"
-      ) {
-        try {
-          (video as HTMLVideoElement & { cancelVideoFrameCallback?: (id: number) => void })
-            .cancelVideoFrameCallback!(videoFrameCallbackId);
-        } catch {
-          // ignore
+      if (videoFrameCallbackId !== null) {
+        const cancelFrame = (
+          video as HTMLVideoElement & { cancelVideoFrameCallback?: (id: number) => void }
+        ).cancelVideoFrameCallback;
+        if (typeof cancelFrame === "function") {
+          try {
+            cancelFrame.call(video, videoFrameCallbackId);
+          } catch {
+            // ignore
+          }
         }
       }
       video.removeEventListener("loadedmetadata", onMetadata);
@@ -813,15 +814,14 @@ function VideoPlayer({
       video.removeEventListener("canplay", onCanPlay);
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("play", onPlaying);
+      video.removeEventListener("playing", enforceUserPause);
       video.removeEventListener("pause", onPause);
       video.removeEventListener("canplay", attemptAutoPlay);
+      document.removeEventListener("visibilitychange", enforceUserPause);
+      window.removeEventListener("focus", enforceUserPause);
     };
-    // `failed` is a dependency because the guards below short-circuit on it;
-    // reading it from an older render made them permanently false.
-    // `itemId` is deliberately omitted: re-running this setup when the queue
-    // advances to the next video with the same resolved source throws away the
-    // duration and loop state that is already correct. The queue-advance test
-    // in VideoPlayer.test.tsx covers it.
+    // `failed` is a dep so guards do not read stale state; `itemId` is omitted so
+    // queue advance on the same source keeps duration and loop state (see VideoPlayer.test.tsx).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedSrc, syncPlayback, failed]);
 
@@ -955,23 +955,20 @@ function VideoPlayer({
       title: name || "Video",
       artist: "VistoGallery",
     });
-    const play = () => void video.play().catch(() => {});
-    const pause = () => video.pause();
+    const play = () => {
+      requestVideoPlay(video);
+    };
     const seekBy = (delta: number) => {
       const next = Math.min(Math.max(0, video.currentTime + delta), video.duration || 0);
       video.currentTime = next;
       setTime(next);
     };
     session.setActionHandler("play", play);
-    session.setActionHandler("pause", pause);
+    session.setActionHandler("pause", () => video.pause());
     session.setActionHandler("seekbackward", (details) => seekBy(-(details?.seekOffset || 10)));
     session.setActionHandler("seekforward", (details) => seekBy(details?.seekOffset || 10));
-    const onPlay = () => {
-      session.playbackState = "playing";
-    };
-    const onPause = () => {
-      session.playbackState = "paused";
-    };
+    const onPlay = () => (session.playbackState = "playing");
+    const onPause = () => (session.playbackState = "paused");
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
     return () => {
@@ -989,7 +986,7 @@ function VideoPlayer({
     if (!video) return;
     if (video.paused) {
       if (video.ended) video.currentTime = 0;
-      void video.play().catch(() => {});
+      requestVideoPlay(video);
     } else {
       video.pause();
     }
@@ -1084,7 +1081,6 @@ function VideoPlayer({
           objectFit: "contain",
           objectPosition: "center",
         }}
-        autoPlay={videoAutoPlay || forceAutoPlay}
         loop={videoLoop && !autoAdvance && !compact}
         playsInline
         preload="metadata"

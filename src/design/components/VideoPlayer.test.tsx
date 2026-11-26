@@ -268,6 +268,43 @@ describe("same-video handoff", () => {
     expect(video.autoplay).toBe(false);
     expect(pause).toHaveBeenCalled();
   });
+
+  it.each([false, true])(
+    "keeps a video paused on wake (rejected Play request: %s)",
+    async (rejectPlay) => {
+      usePlaybackStore.setState({ itemId: null, name: "", playing: false, time: 0, duration: 0 });
+      const play = vi.mocked(window.HTMLMediaElement.prototype.play);
+      const pause = vi.mocked(window.HTMLMediaElement.prototype.pause);
+      const { container } = renderPlayer({
+        itemId: "video-c",
+        src: "/video-c.mp4",
+        forceAutoPlay: true,
+      });
+      const video = container.querySelector("video")!;
+
+      expect(video.autoplay).toBe(true);
+      fireEvent.pause(video);
+      play.mockClear();
+      pause.mockClear();
+
+      fireEvent.canPlay(video);
+      expect(play).not.toHaveBeenCalled();
+
+      if (rejectPlay) {
+        play.mockRejectedValueOnce(new DOMException("Playback denied", "NotAllowedError"));
+        usePlaybackStore.getState().toggle();
+        expect(play).toHaveBeenCalledOnce();
+        await Promise.resolve();
+      }
+
+      // Simulate WebKit resuming the element (paused=false) and emitting a spurious play event on wake.
+      Object.defineProperty(video, "paused", { configurable: true, get: () => false });
+      fireEvent.play(video);
+      expect(pause).toHaveBeenCalled();
+      expect(video.autoplay).toBe(false);
+      expect(usePlaybackStore.getState().playing).toBe(false);
+    },
+  );
 });
 
 describe("audio tracks and subtitles", () => {
