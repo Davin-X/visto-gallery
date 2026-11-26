@@ -311,9 +311,22 @@ pub(crate) fn generate_cached_thumbnail(
     quality: u8,
     kind: &str,
 ) -> Result<(Vec<u8>, u32, u32), CommandError> {
+    // RAW files: extract the embedded JPEG preview first so grid thumbnails
+    // do not spawn `sips` or demosaic full sensor data; fall back to ImageIO
+    // only when no suitably sized embedded preview exists.
+    if kind == "raw" {
+        if let Some(result) = crate::media_raw_preview::render_embedded_raw_preview(
+            Path::new(source),
+            destination,
+            size,
+            quality,
+        ) {
+            return Ok(result);
+        }
+    }
     #[cfg(target_os = "macos")]
     {
-        // RAW files: try macOS ImageIO (sips) which supports some RAW via Camera Raw.
+        // RAW fallback: macOS ImageIO (sips) supports RAW via Camera Raw.
         if kind == "raw" {
             if let Ok(result) = generate_with_macos_sips(
                 source,

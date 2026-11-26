@@ -77,7 +77,7 @@ pub async fn get_display_preview(
     let is_full = edge == 0;
 
     if hidden != 0 {
-        let rendered = tokio::task::spawn_blocking(move || render_inline(&path, edge))
+        let rendered = tokio::task::spawn_blocking(move || render_inline(&path, &kind, edge))
             .await
             .map_err(|error| CommandError::internal(format!("Preview worker failed: {error}")))??;
         let (bytes, width, height) = rendered;
@@ -112,7 +112,7 @@ pub async fn get_display_preview(
             super::storage::touch_if_stale(&cached_target);
             return Ok(dimensions);
         }
-        let (_, width, height) = render(&path, &cached_target, edge)?;
+        let (_, width, height) = render(&path, &kind, &cached_target, edge)?;
         super::library::prune_thumbnail_cache(&cache_root, budget);
         Ok::<_, CommandError>((width, height))
     })
@@ -128,27 +128,44 @@ pub async fn get_display_preview(
     })
 }
 
-#[cfg(target_os = "macos")]
-fn render(source: &str, target: &Path, edge: u32) -> Result<(Vec<u8>, u32, u32), CommandError> {
-    super::library::generate_with_macos_sips(
-        source,
-        target,
-        edge,
-        PREVIEW_QUALITY,
-        "viewer preview via macOS ImageIO",
-    )
-}
-
-#[cfg(not(target_os = "macos"))]
-fn render(_source: &str, _target: &Path, _edge: u32) -> Result<(Vec<u8>, u32, u32), CommandError> {
-    Err(CommandError::internal(
-        "Viewer previews need macOS ImageIO.",
-    ))
+fn render(
+    source: &str,
+    kind: &str,
+    target: &Path,
+    edge: u32,
+) -> Result<(Vec<u8>, u32, u32), CommandError> {
+    if kind == "raw" && edge > 0 {
+        if let Some(result) = crate::media_raw_preview::render_embedded_raw_preview(
+            Path::new(source),
+            target,
+            edge,
+            PREVIEW_QUALITY,
+        ) {
+            return Ok(result);
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        super::library::generate_with_macos_sips(
+            source,
+            target,
+            edge,
+            PREVIEW_QUALITY,
+            "viewer preview via macOS ImageIO",
+        )
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (source, target, edge);
+        Err(CommandError::internal(
+            "Viewer previews need macOS ImageIO.",
+        ))
+    }
 }
 
 /// A hidden item's preview: rendered in a private temp folder and deleted as
 /// soon as it is read, so it never stays on disk.
-fn render_inline(source: &str, edge: u32) -> Result<(Vec<u8>, u32, u32), CommandError> {
+fn render_inline(source: &str, kind: &str, edge: u32) -> Result<(Vec<u8>, u32, u32), CommandError> {
     let scratch = std::env::temp_dir().join("visto-uncached-thumbnails");
     std::fs::create_dir_all(&scratch)?;
     #[cfg(unix)]
@@ -157,7 +174,7 @@ fn render_inline(source: &str, edge: u32) -> Result<(Vec<u8>, u32, u32), Command
         let _ = std::fs::set_permissions(&scratch, std::fs::Permissions::from_mode(0o700));
     }
     let target = scratch.join(format!("{}.jpg", Uuid::new_v4()));
-    let result = render(source, &target, edge);
+    let result = render(source, kind, &target, edge);
     let _ = std::fs::remove_file(&target);
     result
 }
@@ -194,12 +211,53 @@ mod tests {
             .unwrap();
 
         let display = dir.join("display.jpg");
-        let (_, w, h) = render(source.to_str().unwrap(), &display, DISPLAY_EDGE).unwrap();
+        let (_, w, h) = render(source.to_str().unwrap(), "photo", &display, DISPLAY_EDGE).unwrap();
         assert_eq!((w, h), (DISPLAY_EDGE, 768));
 
         let full = dir.join("full.jpg");
-        let (_, w, h) = render(source.to_str().unwrap(), &full, 0).unwrap();
+        let (_, w, h) = render(source.to_str().unwrap(), "photo", &full, 0).unwrap();
         assert_eq!((w, h), (4000, 1000));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn renders_raw_from_embedded_jpeg_preview() {
+        let dir = std::env::temp_dir().join(format!("visto-raw-render-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let img = image::RgbImage::from_pixel(640, 480, image::Rgb([10, 90, 180]));
+        let mut jpg = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpg, 85)
+            .encode(&img, 640, 480, image::ExtendedColorType::Rgb8)
+            .unwrap();
+
+        // Synthetic TIFF-RAW with an embedded JPEG in IFD0 (sips cannot decode
+        // a bare synthetic TIFF-RAW without sensor data, so success proves the
+        // embedded-JPEG path ran).
+        let ifd0_off = 8u32;
+        let jpg_off = 8u32 + 2 + 24 + 4;
+        let mut raw = vec![0u8; jpg_off as usize + jpg.len()];
+        raw[0..4].copy_from_slice(b"II*\0");
+        raw[4..8].copy_from_slice(&ifd0_off.to_le_bytes());
+        let mut p = ifd0_off as usize;
+        raw[p..p + 2].copy_from_slice(&2u16.to_le_bytes());
+        p += 2;
+        raw[p..p + 2].copy_from_slice(&0x0201u16.to_le_bytes());
+        raw[p + 2..p + 4].copy_from_slice(&4u16.to_le_bytes());
+        raw[p + 4..p + 8].copy_from_slice(&1u32.to_le_bytes());
+        raw[p + 8..p + 12].copy_from_slice(&jpg_off.to_le_bytes());
+        p += 12;
+        raw[p..p + 2].copy_from_slice(&0x0202u16.to_le_bytes());
+        raw[p + 2..p + 4].copy_from_slice(&4u16.to_le_bytes());
+        raw[p + 4..p + 8].copy_from_slice(&1u32.to_le_bytes());
+        raw[p + 8..p + 12].copy_from_slice(&(jpg.len() as u32).to_le_bytes());
+        raw[jpg_off as usize..].copy_from_slice(&jpg);
+
+        let source = dir.join("sample.cr2");
+        std::fs::write(&source, raw).unwrap();
+        let dest = dir.join("preview.jpg");
+        let (_, w, h) = render(source.to_str().unwrap(), "raw", &dest, 320).unwrap();
+        assert_eq!((w, h), (320, 240));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

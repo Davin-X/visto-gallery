@@ -1303,10 +1303,22 @@
   right: 6px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: var(--blue);
-  color: var(--accent-contrast);
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
   font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
+
+.gallery-grid .format-label .kind-badge {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  box-shadow: none;
 }
 
 .gallery-grid.layout-details .format-label {

@@ -6,10 +6,10 @@ import {
   EyeIcon,
   EyeOffIcon,
   FolderIcon,
+  FullscreenIcon,
   HeartIcon,
   PauseIcon,
   PlayIcon,
-  PlusIcon,
 } from "../../design/components/icons";
 import { KindBadge } from "../../design/components/KindBadge";
 import { tauri } from "../../engine/commands/tauri";
@@ -213,8 +213,14 @@ export function LibraryInspector({
           <div className="inspector-actions">
             {sel.kind === "video" ? (
               <button
+                type="button"
                 className="inspector-action primary"
                 onClick={() => toggleBackground(sel)}
+                aria-label={
+                  playingId === sel.id && isPlaying
+                    ? "Pause background playback"
+                    : "Play in background"
+                }
                 title={
                   playingId === sel.id && isPlaying
                     ? "Pause — the top bar controls the session"
@@ -223,50 +229,50 @@ export function LibraryInspector({
                 aria-pressed={playingId === sel.id && isPlaying}
               >
                 {playingId === sel.id && isPlaying ? (
-                  <PauseIcon size={14} />
+                  <PauseIcon size={16} />
                 ) : (
-                  <PlayIcon size={14} />
+                  <PlayIcon size={16} />
                 )}
-                <span>{playingId === sel.id && isPlaying ? "Pause" : "Play"}</span>
               </button>
             ) : (
               <button
+                type="button"
                 className="inspector-action primary"
                 onClick={() => props.onOpenViewer(sel.id)}
+                aria-label="View item"
                 title="View item"
               >
-                <PlayIcon size={14} />
-                <span>View</span>
+                <FullscreenIcon size={16} />
               </button>
             )}
             <button
+              type="button"
               className={`inspector-action ${sel.favorite ? "favorite active" : ""}`}
               onClick={() => props.onToggleFavorite(sel.id)}
+              aria-label={sel.favorite ? "Remove from favorites" : "Add to favorites"}
               title={sel.favorite ? "Remove from favorites" : "Add to favorites"}
               aria-pressed={!!sel.favorite}
             >
-              {/* The label stays "Favorite"; the filled heart and
-          pressed state show it is on. "Unfavorite" was too
-          long for the button and spilled out of it. */}
-              <HeartIcon size={14} filled={!!sel.favorite} />
-              <span>Favorite</span>
+              <HeartIcon size={16} filled={!!sel.favorite} />
             </button>
             <button
+              type="button"
               className="inspector-action"
               onClick={() => props.onToggleHidden(sel.id)}
+              aria-label={sel.hidden ? "Unhide" : "Hide"}
               title={sel.hidden ? "Unhide" : "Hide"}
             >
-              {sel.hidden ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
-              <span>{sel.hidden ? "Show" : "Hide"}</span>
+              {sel.hidden ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
             </button>
             <button
+              type="button"
               className={`inspector-action ${isSelected ? "active" : ""}`}
               onClick={() => props.onToggleSelect(sel.id)}
+              aria-label={isSelected ? "Remove from selection" : "Add to selection"}
               title={isSelected ? "Remove from selection" : "Add to selection"}
               aria-pressed={isSelected}
             >
-              {isSelected ? <CheckIcon size={14} /> : <PlusIcon size={14} />}
-              <span>Select</span>
+              <CheckIcon size={16} />
             </button>
           </div>
           {!masked && (

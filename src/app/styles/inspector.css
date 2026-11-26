@@ -289,17 +289,9 @@
   color: #b64059;
 }
 
-.inspector-action.favorite.active span {
-  color: #b64059;
-}
-
 .app-frame.dark .inspector-action.favorite.active {
   background: #38252b;
   border-color: #77424d;
-  color: #ff8ba0;
-}
-
-.app-frame.dark .inspector-action.favorite.active span {
   color: #ff8ba0;
 }
 
