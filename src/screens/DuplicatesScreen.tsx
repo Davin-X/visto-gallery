@@ -946,13 +946,12 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const fileHeading = (
     <div className="page-heading">
       <div>
-        <p className="eyebrow">CLEANUP</p>
         <h1>Duplicate files</h1>
         <p className="page-subtitle">
           {fileScan && fileGroups.length > 0
-            ? `${fileGroups.length.toLocaleString()} ${fileGroups.length === 1 ? "group" : "groups"} · ${fileTotals.copies.toLocaleString()} extra ${fileTotals.copies === 1 ? "copy" : "copies"} · ${formatBytesSimple(fileTotals.bytes)} reclaimable · ${fileScan.filesScanned.toLocaleString()} files scanned · ${fileScan.filesCompared.toLocaleString()} compared`
+            ? `${fileGroups.length.toLocaleString()} ${fileGroups.length === 1 ? "group" : "groups"} · ${fileTotals.copies.toLocaleString()} extra ${fileTotals.copies === 1 ? "copy" : "copies"} · ${formatBytesSimple(fileTotals.bytes)} reclaimable`
             : fileScan
-              ? `${fileScan.filesScanned.toLocaleString()} files scanned · ${fileScan.filesCompared.toLocaleString()} compared byte for byte inside ${fileScopeLabel}.`
+              ? `Scan results for ${fileScopeLabel}.`
               : fileScope
                 ? `Compare every file type inside ${fileScopeLabel} — documents, project files, archives, photos. Hashes stay in memory for this scan and are never saved.`
                 : "Pick a folder to compare every file type inside it."}
@@ -1074,6 +1073,10 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               The scan was cancelled, so these results are partial. Scan again to finish.
             </p>
           )}
+          <p className="duplicate-notice">
+            {fileScan.filesScanned.toLocaleString()} files scanned ·{" "}
+            {fileScan.filesCompared.toLocaleString()} compared
+          </p>
           <div className="duplicate-selection-bar">
             <div className="duplicate-selection-copy">
               <span>
@@ -1170,7 +1173,6 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const pageHeading = (
     <div className="page-heading">
       <div>
-        <p className="eyebrow">CLEANUP</p>
         <h1>{mode === "bursts" ? "Burst & similar photos" : "Duplicate media"}</h1>
         <p className="page-subtitle">
           {hasGroups
@@ -1181,8 +1183,8 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               } · ${formatBytesSimple(libraryTotals.bytes)} reclaimable`
             : mode === "bursts"
               ? scope
-                ? `Find camera bursts and visually similar photos inside ${scopeLabel} verified by dHash.`
-                : "Find camera bursts and visually similar photos in your library verified by dHash."
+                ? `Find camera bursts and visually similar photos inside ${scopeLabel}.`
+                : "Find camera bursts and visually similar photos in your library."
               : scope
                 ? `Find exact copies of the same photo or video inside ${scopeLabel} and free up the space they take.`
                 : "Find exact copies of the same photo or video in your library and free up the space they take."}
