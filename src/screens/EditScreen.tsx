@@ -549,7 +549,6 @@ function EditScreen(props: EditScreenProps) {
             chip) belongs to an open photo. */}
         <div className="page-heading">
           <div>
-            <p className="eyebrow">ADJUST</p>
             <h1>Edit</h1>
             <p className="page-subtitle">
               Adjust light and color, crop and rotate. Your original is kept until you replace it.
