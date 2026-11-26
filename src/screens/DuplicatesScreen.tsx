@@ -1204,7 +1204,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               }
               disabled={isCurrentBusy}
             >
-              Clear
+              Clear results
             </button>
           )}
           {/* With no results the empty state carries the only scan button. */}
