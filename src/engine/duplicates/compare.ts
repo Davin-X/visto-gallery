@@ -1,6 +1,7 @@
 import { formatBytesSimple } from "../utils/mediaTypes";
 import type { MediaItem } from "../types/media";
 import { formatCapturedDate, formatFileDate } from "../utils/mediaDate";
+import { parentFolder } from "../utils/fileName";
 
 export interface CompareRow {
   label: string;
@@ -15,11 +16,6 @@ const DASH = "—";
 function text(value: string | number | undefined | null): string {
   if (value === undefined || value === null || value === "") return DASH;
   return String(value);
-}
-
-function parentFolder(path: string): string {
-  const index = path.lastIndexOf("/");
-  return index > 0 ? path.slice(0, index) : path;
 }
 
 function capturedDate(ms?: number | null): string {

@@ -16,15 +16,10 @@ import { tauri } from "../../engine/commands/tauri";
 import type { DraftTransform } from "../../engine/stores/useEditStore";
 import type { MediaItem } from "../../engine/types/media";
 import { draftImageStyle } from "../../engine/utils/draftImage";
+import { parentFolder } from "../../engine/utils/fileName";
 import { formatCapturedDateTime, formatFileDateTime } from "../../engine/utils/mediaDate";
 import { formatBytesSimple } from "../../engine/utils/mediaTypes";
 import type { LibraryScreenProps } from "./types";
-
-/** The folder holding `path` ("/a/b/c.jpg" → "/a/b"). */
-function parentFolder(path: string) {
-  const index = path.lastIndexOf("/");
-  return index > 0 ? path.slice(0, index) : path;
-}
 
 /** Just the folder's own name, for a compact Location value. */
 function folderName(path: string) {

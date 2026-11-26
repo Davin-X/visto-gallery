@@ -28,9 +28,9 @@ import {
 import { CompareOverlay } from "../design/components/CompareOverlay";
 import { CleanupTabs } from "../design/components/CleanupTabs";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
+import { parentFolder } from "../engine/utils/fileName";
 
 import { DuplicateGroupCard, INLINE_COPIES } from "./duplicates/DuplicateGroupCard";
-import { parentFolder } from "./duplicates/paths";
 
 interface DuplicatesScreenProps {
   groups: DuplicateGroup[];
