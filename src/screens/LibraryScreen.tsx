@@ -1240,9 +1240,6 @@ function LibraryScreen(props: LibraryScreenProps) {
           ) : (
             <header className="page-heading">
               <div className="header-left">
-                <p className="eyebrow">
-                  {props.hiddenView ? "OUT OF THE GALLERY" : "YOUR COLLECTION"}
-                </p>
                 <h1>{libraryHeading(props.hiddenView, activeSmartAlbumName, props.filter)}</h1>
                 {/* The hidden-view note lives in the heading instead of a
                     banner row so the sticky header stays short. When nothing is
