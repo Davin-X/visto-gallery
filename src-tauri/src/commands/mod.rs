@@ -145,8 +145,8 @@ pub(crate) fn apply_setting(settings: &mut AppSettings, key: &str, value: &str) 
     match key {
         "appearance" => settings.appearance = value.parse().unwrap_or_default(),
         "accent_color" => settings.accent_color = value.parse().unwrap_or_default(),
-        "sidebar_width" => settings.sidebar_width = value.parse().unwrap_or(240),
-        "inspector_width" => settings.inspector_width = value.parse().unwrap_or(300),
+        "sidebar_width" => settings.sidebar_width = value.parse().unwrap_or(215),
+        "inspector_width" => settings.inspector_width = value.parse().unwrap_or(280),
         "show_extensions" => settings.show_extensions = value.parse().unwrap_or(false),
         "animate_transitions" => settings.animate_transitions = value.parse().unwrap_or(true),
         "startup_view" => settings.startup_view = value.parse().unwrap_or_default(),

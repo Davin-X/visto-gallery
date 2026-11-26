@@ -62,7 +62,7 @@ export function AppShell({
               cssVar="--sidebar-width"
               targetRef={frameRef}
               onCommit={(next) => void updateSettings("sidebarWidth", next)}
-              defaultWidth={240}
+              defaultWidth={215}
               label="Resize sidebar"
             />
           )}

@@ -1,19 +1,19 @@
-import type { CSSProperties } from "react";
-import { GearIcon, ChevronDownIcon } from "../icons";
+import { GearIcon } from "../icons";
 import type { AppSettings } from "../../../engine/types/settings";
+import { SettingsSliderRow } from "./SettingsSliderRow";
 import type { RenderAccentPicker, RenderRadioGroup, SettingsChange } from "./types";
 
 export function GeneralPanel(props: {
   appearance: string;
   accentColor: string;
   sidebarWidth: number;
+  inspectorWidth: number;
   animateTransitions: boolean;
   showExtensions: boolean;
   startupView: string;
   openLastFolder: boolean;
   restoreWindow: boolean;
   onChange: SettingsChange;
-  onSidebarWidthChange: (width: number) => void;
   renderRadioGroup: RenderRadioGroup;
   renderAccentPicker: RenderAccentPicker;
 }) {
@@ -50,30 +50,28 @@ export function GeneralPanel(props: {
             )}
           </div>
         </div>
-        <div className="settings-row">
-          <div className="settings-row-label">
-            <b>Sidebar width</b>
-            <span className="settings-row-desc">Adjust the navigation sidebar size</span>
-          </div>
-          <div className="settings-row-control" style={{ alignItems: "center" }}>
-            <input
-              type="range"
-              className="settings-slider"
-              style={
-                {
-                  "--slider-progress": `${((props.sidebarWidth - 180) / 180) * 100}%`,
-                } as CSSProperties
-              }
-              min={180}
-              max={360}
-              step={4}
-              value={props.sidebarWidth}
-              onChange={(e) => props.onSidebarWidthChange(Number(e.target.value))}
-              aria-label="Sidebar width"
-            />
-            <span className="settings-slider-value">{props.sidebarWidth}px</span>
-          </div>
-        </div>
+        <SettingsSliderRow
+          label="Sidebar width"
+          description="Adjust the navigation sidebar size"
+          value={props.sidebarWidth}
+          min={180}
+          max={360}
+          step={4}
+          unit="px"
+          ariaLabel="Sidebar width"
+          onChange={(v) => props.onChange("sidebarWidth", v)}
+        />
+        <SettingsSliderRow
+          label="Inspector width"
+          description="Adjust the right-hand inspector size"
+          value={props.inspectorWidth}
+          min={240}
+          max={480}
+          step={4}
+          unit="px"
+          ariaLabel="Inspector width"
+          onChange={(v) => props.onChange("inspectorWidth", v)}
+        />
         <div className="settings-row">
           <div className="settings-row-label">
             <b>
@@ -124,23 +122,12 @@ export function GeneralPanel(props: {
             <b>Open on launch</b>
           </div>
           <div className="settings-row-control">
-            <span className="settings-select-wrap">
-              <select
-                className="settings-select"
-                aria-label="Open on launch"
-                value={props.startupView}
-                onChange={(e) =>
-                  props.onChange("startupView", e.target.value as AppSettings["startupView"])
-                }
-              >
-                {STARTUP_VIEWS.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDownIcon size={16} className="settings-select-chevron" />
-            </span>
+            {props.renderRadioGroup(
+              "startup-view",
+              props.startupView,
+              [...STARTUP_VIEWS],
+              (v: string) => props.onChange("startupView", v as AppSettings["startupView"]),
+            )}
           </div>
         </div>
         {props.startupView === "last" && (

@@ -5,8 +5,8 @@ import type { AppSettings } from "./generated/ipc";
 export const defaultSettings: AppSettings = {
   appearance: "system",
   accentColor: "blue",
-  sidebarWidth: 240,
-  inspectorWidth: 300,
+  sidebarWidth: 215,
+  inspectorWidth: 280,
   showExtensions: false,
   animateTransitions: true,
   startupView: "library",

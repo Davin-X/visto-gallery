@@ -1,7 +1,7 @@
-import type { CSSProperties } from "react";
 import { CpuIcon, TrashIcon } from "../icons";
 import type { ErrorCode } from "../../../engine/types/commands";
 import { RootPathMapping } from "./RootPathMapping";
+import { SettingsSliderRow } from "./SettingsSliderRow";
 import { StorageSection } from "./StorageSection";
 import type { SettingsChange } from "./types";
 
@@ -28,62 +28,32 @@ export function AdvancedPanel(props: {
 }) {
   return (
     <>
-      <section className="settings-section">
+      <section className="settings-section settings-cache-perf">
         <h2 className="settings-section-title">
           <CpuIcon size={14} /> Cache & performance
         </h2>
-        <div className="settings-row">
-          <div className="settings-row-label">
-            <b>Maximum cache size</b>
-            <span className="settings-row-desc">
-              Limit for each cache: thumbnails, and videos converted for playback
-            </span>
-          </div>
-          <div className="settings-row-control" style={{ alignItems: "center" }}>
-            <input
-              type="range"
-              className="settings-slider"
-              style={
-                {
-                  "--slider-progress": `${((props.maxCacheSize - 1) / 49) * 100}%`,
-                } as CSSProperties
-              }
-              min={1}
-              max={50}
-              step={1}
-              value={props.maxCacheSize}
-              onChange={(e) => props.onChange("maxCacheSizeGB", Number(e.target.value))}
-              aria-label="Maximum cache size in gigabytes"
-            />
-            <span className="settings-slider-value">{props.maxCacheSize} GB</span>
-          </div>
-        </div>
-        <div className="settings-row">
-          <div className="settings-row-label">
-            <b>Thumbnail quality</b>
-            <span className="settings-row-desc">
-              JPEG quality for generated thumbnails (higher = larger files)
-            </span>
-          </div>
-          <div className="settings-row-control" style={{ alignItems: "center" }}>
-            <input
-              type="range"
-              className="settings-slider"
-              style={
-                {
-                  "--slider-progress": `${((props.thumbnailQuality - 50) / 50) * 100}%`,
-                } as CSSProperties
-              }
-              min={50}
-              max={100}
-              step={5}
-              value={props.thumbnailQuality}
-              onChange={(e) => props.onChange("thumbnailQuality", Number(e.target.value))}
-              aria-label="Thumbnail JPEG quality percentage"
-            />
-            <span className="settings-slider-value">{props.thumbnailQuality}%</span>
-          </div>
-        </div>
+        <SettingsSliderRow
+          label="Maximum cache size"
+          description="Limit for each cache: thumbnails, and videos converted for playback"
+          value={props.maxCacheSize}
+          min={1}
+          max={50}
+          step={1}
+          unit=" GB"
+          ariaLabel="Maximum cache size in gigabytes"
+          onChange={(v) => props.onChange("maxCacheSizeGB", v)}
+        />
+        <SettingsSliderRow
+          label="Thumbnail quality"
+          description="JPEG quality for generated thumbnails (higher = larger files)"
+          value={props.thumbnailQuality}
+          min={50}
+          max={100}
+          step={5}
+          unit="%"
+          ariaLabel="Thumbnail JPEG quality percentage"
+          onChange={(v) => props.onChange("thumbnailQuality", v)}
+        />
         <div className="settings-row">
           <div className="settings-row-label">
             <b>Rebuild library</b>
@@ -177,13 +147,15 @@ export function AdvancedPanel(props: {
         showNotice={props.showNotice}
       />
 
-      <section className="settings-section">
+      <section className="settings-section settings-cache-perf">
         <h2 className="settings-section-title">
           <CpuIcon size={14} /> Developer
         </h2>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Debug logging</b>
+            <b>
+              <label htmlFor="setting-debug-logging">Debug logging</label>
+            </b>
             <span className="settings-row-desc">
               Verbose logs in the developer console and Console.app for troubleshooting
             </span>
@@ -191,6 +163,7 @@ export function AdvancedPanel(props: {
           <div className="settings-row-control">
             <label className="toggle-switch">
               <input
+                id="setting-debug-logging"
                 type="checkbox"
                 aria-label="Enable debug logging"
                 checked={props.debugLogging}
@@ -202,7 +175,9 @@ export function AdvancedPanel(props: {
         </div>
         <div className="settings-row">
           <div className="settings-row-label">
-            <b>Show native limit warnings</b>
+            <b>
+              <label htmlFor="setting-native-limit-warnings">Show native limit warnings</label>
+            </b>
             <span className="settings-row-desc">
               Display notices when browser preview lacks native features
             </span>
@@ -210,6 +185,7 @@ export function AdvancedPanel(props: {
           <div className="settings-row-control">
             <label className="toggle-switch">
               <input
+                id="setting-native-limit-warnings"
                 type="checkbox"
                 aria-label="Show native limit warnings"
                 checked={props.showNativeWarnings}

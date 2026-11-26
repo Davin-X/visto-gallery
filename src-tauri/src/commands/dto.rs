@@ -448,8 +448,8 @@ macro_rules! define_settings {
 define_settings! {
     appearance: Appearance = Appearance::System,
     accent_color: AccentColor = AccentColor::Blue,
-    sidebar_width: i32 = 240,
-    inspector_width: i32 = 300,
+    sidebar_width: i32 = 215,
+    inspector_width: i32 = 280,
     show_extensions: bool = false,
     animate_transitions: bool = true,
     startup_view: StartupView = StartupView::Library,

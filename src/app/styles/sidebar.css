@@ -1,6 +1,6 @@
 /* Sidebar */
 .app-body.sidebar-open {
-  grid-template-columns: var(--sidebar-width, 220px) minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width, 215px) minmax(0, 1fr);
 }
 
 .app-body.sidebar-closed {
