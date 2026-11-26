@@ -308,6 +308,56 @@
   pointer-events: none;
 }
 
+.viewer-compare-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.viewer-compare-pane {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--viewer-stage-bg, #0b0d10);
+}
+
+.viewer-compare-pane > .photo-viewer-image {
+  position: relative;
+  z-index: 1;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+}
+
+.viewer-compare-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 3;
+  max-width: calc(100% - 24px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(12, 15, 20, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f4f6f9;
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
 /* Dragging must track the cursor, so the easing only applies to zoom/rotate. */
 .viewer-stage > .photo-viewer-image.is-panning {
   transition: opacity 180ms ease;

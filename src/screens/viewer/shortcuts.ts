@@ -8,7 +8,9 @@ export function buildShortcuts(kind: string | undefined) {
   ];
   if (photo) rows.push({ keys: ["R", "X"], label: "Rotate / flip" });
   rows.push({ keys: ["0"], label: "Reset zoom" });
-  if (still) rows.push({ keys: ["1"], label: "200%" });
+  if (still) rows.push({ keys: ["1"], label: "1:1 pixels" });
+  if (still) rows.push({ keys: ["C"], label: "Compare A/B" });
+  if (still) rows.push({ keys: ["\\"], label: "Flip A/B" });
   rows.push(
     { keys: ["L"], label: "Favorite" },
     { keys: ["F"], label: "Full screen" },

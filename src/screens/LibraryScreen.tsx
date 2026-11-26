@@ -33,6 +33,12 @@ import VideoThumb, { VideoPoster } from "../design/components/VideoThumb";
 import { useDraftTransforms } from "../engine/stores/useEditStore";
 import { draftImageStyle } from "../engine/utils/draftImage";
 import { LibrarySearch } from "./library/LibrarySearch";
+import {
+  calculateVirtualGridWindow,
+  computeVirtualGridLayout,
+  restoreScrollOffset,
+} from "./library/scrollRestore";
+export { calculateVirtualGridWindow };
 import { toDateInputValue } from "../engine/utils/dateRange";
 import {
   useLibraryStore,
@@ -51,8 +57,11 @@ import { usePlaybackStore } from "../engine/stores/usePlaybackStore";
 import { FilterDropdown } from "../design/components/FilterDropdown";
 import { ActiveRefinements } from "../design/components/ActiveRefinements";
 import SplitButton from "../design/components/SplitButton";
-import { useSettingsStore } from "../engine/stores/useSettingsStore";
-import { useThumbnailSize, useInspectorWidth } from "../engine/stores/useSettingsStore";
+import {
+  useSettingsStore,
+  useThumbnailSize,
+  useInspectorWidth,
+} from "../engine/stores/useSettingsStore";
 import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple, canPlayVideoInApp } from "../engine/utils/mediaTypes";
 import type { MediaItem, Filter } from "../engine/types/media";
@@ -66,9 +75,6 @@ import { LibraryInspector } from "./library/LibraryInspector";
 import type { LibraryScreenProps } from "./library/types";
 
 const GALLERY_PAGE_SIZE = 180;
-const VIRTUAL_GRID_OVERSCAN_ROWS = 6;
-const MAX_VIRTUAL_GRID_ITEMS = 480;
-const GRID_HORIZONTAL_PADDING = 40;
 
 /**
  * Scroll offsets remembered per view.
@@ -96,35 +102,6 @@ function rememberScroll(key: string, value: RememberedScroll) {
     if (oldest === undefined) break;
     rememberedScroll.delete(oldest);
   }
-}
-
-/** Pure row-window calculation for the fixed-height grid and overview cards. */
-export function calculateVirtualGridWindow(
-  itemCount: number,
-  columns: number,
-  rowStride: number,
-  gap: number,
-  scrollTop: number,
-  viewportHeight: number,
-) {
-  const totalRows = Math.ceil(itemCount / columns);
-  const firstVisibleRow = Math.max(0, Math.floor(scrollTop / rowStride));
-  const lastVisibleRow = Math.min(totalRows, Math.ceil((scrollTop + viewportHeight) / rowStride));
-  const startRow = Math.max(0, firstVisibleRow - VIRTUAL_GRID_OVERSCAN_ROWS);
-  const requestedEndRow = Math.min(
-    totalRows,
-    Math.max(lastVisibleRow + VIRTUAL_GRID_OVERSCAN_ROWS, startRow + 1),
-  );
-  // Cap the DOM even on very wide monitors with many grid columns.
-  const maxWindowRows = Math.max(1, Math.floor(MAX_VIRTUAL_GRID_ITEMS / columns));
-  const endRow = Math.min(requestedEndRow, startRow + maxWindowRows);
-
-  return {
-    startIndex: startRow * columns,
-    endIndex: Math.min(itemCount, endRow * columns),
-    topSpacer: startRow ? Math.max(0, startRow * rowStride - gap) : 0,
-    bottomSpacer: endRow < totalRows ? Math.max(0, (totalRows - endRow) * rowStride - gap) : 0,
-  };
 }
 
 /**
@@ -604,9 +581,17 @@ function LibraryScreen(props: LibraryScreenProps) {
     setMeasuredTileHeight(null);
   }, [props.layout, thumbnailSize, gridViewport.width]);
 
+  const virtualMetricsRef = useRef<{ columns: number; rowStride: number; itemIds: string[] }>({
+    columns: 0,
+    rowStride: 0,
+    itemIds: [],
+  });
+  const inspectedIdRef = useRef(props.inspectedId);
+  inspectedIdRef.current = props.inspectedId;
+
   // Restore the scroll offset saved for this view, refilling the same item
   // depth first so the grid is tall enough to reach the remembered row.
-  // Switching to a view with no history still starts at the top.
+  // With no saved offset, start at the top and reveal the inspected item.
   useEffect(() => {
     const dataReady = props.hiddenView || library.loadedViewKey === viewKey;
     if (!dataReady || restoringScrollRef.current) return;
@@ -615,26 +600,21 @@ function LibraryScreen(props: LibraryScreenProps) {
 
     const el = scrollRef.current;
     const saved = rememberedScroll.get(scrollKey);
-    if (!el || !saved || (saved.scrollTop <= 0 && saved.renderLimit <= GALLERY_PAGE_SIZE)) {
-      setRenderLimit(GALLERY_PAGE_SIZE);
-      el?.scrollTo({ top: 0 });
-      return;
-    }
+    if (!el) return;
 
-    setRenderLimit(Math.max(GALLERY_PAGE_SIZE, saved.renderLimit));
+    setRenderLimit(Math.max(GALLERY_PAGE_SIZE, saved?.renderLimit ?? 0));
 
-    const jumpToSavedOffset = () => {
-      restoringScrollRef.current = true;
-      window.requestAnimationFrame(() => {
-        el.scrollTo({ top: saved.scrollTop });
-        window.requestAnimationFrame(() => {
-          restoringScrollRef.current = false;
-        });
-      });
-    };
+    const jumpToSavedOffset = () =>
+      restoreScrollOffset(
+        el,
+        saved?.scrollTop ?? 0,
+        inspectedIdRef.current,
+        restoringScrollRef,
+        virtualMetricsRef.current,
+      );
 
     const refillDepth = async () => {
-      if (props.hiddenView) return;
+      if (props.hiddenView || !saved) return;
       let state = useLibraryStore.getState();
       let guard = 0;
       while (state.items.length < saved.itemCount && state.hasMore && guard < 100) {
@@ -766,26 +746,16 @@ function LibraryScreen(props: LibraryScreenProps) {
   }, [props.items, renderLimit, supportsGridVirtualization]);
   const virtualGrid = useMemo(() => {
     if (!supportsGridVirtualization || renderedItems.length === 0) {
-      return { items: renderedItems, topSpacer: 0, bottomSpacer: 0 };
+      return { items: renderedItems, topSpacer: 0, bottomSpacer: 0, columns: 0, rowStride: 0 };
     }
 
-    const overview = props.layout === "overview";
-    const gap = overview ? 20 : 16;
-    const minTileWidth = overview
-      ? 320
-      : thumbnailSize === "small"
-        ? 160
-        : thumbnailSize === "large"
-          ? 280
-          : props.showInspector
-            ? 210
-            : 220;
-    const availableWidth = Math.max(minTileWidth, gridViewport.width - GRID_HORIZONTAL_PADDING);
-    const columns = Math.max(1, Math.floor((availableWidth + gap) / (minTileWidth + gap)));
-    const tileWidth = (availableWidth - gap * (columns - 1)) / columns;
-    const estimatedTileHeight = tileWidth * (overview ? 10 / 16 : 1) + 58;
-    const rowHeight = measuredTileHeight ?? estimatedTileHeight;
-    const rowStride = rowHeight + gap;
+    const { columns, rowStride, gap } = computeVirtualGridLayout({
+      layout: props.layout,
+      thumbnailSize,
+      showInspector: props.showInspector,
+      viewportWidth: gridViewport.width,
+      measuredTileHeight,
+    });
     const window = calculateVirtualGridWindow(
       renderedItems.length,
       columns,
@@ -799,6 +769,8 @@ function LibraryScreen(props: LibraryScreenProps) {
       items: renderedItems.slice(window.startIndex, window.endIndex),
       topSpacer: window.topSpacer,
       bottomSpacer: window.bottomSpacer,
+      columns,
+      rowStride,
     };
   }, [
     gridViewport.height,
@@ -811,6 +783,11 @@ function LibraryScreen(props: LibraryScreenProps) {
     supportsGridVirtualization,
     thumbnailSize,
   ]);
+  virtualMetricsRef.current = {
+    columns: virtualGrid.columns,
+    rowStride: virtualGrid.rowStride,
+    itemIds: renderedItems.map((item) => item.id),
+  };
 
   useLayoutEffect(() => {
     if (!supportsGridVirtualization) return;
