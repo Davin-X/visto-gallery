@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **GitHub Pages landing page**: interactive product showcase in `docs/` with dark/light screenshot switching, feature tour, sitemap, and responsive navigation.
 
 ### Fixed
+- Aligned Settings controls and section widths across all five tabs, with stacked rows when the settings pane is narrow.
 - Simplified screen headers to keep titles, useful context, and controls in view.
 - Clarified the Manage sources dialog, added a scroll cue to long folder lists, and separated bulk removal from everyday actions in Library settings.
 - Batch metadata preserves existing keywords when Replace is empty. Choose **Clear all keywords** to remove them across the selected files.

@@ -749,10 +749,6 @@
   margin-top: 1px;
 }
 
-.privacy-section {
-  max-width: 860px;
-}
-
 .privacy-overview {
   display: flex;
   align-items: flex-start;
@@ -821,7 +817,7 @@
   line-height: 1.5;
 }
 
-@media (max-width: 720px) {
+@container settings (max-width: 540px) {
   .privacy-facts {
     grid-template-columns: 1fr;
   }
@@ -1840,20 +1836,63 @@
 }
 
 .settings-panel {
+  container: settings / inline-size;
   scrollbar-gutter: stable;
-  padding: 0 10px 18px 0;
+  padding: 0 0 18px;
 }
 
 .settings-row {
-  grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) fit-content(48%);
   gap: 24px;
-  padding: 13px 12px;
   border-radius: 9px;
 }
 
+.settings-row,
 .settings-row:has(.settings-slider),
 .settings-row:has(.toggle-switch) {
   padding: 13px 12px;
+}
+
+.settings-row-control {
+  min-width: 0;
+  width: auto;
+  justify-content: flex-end;
+}
+
+.settings-row-control > * {
+  max-width: 100%;
+}
+
+.settings-row-control.settings-ambient-control {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.settings-ambient-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 300px;
+  flex-wrap: wrap;
+}
+
+.settings-row-control.settings-storage-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+  justify-items: end;
+}
+
+.settings-storage-control .settings-slider-value {
+  grid-column: 1;
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-storage-control button {
+  grid-column: 2;
+  width: 100%;
 }
 
 .settings-row-label {
@@ -1886,24 +1925,23 @@
   line-height: 1.55;
 }
 
-@media (max-width: 960px) {
-  .settings-panel {
-    padding-right: 4px;
-  }
-
+@container settings (max-width: 580px) {
   .settings-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 9px;
-    padding: 12px 8px;
-  }
-
-  .settings-row:has(.settings-slider),
-  .settings-row:has(.toggle-switch) {
-    padding: 12px 8px;
   }
 
   .settings-row-control {
-    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  .settings-row-control.settings-ambient-control {
+    align-items: flex-start;
+  }
+
+  .settings-row-control.settings-storage-control {
+    grid-template-columns: auto 88px;
+    justify-items: start;
   }
 }
 
@@ -2030,7 +2068,7 @@
 
 .default-apps-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
   gap: 2px 16px;
   margin: 4px 0 0;
   padding: 0 12px 8px 30px;
