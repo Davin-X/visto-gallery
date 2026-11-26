@@ -1862,7 +1862,7 @@
 .settings-row,
 .settings-row:has(.settings-slider),
 .settings-row:has(.toggle-switch) {
-  padding: 10px 0;
+  padding: 10px 12px;
 }
 
 .settings-row > .settings-row-control {
