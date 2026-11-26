@@ -118,7 +118,11 @@ Each run starts with a temporary catalog and thumbnail cache. The fixture files 
 
 ## Pull requests
 
-- Branch from `main` (for example `fix/short-description`).
+- Branch from `main` and name the branch for the work. Use a descriptive prefix
+  such as `feat/`, `fix/`, `docs/`, `refactor/`, `perf/`, `test/`, `ci/`, or
+  `chore/` followed by a short kebab-case description (for example
+  `fix/viewer-image-fit`). Keep tool, assistant, and agent names out of branch
+  names.
 - Use [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `perf:`, `refactor:`, `docs:`, `test:`, `ci:`, `chore:`.
 - Keep each commit to one change, and explain why in the body.
 - Add or update tests for behavior changes.
