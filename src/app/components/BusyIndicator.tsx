@@ -32,7 +32,9 @@ export function BusyIndicator() {
               <div className="busy-indicator-progress-copy">
                 <b>{total > 0 ? `Analyzing bursts · ${percent}%` : "Finding camera bursts…"}</b>
                 <small>
-                  {processed.toLocaleString()} of {total.toLocaleString()} photos analyzed
+                  {total > 0
+                    ? `${processed.toLocaleString()} of ${total.toLocaleString()} photos analyzed`
+                    : "Preparing photo list…"}
                 </small>
                 <div
                   className="busy-indicator-progress-track"

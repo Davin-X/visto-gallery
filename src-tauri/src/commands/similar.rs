@@ -367,46 +367,63 @@ pub async fn find_similar_photos(
             let items_clone = std::sync::Arc::clone(&items_arc);
             let thumbs_clone = std::sync::Arc::clone(&thumbs_arc);
             let tx_clone = tx.clone();
+            let cancel_flag = cancel.flag();
             let start = w * chunk_size;
             let end = (start + chunk_size).min(items_clone.len());
 
             if start < end {
                 std::thread::spawn(move || {
                     for i in start..end {
+                        if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
+                            break;
+                        }
                         let it = &items_clone[i];
                         let fp_opt = compute_item_fingerprint(it, &thumbs_clone);
-                        let _ =
-                            tx_clone.send((it.id.clone(), fp_opt, it.modified_at, it.name.clone()));
+                        if tx_clone
+                            .send((it.id.clone(), fp_opt, it.modified_at, it.name.clone()))
+                            .is_err()
+                        {
+                            break;
+                        }
                     }
                 });
             }
         }
         drop(tx);
 
-        while let Ok((id, fp_opt, mtime, name)) = rx.recv() {
+        loop {
             if cancel.is_cancelled() {
                 break;
             }
+            match rx.recv_timeout(std::time::Duration::from_millis(100)) {
+                Ok((id, fp_opt, mtime, name)) => {
+                    if let Some(fp) = fp_opt {
+                        fingerprints.insert(id.clone(), fp);
+                        new_fps_to_persist.push((id, fp, mtime));
+                    }
 
-            if let Some(fp) = fp_opt {
-                fingerprints.insert(id.clone(), fp);
-                new_fps_to_persist.push((id, fp, mtime));
-            }
-
-            processed += 1;
-            if last_emit.elapsed().as_millis() >= 150 || processed >= total {
-                emit_progress(
-                    &window,
-                    json!({
-                        "phase": "analyzing",
-                        "processed": processed,
-                        "total": total,
-                        "currentFile": &name,
-                    }),
-                );
-                last_emit = Instant::now();
+                    processed += 1;
+                    if last_emit.elapsed().as_millis() >= 150 || processed >= total {
+                        emit_progress(
+                            &window,
+                            json!({
+                                "phase": "analyzing",
+                                "processed": processed,
+                                "total": total,
+                                "currentFile": &name,
+                            }),
+                        );
+                        last_emit = Instant::now();
+                    }
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
             }
         }
+    }
+
+    if cancel.is_cancelled() {
+        return Ok(vec![]);
     }
 
     // Persist new fingerprints in chunks to SQLite
