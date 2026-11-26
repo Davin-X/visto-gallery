@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **GitHub Pages landing page**: interactive product showcase in `docs/` with dark/light screenshot switching, feature tour, sitemap, and responsive navigation.
 
 ### Fixed
+- Middle-truncated the selected folder name in the Clean up → Duplicates folder picker so long, similar folder names stay distinguishable.
 - Library controls compact to the available pane width and keep Filters visible alongside scrolling media types.
 - Simplified the scan headers and ready states across all three Duplicates modes.
 - Simplified selection controls in Library and albums and made Move to Trash explicit. Long album titles can wrap without clipping the item count.

@@ -430,19 +430,45 @@
 }
 
 /* The folder menu is as wide as its longest source name, so a deep folder
-   stretches the whole header. Fix its size and let a long name clip. */
+   stretches the whole header. Keep its width bounded and middle-truncate
+   the selected folder name so long names with a shared prefix stay distinct. */
 .duplicates-page .duplicate-heading-actions .source-select {
+  position: relative;
   flex: 0 0 auto;
   width: 240px;
   min-width: 0;
 }
 
-.duplicates-page .duplicate-heading-actions .source-select select {
+.duplicates-page .duplicate-heading-actions .source-select:has(select:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.duplicates-page .duplicate-heading-actions .duplicate-folder-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
   flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.duplicates-page .duplicate-heading-actions .duplicate-folder-value svg {
+  flex: 0 0 auto;
+  color: var(--faint);
+}
+
+.duplicates-page .duplicate-heading-actions .source-select select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 
 /* New folder picker layout: dropdown + "Choose folder…" button side by side,
