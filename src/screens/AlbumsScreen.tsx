@@ -279,7 +279,6 @@ function AlbumsScreen(props: AlbumsScreenProps) {
     <div className="feature-page albums-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">COLLECTIONS</p>
           <h1>Albums</h1>
           <p className="page-subtitle">
             {albums.length.toLocaleString()} {albums.length === 1 ? "album" : "albums"}
