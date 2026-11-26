@@ -328,4 +328,148 @@ describe("photo viewer keyboard shortcuts", () => {
     expect(container.querySelector("img.photo-viewer-backdrop")).toBeNull();
     getCachedThumbnailUrlMock.mockReturnValue(null);
   });
+
+  it("pins A and compares side-by-side or A/B flip at synchronized zoom with C and \\", () => {
+    const first = makeMediaItem({
+      id: "photo-a",
+      name: "a.jpg",
+      path: "/tmp/a.jpg",
+      kind: "photo",
+      width: 1200,
+      height: 800,
+    });
+    const second = makeMediaItem({
+      id: "photo-b",
+      name: "b.jpg",
+      path: "/tmp/b.jpg",
+      kind: "photo",
+      width: 1200,
+      height: 800,
+    });
+    const onNavigate = vi.fn();
+    const props = {
+      active: true,
+      items: [first, second],
+      zoom: 200,
+      fitMode: "fit" as const,
+      rotation: 0,
+      flipX: false,
+      onNavigate,
+      onSetPhoto: vi.fn(),
+      onSetZoom: vi.fn(),
+      onZoomIn: vi.fn(),
+      onZoomOut: vi.fn(),
+      onResetZoom: vi.fn(),
+      onToggleFitMode: vi.fn(),
+      onRotate: vi.fn(),
+      onToggleFlip: vi.fn(),
+      onResetTransform: vi.fn(),
+      onToggleFullscreen: vi.fn(),
+      onClose: vi.fn(),
+      onToggleFavorite: vi.fn(),
+      onToggleHidden: vi.fn(),
+      onOpenEdit: vi.fn(),
+      onContextMenu: vi.fn(),
+      assetUrl: (path: string) => path,
+    };
+
+    const { container, rerender } = render(<ViewerScreen {...props} selected={first} />);
+
+    // Pressing C pins photo-a and advances to photo-b.
+    fireEvent.keyDown(window, { key: "c" });
+    expect(onNavigate).toHaveBeenCalledWith(1);
+
+    rerender(<ViewerScreen {...props} selected={second} />);
+    expect(container.querySelector(".viewer-compare-stage")).not.toBeNull();
+    expect(screen.getByText("A · a.jpg")).toBeInTheDocument();
+    expect(screen.getByText("B · b.jpg")).toBeInTheDocument();
+    const images = container.querySelectorAll(".viewer-compare-pane img.photo-viewer-image");
+    expect(images).toHaveLength(2);
+    expect((images[0] as HTMLElement).style.transform).toContain("scale(2)");
+    expect((images[1] as HTMLElement).style.transform).toContain("scale(2)");
+
+    // Pressing \ enters A/B flip mode and alternates A <-> B.
+    fireEvent.keyDown(window, { key: "\\" });
+    expect(container.querySelector(".viewer-compare-stage")).toBeNull();
+    expect(screen.getByText("A · a.jpg")).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "\\" });
+    expect(screen.getByText("B · b.jpg")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show A" }));
+    expect(screen.getByText("A · a.jpg")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show B" }));
+    expect(screen.getByText("B · b.jpg")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Split side-by-side" }));
+    expect(container.querySelector(".viewer-compare-stage")).not.toBeNull();
+
+    // Pressing C again exits compare mode.
+    fireEvent.keyDown(window, { key: "c" });
+    expect(screen.queryByText("B · b.jpg")).toBeNull();
+  });
+
+  it("routes Favorite and Edit to A when A is shown in flip mode, and sizes A independently", () => {
+    const first = makeMediaItem({
+      id: "photo-a",
+      name: "a.jpg",
+      path: "/tmp/a.jpg",
+      kind: "photo",
+      width: 500,
+      height: 400,
+    });
+    const second = makeMediaItem({
+      id: "photo-b",
+      name: "b.jpg",
+      path: "/tmp/b.jpg",
+      kind: "photo",
+      width: 2400,
+      height: 1600,
+    });
+    const onToggleFavorite = vi.fn();
+    const onOpenEdit = vi.fn();
+    const props = {
+      active: true,
+      items: [first, second],
+      zoom: 100,
+      fitMode: "actual" as const,
+      rotation: 0,
+      flipX: false,
+      onNavigate: vi.fn(),
+      onSetPhoto: vi.fn(),
+      onSetZoom: vi.fn(),
+      onZoomIn: vi.fn(),
+      onZoomOut: vi.fn(),
+      onResetZoom: vi.fn(),
+      onToggleFitMode: vi.fn(),
+      onRotate: vi.fn(),
+      onToggleFlip: vi.fn(),
+      onResetTransform: vi.fn(),
+      onToggleFullscreen: vi.fn(),
+      onClose: vi.fn(),
+      onToggleFavorite,
+      onToggleHidden: vi.fn(),
+      onOpenEdit,
+      onContextMenu: vi.fn(),
+      assetUrl: (path: string) => path,
+    };
+
+    const { container, rerender } = render(<ViewerScreen {...props} selected={first} />);
+    fireEvent.keyDown(window, { key: "c" });
+    rerender(<ViewerScreen {...props} selected={second} />);
+
+    // In 2-up split, A uses its own 500x400 dimensions, not B's 2400x1600.
+    const images = container.querySelectorAll(".viewer-compare-pane img.photo-viewer-image");
+    expect((images[0] as HTMLElement).style.aspectRatio).toBe("auto 500 / 400");
+    expect((images[1] as HTMLElement).style.aspectRatio).toBe("auto 2400 / 1600");
+
+    // Flip to A and trigger Favorite (L) and Edit -> both act on photo-a.
+    fireEvent.keyDown(window, { key: "\\" });
+    expect(screen.getByText("A · a.jpg")).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "l" });
+    expect(onToggleFavorite).toHaveBeenLastCalledWith("photo-a");
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit photo" }));
+    expect(onOpenEdit).toHaveBeenLastCalledWith(first);
+  });
 });

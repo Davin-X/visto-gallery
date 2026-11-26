@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **GitHub Pages landing page**: interactive product showcase in `docs/` with dark/light screenshot switching, feature tour, sitemap, and responsive navigation.
 
 ### Fixed
+- Viewer now supports side-by-side (`C`) and A/B flip (`\`) shot comparison with synchronized zoom and pan, and returning to the Library scrolls the last-viewed item into view if it was navigated off-screen.
 - Viewer now supports Retina-aware `1:1` physical pixel zoom (`1` key or `1:1` button, `0` resets to Fit), shows the cached preview immediately while full-resolution photos load, and prefetches adjacent items with cancellation during rapid navigation.
 - Regular grid tiles now use cached video posters (falling back to inline video frames when playable or a clear placeholder otherwise), separate the passive `Video` badge from the hover/focus play button, soften tile captions and gradients, and distinguish inspected tiles from selected tiles.
 - Re-opening a paused video from the Library now resumes playback instead of staying paused.

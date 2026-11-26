@@ -1,5 +1,13 @@
 import { usePopoverFocus } from "../design/hooks/usePopoverFocus";
 import { useStageZoomGestures } from "./viewer/useStageZoomGestures";
+import {
+  buildViewerImageStyle,
+  CompareStageView,
+  CompareToolbarButtons,
+  useViewerCompare,
+} from "./viewer/CompareStagePane";
+import { ViewerShortcutsPopover } from "./viewer/ViewerShortcutsPopover";
+import { ViewerFilmstrip } from "./viewer/ViewerFilmstrip";
 import { buildShortcuts } from "./viewer/shortcuts";
 import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import {
@@ -11,7 +19,6 @@ import {
   FlipIcon,
   FullscreenIcon,
   HeartIcon,
-  InfoIcon,
   MinusIcon,
   MoreIcon,
   PlusIcon,
@@ -21,13 +28,11 @@ import {
 } from "../design/components/icons";
 import { CachedThumbnail, getCachedThumbnailUrl } from "../design/components/CachedThumbnail";
 import { useViewerPrefetch } from "../app/hooks/useViewerPrefetch";
-import { KindDot } from "../design/components/KindBadge";
-import { useDraftTransforms, draftTransformStyle } from "../engine/stores/useEditStore";
+import { useDraftTransforms } from "../engine/stores/useEditStore";
 import { useSlideshowStore } from "../engine/stores/useSlideshowStore";
 import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple } from "../engine/utils/mediaTypes";
 import { formatDuration } from "../engine/utils/time";
-import { draftImageStyle } from "../engine/utils/draftImage";
 import type { MediaItem } from "../engine/types/media";
 import { formatItemDate } from "../engine/utils/mediaDate";
 import { clampPan, fittedSize, oneToOneZoom, stepZoom } from "../engine/utils/zoom";
@@ -179,6 +184,11 @@ function ViewerScreen(props: ViewerScreenProps) {
   // Sharp previews for stills the web view cannot show at full quality.
   const [photoFallbackId, setPhotoFallbackId] = useState<string | null>(null);
   const [oneToOneId, setOneToOneId] = useState<string | null>(null);
+  const compare = useViewerCompare(items, selected, selectedIndex, props.onNavigate);
+  const actionTarget =
+    compare.active && compare.mode === "flip" && compare.flipShowA && compare.anchor
+      ? compare.anchor
+      : selected;
   const [preview, setPreview] = useState<{
     id: string;
     src: string;
@@ -504,19 +514,30 @@ function ViewerScreen(props: ViewerScreenProps) {
         case "l":
         case "L":
           e.preventDefault();
-          props.onToggleFavorite(selected.id);
+          if (actionTarget) props.onToggleFavorite(actionTarget.id);
           break;
         case "f":
         case "F":
           e.preventDefault();
           props.onToggleFullscreen();
           break;
+        case "c":
+        case "C":
+          e.preventDefault();
+          compare.toggleCompare();
+          break;
+        case "\\":
+          if (compare.anchorId) {
+            e.preventDefault();
+            compare.flipCompare();
+          }
+          break;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selected, props, toggleOneToOne]);
+  }, [selected, actionTarget, props, toggleOneToOne, compare]);
 
   if (!selected)
     return (
@@ -714,46 +735,17 @@ function ViewerScreen(props: ViewerScreenProps) {
               const lowRes = viaPreview && (!shown || shown.lowRes);
               const cachedBackdropSrc =
                 !viaPreview && photoStatus !== "loaded" ? getCachedThumbnailUrl(selected.id) : null;
-              const dpr = window.devicePixelRatio || 1;
-              const actualW =
-                selected.width ??
-                (photoLoadState?.id === selected.id ? photoLoadState.width : undefined);
-              const actualH =
-                selected.height ??
-                (photoLoadState?.id === selected.id ? photoLoadState.height : undefined);
-              const stillStyle: React.CSSProperties = {
-                aspectRatio:
-                  selected.width && selected.height
-                    ? `auto ${selected.width} / ${selected.height}`
-                    : undefined,
-                width: props.fitMode === "actual" ? (actualW ? actualW / dpr : undefined) : "100%",
-                height: props.fitMode === "actual" ? (actualH ? actualH / dpr : undefined) : "100%",
-                maxWidth:
-                  props.fitMode === "actual"
-                    ? "none"
-                    : imageRotation % 180
-                      ? "min(100%, 100cqh)"
-                      : "100%",
-                maxHeight:
-                  props.fitMode === "actual"
-                    ? "none"
-                    : imageRotation % 180
-                      ? "min(100%, 100cqw)"
-                      : "100%",
-                objectFit: props.fitMode === "fill" ? "cover" : "contain",
-                transform: [
-                  `translate3d(${pan.x}px, ${pan.y}px, 0)`,
-                  `rotate(${props.rotation || 0}deg)`,
-                  `scaleX(${props.flipX ? -1 : 1})`,
-                  selected.kind === "photo"
-                    ? draftTransformStyle(draftTransforms.get(selected.id))
-                    : "",
-                  `scale(${props.zoom / 100})`,
-                ]
-                  .filter(Boolean)
-                  .join(" "),
-              };
-              return (
+              const stillStyle = buildViewerImageStyle({
+                item: selected,
+                fitMode: props.fitMode,
+                zoom: props.zoom,
+                pan,
+                rotation: props.rotation,
+                flipX: props.flipX,
+                draftTransform: draftTransforms.get(selected.id),
+                naturalSize: photoLoadState?.id === selected.id ? photoLoadState : null,
+              });
+              const activeNode = (
                 <>
                   {cachedBackdropSrc && (
                     <img
@@ -829,6 +821,27 @@ function ViewerScreen(props: ViewerScreenProps) {
                     )}
                 </>
               );
+              if (compare.active && compare.anchor) {
+                return (
+                  <CompareStageView
+                    anchor={compare.anchor}
+                    selectedName={selected.name}
+                    mode={compare.mode}
+                    flipShowA={compare.flipShowA}
+                    wantsFull={wantsFull}
+                    fitMode={props.fitMode}
+                    zoom={props.zoom}
+                    pan={pan}
+                    rotation={props.rotation}
+                    flipX={props.flipX}
+                    anchorDraft={draftTransforms.get(compare.anchor.id)}
+                    panning={panning}
+                    assetUrl={props.assetUrl}
+                    activeNode={activeNode}
+                  />
+                );
+              }
+              return activeNode;
             })()}
           </>
         ) : null}
@@ -956,6 +969,15 @@ function ViewerScreen(props: ViewerScreenProps) {
                       ? "Fill"
                       : "Fit"}
                 </button>
+                <CompareToolbarButtons
+                  anchorId={compare.anchorId}
+                  active={compare.active}
+                  mode={compare.mode}
+                  onToggleCompare={compare.toggleCompare}
+                  onToggleMode={compare.toggleMode}
+                  flipShowA={compare.flipShowA}
+                  onFlip={compare.flipCompare}
+                />
                 <span className="viewer-divider" />
               </>
             )}
@@ -1025,13 +1047,13 @@ function ViewerScreen(props: ViewerScreenProps) {
                     <button
                       type="button"
                       role="menuitem"
-                      aria-label={selected.hidden ? "Unhide item" : "Hide item"}
+                      aria-label={actionTarget?.hidden ? "Unhide item" : "Hide item"}
                       onClick={() => {
-                        void props.onToggleHidden(selected.id);
+                        if (actionTarget) void props.onToggleHidden(actionTarget.id);
                         setMoreOpen(false);
                       }}
                     >
-                      <EyeOffIcon size={14} /> {selected.hidden ? "Unhide" : "Hide"}
+                      <EyeOffIcon size={14} /> {actionTarget?.hidden ? "Unhide" : "Hide"}
                     </button>
                   </div>
                 )}
@@ -1039,20 +1061,20 @@ function ViewerScreen(props: ViewerScreenProps) {
             )}
             <button
               type="button"
-              onClick={() => props.onToggleFavorite(selected.id)}
-              aria-pressed={!!selected.favorite}
-              aria-label={selected.favorite ? "Remove favorite" : "Add favorite"}
-              title={selected.favorite ? "Remove favorite (L)" : "Favorite (L)"}
+              onClick={() => actionTarget && props.onToggleFavorite(actionTarget.id)}
+              aria-pressed={!!actionTarget?.favorite}
+              aria-label={actionTarget?.favorite ? "Remove favorite" : "Add favorite"}
+              title={actionTarget?.favorite ? "Remove favorite (L)" : "Favorite (L)"}
             >
-              <HeartIcon size={14} filled={!!selected.favorite} />
+              <HeartIcon size={14} filled={!!actionTarget?.favorite} />
               <span className="viewer-bar-label">
-                {selected.favorite ? "Unfavorite" : "Favorite"}
+                {actionTarget?.favorite ? "Unfavorite" : "Favorite"}
               </span>
             </button>
-            {selected.kind === "photo" && (
+            {actionTarget?.kind === "photo" && (
               <button
                 type="button"
-                onClick={() => props.onOpenEdit(selected)}
+                onClick={() => props.onOpenEdit(actionTarget)}
                 aria-label="Edit photo"
                 title="Edit photo"
               >
@@ -1080,94 +1102,31 @@ function ViewerScreen(props: ViewerScreenProps) {
               <FullscreenIcon size={14} />
               <span className="viewer-bar-label">Full screen</span>
             </button>
-            <div className="media-anchor" ref={helpRef}>
-              <button
-                type="button"
-                ref={helpTrigger}
-                aria-haspopup="dialog"
-                aria-expanded={helpOpen}
-                aria-label="Keyboard shortcuts"
-                title="Keyboard shortcuts"
-                className={helpOpen ? "active" : ""}
-                onClick={() => setHelpOpen((value) => !value)}
-              >
-                <InfoIcon size={15} />
-                <span className="viewer-bar-label">Keys</span>
-              </button>
-              {helpOpen && (
-                <div
-                  ref={helpPanel}
-                  tabIndex={-1}
-                  className="media-popover media-shortcuts"
-                  role="dialog"
-                  aria-label="Keyboard shortcuts"
-                >
-                  {shortcutHints.map((hint) => (
-                    <React.Fragment key={hint.label}>
-                      <span className="media-shortcut-keys">
-                        {hint.keys.map((key) => (
-                          <kbd key={key}>{key}</kbd>
-                        ))}
-                      </span>
-                      <span className="media-shortcut-label">{hint.label}</span>
-                    </React.Fragment>
-                  ))}
-                </div>
-              )}
-            </div>
+            <ViewerShortcutsPopover
+              helpRef={helpRef}
+              helpTrigger={helpTrigger}
+              helpPanel={helpPanel}
+              helpOpen={helpOpen}
+              onToggle={() => setHelpOpen((value) => !value)}
+              hints={shortcutHints}
+            />
           </div>
         )}
       </div>
-      <div className="filmstrip" ref={stripRef} onScroll={handleFilmstripScroll}>
-        {stripStart > 0 && (
-          <span
-            className="filmstrip-spacer"
-            aria-hidden="true"
-            style={{ flexBasis: `${stripStart * stripStride}px` }}
-          />
-        )}
-        {items.slice(stripStart, stripEnd).map((item) => (
-          <button
-            type="button"
-            title={item.name}
-            className={item.id === props.selected?.id ? "active" : ""}
-            aria-current={item.id === props.selected?.id ? "true" : undefined}
-            key={item.id}
-            onClick={() => props.onSetPhoto(item.id)}
-          >
-            {item.kind === "photo" || item.kind === "raw" ? (
-              <CachedThumbnail
-                itemId={item.id}
-                name={item.name}
-                size={128}
-                style={draftImageStyle(draftTransforms, item.id)}
-              />
-            ) : (
-              <span>{item.extension.toUpperCase()}</span>
-            )}
-            <KindDot kind={item.kind} />
-          </button>
-        ))}
-        {stripEnd < items.length && (
-          <span
-            className="filmstrip-spacer"
-            aria-hidden="true"
-            style={{ flexBasis: `${(items.length - stripEnd) * stripStride}px` }}
-          />
-        )}
-        {hasMore ? (
-          <button
-            type="button"
-            className="filmstrip-more"
-            onClick={() => void onLoadMore?.()}
-            disabled={loadingMore}
-            aria-label="Load more photos"
-            title="Load more photos into this strip"
-          >
-            {loadingMore ? "Loading…" : "Load more"}
-          </button>
-        ) : null}
-      </div>
+      <ViewerFilmstrip
+        stripRef={stripRef}
+        onScroll={handleFilmstripScroll}
+        items={items}
+        selectedId={props.selected?.id}
+        stripStart={stripStart}
+        stripEnd={stripEnd}
+        stripStride={stripStride}
+        draftTransforms={draftTransforms}
+        hasMore={hasMore}
+        loadingMore={loadingMore}
+        onSelect={props.onSetPhoto}
+        onLoadMore={onLoadMore}
+      />
     </div>
   );
 }
