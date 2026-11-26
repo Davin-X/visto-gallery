@@ -1132,8 +1132,12 @@ function LibraryScreen(props: LibraryScreenProps) {
     if (!props.selectedIds.length) return [];
     const ids = new Set(props.selectedIds);
     const pool = props.hiddenView ? library.hiddenItems : library.items;
-    return pool.filter((i) => ids.has(i.id));
-  }, [props.selectedIds, props.hiddenView, library.items, library.hiddenItems]);
+    const selected = pool.filter((item) => ids.delete(item.id));
+    if (ids.size > 0) {
+      selected.push(...props.items.filter((item) => ids.delete(item.id)));
+    }
+    return selected;
+  }, [props.selectedIds, props.hiddenView, props.items, library.items, library.hiddenItems]);
   const anySelectedFavorite = selectedItems.some((i) => i.favorite);
   const anySelectedHidden = selectedItems.some((i) => i.hidden);
   // Play on a video-only selection opens the player; anything with a photo
@@ -1572,12 +1576,16 @@ function LibraryScreen(props: LibraryScreenProps) {
             <div className="selection-bar" role="toolbar" aria-label="Selection actions">
               <div className="selection-bar-left">
                 <span className="selection-bar-count">{selectionSummary}</span>
-                <span className="selection-bar-divider" aria-hidden="true" />
-                <span className="selection-bar-size">
-                  {formatBytesSimple(
-                    selectedItems.reduce((sum: number, item) => sum + (item.size || 0), 0),
-                  )}
-                </span>
+                {selectedItems.length === props.selectedIds.length && (
+                  <>
+                    <span className="selection-bar-divider" aria-hidden="true" />
+                    <span className="selection-bar-size">
+                      {formatBytesSimple(
+                        selectedItems.reduce((sum, item) => sum + (item.size || 0), 0),
+                      )}
+                    </span>
+                  </>
+                )}
               </div>
               <div className="selection-bar-actions">
                 {!allVisibleSelected && (
