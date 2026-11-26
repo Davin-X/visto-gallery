@@ -23,3 +23,9 @@ export function splitForMiddleTruncation(text: string, tailLength = 10): [string
   if (text.length <= tailLength * 2) return [text, ""];
   return [text.slice(0, -tailLength), text.slice(-tailLength)];
 }
+
+/** Return the folder containing a file, preserving paths without a parent. */
+export function parentFolder(path: string): string {
+  const index = path.lastIndexOf("/");
+  return index > 0 ? path.slice(0, index) : path;
+}

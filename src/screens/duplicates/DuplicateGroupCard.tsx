@@ -13,7 +13,7 @@ import type { GroupView } from "../../engine/duplicates/grouping";
 import type { MediaItem, SimilarGroup } from "../../engine/types/media";
 import { formatFileDate } from "../../engine/utils/mediaDate";
 import { formatBytesSimple } from "../../engine/utils/mediaTypes";
-import { parentFolder } from "./paths";
+import { parentFolder } from "../../engine/utils/fileName";
 
 // Enough tiles to fill one row of a wide window; expansion reveals the rest.
 export const INLINE_COPIES = 4;
