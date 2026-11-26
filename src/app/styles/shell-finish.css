@@ -151,45 +151,50 @@
   bottom: auto;
 }
 .photo-inspector .inspector-actions {
-  gap: 7px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
   margin: 10px 0 18px;
 }
-.photo-inspector .inspector-action {
+.photo-inspector .inspector-actions .inspector-action {
   min-width: 0;
-  min-height: 58px;
-  flex-direction: column;
-  gap: 5px;
-  padding: 8px 4px;
+  min-height: 34px;
+  padding: 6px;
   border-radius: 8px;
-  font-size: 11px;
-}
-.photo-inspector .inspector-action span {
-  font-size: 11px;
 }
 .photo-inspector .inspector-section {
   padding-top: 15px;
 }
 
-/* File actions (Reveal / Open / Copy path) hold long labels, so they get
-   their own grid: three equal columns that wrap the label to a second line
-   instead of ellipsizing it like the icon-grid does. */
+/* File actions (Reveal / Open / Copy path) sit on single-line rows so
+   multi-word labels stay readable without 2-3 line wrapping. */
 .photo-inspector .inspector-file-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 5px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
 }
-.photo-inspector .inspector-file-actions button {
+.photo-inspector .inspector-file-actions .inspector-action {
   min-width: 0;
-  padding-inline: 4px;
-  overflow: hidden;
+  min-height: 28px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 5px 8px;
+  border-color: transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+}
+.photo-inspector .inspector-file-actions .inspector-action:hover {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--text);
 }
 .photo-inspector .inspector-file-actions button span {
-  max-width: 100%;
-  font-size: 11px;
-  line-height: 1.25;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  text-align: center;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .photo-inspector .inspector-section-head {
   margin-bottom: 9px;

@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **Fast RAW embedded previews**: grid thumbnails and screen-size viewer previews extract embedded JPEGs from DNG, CR2, CR3, NEF, ARW, ORF, PEF, RW2, SRW, and RAF files before falling back to macOS ImageIO.
 - **Batch metadata editing**: edit capture date, title, keywords, and GPS location across selected items in **Batch → Edit metadata**, written to `.xmp` sidecar files so originals are never modified.
 - **Map view**: browse geotagged photos and RAW files on a built-in offline map, group nearby photos into thumbnail markers, and open a photo in the viewer or show it in Finder.
 - **RAW + JPEG pair guard**: near-duplicate and camera burst scans now protect companion RAW + JPEG/HEIC pairs (matching stem, capture time, camera) from being flagged as duplicates or pruned in burst selection, honoring the `pair_raw_jpeg` preference.
@@ -15,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **GitHub Pages landing page**: interactive product showcase in `docs/` with dark/light screenshot switching, feature tour, sitemap, and responsive navigation.
 
 ### Fixed
+- Fixed the `RAW` badge on library thumbnails so it no longer renders a double orange-on-orange pill, and tightened Inspector action buttons (icon-only top bar + single-line `File` rows).
 - Middle-truncated the selected folder name in the Clean up → Duplicates folder picker so long, similar folder names stay distinguishable.
 - Library controls compact to the available pane width and keep Filters visible alongside scrolling media types.
 - Simplified the scan headers and ready states across all three Duplicates modes.
