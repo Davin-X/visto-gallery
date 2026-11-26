@@ -37,7 +37,7 @@ test("timeline months: catalog counts, collapse, whole-month select, jump", asyn
   // Select all on a month selects the whole month; a second click clears it.
   const selectOctober = month(page, "2026-10").getByRole("button", { name: /Select all|Selected/ });
   await selectOctober.click();
-  await expect(page.getByText("31 selected", { exact: true })).toBeVisible();
+  await expect(page.getByText("31 photos selected", { exact: true })).toBeVisible();
   await expect(selectOctober).toHaveAttribute("aria-pressed", "true");
   await selectOctober.click();
   await expect(selectOctober).toHaveAttribute("aria-pressed", "false");
@@ -97,7 +97,7 @@ test("Hidden timeline counts and selects only hidden items", async ({ page }) =>
     name: /Select all|Selected/,
   });
   await selectNovember.click();
-  await expect(page.getByText("1 selected", { exact: true })).toBeVisible();
+  await expect(page.getByText("1 photo selected", { exact: true })).toBeVisible();
   await expect(selectNovember).toHaveAttribute("aria-pressed", "true");
 
   expect(pageErrors).toEqual([]);
