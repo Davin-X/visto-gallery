@@ -32,6 +32,7 @@
 
 .duplicate-heading-row {
   display: flex;
+  width: 100%;
   flex-wrap: wrap;
   justify-content: flex-start;
   align-items: center;
@@ -83,6 +84,7 @@
 .duplicate-mode-tabs {
   display: inline-grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
   max-width: 100%;
   min-height: 34px;
   height: auto;
@@ -447,13 +449,15 @@
    with a pill showing the picked folder (only in Any file type mode). */
 .duplicate-folder-picker {
   display: flex;
+  width: 100%;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 
-.duplicate-folder-picker .source-select {
+.duplicates-page .duplicate-folder-picker .source-select {
   flex: 1 1 auto;
+  max-width: 100%;
   min-width: 0;
 }
 
