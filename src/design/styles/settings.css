@@ -302,15 +302,23 @@
 
 /* Radio Group */
 .radio-group {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 336px;
+  max-width: 100%;
   gap: 8px;
-  flex-wrap: wrap;
+}
+
+.radio-group:has(> .radio-option:nth-child(2):last-child) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 248px;
 }
 
 .radio-option {
   position: relative;
   display: flex;
   align-items: center;
+  min-width: 0;
   gap: 8px;
   cursor: pointer;
   min-height: 34px;
@@ -389,6 +397,7 @@
   color: var(--text);
   font-size: 13px;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .radio-option:hover .radio-label {
@@ -1676,7 +1685,11 @@
     width: auto;
   }
 
-  .radio-group {
+  .radio-group,
+  .radio-group:has(> .radio-option:nth-child(2):last-child) {
+    display: flex;
+    flex-wrap: wrap;
+    width: auto;
     gap: 12px;
   }
 
@@ -1982,8 +1995,10 @@
   box-shadow: 0 0 0 3px var(--accent);
 }
 
-.settings-catalog-actions .settings-row-control > button {
-  width: 144px;
+.settings-catalog-actions .settings-row-control > button,
+.settings-danger-zone .settings-row-control > button,
+.settings-cache-perf .settings-row-control > button {
+  min-width: 152px;
 }
 
 .settings-row > .root-mapping-path {

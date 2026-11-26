@@ -2159,7 +2159,7 @@ body {
   --field-inner-strong: rgba(32, 42, 54, 0.13);
   --field-focus-inner: rgba(52, 116, 212, 0.24);
   /* Sidebar width: the layout grid is driven from this property. */
-  --sidebar-width: 220px;
+  --sidebar-width: 215px;
 
   /* Spacing scale (scoped so dark mode can override if needed). */
   --space-1: 4px;

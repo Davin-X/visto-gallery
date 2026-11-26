@@ -3,6 +3,7 @@ export {
   useAppearance,
   useAccentColor,
   useSidebarWidth,
+  useInspectorWidth,
   useDefaultLayout,
   useThumbnailSize,
   useSystemDark,
@@ -45,4 +46,4 @@ export {
 } from "./useEditStore";
 export { useSlideshowStore, type SlideshowTransition } from "./useSlideshowStore";
 export { useBatchStore, useBatchConfig, useBatchState } from "./useBatchStore";
-export { usePlaybackStore } from "./usePlaybackStore";
+export { requestVideoPlay, usePlaybackStore } from "./usePlaybackStore";

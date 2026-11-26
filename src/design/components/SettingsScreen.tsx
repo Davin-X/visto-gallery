@@ -4,6 +4,7 @@ import {
   useAppearance,
   useAccentColor,
   useSidebarWidth,
+  useInspectorWidth,
   useDefaultLayout,
   useLibraryStore,
   useSystemDark,
@@ -44,6 +45,7 @@ export function SettingsScreen(props: {
 }) {
   const [activeTab, setActiveTab] = useState<SettingsTab>(props.initialTab ?? "general");
   const sidebarWidth = useSidebarWidth();
+  const inspectorWidth = useInspectorWidth();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingLibrary, setDeletingLibrary] = useState(false);
@@ -96,10 +98,6 @@ export function SettingsScreen(props: {
 
   // Settings hydration and theme application are owned by App.tsx, which is
   // always mounted; Settings only reads and writes.
-
-  const handleSidebarWidthChange = (width: number) => {
-    update("sidebarWidth", width);
-  };
 
   const pickAmbientAudio = useCallback(async () => {
     try {
@@ -327,13 +325,13 @@ export function SettingsScreen(props: {
             appearance={appearance}
             accentColor={accentColor}
             sidebarWidth={sidebarWidth}
+            inspectorWidth={inspectorWidth}
             animateTransitions={animateTransitions}
             showExtensions={showExtensions}
             startupView={startupView}
             openLastFolder={openLastFolder}
             restoreWindow={restoreWindow}
             onChange={update}
-            onSidebarWidthChange={handleSidebarWidthChange}
             renderRadioGroup={renderRadioGroup}
             renderAccentPicker={renderAccentPicker}
           />

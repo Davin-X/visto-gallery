@@ -103,11 +103,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (key === "sidebarWidth") {
       // Hard clamp so the layout stays within the bounds the CSS was authored
       // for (180px - 360px).
-      value = Math.min(360, Math.max(180, Number(value) || 240)) as AppSettings["sidebarWidth"];
+      value = Math.min(360, Math.max(180, Number(value) || 215)) as AppSettings["sidebarWidth"];
     }
     if (key === "inspectorWidth") {
       // Hard clamp so the inspector stays usable (240px - 480px).
-      value = Math.min(480, Math.max(240, Number(value) || 300)) as AppSettings["inspectorWidth"];
+      value = Math.min(480, Math.max(240, Number(value) || 280)) as AppSettings["inspectorWidth"];
     }
     const patch: Partial<AppSettings> = {
       [key]: value,
@@ -122,11 +122,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if ("sidebarWidth" in partial) {
       // Hard clamp so the layout stays within the bounds the CSS was
       // authored for (180px - 360px).
-      next.sidebarWidth = Math.min(360, Math.max(180, Number(partial.sidebarWidth) || 240));
+      next.sidebarWidth = Math.min(360, Math.max(180, Number(partial.sidebarWidth) || 215));
     }
     if ("inspectorWidth" in partial) {
       // Hard clamp so the inspector stays usable (240px - 480px).
-      next.inspectorWidth = Math.min(480, Math.max(240, Number(partial.inspectorWidth) || 300));
+      next.inspectorWidth = Math.min(480, Math.max(240, Number(partial.inspectorWidth) || 280));
     }
     // Optimistic update with the fully-clamped merged state.
     set(next);

@@ -78,7 +78,7 @@ body {
 
 .app-body {
   display: grid;
-  grid-template-columns: var(--sidebar-width, 220px) minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width, 215px) minmax(0, 1fr);
   position: relative;
   flex: 1;
   min-height: 0;
@@ -122,11 +122,11 @@ body {
 }
 
 .resizer-left {
-  left: calc(var(--sidebar-width, 240px) - 5px);
+  left: calc(var(--sidebar-width, 215px) - 5px);
 }
 
 .resizer-right {
-  right: calc(var(--inspector-width, 300px) - 5px);
+  right: calc(var(--inspector-width, 280px) - 5px);
 }
 
 body.is-resizing,

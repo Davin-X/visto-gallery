@@ -21,17 +21,23 @@ function files(count: number): string {
  * What VistoGallery stores beside your media, with the two caches the user can
  * clear. Clearing never touches media files, the catalog, or edit originals.
  */
+// Cached across tab switches so reopening Advanced does not re-walk disk.
+let cachedStorageUsage: StorageUsage | null = null;
+
 export function StorageSection(props: { showNotice: (text: string, code?: ErrorCode) => void }) {
   const { showNotice } = props;
-  const [usage, setUsage] = useState<StorageUsage | null>(null);
+  const [usage, setUsage] = useState<StorageUsage | null>(cachedStorageUsage);
   const [failed, setFailed] = useState(false);
   const [clearing, setClearing] = useState<CacheKind | null>(null);
 
   const refresh = useCallback(async () => {
     setFailed(false);
     try {
-      setUsage(await tauri.storage.usage());
+      const next = await tauri.storage.usage();
+      cachedStorageUsage = next;
+      setUsage(next);
     } catch {
+      cachedStorageUsage = null;
       setUsage(null);
       setFailed(true);
     }
