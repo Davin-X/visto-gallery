@@ -922,14 +922,10 @@
   content: "";
   position: absolute;
   inset: auto 0 0;
-  height: 42%;
-  background: linear-gradient(
-    to top,
-    color-mix(in srgb, var(--surface-3) 90%, transparent),
-    transparent
-  );
+  height: 24%;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.28), transparent);
   pointer-events: none;
-  opacity: 0.45;
+  opacity: 0.7;
 }
 
 .gallery-grid.layout-overview .tile-image {
@@ -1006,6 +1002,18 @@
     0 0 0 1px var(--blue);
 }
 
+.gallery-grid.layout-grid .gallery-tile.inspected {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+
+.gallery-grid.layout-grid .gallery-tile.inspected.selected {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent),
+    0 14px 30px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
 .tile-select-check {
   position: absolute;
   top: 10px;
@@ -1033,6 +1041,12 @@
 .gallery-tile.inspected .tile-select-check {
   opacity: 1;
   transform: scale(1);
+}
+
+.gallery-grid.layout-grid .gallery-tile.inspected:not(:hover):not(.selected)
+  .tile-select-check:not(:focus-within) {
+  opacity: 0;
+  transform: scale(0.95);
 }
 
 .gallery-tile.selected .tile-select-check {
@@ -1134,6 +1148,7 @@
   content: "Hold to show";
   position: absolute;
   inset: 0;
+  height: auto;
   z-index: 3;
   display: grid;
   place-items: center;
@@ -1202,6 +1217,16 @@
   border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
 }
 
+.gallery-grid.layout-grid .tile-caption {
+  padding: 8px 10px 9px;
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  border-top-color: color-mix(in srgb, var(--line) 40%, transparent);
+}
+
+.gallery-grid.layout-grid .tile-caption small {
+  font-size: 11px;
+}
+
 .gallery-grid.layout-grid .tile-caption .tile-size,
 .gallery-grid.layout-overview .tile-caption .tile-size,
 .gallery-grid.layout-timeline .tile-caption .tile-size {
@@ -1213,6 +1238,16 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
   font-weight: 700;
+}
+
+.gallery-grid.layout-grid .tile-caption .tile-size {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 400;
 }
 
 .gallery-grid.layout-grid .gallery-tile.selected .tile-caption b,
@@ -1311,6 +1346,7 @@
   line-height: 1.2;
 }
 
+.gallery-grid .video-label .kind-badge,
 .gallery-grid .format-label .kind-badge {
   padding: 0;
   border: 0;

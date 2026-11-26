@@ -1,6 +1,7 @@
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CachedThumbnail } from "./CachedThumbnail";
+import { VideoPoster } from "./VideoThumb";
 
 const mocks = vi.hoisted(() => ({
   getThumbnail: vi.fn(),
@@ -22,6 +23,20 @@ vi.mock("../../engine/stores/useSettingsStore", () => {
 
 class NoIntersectionObserver {
   observe() {}
+  disconnect() {}
+}
+
+class ImmediateIntersectionObserver {
+  private callback: IntersectionObserverCallback;
+  constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback;
+  }
+  observe() {
+    this.callback(
+      [{ isIntersecting: true } as IntersectionObserverEntry],
+      this as unknown as IntersectionObserver,
+    );
+  }
   disconnect() {}
 }
 
@@ -115,5 +130,33 @@ describe("CachedThumbnail", () => {
     rerender(<CachedThumbnail itemId="a" name="a.jpg" size={128} eager />);
     await waitFor(() => expect(mocks.getThumbnail).toHaveBeenCalledTimes(5));
     expect(mocks.getThumbnail).toHaveBeenLastCalledWith(expect.objectContaining({ itemId: "a" }));
+  });
+
+  it("falls back to VideoThumb for playable videos when the thumbnail request rejects", async () => {
+    vi.stubGlobal("IntersectionObserver", ImmediateIntersectionObserver);
+    mocks.getThumbnail.mockRejectedValue(new Error("ffmpeg unavailable"));
+
+    const { container } = render(
+      <VideoPoster
+        itemId="video-fallback"
+        name="clip.mp4"
+        size={128}
+        fallbackSrc="asset://clip.mp4"
+      />,
+    );
+
+    await waitFor(() => expect(container.querySelector("video")).not.toBeNull());
+    expect(container.querySelector("video")?.getAttribute("title")).toBe("clip.mp4");
+  });
+
+  it("shows the video placeholder when the thumbnail request rejects without a playable fallback", async () => {
+    vi.stubGlobal("IntersectionObserver", ImmediateIntersectionObserver);
+    mocks.getThumbnail.mockRejectedValue(new Error("ffmpeg unavailable"));
+
+    const { getByText } = render(
+      <VideoPoster itemId="video-no-fallback" name="clip.mkv" size={128} />,
+    );
+
+    await waitFor(() => expect(getByText("Video preview unavailable")).toBeTruthy());
   });
 });
