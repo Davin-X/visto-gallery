@@ -278,12 +278,23 @@
   .library-header .compact-view-options {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    flex: 0 0 32px;
+    height: 32px;
+    padding: 0;
     color: var(--text);
-    background: var(--surface-2);
+    background: var(--surface-3);
     border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 4px 8px;
+    border-radius: 8px;
   }
+
+  .library-header .compact-view-options:hover,
+  .library-header .compact-view-options[aria-expanded="true"] {
+    background: var(--surface-2);
+    color: var(--accent-text);
+  }
+
   .library-header
     .collection-toolbar:not(.options-open)
     :is(.zoom-control, .sort-control, .view-controls .toolbar-divider),
