@@ -1131,6 +1131,14 @@
   min-height: 0;
   max-height: 360px;
   overflow: auto;
+  border-radius: 8px;
+  /* The cover hides the bottom shadow when the list reaches its end. */
+  background:
+    linear-gradient(var(--surface), var(--surface)) bottom / 100% 14px local,
+    linear-gradient(to top, color-mix(in srgb, var(--text) 24%, transparent), transparent) bottom /
+      100% 12px scroll;
+  background-repeat: no-repeat;
+  background-color: var(--surface);
 }
 
 .sources-summary {
@@ -1157,11 +1165,6 @@
   color: var(--muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-}
-
-.sources-summary-hint {
-  color: var(--faint);
-  font-size: 11px;
 }
 
 .sources-summary-dot {
@@ -1465,6 +1468,18 @@
   padding: 4px 10px;
 }
 
+.settings-section .sources-footer {
+  margin-top: 12px;
+}
+
+.sources-footer:has(.sources-remove-all) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .sources-note {
   display: flex;
   align-items: flex-start;
@@ -1495,12 +1510,21 @@
   margin: 0;
 }
 
+.sources-sheet .sources-summary {
+  display: grid;
+  gap: 10px;
+}
+
 .sources-sheet .sources-table-viewport {
   flex: 1 1 auto;
   overflow: auto;
   max-height: none;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
+}
+
+.sources-table tbody tr:not(.is-active):not(:hover) td {
+  background: transparent;
 }
 
 .sources-sheet .sources-table {
@@ -1752,8 +1776,7 @@
     width: 44px;
   }
 
-  .sources-row-view,
-  .sources-summary-hint {
+  .sources-row-view {
     display: none;
   }
 
