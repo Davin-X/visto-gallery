@@ -1,3 +1,4 @@
+import { DateJump } from "./timeline/DateJump";
 import { cachedItem, groupLoaded, scopedPages, timelineKey } from "./timeline/monthCache";
 import { MonthContinuation } from "./timeline/MonthContinuation";
 import type { CSSProperties } from "react";
@@ -1799,25 +1800,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                           </button>
                         ))}
                       </div>
-                      <select
-                        className="timeline-jump-month"
-                        aria-label="Jump to month"
-                        value=""
-                        onChange={(e) => {
-                          if (e.target.value) void jumpToTimelineMonth(e.target.value);
-                        }}
-                      >
-                        <option value="">Jump to date…</option>
-                        {timelineYears.map(({ year, months }) => (
-                          <optgroup key={year} label={year}>
-                            {months.map((month) => (
-                              <option key={month.key} value={month.key}>
-                                {month.label} · {month.count.toLocaleString()}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
+                      <DateJump years={timelineYears} jump={jumpToTimelineMonth} />
                     </nav>
                   )}
                   {timelineMonths.length === 0 ||
