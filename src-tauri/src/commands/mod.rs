@@ -3,6 +3,7 @@ mod albums;
 mod backup;
 mod batch;
 mod batch_pipeline;
+mod camera_card;
 mod cancel;
 mod default_apps;
 pub(crate) mod dhash;
@@ -36,6 +37,7 @@ pub use backup::*;
 pub use batch::*;
 #[allow(unused_imports)]
 pub(crate) use batch_pipeline::{export_batch_item, render_batch_filename};
+pub use camera_card::*;
 pub use cancel::{cancel_find_similar_photos, cancel_move_to_trash, cancel_scan};
 pub(crate) use cancel::{CancelGroup, CancelToken};
 pub use default_apps::{default_apps_status, set_default_app};

@@ -37,6 +37,7 @@ export interface LibraryScreenProps {
   onCreateAlbum: (itemIds?: string[]) => void;
   onImportFiles?: () => void;
   onImportFolder?: () => void;
+  onImportCameraCard?: () => void;
   onInspectItem: (id: string) => void;
   onOpenAlbumPicker: (itemIds?: string[]) => void;
   onOpenAlbums: () => void;

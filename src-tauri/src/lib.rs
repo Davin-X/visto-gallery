@@ -400,6 +400,7 @@ pub fn run() {
             split_source,
             pick_source_folders,
             pick_media_files,
+            import_camera_card,
             pick_ambient_audio,
             cancel_scan,
             cancel_move_to_trash,

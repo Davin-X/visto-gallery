@@ -54,6 +54,7 @@ interface AppScreenRouterProps {
   rescanSource: (folder: LibraryFolder) => Promise<void>;
   importFiles: () => Promise<void>;
   importFolder: () => Promise<void>;
+  importCameraCard: () => Promise<void>;
   showNotice: ShowNotice;
   showErrorNotice: (error: unknown, prefix?: string) => void;
   exportToBatch: () => void;
@@ -114,6 +115,7 @@ export function AppScreenRouter({
   rescanSource,
   importFiles,
   importFolder,
+  importCameraCard,
   importFolderPath,
   showNotice,
   showErrorNotice,
@@ -256,6 +258,7 @@ export function AppScreenRouter({
           }}
           onImportFolder={() => importFolder()}
           onImportFiles={() => importFiles()}
+          onImportCameraCard={() => importCameraCard()}
           onPlaySlideshow={playSlideshow}
           onCreateAlbum={openAlbumDialog}
           searchInputRef={searchInputRef}

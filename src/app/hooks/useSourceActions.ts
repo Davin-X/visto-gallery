@@ -107,6 +107,44 @@ export function useSourceActions({
     }
   };
 
+  const importCameraCard = async () => {
+    let sourcePaths: string[];
+    try {
+      sourcePaths = await tauri.library.pickSourceFolders();
+      if (!sourcePaths.length) return;
+    } catch (e) {
+      showErrorNotice(e, "Could not open the folder picker");
+      return;
+    }
+    let destinationPaths: string[];
+    try {
+      destinationPaths = await tauri.library.pickSourceFolders();
+      if (!destinationPaths.length) return;
+    } catch (e) {
+      showErrorNotice(e, "Could not open the folder picker");
+      return;
+    }
+    const source = sourcePaths[0];
+    const destination = destinationPaths[0];
+    const library = useLibraryStore.getState();
+    try {
+      library.setBusy(true);
+      library.setProgress({ phase: "importing", processed: 0, total: 0 });
+      const result = await tauri.library.importCameraCard(source, destination);
+      await library.loadLibrary();
+      refreshLibraryStats();
+      library.setBusy(false);
+      library.setProgress(null);
+      showNotice(
+        `Imported ${result.imported.toLocaleString()} file(s), skipped ${result.skipped.toLocaleString()} duplicate(s), ${result.failed.toLocaleString()} failed.`,
+      );
+    } catch (e) {
+      library.setBusy(false);
+      library.setProgress(null);
+      showErrorNotice(e, "Camera card import failed");
+    }
+  };
+
   const importFiles = async () => {
     let paths: string[];
     try {
@@ -442,6 +480,7 @@ export function useSourceActions({
     importPaths,
     importFolder,
     importFolderPath,
+    importCameraCard,
     rescanSource,
     rescanSources,
     removeAllSources,
