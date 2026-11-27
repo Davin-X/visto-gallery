@@ -72,7 +72,7 @@ export interface CollapseOverrides {
   years: Record<string, boolean>;
 }
 
-const STORAGE_KEY = "vistogallery.timeline.collapsed";
+const STORAGE_KEY = "vistogallery.timeline.collapsed.v2";
 
 function readOverrides(): CollapseOverrides {
   try {
@@ -95,22 +95,9 @@ function writeOverrides(overrides: CollapseOverrides): void {
   }
 }
 
-/**
- * Whether a month is collapsed: an explicit month choice wins, then a choice
- * made on its year; otherwise the newest year with items is open and older
- * years start folded.
- */
-export function isMonthCollapsed(
-  overrides: CollapseOverrides,
-  key: string,
-  newestYear: string | null,
-): boolean {
-  const explicit = overrides.months[key];
-  if (explicit !== undefined) return explicit;
-  const year = monthYear(key);
-  const yearChoice = overrides.years[year];
-  if (yearChoice !== undefined) return yearChoice;
-  return newestYear !== null && year < newestYear;
+/** Explicit month and year choices override the folded default. */
+export function isMonthCollapsed(overrides: CollapseOverrides, key: string): boolean {
+  return overrides.months[key] ?? overrides.years[monthYear(key)] ?? true;
 }
 
 /** Collapse state remembered across launches, per viewer. */

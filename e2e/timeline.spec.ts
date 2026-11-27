@@ -25,8 +25,7 @@ test("timeline months: catalog counts, collapse, whole-month select, jump", asyn
   // The sort menu is locked to date order in the Timeline.
   await expect(page.getByRole("combobox", { name: "Sort library by" })).toBeDisabled();
 
-  // Collapse a month: its tiles give way to a strip of covers.
-  await toggle(page, "2026-10").click();
+  // Even the newest year starts with month cover strips.
   await expect(toggle(page, "2026-10")).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByRole("button", { name: "Show 31 items from October 2026" })).toBeVisible();
 
@@ -70,11 +69,11 @@ test("timeline collapse state survives a relaunch", async ({ page }) => {
   await page.setViewportSize({ width: 1500, height: 900 });
   await openTimeline(page);
   await toggle(page, "2026-10").click();
-  await expect(toggle(page, "2026-10")).toHaveAttribute("aria-expanded", "false");
+  await expect(toggle(page, "2026-10")).toHaveAttribute("aria-expanded", "true");
 
   await openTimeline(page);
-  await expect(toggle(page, "2026-10")).toHaveAttribute("aria-expanded", "false");
-  await expect(toggle(page, "2026-11")).toHaveAttribute("aria-expanded", "true");
+  await expect(toggle(page, "2026-10")).toHaveAttribute("aria-expanded", "true");
+  await expect(toggle(page, "2026-11")).toHaveAttribute("aria-expanded", "false");
 });
 
 test("Hidden timeline counts and selects only hidden items", async ({ page }) => {
@@ -169,6 +168,7 @@ test("a large partial month continues in scoped pages as its end approaches", as
   await page.goto("/harness.html?benchmark=600");
   await page.waitForSelector(".gallery-tile");
   await page.getByRole("button", { name: "Timeline view", exact: true }).click();
+  await toggle(page, "2026-11").click();
   const tiles = page.locator(".layout-timeline .gallery-tile");
   await expect(tiles).toHaveCount(250);
   const marker = page.locator(".timeline-continuation");
@@ -201,3 +201,23 @@ for (const scheme of ["light", "dark"] as const) {
     expect((await bar.boundingBox())!.y).toBeCloseTo(top, 0);
   });
 }
+
+test("April 2024 starts folded and a date jump does not change its saved default", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  async function open() {
+    await page.goto("/harness.html?benchmark=1000&dayStep=1");
+    await page.waitForSelector(".gallery-tile");
+    await page.getByRole("button", { name: "Timeline view", exact: true }).click();
+  }
+  await open();
+  const april = toggle(page, "2024-04");
+  await expect(april).toHaveAttribute("aria-expanded", "false");
+  await page.getByRole("button", { name: "Jump to month" }).click();
+  await page.getByRole("combobox", { name: "Year", exact: true }).selectOption("2024");
+  await page.getByRole("button", { name: "April 2024", exact: true }).click();
+  await expect(april).toHaveAttribute("aria-expanded", "true");
+  await open();
+  await expect(april).toHaveAttribute("aria-expanded", "false");
+});

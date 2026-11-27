@@ -802,7 +802,6 @@ function LibraryScreen(props: LibraryScreenProps) {
   // Select all describe the whole month, not just the loaded pages. Hidden is
   // its own scope: its months, counts and selection use the hidden filter.
   const timelineActive = props.layout === "timeline";
-  const catalogTimeline = timelineActive;
   const timelineFilter = props.hiddenView
     ? hiddenPageFilter(library)
     : currentLibraryFilter(library);
@@ -817,14 +816,14 @@ function LibraryScreen(props: LibraryScreenProps) {
       state.refreshDerived();
     }
   }, [timelineActive, timelineRefreshKey]);
-  const catalogMonths = useTimelineMonths(catalogTimeline, timelineFilter, timelineRefreshKey);
+  const catalogMonths = useTimelineMonths(timelineActive, timelineFilter, timelineRefreshKey);
   const pages = scopedPages(library, !!props.hiddenView);
   const timelineMonths = useMemo(
     () => (timelineActive ? (catalogMonths ?? monthsFromItems(props.items)) : []),
     [timelineActive, catalogMonths, props.items],
   );
   const timelineCollapse = useTimelineCollapse();
-  const newestTimelineYear = timelineMonths[0] ? monthYear(timelineMonths[0].key) : null;
+  const [jumpTarget, setJumpTarget] = useState<string | null>(null);
   const loadedByMonth = useMemo(
     () => groupLoaded(timelineActive ? props.items : [], pages),
     [timelineActive, props.items, pages],
@@ -835,9 +834,10 @@ function LibraryScreen(props: LibraryScreenProps) {
         ...month,
         label: monthLabel(month.key),
         visibleItems: loadedByMonth.get(month.key) ?? [],
-        collapsed: isMonthCollapsed(timelineCollapse.overrides, month.key, newestTimelineYear),
+        collapsed:
+          month.key !== jumpTarget && isMonthCollapsed(timelineCollapse.overrides, month.key),
       })),
-    [timelineMonths, loadedByMonth, timelineCollapse.overrides, newestTimelineYear],
+    [timelineMonths, loadedByMonth, timelineCollapse.overrides, jumpTarget],
   );
   const yearsByKey = useMemo(() => groupYears(visibleTimelineGroups), [visibleTimelineGroups]);
   const timelineYears = useMemo(() => [...yearsByKey.values()], [yearsByKey]);
@@ -845,11 +845,11 @@ function LibraryScreen(props: LibraryScreenProps) {
   // The Timeline is a chronology: it always reads newest first by date.
   const { sortBy: librarySortBy, sortOrder: librarySortOrder, setSort: setLibrarySort } = library;
   useEffect(() => {
-    if (!catalogTimeline) return;
+    if (!timelineActive) return;
     if (librarySortBy !== "capturedAt" || librarySortOrder !== "desc") {
       setLibrarySort("capturedAt", "desc");
     }
-  }, [catalogTimeline, librarySortBy, librarySortOrder, setLibrarySort]);
+  }, [timelineActive, librarySortBy, librarySortOrder, setLibrarySort]);
 
   const sortDetailsBy = (sortBy: typeof library.sortBy) => {
     library.setSort(
@@ -929,6 +929,7 @@ function LibraryScreen(props: LibraryScreenProps) {
     );
   };
   const toggleTimelineCollapse = (key: string, collapsed: boolean, everything: boolean) => {
+    if (everything || key === jumpTarget) setJumpTarget(null);
     if (everything) {
       timelineCollapse.setAll(
         timelineYears.map(({ year }) => year),
@@ -939,6 +940,7 @@ function LibraryScreen(props: LibraryScreenProps) {
     }
   };
   const toggleTimelineYear = (year: string, everything: boolean) => {
+    if (everything || jumpTarget?.startsWith(year + "-")) setJumpTarget(null);
     const allCollapsed = yearsByKey.get(year)?.collapsed;
     if (everything) {
       timelineCollapse.setAll(
@@ -949,10 +951,8 @@ function LibraryScreen(props: LibraryScreenProps) {
       timelineCollapse.setYear(year, !allCollapsed);
     }
   };
-  const [jumpTarget, setJumpTarget] = useState<string | null>(null);
   const jumpToTimelineMonth = (key: string, toYear = false) => {
     setJumpTarget(key);
-    timelineCollapse.setMonth(key, false);
     const scroll = () =>
       (
         (toYear && document.getElementById(`timeline-year-${monthYear(key)}`)) ||
@@ -1358,8 +1358,8 @@ function LibraryScreen(props: LibraryScreenProps) {
                   >
                     <select
                       aria-label="Sort library by"
-                      disabled={catalogTimeline}
-                      title={catalogTimeline ? "Timeline is always sorted by date" : undefined}
+                      disabled={timelineActive}
+                      title={timelineActive ? "Timeline is always sorted by date" : undefined}
                       value={library.sortBy}
                       onChange={(e) =>
                         library.setSort(e.target.value as typeof library.sortBy, library.sortOrder)
@@ -1374,9 +1374,9 @@ function LibraryScreen(props: LibraryScreenProps) {
                     <button
                       type="button"
                       aria-label={`Sort ${nextSortDirectionLabel}`}
-                      disabled={catalogTimeline}
+                      disabled={timelineActive}
                       title={
-                        catalogTimeline
+                        timelineActive
                           ? "Timeline is always sorted by date, newest first"
                           : `Currently ${sortDirectionLabel}; click to sort ${nextSortDirectionLabel}`
                       }
