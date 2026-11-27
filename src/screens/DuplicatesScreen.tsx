@@ -71,8 +71,8 @@ interface DuplicatesScreenProps {
   onSetBurstScanned?: (scanned: boolean) => void;
   onClearBursts?: () => void;
   onScanSimilar?: (scope?: string | null) => Promise<void>;
-  mode?: ScanMode;
-  onModeChange?: (mode: ScanMode) => void;
+  mode: ScanMode;
+  onModeChange: (mode: ScanMode) => void;
 }
 
 const GROUP_PAGE = 40;
@@ -165,7 +165,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     onChangeScope,
     onError,
     onFilesTrashed,
-    mode: modeProp,
+    mode,
     onModeChange,
   } = props;
 
@@ -176,8 +176,6 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const [keeperMode, setKeeperMode] = useState<KeeperMode>("best");
   const [filterKind, setFilterKind] = useState<KindFilter>("all");
   const [sortBy, setSortBy] = useState<SortBy>("saving");
-  const [localMode, setLocalMode] = useState<ScanMode>("media");
-  const mode = modeProp ?? localMode;
   const [localBurstGroups, setLocalBurstGroups] = useState<SimilarGroup[]>([]);
   const [localBurstScanned, setLocalBurstScanned] = useState(false);
   const burstGroups = props.burstGroups ?? localBurstGroups;
@@ -607,12 +605,11 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
 
   const switchMode = useCallback(
     (next: ScanMode) => {
-      if (modeProp === undefined) setLocalMode(next);
-      onModeChange?.(next);
+      onModeChange(next);
       setConfirmFileTrash(false);
       setSelected(new Set());
     },
-    [modeProp, onModeChange],
+    [onModeChange],
   );
 
   const runFileScan = useCallback(async () => {
@@ -972,7 +969,11 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           </p>
         )}
       </div>
-      <div className={`duplicate-heading-actions${mode === "files" ? " is-file-mode" : ""}`}>
+      <div
+        className={
+          mode === "files" ? "duplicate-heading-actions is-file-mode" : "duplicate-heading-actions"
+        }
+      >
         {modeTabs}
         <div className="duplicate-heading-row">
           {folderPicker}

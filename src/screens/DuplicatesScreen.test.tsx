@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import DuplicatesScreen from "./DuplicatesScreen";
+import DuplicatesScreen, { type ScanMode } from "./DuplicatesScreen";
 import type { MediaItem } from "../engine/types/media";
 import type { DuplicateGroup } from "../engine/types/media";
 import { makeLibraryFolder, makeMediaItem } from "../test/fixtures";
@@ -55,10 +56,26 @@ function selectedSummary(): string {
   return (bar?.textContent ?? "").replace(/\s+/g, " ").trim();
 }
 
+type DuplicatesScreenProps = Parameters<typeof DuplicatesScreen>[0];
+
+function ControlledTestScreen(props: DuplicatesScreenProps) {
+  const [mode, setMode] = useState<ScanMode>(props.mode);
+  return (
+    <DuplicatesScreen
+      {...props}
+      mode={mode}
+      onModeChange={(next) => {
+        setMode(next);
+        props.onModeChange(next);
+      }}
+    />
+  );
+}
+
 function renderScreen(
   groups: DuplicateGroup[],
   scanned = true,
-  extra: Partial<Parameters<typeof DuplicatesScreen>[0]> = {},
+  extra: Partial<DuplicatesScreenProps> = {},
 ) {
   const onRequestDeleteItems = vi.fn();
   const props = {
@@ -71,9 +88,11 @@ function renderScreen(
     assetUrl: (path: string) => path,
     onRequestDeleteItems,
     onHideIds: vi.fn(),
+    mode: "media" as ScanMode,
+    onModeChange: vi.fn(),
     ...extra,
   };
-  return { ...render(<DuplicatesScreen {...props} />), props, onRequestDeleteItems };
+  return { ...render(<ControlledTestScreen {...props} />), props, onRequestDeleteItems };
 }
 
 describe("DuplicatesScreen", () => {
@@ -104,7 +123,7 @@ describe("DuplicatesScreen", () => {
     expect(onSetBurstScanned).not.toHaveBeenCalled();
     expect(screen.getByText("burst-photo.jpg")).toBeInTheDocument();
 
-    view.rerender(<DuplicatesScreen {...view.props} scope="/another-folder" />);
+    view.rerender(<ControlledTestScreen {...view.props} scope="/another-folder" />);
 
     expect(onSetBurstGroups).toHaveBeenCalledWith([]);
     expect(onSetBurstScanned).toHaveBeenCalledWith(false);
@@ -174,7 +193,7 @@ describe("DuplicatesScreen", () => {
 
     // The store drops a trashed copy from the group; the stale id must not
     // keep the action bar alive.
-    rerender(<DuplicatesScreen {...props} groups={[makeGroup([jpg])]} items={[jpg]} />);
+    rerender(<ControlledTestScreen {...props} groups={[makeGroup([jpg])]} items={[jpg]} />);
 
     expect(selectedSummary()).toContain("0 of 0 extra copies selected");
     const trashButton = screen.getByRole("button", { name: /Move to Trash/i });
@@ -606,7 +625,7 @@ describe("DuplicatesScreen", () => {
       (screen.getByLabelText("Only compare files in this folder") as HTMLSelectElement).disabled,
     ).toBe(true);
 
-    rerender(<DuplicatesScreen {...props} scope="/shoots/snow" />);
+    rerender(<ControlledTestScreen {...props} scope="/shoots/snow" />);
     await act(async () => {
       resolveScan(staleScan);
     });
