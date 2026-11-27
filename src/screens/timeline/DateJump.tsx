@@ -43,7 +43,7 @@ export function DateJump({
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        Jump to date <ChevronDownIcon size={12} />
+        Jump to month <ChevronDownIcon size={12} />
       </button>
       {open && current && (
         <div className="date-jump-panel">
