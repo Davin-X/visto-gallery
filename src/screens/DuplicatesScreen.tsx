@@ -974,7 +974,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                 setConfirmFileTrash(false);
               }}
             >
-              Clear
+              Clear results
             </button>
           )}
           {fileBusy ? (
@@ -1109,7 +1109,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
                   setConfirmFileTrash(false);
                 }}
               >
-                Clear
+                Clear selection
               </button>
               <button
                 type="button"
@@ -1364,7 +1364,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
               disabled={selected.size === 0}
               onClick={selectNone}
             >
-              Clear
+              Clear selection
             </button>
             <button
               type="button"
