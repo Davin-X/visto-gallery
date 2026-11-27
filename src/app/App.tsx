@@ -251,6 +251,7 @@ function App() {
         cachedItem(lib, scope === "hidden", targetId) ??
         lib.mapItems.find((candidate) => candidate.id === targetId) ??
         lib.duplicates.flatMap((g) => g.items).find((candidate) => candidate.id === targetId) ??
+        lib.burstGroups.flatMap((g) => g.items).find((candidate) => candidate.id === targetId) ??
         null;
       if (!item) return;
       setViewerOrigin(origin);

@@ -130,4 +130,21 @@ describe("useOpenWith", () => {
     await waitFor(() => expect(openViewer).toHaveBeenCalledWith("item-0"));
     expect(importPaths).toHaveBeenCalledWith(["/Users/me/Pictures/b.jpg"]);
   });
+
+  it("does not lose a path arriving as the listener is attached", async () => {
+    mocks.onOpenPathsPending.mockImplementationOnce(async (callback) => {
+      mocks.takePendingOpenPaths
+        .mockResolvedValueOnce([{ path: "/Users/me/Pictures/c.jpg", isDir: false }])
+        .mockResolvedValueOnce([]);
+      callback();
+      return () => {};
+    });
+
+    const { importPaths, openViewer } = renderOpenWith();
+
+    await waitFor(() => expect(openViewer).toHaveBeenCalledWith("item-0"));
+    expect(mocks.takePendingOpenPaths).toHaveBeenCalledTimes(2);
+    expect(importPaths).toHaveBeenCalledTimes(1);
+    expect(importPaths).toHaveBeenCalledWith(["/Users/me/Pictures/c.jpg"]);
+  });
 });

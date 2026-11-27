@@ -91,13 +91,16 @@ export function useOpenWith(options: UseOpenWithOptions) {
         });
     };
 
-    void drain();
     let unlisten: (() => void) | undefined;
     void (async () => {
       try {
         const stop = await events.onOpenPathsPending(drain);
         if (cancelled) stop();
-        else unlisten = stop;
+        else {
+          unlisten = stop;
+          // Subscribe before draining so Finder events cannot land in a gap.
+          drain();
+        }
       } catch {
         /* browser preview has no Tauri event bridge */
       }
