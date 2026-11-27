@@ -23,6 +23,10 @@ function findKnownItem(state: LibraryState, id: string): MediaItem | null {
     const match = group.items.find((item) => item.id === id);
     if (match) return match;
   }
+  for (const group of state.burstGroups) {
+    const match = group.items.find((item) => item.id === id);
+    if (match) return match;
+  }
   return null;
 }
 

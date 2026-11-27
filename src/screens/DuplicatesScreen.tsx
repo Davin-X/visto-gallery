@@ -71,6 +71,8 @@ interface DuplicatesScreenProps {
   onSetBurstScanned?: (scanned: boolean) => void;
   onClearBursts?: () => void;
   onScanSimilar?: (scope?: string | null) => Promise<void>;
+  mode?: ScanMode;
+  onModeChange?: (mode: ScanMode) => void;
 }
 
 const GROUP_PAGE = 40;
@@ -79,7 +81,7 @@ const GROUP_PAGE = 40;
 const FILE_GROUP_PAGE = 50;
 
 type ViewMode = "grid" | "list";
-type ScanMode = "media" | "bursts" | "files";
+export type ScanMode = "media" | "bursts" | "files";
 type KindFilter = "all" | "photo" | "video" | "raw";
 type SortBy = "saving" | "copies" | "newest" | "name";
 
@@ -163,6 +165,8 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     onChangeScope,
     onError,
     onFilesTrashed,
+    mode: modeProp,
+    onModeChange,
   } = props;
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -172,7 +176,8 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   const [keeperMode, setKeeperMode] = useState<KeeperMode>("best");
   const [filterKind, setFilterKind] = useState<KindFilter>("all");
   const [sortBy, setSortBy] = useState<SortBy>("saving");
-  const [mode, setMode] = useState<ScanMode>("media");
+  const [localMode, setLocalMode] = useState<ScanMode>("media");
+  const mode = modeProp ?? localMode;
   const [localBurstGroups, setLocalBurstGroups] = useState<SimilarGroup[]>([]);
   const [localBurstScanned, setLocalBurstScanned] = useState(false);
   const burstGroups = props.burstGroups ?? localBurstGroups;
@@ -506,12 +511,15 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     if (fileBusyRef.current) void tauri.duplicates.cancel();
   }, [fileScope]);
 
+  const previousScope = useRef(scope);
   useEffect(() => {
+    if (previousScope.current === scope) return;
+    previousScope.current = scope;
     burstScanRequest.current += 1;
     setBurstGroups([]);
     setBurstScanned(false);
     setBurstProgress(null);
-  }, [scope, setBurstGroups, setBurstScanned]);
+  }, [scope]);
 
   // A folder picked for the any-file scan is session-only; narrowing the
   // library scope means the user is choosing a source again, so the pick
@@ -597,11 +605,15 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     setBurstScanned,
   ]);
 
-  const switchMode = useCallback((next: ScanMode) => {
-    setMode(next);
-    setConfirmFileTrash(false);
-    setSelected(new Set());
-  }, []);
+  const switchMode = useCallback(
+    (next: ScanMode) => {
+      setLocalMode(next);
+      onModeChange?.(next);
+      setConfirmFileTrash(false);
+      setSelected(new Set());
+    },
+    [onModeChange],
+  );
 
   const runFileScan = useCallback(async () => {
     if (!fileScope) return;
@@ -960,7 +972,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           </p>
         )}
       </div>
-      <div className="duplicate-heading-actions">
+      <div className="duplicate-heading-actions is-file-mode">
         {modeTabs}
         <div className="duplicate-heading-row">
           {folderPicker}

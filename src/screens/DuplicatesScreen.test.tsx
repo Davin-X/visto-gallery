@@ -77,6 +77,39 @@ function renderScreen(
 }
 
 describe("DuplicatesScreen", () => {
+  it("preserves burst scan results on mount and clears them when the scope changes", () => {
+    const groups = [
+      {
+        id: "burst-1",
+        groupType: "burst",
+        status: "review",
+        reason: "time_and_visual_similarity",
+        keeperId: "burst-photo",
+        confidence: 0.9,
+        items: [item({ id: "burst-photo" })],
+      },
+    ];
+    const onSetBurstGroups = vi.fn();
+    const onSetBurstScanned = vi.fn();
+
+    const view = renderScreen([], true, {
+      mode: "bursts",
+      burstGroups: groups,
+      burstScanned: true,
+      onSetBurstGroups,
+      onSetBurstScanned,
+    });
+
+    expect(onSetBurstGroups).not.toHaveBeenCalled();
+    expect(onSetBurstScanned).not.toHaveBeenCalled();
+    expect(screen.getByText("burst-photo.jpg")).toBeInTheDocument();
+
+    view.rerender(<DuplicatesScreen {...view.props} scope="/another-folder" />);
+
+    expect(onSetBurstGroups).toHaveBeenCalledWith([]);
+    expect(onSetBurstScanned).toHaveBeenCalledWith(false);
+  });
+
   it("marks the best-quality copy as the keeper and counts the rest as copies", () => {
     const jpg = item({ id: "keep" });
     const raw = item({ id: "raw", name: "raw.cr2", kind: "raw", extension: "cr2" });

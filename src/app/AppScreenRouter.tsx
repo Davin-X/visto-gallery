@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import type { MutableRefObject, RefObject } from "react";
 import { tauri } from "../engine/commands/tauri";
 import { clearEditDraft } from "../engine/stores";
@@ -12,7 +12,7 @@ import ViewerScreen from "../screens/ViewerScreen";
 import VideoPlayerScreen from "../screens/VideoPlayerScreen";
 import BatchScreen from "../screens/BatchScreen";
 import AlbumsScreen from "../screens/AlbumsScreen";
-import DuplicatesScreen from "../screens/DuplicatesScreen";
+import DuplicatesScreen, { type ScanMode } from "../screens/DuplicatesScreen";
 import CleanupScreen from "../screens/CleanupScreen";
 import { SettingsScreen } from "../design/components/SettingsScreen";
 import type { LibraryFolder, LibraryStats, SmartAlbum } from "../engine/types/commands";
@@ -152,6 +152,7 @@ export function AppScreenRouter({
   copyTagsToFinderForIds,
   playVideoInBackground,
 }: AppScreenRouterProps) {
+  const [duplicatesMode, setDuplicatesMode] = useState<ScanMode>("media");
   const openViewerEdit = async (item: MediaItem) => {
     await edit.saveDraft();
     await edit.open(item);
@@ -565,6 +566,8 @@ export function AppScreenRouter({
           onSetBurstScanned={library.setBurstScanned}
           onClearBursts={library.clearBurstGroups}
           onScanSimilar={library.scanSimilar}
+          mode={duplicatesMode}
+          onModeChange={setDuplicatesMode}
           items={library.items}
           onScan={library.scanDuplicates}
           onClear={library.clearDuplicates}

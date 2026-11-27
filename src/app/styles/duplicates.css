@@ -30,6 +30,26 @@
   gap: 8px;
 }
 
+.duplicate-heading-actions.is-file-mode {
+  flex-basis: 640px;
+  min-width: min(640px, 100%);
+}
+
+.duplicate-heading-actions.is-file-mode .duplicate-mode-tabs {
+  align-self: flex-end;
+  width: min(440px, 100%);
+}
+
+.duplicate-heading-actions.is-file-mode .duplicate-folder-picker {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+.duplicate-heading-actions.is-file-mode .duplicate-folder-picker .source-select {
+  flex: 0 0 180px;
+  width: 180px;
+}
+
 .duplicate-heading-row {
   display: flex;
   width: 100%;
@@ -1127,6 +1147,22 @@
 }
 
 @media (max-width: 720px) {
+  .duplicate-heading-actions.is-file-mode {
+    flex-basis: 100%;
+    min-width: 0;
+    align-items: stretch;
+  }
+  .duplicate-heading-actions.is-file-mode .duplicate-mode-tabs {
+    align-self: stretch;
+    width: 100%;
+  }
+  .duplicate-heading-actions.is-file-mode .duplicate-heading-row,
+  .duplicate-heading-actions.is-file-mode .duplicate-folder-picker {
+    flex-wrap: wrap;
+  }
+  .duplicate-heading-actions.is-file-mode .duplicate-folder-picker {
+    flex-basis: 100%;
+  }
   .duplicate-tiles {
     grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
     gap: 8px;
