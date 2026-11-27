@@ -471,17 +471,17 @@ define_settings! {
     video_loop: bool = false,
     watch_folders: Vec<String> = Vec::new(),
     auto_import: bool = false,
-    /// Dormant compatibility field. RAW+JPEG pairing is not implemented yet;
-    /// the control is marked unavailable in Settings, but the persisted value
-    /// is kept so an upgrade never drops a user preference.
+    /// RAW+JPEG companion pairs are protected in duplicate/burst scans; the
+    /// Settings toggle for it is still unavailable, but the persisted value is
+    /// kept so an upgrade never drops a user preference.
     pair_raw_jpeg: bool = true,
     /// Dormant compatibility field. Burst stacking is not implemented yet; the
     /// control is marked unavailable in Settings, but the persisted value is
     /// kept so an upgrade never drops a user preference.
     stack_bursts: bool = true,
-    /// Dormant compatibility field. Live Photo stacking is not implemented yet;
-    /// the control is marked unavailable in Settings, but the persisted value
-    /// is kept so an upgrade never drops a user preference.
+    /// Live Photo motion playback on hover is implemented in the library grid;
+    /// catalog stacking is not, and the Settings toggle stays unavailable, but
+    /// the persisted value is kept so an upgrade never drops a user preference.
     stack_live_photos: bool = true,
     /// Contact GitHub for public release metadata once after launch. Defaults
     /// to false to preserve the local-first promise; Help > Check for Updates

@@ -26,6 +26,7 @@ import {
   TrashIcon,
 } from "../design/components/icons";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
+import { LivePhotoThumb } from "../design/components/LivePhotoThumb";
 import { PanelResizer } from "../design/components/PanelResizer";
 import { KindBadge, KindDot } from "../design/components/KindBadge";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
@@ -68,6 +69,7 @@ import type { MediaItem, Filter } from "../engine/types/media";
 import type { LibraryFolder } from "../engine/types/commands";
 import { formatItemDate, itemMonth, monthLabel } from "../engine/utils/mediaDate";
 import { displayFileName } from "../engine/utils/fileName";
+import { livePhotoMotionMap } from "../engine/utils/livePhotos";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
 import { buildItemContextMenu } from "../engine/utils/itemContextMenu";
 
@@ -238,6 +240,7 @@ function LibraryScreen(props: LibraryScreenProps) {
   // preview is only 42-52 px, so a 128 px thumbnail is plenty there.
   const thumbnailPixels =
     props.layout === "overview" ? 1024 : props.layout === "details" ? 128 : 512;
+  const livePhotoMotionByItemId = useMemo(() => livePhotoMotionMap(props.items), [props.items]);
   // Hidden items are masked by default. A pointer-down reveals just that tile
   // while it is held; releasing (or leaving the tile) puts the veil back.
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
@@ -1743,12 +1746,17 @@ function LibraryScreen(props: LibraryScreenProps) {
                             />
                           )
                         ) : item.kind === "photo" ? (
-                          <CachedThumbnail
+                          <LivePhotoThumb
                             itemId={item.id}
                             name={tileAlt(item)}
                             size={thumbnailPixels}
                             style={draftImageStyle(draftTransforms, item.id)}
                             fallbackSrc={assetUrl(item.path)}
+                            motionSrc={
+                              livePhotoMotionByItemId.has(item.id)
+                                ? assetUrl(livePhotoMotionByItemId.get(item.id)!.path)
+                                : undefined
+                            }
                           />
                         ) : (
                           <CachedThumbnail
@@ -1802,6 +1810,9 @@ function LibraryScreen(props: LibraryScreenProps) {
                           <span className="format-label">
                             <KindBadge kind={item.kind} />
                           </span>
+                        )}
+                        {livePhotoMotionByItemId.has(item.id) && (
+                          <span className="format-label">Live</span>
                         )}
                       </span>
                       <span
@@ -2021,12 +2032,17 @@ function LibraryScreen(props: LibraryScreenProps) {
                                         />
                                       )
                                     ) : item.kind === "photo" ? (
-                                      <CachedThumbnail
+                                      <LivePhotoThumb
                                         itemId={item.id}
                                         name={tileAlt(item)}
                                         size={thumbnailPixels}
                                         style={draftImageStyle(draftTransforms, item.id)}
                                         fallbackSrc={assetUrl(item.path)}
+                                        motionSrc={
+                                          livePhotoMotionByItemId.has(item.id)
+                                            ? assetUrl(livePhotoMotionByItemId.get(item.id)!.path)
+                                            : undefined
+                                        }
                                       />
                                     ) : (
                                       <CachedThumbnail
@@ -2082,6 +2098,9 @@ function LibraryScreen(props: LibraryScreenProps) {
                                       <span className="format-label">
                                         <KindBadge kind={item.kind} />
                                       </span>
+                                    )}
+                                    {livePhotoMotionByItemId.has(item.id) && (
+                                      <span className="format-label">Live</span>
                                     )}
                                     {item.favorite && !masked(item) ? (
                                       <span className="tile-favorite" aria-label="Favorite">
@@ -2190,12 +2209,17 @@ function LibraryScreen(props: LibraryScreenProps) {
                           />
                         )
                       ) : item.kind === "photo" ? (
-                        <CachedThumbnail
+                        <LivePhotoThumb
                           itemId={item.id}
                           name={tileAlt(item)}
                           size={thumbnailPixels}
                           style={draftImageStyle(draftTransforms, item.id)}
                           fallbackSrc={assetUrl(item.path)}
+                          motionSrc={
+                            livePhotoMotionByItemId.has(item.id)
+                              ? assetUrl(livePhotoMotionByItemId.get(item.id)!.path)
+                              : undefined
+                          }
                         />
                       ) : (
                         <CachedThumbnail
@@ -2244,6 +2268,9 @@ function LibraryScreen(props: LibraryScreenProps) {
                         <span className="format-label">
                           <KindBadge kind={item.kind} />
                         </span>
+                      )}
+                      {livePhotoMotionByItemId.has(item.id) && (
+                        <span className="format-label">Live</span>
                       )}
                       {item.favorite && !masked(item) ? (
                         <span className="tile-favorite" aria-label="Favorite">
