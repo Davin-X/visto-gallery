@@ -178,3 +178,26 @@ test("a large partial month continues in scoped pages as its end approaches", as
   await expect(tiles).toHaveCount(600);
   await expect(marker).toHaveCount(0);
 });
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`year bar stays pinned and opaque in ${scheme} mode`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.setViewportSize({ width: 1500, height: 900 });
+    await openTimeline(page);
+    const bar = page.locator(".timeline-jump");
+    await expect(bar).toHaveCSS(
+      "background-color",
+      scheme === "dark" ? "rgb(11, 13, 18)" : "rgb(255, 255, 255)",
+    );
+    const scroller = page.locator(".library-grid-container");
+    await scroller.evaluate((el) => {
+      el.scrollTop = 500;
+    });
+    const top = (await bar.boundingBox())!.y;
+    await scroller.evaluate((el) => {
+      el.scrollTop = 1500;
+    });
+    await expect(bar).toBeInViewport({ ratio: 1 });
+    expect((await bar.boundingBox())!.y).toBeCloseTo(top, 0);
+  });
+}

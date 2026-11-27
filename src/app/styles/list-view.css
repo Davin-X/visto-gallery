@@ -624,6 +624,9 @@
 }
 
 .gallery-grid.layout-timeline .timeline-jump {
+  position: sticky;
+  top: 0;
+  z-index: 4;
   display: flex;
   grid-column: 1 / -1;
   align-items: center;
@@ -633,7 +636,8 @@
   padding: 8px 2px;
   border-bottom: 1px solid var(--line);
   background: var(--surface);
-
+  /* Cover the scroll container’s top padding as thumbnails pass underneath. */
+  box-shadow: 0 -32px 0 var(--surface);
 }
 
 .gallery-grid.layout-timeline {
