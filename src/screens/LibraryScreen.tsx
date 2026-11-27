@@ -69,15 +69,12 @@ import type { MediaItem, Filter } from "../engine/types/media";
 import type { LibraryFolder } from "../engine/types/commands";
 import { formatItemDate, itemMonth, monthLabel } from "../engine/utils/mediaDate";
 import { displayFileName } from "../engine/utils/fileName";
-import { livePhotoMotionMap } from "../engine/utils/livePhotos";
+import { livePhotoMotionMap, livePhotoMotionSrc } from "../engine/utils/livePhotos";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
 import { buildItemContextMenu } from "../engine/utils/itemContextMenu";
-
 import { LibraryInspector } from "./library/LibraryInspector";
 import type { LibraryScreenProps } from "./library/types";
-
 const GALLERY_PAGE_SIZE = 180;
-
 /**
  * Scroll offsets remembered per view.
  *
@@ -95,7 +92,6 @@ interface RememberedScroll {
 }
 const rememberedScroll = new Map<string, RememberedScroll>();
 const MAX_REMEMBERED_SCROLL_VIEWS = 40;
-
 function rememberScroll(key: string, value: RememberedScroll) {
   rememberedScroll.delete(key);
   rememberedScroll.set(key, value);
@@ -105,7 +101,6 @@ function rememberScroll(key: string, value: RememberedScroll) {
     rememberedScroll.delete(oldest);
   }
 }
-
 /**
  * The heading above the grid.
  *
@@ -122,9 +117,7 @@ export function libraryHeading(
   if (smartAlbumName) return smartAlbumName;
   return filter === "All" ? "All Media" : filter;
 }
-
 import { ListRowMeta } from "./library/ListRowMeta";
-
 function LibraryScreen(props: LibraryScreenProps) {
   const library = useLibraryStore();
   const inspectedItem =
@@ -137,7 +130,6 @@ function LibraryScreen(props: LibraryScreenProps) {
   const isPlaying = usePlaybackStore((state) => state.playing);
   const [copiedPathFor, setCopiedPathFor] = useState<string | null>(null);
   const copyPathTimeoutRef = useRef<number | null>(null);
-
   const copyItemPath = useCallback((path: string, itemId: string) => {
     if (copyPathTimeoutRef.current) window.clearTimeout(copyPathTimeoutRef.current);
     void navigator.clipboard.writeText(path).then(() => {
@@ -147,7 +139,6 @@ function LibraryScreen(props: LibraryScreenProps) {
       }, 1500);
     });
   }, []);
-
   useEffect(
     () => () => {
       if (copyPathTimeoutRef.current) window.clearTimeout(copyPathTimeoutRef.current);
@@ -186,7 +177,6 @@ function LibraryScreen(props: LibraryScreenProps) {
   const updateSettings = useSettingsStore((s) => s.update);
   const inspectorWidth = useInspectorWidth();
   const inspectorRef = useRef<HTMLDivElement>(null);
-
   // A width persisted on a large display must not squeeze the grid below a
   // usable size when the window is later made narrower. The drag handle uses
   // the same bound; this keeps the resting layout honest after a window resize.
@@ -1752,11 +1742,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                             size={thumbnailPixels}
                             style={draftImageStyle(draftTransforms, item.id)}
                             fallbackSrc={assetUrl(item.path)}
-                            motionSrc={
-                              livePhotoMotionByItemId.has(item.id)
-                                ? assetUrl(livePhotoMotionByItemId.get(item.id)!.path)
-                                : undefined
-                            }
+                            motionSrc={livePhotoMotionSrc(livePhotoMotionByItemId, item, assetUrl)}
                           />
                         ) : (
                           <CachedThumbnail
@@ -1810,9 +1796,6 @@ function LibraryScreen(props: LibraryScreenProps) {
                           <span className="format-label">
                             <KindBadge kind={item.kind} />
                           </span>
-                        )}
-                        {livePhotoMotionByItemId.has(item.id) && (
-                          <span className="format-label">Live</span>
                         )}
                       </span>
                       <span
@@ -2038,11 +2021,11 @@ function LibraryScreen(props: LibraryScreenProps) {
                                         size={thumbnailPixels}
                                         style={draftImageStyle(draftTransforms, item.id)}
                                         fallbackSrc={assetUrl(item.path)}
-                                        motionSrc={
-                                          livePhotoMotionByItemId.has(item.id)
-                                            ? assetUrl(livePhotoMotionByItemId.get(item.id)!.path)
-                                            : undefined
-                                        }
+                                        motionSrc={livePhotoMotionSrc(
+                                          livePhotoMotionByItemId,
+                                          item,
+                                          assetUrl,
+                                        )}
                                       />
                                     ) : (
                                       <CachedThumbnail
@@ -2098,9 +2081,6 @@ function LibraryScreen(props: LibraryScreenProps) {
                                       <span className="format-label">
                                         <KindBadge kind={item.kind} />
                                       </span>
-                                    )}
-                                    {livePhotoMotionByItemId.has(item.id) && (
-                                      <span className="format-label">Live</span>
                                     )}
                                     {item.favorite && !masked(item) ? (
                                       <span className="tile-favorite" aria-label="Favorite">
@@ -2215,11 +2195,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                           size={thumbnailPixels}
                           style={draftImageStyle(draftTransforms, item.id)}
                           fallbackSrc={assetUrl(item.path)}
-                          motionSrc={
-                            livePhotoMotionByItemId.has(item.id)
-                              ? assetUrl(livePhotoMotionByItemId.get(item.id)!.path)
-                              : undefined
-                          }
+                          motionSrc={livePhotoMotionSrc(livePhotoMotionByItemId, item, assetUrl)}
                         />
                       ) : (
                         <CachedThumbnail
@@ -2268,9 +2244,6 @@ function LibraryScreen(props: LibraryScreenProps) {
                         <span className="format-label">
                           <KindBadge kind={item.kind} />
                         </span>
-                      )}
-                      {livePhotoMotionByItemId.has(item.id) && (
-                        <span className="format-label">Live</span>
                       )}
                       {item.favorite && !masked(item) ? (
                         <span className="tile-favorite" aria-label="Favorite">

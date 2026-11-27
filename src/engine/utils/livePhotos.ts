@@ -39,6 +39,15 @@ export function livePhotoMotionMap(items: readonly MediaItem[]): Map<string, Med
  * Convenience predicate. Rebuilds the pairing map on every call (O(n)); prefer
  * the memoized `livePhotoMotionMap` result in hot paths such as grids.
  */
+export function livePhotoMotionSrc(
+  map: ReadonlyMap<string, MediaItem>,
+  item: MediaItem,
+  assetUrl: (path: string) => string,
+): string | undefined {
+  const motion = map.get(item.id);
+  return motion ? assetUrl(motion.path) : undefined;
+}
+
 export function isLivePhoto(item: MediaItem, items: readonly MediaItem[]): boolean {
   return livePhotoMotionMap(items).has(item.id);
 }
