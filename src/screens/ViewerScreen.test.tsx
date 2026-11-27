@@ -472,4 +472,84 @@ describe("photo viewer keyboard shortcuts", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit photo" }));
     expect(onOpenEdit).toHaveBeenLastCalledWith(first);
   });
+
+  it("shows RAW preview vs rendering vs full render badge as resolution changes", async () => {
+    const raw = makeMediaItem({
+      id: "raw-badge",
+      name: "shot.cr3",
+      path: "/tmp/shot.cr3",
+      kind: "raw",
+      width: 6000,
+      height: 4000,
+    });
+    let resolveFull!: (value: { path: string; dataUrl: null; full: boolean }) => void;
+    const getDisplayPreview = vi
+      .spyOn(tauri.library, "getDisplayPreview")
+      .mockImplementation((_id, full) => {
+        if (!full) {
+          return Promise.resolve({ path: "/tmp/preview.jpg", dataUrl: null, full: false } as never);
+        }
+        return new Promise((resolve) => {
+          resolveFull = resolve as typeof resolveFull;
+        }) as never;
+      });
+
+    const props = {
+      active: true,
+      items: [raw],
+      selected: raw,
+      zoom: 100,
+      fitMode: "fit" as const,
+      rotation: 0,
+      flipX: false,
+      onNavigate: vi.fn(),
+      onSetPhoto: vi.fn(),
+      onSetZoom: vi.fn(),
+      onZoomIn: vi.fn(),
+      onZoomOut: vi.fn(),
+      onResetZoom: vi.fn(),
+      onToggleFitMode: vi.fn(),
+      onRotate: vi.fn(),
+      onToggleFlip: vi.fn(),
+      onResetTransform: vi.fn(),
+      onToggleFullscreen: vi.fn(),
+      onClose: vi.fn(),
+      onToggleFavorite: vi.fn(),
+      onToggleHidden: vi.fn(),
+      onOpenEdit: vi.fn(),
+      onContextMenu: vi.fn(),
+      assetUrl: (path: string) => path,
+    };
+
+    const { rerender } = render(<ViewerScreen {...props} />);
+    await waitFor(() => expect(getDisplayPreview).toHaveBeenCalledWith("raw-badge", false));
+    expect(screen.getByText("RAW preview")).toBeInTheDocument();
+
+    rerender(<ViewerScreen {...props} zoom={200} />);
+    expect(screen.getByText("Rendering full RAW…")).toBeInTheDocument();
+
+    resolveFull({ path: "/tmp/full.jpg", dataUrl: null, full: true });
+    await waitFor(() => expect(screen.getByText("Full render")).toBeInTheDocument());
+
+    getDisplayPreview.mockRestore();
+  });
+
+  it("collapses and expands the filmstrip via button and B shortcut", () => {
+    const { container } = renderPhotoViewer("photo", 1);
+    expect(container.querySelector(".filmstrip")).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide filmstrip" }));
+    expect(container.querySelector(".filmstrip")).toBeNull();
+    expect(screen.getByRole("button", { name: "Show filmstrip" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+
+    fireEvent.keyDown(window, { key: "b" });
+    expect(container.querySelector(".filmstrip")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Hide filmstrip" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
 });

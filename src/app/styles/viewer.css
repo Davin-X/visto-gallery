@@ -902,8 +902,8 @@
 }
 
 
-/* Says when a lower-resolution stand-in is on screen (a RAW file's grid
-   thumbnail while its full render loads, or when it cannot be decoded). */
+/* Says whether the viewer is showing a RAW/fallback preview, rendering the
+   full image, or displaying the full-resolution render. */
 .viewer-lowres-badge {
   position: absolute;
   top: 14px;
@@ -920,4 +920,14 @@
   text-transform: uppercase;
   pointer-events: none;
   backdrop-filter: blur(8px);
+}
+
+.viewer-lowres-badge.is-full {
+  border-color: rgba(110, 231, 183, 0.36);
+  color: rgba(209, 250, 229, 0.94);
+}
+
+.viewer-lowres-badge.is-loading {
+  border-color: rgba(143, 211, 255, 0.38);
+  color: rgba(224, 242, 254, 0.94);
 }

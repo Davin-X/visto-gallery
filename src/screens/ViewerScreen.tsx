@@ -7,9 +7,10 @@ import {
   useViewerCompare,
 } from "./viewer/CompareStagePane";
 import { ViewerShortcutsPopover } from "./viewer/ViewerShortcutsPopover";
-import { ViewerFilmstrip } from "./viewer/ViewerFilmstrip";
+import { ViewerFilmstrip, useViewerFilmstrip } from "./viewer/ViewerFilmstrip";
+import { getPreviewBadge } from "./viewer/previewBadge";
 import { buildShortcuts } from "./viewer/shortcuts";
-import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -104,14 +105,6 @@ function ViewerScreen(props: ViewerScreenProps) {
     width?: number;
     height?: number;
   } | null>(null);
-  const stripWindowSize = 50;
-  // One strip item occupies `stripStride` px. It is measured from the rendered
-  // strip rather than duplicated here: the thumbnail size and gap belong to
-  // the CSS and change with the window.
-  const [stripStride, setStripStride] = useState(66);
-  const [stripStart, setStripStart] = useState(() =>
-    Math.max(0, items.findIndex((item) => item.id === selected?.id) - stripWindowSize / 2),
-  );
   const hideTimerRef = useRef<number | null>(null);
   const barHoveredRef = useRef(false);
 
@@ -170,14 +163,23 @@ function ViewerScreen(props: ViewerScreenProps) {
     if (!popoverOpenedRef.current) return;
     scheduleBarHide();
   }, [moreOpen, helpOpen, scheduleBarHide]);
-  const stripRef = useRef<HTMLDivElement | null>(null);
-  const stripStrideRef = useRef(stripStride);
-  const stripStartRef = useRef(stripStart);
-  const lastRevealedRef = useRef<string | null>(null);
-  const loadMoreLockRef = useRef(false);
   const selectedIndex = items.findIndex((item) => item.id === selected?.id);
   useViewerPrefetch(items, selectedIndex, props.assetUrl);
-  const stripEnd = Math.min(items.length, stripStart + stripWindowSize);
+  const {
+    filmstripOpen,
+    setFilmstripOpen,
+    stripRef,
+    stripStart,
+    stripEnd,
+    stripStride,
+    handleFilmstripScroll,
+  } = useViewerFilmstrip({
+    items,
+    selectedId: selected?.id,
+    selectedIndex,
+    hasMore,
+    onLoadMore,
+  });
   const photoStatus =
     photoLoadState && photoLoadState.id === selected?.id ? photoLoadState.status : "loading";
 
@@ -363,92 +365,6 @@ function ViewerScreen(props: ViewerScreenProps) {
     };
   }, [props.selected?.id, flashHints]);
 
-  // Measure the real stride from the rendered strip. The CSS owns the
-  // thumbnail size and gap, so a duplicated constant drifts out of step with
-  // the spacers and the strip renders the wrong slice of the list.
-  useLayoutEffect(() => {
-    const strip = stripRef.current;
-    if (!strip) return;
-    const button = strip.querySelector<HTMLElement>("button");
-    const width = button?.getBoundingClientRect().width ?? 0;
-    if (width <= 0) return;
-    const gap = Number.parseFloat(window.getComputedStyle(strip).columnGap || "0") || 0;
-    const stride = width + gap;
-    if (Math.abs(stride - stripStrideRef.current) > 0.5) {
-      stripStrideRef.current = stride;
-      setStripStride(stride);
-    }
-  }, [items.length]);
-
-  // Bring the current photo to the middle of the strip when the selection
-  // changes, and once on open. Deliberately not keyed on the scroll position:
-  // re-running this on every scroll event snapped the strip back to the
-  // current photo the moment the user tried to browse elsewhere.
-  // Pull in the next page when the strip reaches the end of what is loaded.
-  // The viewer used to stop dead at the library's page size ("250 of 250").
-  const maybeLoadMore = useCallback(() => {
-    if (!hasMore || !onLoadMore || loadMoreLockRef.current) return;
-    loadMoreLockRef.current = true;
-    void Promise.resolve(onLoadMore()).finally(() => {
-      loadMoreLockRef.current = false;
-    });
-  }, [hasMore, onLoadMore]);
-
-  useEffect(() => {
-    loadMoreLockRef.current = false;
-  }, [items.length]);
-
-  useEffect(() => {
-    const strip = stripRef.current;
-    if (!strip || selectedIndex < 0) return;
-    const currentId = selected?.id ?? null;
-    const selectionChanged = lastRevealedRef.current !== currentId;
-    lastRevealedRef.current = currentId;
-    const stride = stripStrideRef.current;
-    const maxStart = Math.max(0, items.length - stripWindowSize);
-    let start = stripStartRef.current;
-    const outsideWindow = selectedIndex < start || selectedIndex >= start + stripWindowSize;
-    if (outsideWindow) {
-      start = Math.max(0, Math.min(selectedIndex - Math.floor(stripWindowSize / 2), maxStart));
-      stripStartRef.current = start;
-      setStripStart(start);
-    } else if (!selectionChanged) {
-      // A page arrived: leave the strip where the user left it.
-      return;
-    }
-    // A leading spacer of exactly one stride per skipped item means every
-    // thumbnail sits at `index × stride` regardless of the rendered window.
-    strip.scrollLeft = Math.max(
-      0,
-      selectedIndex * stride - Math.max(0, (strip.clientWidth - stride) / 2),
-    );
-  }, [selectedIndex, selected?.id, items.length, stripWindowSize]);
-
-  // Slide the rendered window along as the user scrolls. The scroll position
-  // needs no correction: a spacer of exactly one stride per skipped item keeps
-  // every thumbnail at the same offset, so the strip moves under the pointer
-  // without jumping.
-  const handleFilmstripScroll = useCallback(() => {
-    const strip = stripRef.current;
-    if (!strip || items.length <= stripWindowSize) return;
-    const stride = stripStrideRef.current;
-    if (stride <= 0) return;
-    const start = stripStartRef.current;
-    const lead = 10;
-    const first = Math.max(0, Math.floor(strip.scrollLeft / stride));
-    const last = first + Math.ceil(strip.clientWidth / stride) + 1;
-    if (last > items.length - 10) maybeLoadMore();
-    let next = start;
-    if (first < start + lead) {
-      next = Math.max(0, first - lead);
-    } else if (last > start + stripWindowSize - lead) {
-      next = Math.min(Math.max(0, items.length - stripWindowSize), last - stripWindowSize + lead);
-    }
-    if (next === start) return;
-    stripStartRef.current = next;
-    setStripStart(next);
-  }, [items.length, stripWindowSize, maybeLoadMore]);
-
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -521,6 +437,11 @@ function ViewerScreen(props: ViewerScreenProps) {
           e.preventDefault();
           props.onToggleFullscreen();
           break;
+        case "b":
+        case "B":
+          e.preventDefault();
+          setFilmstripOpen((open) => !open);
+          break;
         case "c":
         case "C":
           e.preventDefault();
@@ -537,7 +458,7 @@ function ViewerScreen(props: ViewerScreenProps) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selected, actionTarget, props, toggleOneToOne, compare]);
+  }, [selected, actionTarget, props, toggleOneToOne, compare, setFilmstripOpen]);
 
   if (!selected)
     return (
@@ -733,6 +654,10 @@ function ViewerScreen(props: ViewerScreenProps) {
                 ? (shown?.src ?? null)
                 : `${props.assetUrl(selected.path)}?v=${selected.id}-${selected.modifiedAt}-${selected.size}`;
               const lowRes = viaPreview && (!shown || shown.lowRes);
+              const previewBadge =
+                viaPreview && photoStatus !== "failed"
+                  ? getPreviewBadge(selected.kind, shown, wantsFull)
+                  : null;
               const cachedBackdropSrc =
                 !viaPreview && photoStatus !== "loaded" ? getCachedThumbnailUrl(selected.id) : null;
               const stillStyle = buildViewerImageStyle({
@@ -795,12 +720,13 @@ function ViewerScreen(props: ViewerScreenProps) {
                       style={{ ...stillStyle, aspectRatio: undefined, objectFit: "contain" }}
                     />
                   )}
-                  {lowRes && photoStatus !== "failed" && (
+                  {previewBadge && (
                     <span
-                      className="viewer-lowres-badge"
-                      title="A lower-resolution preview is on screen while the full image loads, or because it could not be decoded"
+                      className={`viewer-lowres-badge${previewBadge.tone === "full" ? " is-full" : previewBadge.tone === "loading" ? " is-loading" : ""}`}
+                      title={previewBadge.title}
+                      role={previewBadge.tone === "loading" ? "status" : undefined}
                     >
-                      Preview
+                      {previewBadge.label}
                     </span>
                   )}
                   {selected.kind === "photo" &&
@@ -1095,6 +1021,17 @@ function ViewerScreen(props: ViewerScreenProps) {
             <span className="viewer-divider" />
             <button
               type="button"
+              className={filmstripOpen ? "active" : ""}
+              onClick={() => setFilmstripOpen((open) => !open)}
+              aria-pressed={filmstripOpen}
+              aria-label={filmstripOpen ? "Hide filmstrip" : "Show filmstrip"}
+              title={filmstripOpen ? "Hide filmstrip (B)" : "Show filmstrip (B)"}
+            >
+              <FilmstripIcon size={14} />
+              <span className="viewer-bar-label">Filmstrip</span>
+            </button>
+            <button
+              type="button"
               onClick={() => void props.onToggleFullscreen()}
               aria-label="Toggle full screen"
               title="Full screen (F)"
@@ -1113,20 +1050,22 @@ function ViewerScreen(props: ViewerScreenProps) {
           </div>
         )}
       </div>
-      <ViewerFilmstrip
-        stripRef={stripRef}
-        onScroll={handleFilmstripScroll}
-        items={items}
-        selectedId={props.selected?.id}
-        stripStart={stripStart}
-        stripEnd={stripEnd}
-        stripStride={stripStride}
-        draftTransforms={draftTransforms}
-        hasMore={hasMore}
-        loadingMore={loadingMore}
-        onSelect={props.onSetPhoto}
-        onLoadMore={onLoadMore}
-      />
+      {filmstripOpen && (
+        <ViewerFilmstrip
+          stripRef={stripRef}
+          onScroll={handleFilmstripScroll}
+          items={items}
+          selectedId={props.selected?.id}
+          stripStart={stripStart}
+          stripEnd={stripEnd}
+          stripStride={stripStride}
+          draftTransforms={draftTransforms}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          onSelect={props.onSetPhoto}
+          onLoadMore={onLoadMore}
+        />
+      )}
     </div>
   );
 }
