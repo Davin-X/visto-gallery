@@ -683,7 +683,6 @@ function LibraryScreen(props: LibraryScreenProps) {
     if (props.layout !== "timeline" && el.scrollHeight - el.scrollTop - el.clientHeight < 800)
       loadMore();
   };
-  // Destructuring keeps the callback's dependency list to the one prop it uses.
   const { onInspectItem } = props;
   const handleGridKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -950,9 +949,10 @@ function LibraryScreen(props: LibraryScreenProps) {
       timelineCollapse.setYear(year, !allCollapsed);
     }
   };
+  const [jumpTarget, setJumpTarget] = useState<string | null>(null);
   const jumpToTimelineMonth = (key: string, toYear = false) => {
+    setJumpTarget(key);
     timelineCollapse.setMonth(key, false);
-    // A year jump lands on the year's heading when there is one.
     const scroll = () =>
       (
         (toYear && document.getElementById(`timeline-year-${monthYear(key)}`)) ||
@@ -1010,9 +1010,7 @@ function LibraryScreen(props: LibraryScreenProps) {
       masked(item) ? " hidden-obscured" : ""
     }`;
 
-  // Right-clicking a photo is the most direct place to manage its album
-  // membership. The picker itself carries the album list and search. The menu
-  // is shared with the viewer, so the two surfaces cannot drift apart.
+  // Gallery and Viewer share the same item menu.
   const itemContextMenu = (item: MediaItem) =>
     buildItemContextMenu(item, {
       onOpen: (id) => props.onOpenViewer(id),
@@ -2058,6 +2056,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                                 <MonthContinuation
                                   key={timelineRefreshKey}
                                   month={key}
+                                  requested={jumpTarget === key && !pages?.has(key)}
                                   view={timelineRefreshKey}
                                   filter={timelineFilter}
                                   cursor={pages?.get(key)?.nextCursor ?? null}

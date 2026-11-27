@@ -25,11 +25,13 @@ export function MonthContinuation({
   view,
   filter,
   cursor,
+  requested = false,
 }: {
   month: string;
   view: string;
   filter: LibraryFilterDTO;
   cursor: string | null;
+  requested?: boolean;
 }) {
   const marker = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
@@ -69,13 +71,17 @@ export function MonthContinuation({
     };
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && !started) {
+        if ((requested || entry.isIntersecting) && !started) {
           pending.add(fetchPage);
           drain();
         } else pending.delete(fetchPage);
       },
       { rootMargin: "240px" },
     );
+    if (requested) {
+      pending.add(fetchPage);
+      drain();
+    }
     observer.observe(marker.current!);
     return () => {
       live = false;
@@ -84,7 +90,7 @@ export function MonthContinuation({
     };
     // The view key identifies the filter across renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month, view, cursor, attempt]);
+  }, [month, view, cursor, attempt, requested]);
   return (
     <div className="timeline-continuation" ref={marker}>
       {failed ? (
