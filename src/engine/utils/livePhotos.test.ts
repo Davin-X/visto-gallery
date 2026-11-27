@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { livePhotoMotionMap } from "./livePhotos";
+import { livePhotoMotionMap, isLivePhoto } from "./livePhotos";
 import type { MediaItem } from "../types/media";
 
 function item(overrides: Partial<MediaItem>): MediaItem {
@@ -61,7 +61,23 @@ describe("livePhotoMotionMap", () => {
       extension: "mov",
       kind: "video",
     });
-    const map = livePhotoMotionMap([heic, mov]);
+    const items = [heic, mov];
+    const map = livePhotoMotionMap(items);
     expect(map.has("h")).toBe(false);
+    expect(isLivePhoto(heic, items)).toBe(false);
+  });
+
+  it("isLivePhoto reports true for paired stills", () => {
+    const heic = item({ id: "h", path: "/lib/IMG_1.HEIC", name: "IMG_1.HEIC" });
+    const mov = item({
+      id: "m",
+      path: "/lib/IMG_1.MOV",
+      name: "IMG_1.MOV",
+      extension: "mov",
+      kind: "video",
+    });
+    const items = [heic, mov];
+    expect(isLivePhoto(heic, items)).toBe(true);
+    expect(isLivePhoto(mov, items)).toBe(false);
   });
 });

@@ -39,8 +39,11 @@ export function LivePhotoThumb({
   return (
     <span
       style={{ display: "block", width: "100%", height: "100%" }}
+      tabIndex={-1}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onFocus={() => setHovered(true)}
+      onBlur={() => setHovered(false)}
     >
       {hovered ? (
         <video src={motionSrc} muted playsInline autoPlay loop />
