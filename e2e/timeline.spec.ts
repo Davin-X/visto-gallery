@@ -51,7 +51,7 @@ test("timeline months: catalog counts, collapse, whole-month select, jump", asyn
 
   // The month menu reaches any month.
   await page.getByRole("button", { name: "Jump to date" }).click();
-  await page.getByLabel("Year", { exact: true }).selectOption("2025");
+  await page.getByRole("combobox", { name: "Year", exact: true }).selectOption("2025");
   await page.getByRole("button", { name: "June 2025", exact: true }).click();
   await expect(month(page, "2025-06")).toBeInViewport();
   await expect(toggle(page, "2025-06")).toHaveAttribute("aria-expanded", "true");
@@ -120,7 +120,7 @@ test("an old month opens and navigates without paging through the catalog", asyn
   await expect(toggle(page, "2025-06")).toHaveAttribute("aria-expanded", "false");
   expect((await pages()).every((p) => !p.month && !p.cursor && p.limit === 250)).toBe(true);
   await page.getByRole("button", { name: "Jump to date" }).click();
-  await page.getByLabel("Year", { exact: true }).selectOption("2025");
+  await page.getByRole("combobox", { name: "Year", exact: true }).selectOption("2025");
   await page.getByRole("button", { name: "June 2025", exact: true }).click();
   const tiles = page
     .locator("#timeline-month-2025-06 ~ .gallery-tile")
@@ -148,7 +148,7 @@ test("Hidden loads an older month through its own pager", async ({ page }) => {
   await page.locator(".sidebar").getByRole("button", { name: "Hidden", exact: true }).click();
   await page.getByRole("button", { name: "Timeline view", exact: true }).click();
   await page.getByRole("button", { name: "Jump to date" }).click();
-  await page.getByLabel("Year", { exact: true }).selectOption("2025");
+  await page.getByRole("combobox", { name: "Year", exact: true }).selectOption("2025");
   await page.getByRole("button", { name: "June 2025", exact: true }).click();
   const first = page.locator("#timeline-month-2025-06 + .gallery-tile .tile-open-button");
   await expect(first).toHaveAttribute("data-item-id", /^hidden-/);
