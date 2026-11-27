@@ -88,6 +88,16 @@ export const tauri = {
     /** Native media-file picker owned by the backend; picked files are trusted. */
     pickMediaFiles: (): Promise<string[]> => invoke("pick_media_files"),
 
+    /** Copy a camera card's media into date-based folders, skipping duplicates. */
+    importCameraCard: (
+      source: string,
+      destination: string,
+    ): Promise<{
+      imported: number;
+      skipped: number;
+      failed: number;
+    }> => invoke("import_camera_card", { source, destination }),
+
     /** Native audio-file picker for the slideshow ambient track. */
     pickAmbientAudio: (): Promise<string | null> => invoke("pick_ambient_audio"),
 

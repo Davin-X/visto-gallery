@@ -781,6 +781,7 @@ function App() {
         rescanSource={sources.rescanSource}
         importFiles={sources.importFiles}
         importFolder={sources.importFolder}
+        importCameraCard={sources.importCameraCard}
         importFolderPath={sources.importFolderPath}
         showNotice={showNotice}
         showErrorNotice={showErrorNotice}

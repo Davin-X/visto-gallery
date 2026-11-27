@@ -192,7 +192,6 @@ function LibraryScreen(props: LibraryScreenProps) {
     window.addEventListener("resize", clampWidth);
     return () => window.removeEventListener("resize", clampWidth);
   }, [inspectorWidth, props.showInspector, updateSettings]);
-
   const sortDirectionLabel =
     library.sortBy === "capturedAt" || library.sortBy === "modifiedAt"
       ? library.sortOrder === "asc"
@@ -379,7 +378,6 @@ function LibraryScreen(props: LibraryScreenProps) {
     if (to) return `To ${to}`;
     return "";
   })();
-
   const emptyView = () => {
     if (props.hiddenView) {
       const nothingHidden = props.hiddenCount === 0;
@@ -471,7 +469,6 @@ function LibraryScreen(props: LibraryScreenProps) {
       </div>
     );
   };
-
   // Placeholders shown while the first page for this view loads, so a fresh
   // filter or folder never flashes the empty state. Matches the grid tile's
   // footprint; the details layout gets a row-shaped variant.
@@ -489,7 +486,6 @@ function LibraryScreen(props: LibraryScreenProps) {
           ))}
     </>
   );
-
   // Progressive rendering. A library can hold tens of thousands of items and
   // mounting a tile for every one makes typing, clicking and filtering janky
   // (the whole grid reconciles on each state change). Render a page at a time
@@ -505,7 +501,6 @@ function LibraryScreen(props: LibraryScreenProps) {
   const virtualFrame = useRef<number | null>(null);
   const restoringScrollRef = useRef(false);
   const restoredScrollKeyRef = useRef<string | null>(null);
-
   // A view is the filter/query/album/source combination plus the layout and
   // thumbnail size, because the same item offset maps to different pixels in
   // each layout. Hidden has its own filter state, so it gets its own prefix.
@@ -522,7 +517,6 @@ function LibraryScreen(props: LibraryScreenProps) {
     : library.loadedViewKey !== viewKey;
   const renderLimitRef = useRef(renderLimit);
   renderLimitRef.current = renderLimit;
-
   // The standard grid and overview use fixed-ratio cards, so their full
   // scroll height can be represented by two spacers while only nearby rows
   // stay mounted. Details, timeline and masonry retain their specialised
@@ -1264,6 +1258,12 @@ function LibraryScreen(props: LibraryScreenProps) {
                           icon: PlusIcon,
                           title: "Add files (⌘I)",
                           onClick: () => props.onImportFiles?.(),
+                        },
+                        {
+                          key: "camera-card",
+                          label: "Import from camera card…",
+                          icon: PlusIcon,
+                          onClick: () => props.onImportCameraCard?.(),
                         },
                       ]}
                     />
