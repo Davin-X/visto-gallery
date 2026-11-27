@@ -1,3 +1,4 @@
+import { timelineViewerItems } from "../../screens/timeline/monthCache";
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
@@ -8,6 +9,7 @@ import { errorCode } from "../types/errors";
 import { tauri } from "../commands/tauri";
 import { debugLog } from "./useSettingsStore";
 import { currentLibraryFilter } from "./library/filters";
+import { createItemMetadataActions, mutationTargets } from "./library/itemMetadata";
 import { createPagingActions } from "./library/paging";
 import { createSelectionActions, resolveInspectedItem } from "./library/selection";
 import type { LibraryState } from "./library/types";
@@ -16,8 +18,6 @@ import { mergeDuplicateGroups, sortSmartAlbums } from "./library/collections";
 export { currentLibraryFilter, hiddenPageFilter, libraryViewKey } from "./library/filters";
 export type { LibraryState } from "./library/types";
 
-// Each notice gets an id so its dismiss timer clears only that notice, never
-// a newer one shown in the meantime (such as an Undo toast).
 let latestNoticeId = 0;
 
 // The icons-only sidebar is a per-Mac view preference, so it lives in local
@@ -135,6 +135,7 @@ function computeDerived(state: LibraryState) {
     viewerItems = visible.filter((item) => matchesKindFilter(item, state.filter));
   }
 
+  viewerItems = timelineViewerItems(state, viewerItems);
   const viewerSelected = resolveInspectedItem({ ...state, inspectedId }, viewerItems);
   const currentIndex = Math.max(
     0,
@@ -153,7 +154,7 @@ function computeDerived(state: LibraryState) {
     currentIndex,
     viewerIndex,
     hiddenItems: state.hiddenItems,
-    hiddenCount: state.hiddenItems.length,
+    hiddenCount: state.hiddenHasMore ? state.hiddenCount : state.hiddenItems.length,
   };
 }
 
@@ -467,38 +468,11 @@ export const useLibraryStore = create<LibraryState>()(
         get().refreshDerived();
       },
 
-      toggleFavorite: async (id) => {
-        const item = get().items.find((i) => i.id === id);
-        if (!item) return;
-        const next = !item.favorite;
-        await tauri.items.toggleFavorite(id, next);
-        set((s) => ({
-          items: s.items.map((i) => (i.id === id ? { ...i, favorite: next } : i)),
-        }));
-        get().refreshDerived();
-      },
-
-      setFavoriteForIds: async (ids, favorite) => {
-        const targets = get().items.filter((i) => ids.includes(i.id));
-        await Promise.all(targets.map((i) => tauri.items.toggleFavorite(i.id, favorite)));
-        set((s) => ({
-          items: s.items.map((i) => (ids.includes(i.id) ? { ...i, favorite } : i)),
-        }));
-        get().refreshDerived();
-      },
+      ...createItemMetadataActions(set, get, store),
 
       setHiddenForIds: async (ids, hidden) => {
         if (!ids.length) return;
-        // Targets may live in the normal library or in the hidden collection
-        // (Hidden screen). Resolve from both so bulk unhide works there.
-        const state = get();
-        const pool = [...state.items, ...state.hiddenItems];
-        const seen = new Set<string>();
-        const targets = pool.filter((i) => {
-          if (!ids.includes(i.id) || seen.has(i.id)) return false;
-          seen.add(i.id);
-          return true;
-        });
+        const targets = [...mutationTargets(get(), ids).values()];
         if (!targets.length) return;
 
         // Hiding removes an item from every visible collection; unhiding puts
@@ -537,6 +511,9 @@ export const useLibraryStore = create<LibraryState>()(
               ? s.items.filter((i) => !idSet.has(i.id))
               : s.items.map((i) => (idSet.has(i.id) ? { ...i, hidden } : i)),
             hiddenItems: nextHiddenItems,
+            // Month pages can hold items outside the main loaded page. Drop
+            // them so hide and unhide cannot leave stale timeline entries.
+            timelineCache: undefined,
             mapItems: hidden ? s.mapItems.filter((i) => !idSet.has(i.id)) : s.mapItems,
             folders,
             albums: s.albums.map((album) => {
@@ -559,108 +536,14 @@ export const useLibraryStore = create<LibraryState>()(
           };
         });
         get().refreshDerived();
-        // Keep both collections authoritative: hidden view reflects changes
-        // immediately after optimistic update, and unhiding restores items to
-        // the filtered library page.
+        // Reload both collections so Timeline counts follow the visibility change.
         void get().loadHiddenItems();
-        if (!hidden) void get().loadItemsPage();
+        void get().loadItemsPage();
       },
 
       toggleHidden: async (id) => {
-        const item =
-          get().items.find((i) => i.id === id) ?? get().hiddenItems.find((i) => i.id === id);
-        if (!item) return;
-        await get().setHiddenForIds([id], !item.hidden);
-      },
-
-      setRating: async (id, rating) => {
-        const item = get().items.find((i) => i.id === id);
-        if (!item) return;
-        const prev = { ...item };
-        set((s) => ({
-          items: s.items.map((i) => (i.id === id ? { ...i, rating } : i)),
-        }));
-        get().refreshDerived();
-        try {
-          await tauri.items.setRating(id, rating);
-        } catch (error) {
-          // eslint-disable-next-line no-console
-          console.error(`Failed to set rating for ${id}:`, error);
-          set((s) => ({
-            items: s.items.map((i) => (i.id === id ? { ...prev } : i)),
-          }));
-          get().refreshDerived();
-        }
-      },
-
-      setColorLabel: async (id, colorLabel) => {
-        const item = get().items.find((i) => i.id === id);
-        if (!item) return;
-        const prev = { ...item };
-        set((s) => ({
-          items: s.items.map((i) => (i.id === id ? { ...i, colorLabel: colorLabel || null } : i)),
-        }));
-        get().refreshDerived();
-        try {
-          await tauri.items.setColorLabel(id, colorLabel);
-        } catch (error) {
-          // eslint-disable-next-line no-console
-          console.error(`Failed to set color label for ${id}:`, error);
-          set((s) => ({
-            items: s.items.map((i) => (i.id === id ? { ...prev } : i)),
-          }));
-          get().refreshDerived();
-        }
-      },
-
-      setRatingForIds: async (ids, rating) => {
-        const targets = get().items.filter((i) => ids.includes(i.id));
-        if (!targets.length) return;
-        const prevs = new Map(targets.map((i) => [i.id, { ...i }]));
-        set((s) => ({
-          items: s.items.map((i) => (ids.includes(i.id) ? { ...i, rating } : i)),
-        }));
-        get().refreshDerived();
-        try {
-          await Promise.all(targets.map((i) => tauri.items.setRating(i.id, rating)));
-        } catch (error) {
-          // eslint-disable-next-line no-console
-          console.error(`Failed to set rating for ${ids.length} items:`, error);
-          set((s) => ({
-            items: s.items.map((i) => (ids.includes(i.id) ? { ...prevs.get(i.id)! } : i)),
-          }));
-          get().refreshDerived();
-        }
-      },
-
-      setColorLabelForIds: async (ids, colorLabel) => {
-        const targets = get().items.filter((i) => ids.includes(i.id));
-        if (!targets.length) return;
-        const prevs = new Map(targets.map((i) => [i.id, { ...i }]));
-        set((s) => ({
-          items: s.items.map((i) =>
-            ids.includes(i.id) ? { ...i, colorLabel: colorLabel || null } : i,
-          ),
-        }));
-        get().refreshDerived();
-        try {
-          await Promise.all(targets.map((i) => tauri.items.setColorLabel(i.id, colorLabel)));
-        } catch (error) {
-          // eslint-disable-next-line no-console
-          console.error(`Failed to set color label for ${ids.length} items:`, error);
-          set((s) => ({
-            items: s.items.map((i) => (ids.includes(i.id) ? { ...prevs.get(i.id)! } : i)),
-          }));
-          get().refreshDerived();
-        }
-      },
-
-      updateItemTags: async (id, tags) => {
-        await tauri.items.updateTags(id, tags);
-        set((s) => ({
-          items: s.items.map((i) => (i.id === id ? { ...i, tags } : i)),
-        }));
-        get().refreshDerived();
+        const item = mutationTargets(get(), [id]).get(id);
+        if (item) await get().setHiddenForIds([id], !item.hidden);
       },
 
       deleteItems: async (ids) => {

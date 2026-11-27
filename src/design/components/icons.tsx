@@ -495,11 +495,10 @@ export function DetailsIcon({ size = 15, className = "", strokeWidth = 1.8 }: Ic
 export function TimelineIcon({ size = 15, className = "", strokeWidth = 1.8 }: IconProps) {
   return (
     <Svg size={size} className={className} strokeWidth={strokeWidth}>
-      <rect x="4" y="3" width="16" height="18" rx="2" />
-      <path d="M4 8h16" />
-      <path d="M12 11v7" />
-      <circle cx="12" cy="11" r="2" />
-      <path d="M8 16h8" />
+      <path d="M5 6v12M11 5h9M11 12h6M11 19h9" />
+      {[5, 12, 19].map((y) => (
+        <circle key={y} cx="5" cy={y} r="2" fill="currentColor" />
+      ))}
     </Svg>
   );
 }

@@ -62,6 +62,9 @@ test("library tiles keep open and play as sibling buttons", async ({ page }) => 
   // No interactive element may be nested inside another in any layout.
   for (const view of ["Grid view", "Details view", "Timeline view", "Grid view"]) {
     await page.getByRole("button", { name: view, exact: true }).click();
+    if (view === "Timeline view") {
+      await page.locator(".timeline-month-toggle").first().click();
+    }
     await page.waitForSelector(".gallery-tile");
     expect(
       await page.evaluate(() => document.querySelectorAll("button button").length),

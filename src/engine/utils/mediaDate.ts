@@ -66,15 +66,17 @@ export function formatFileDate(ms: number): string {
  * matches the backend's `TIMELINE_MONTH_SQL`, so loaded items line up with
  * `get_timeline_months`.
  */
-export function itemMonth(item: DatedItem): { key: string; label: string } {
+export function itemMonthKey(item: DatedItem): string {
   const { ms, wallClock } = itemTimestamp(item);
   const date = new Date(ms);
   const year = wallClock ? date.getUTCFullYear() : date.getFullYear();
   const month = wallClock ? date.getUTCMonth() : date.getMonth();
-  return {
-    key: `${year}-${String(month + 1).padStart(2, "0")}`,
-    label: format(ms, MONTH, wallClock),
-  };
+  return `${year}-${String(month + 1).padStart(2, "0")}`;
+}
+
+export function itemMonth(item: DatedItem) {
+  const key = itemMonthKey(item);
+  return { key, label: monthLabel(key) };
 }
 
 /** "July 2026" for a `YYYY-MM` timeline key. */

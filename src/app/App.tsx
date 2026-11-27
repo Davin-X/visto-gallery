@@ -1,3 +1,4 @@
+import { cachedItem, scopedPages } from "../screens/timeline/monthCache";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { isHiddenLocked, useHiddenLockStore } from "../engine/stores/useHiddenLockStore";
@@ -207,7 +208,8 @@ function App() {
   }, [library.viewerItems, library.viewerSelected]);
   // The viewer walks the loaded pages, so it has to be able to pull the next
   // one in; without this it stopped at the library's page size.
-  const photoViewerHasMore = library.hasMore && library.viewerScope === "library";
+  const photoViewerHasMore =
+    library.hasMore && library.viewerScope === "library" && !scopedPages(library, false)?.size;
   const loadMorePhotos = useCallback(() => useLibraryStore.getState().loadNextPage(), []);
 
   // Same reason as the layout effect: depend on the members, not the object.
@@ -246,6 +248,7 @@ function App() {
       const item =
         lib.items.find((candidate) => candidate.id === targetId) ??
         lib.hiddenItems.find((candidate) => candidate.id === targetId) ??
+        cachedItem(lib, scope === "hidden", targetId) ??
         lib.mapItems.find((candidate) => candidate.id === targetId) ??
         lib.duplicates.flatMap((g) => g.items).find((candidate) => candidate.id === targetId) ??
         null;
@@ -272,6 +275,7 @@ function App() {
       const targetId = id ?? library.inspectedId;
       const item =
         library.items.find((candidate) => candidate.id === targetId) ??
+        cachedItem(library, scope === "hidden", targetId) ??
         library.hiddenItems.find((candidate) => candidate.id === targetId) ??
         null;
       if (!item || item.kind !== "video") return;

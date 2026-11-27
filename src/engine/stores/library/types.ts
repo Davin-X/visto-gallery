@@ -83,6 +83,7 @@ export interface LibraryState {
   viewerScope: "library" | "hidden" | "map";
   // The photos the Map opened the viewer with, in map order.
   mapItems: MediaItem[];
+  timelineCache?: import("../../../screens/timeline/monthCache").MonthCache;
 
   // Pagination
   page: number;

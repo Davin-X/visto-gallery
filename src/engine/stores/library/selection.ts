@@ -1,15 +1,23 @@
+import { loadTimelinePage } from "../../../screens/timeline/loadTimelinePage";
+import { itemMonthKey } from "../../utils/mediaDate";
+import { cachedItem, scopedPages, timelineKey } from "../../../screens/timeline/monthCache";
 import type { StateCreator } from "zustand";
 import { tauri } from "../../commands/tauri";
 import type { MediaItem } from "../../types/media";
 import { debugLog } from "../useSettingsStore";
-import { currentLibraryFilter } from "./filters";
+import { currentLibraryFilter, hiddenPageFilter } from "./filters";
 import type { LibraryState } from "./types";
 
 function findKnownItem(state: LibraryState, id: string): MediaItem | null {
   const direct =
     state.items.find((item) => item.id === id) ||
     state.hiddenItems.find((item) => item.id === id) ||
-    state.mapItems.find((item) => item.id === id);
+    state.mapItems.find((item) => item.id === id) ||
+    cachedItem(
+      state,
+      state.screen === "Hidden" || (state.screen === "Viewer" && state.viewerScope === "hidden"),
+      id,
+    );
   if (direct) return direct;
   for (const group of state.duplicates) {
     const match = group.items.find((item) => item.id === id);
@@ -142,7 +150,44 @@ export const createSelectionActions: StateCreator<
       let currentIndex = photos.findIndex((item) => item.id === currentId);
       if (currentIndex < 0) return false;
 
-      if (delta > 0 && state.viewerScope === "library" && currentIndex + delta >= photos.length) {
+      const hidden = state.viewerScope === "hidden";
+      const month = itemMonthKey(photos[currentIndex]);
+      const view = timelineKey(state, hidden);
+      let page = scopedPages(state, hidden)?.get(month);
+      while (
+        delta > 0 &&
+        page?.nextCursor &&
+        (!photos[currentIndex + delta] || itemMonthKey(photos[currentIndex + delta]) !== month)
+      ) {
+        const cursor = page.nextCursor;
+        try {
+          await loadTimelinePage(
+            store,
+            hidden ? hiddenPageFilter(state) : currentLibraryFilter(state),
+            view,
+            month,
+            cursor,
+            () => get().viewerScope === state.viewerScope,
+          );
+        } catch (error) {
+          debugLog("Could not load the next Timeline page:", error);
+          return false;
+        }
+        state = get();
+        if (state.inspectedId !== currentId || timelineKey(state, hidden) !== view) return false;
+        photos = state.viewerItems.filter((item) => item.kind !== "video");
+        currentIndex = photos.findIndex((item) => item.id === currentId);
+        if (currentIndex < 0) return false;
+        page = scopedPages(state, hidden)?.get(month);
+        if (!page || page.nextCursor === cursor) return false;
+      }
+
+      if (
+        delta > 0 &&
+        !scopedPages(state, false)?.size &&
+        state.viewerScope === "library" &&
+        currentIndex + delta >= photos.length
+      ) {
         while (state.hasMore) {
           const previousItemCount = state.items.length;
           await state.loadNextPage();

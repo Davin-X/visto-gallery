@@ -1,3 +1,6 @@
+import { DateJump } from "./timeline/DateJump";
+import { cachedItem, groupLoaded, scopedPages, timelineKey } from "./timeline/monthCache";
+import { MonthContinuation } from "./timeline/MonthContinuation";
 import type { CSSProperties } from "react";
 import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
@@ -48,7 +51,9 @@ import {
   hiddenPageFilter,
 } from "../engine/stores/useLibraryStore";
 import {
+  groupYears,
   isMonthCollapsed,
+  timelineRange,
   monthsFromItems,
   monthYear,
   useTimelineCollapse,
@@ -67,7 +72,7 @@ import { tauri } from "../engine/commands/tauri";
 import { formatBytesSimple, canPlayVideoInApp } from "../engine/utils/mediaTypes";
 import type { MediaItem, Filter } from "../engine/types/media";
 import type { LibraryFolder } from "../engine/types/commands";
-import { formatItemDate, itemMonth, monthLabel } from "../engine/utils/mediaDate";
+import { formatItemDate, monthLabel } from "../engine/utils/mediaDate";
 import { displayFileName } from "../engine/utils/fileName";
 import { livePhotoMotionMap, livePhotoMotionSrc } from "../engine/utils/livePhotos";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
@@ -122,9 +127,9 @@ function LibraryScreen(props: LibraryScreenProps) {
   const library = useLibraryStore();
   const inspectedItem =
     props.showInspector && props.inspectedId
-      ? (props.hiddenView ? library.hiddenItems : library.items).find(
+      ? ((props.hiddenView ? library.hiddenItems : library.items).find(
           (item) => item.id === props.inspectedId,
-        )
+        ) ?? cachedItem(library, !!props.hiddenView, props.inspectedId))
       : undefined;
   const playingId = usePlaybackStore((state) => state.itemId);
   const isPlaying = usePlaybackStore((state) => state.playing);
@@ -601,7 +606,7 @@ function LibraryScreen(props: LibraryScreenProps) {
       );
 
     const refillDepth = async () => {
-      if (props.hiddenView || !saved) return;
+      if (props.layout === "timeline" || props.hiddenView || !saved) return;
       let state = useLibraryStore.getState();
       let guard = 0;
       while (state.items.length < saved.itemCount && state.hasMore && guard < 100) {
@@ -618,7 +623,7 @@ function LibraryScreen(props: LibraryScreenProps) {
     void refillDepth().then(jumpToSavedOffset);
     // `restoredScrollKeyRef` makes this run once per view; item-count changes
     // during the depth refill must not restart the effect.
-  }, [library.loadedViewKey, props.hiddenView, scrollKey, viewKey]);
+  }, [library.loadedViewKey, props.hiddenView, props.layout, scrollKey, viewKey]);
 
   const loadMore = () => {
     if (props.hiddenView) {
@@ -676,9 +681,9 @@ function LibraryScreen(props: LibraryScreenProps) {
         });
       }
     }
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 800) loadMore();
+    if (props.layout !== "timeline" && el.scrollHeight - el.scrollTop - el.clientHeight < 800)
+      loadMore();
   };
-  // Destructuring keeps the callback's dependency list to the one prop it uses.
   const { onInspectItem } = props;
   const handleGridKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -798,80 +803,54 @@ function LibraryScreen(props: LibraryScreenProps) {
   // Select all describe the whole month, not just the loaded pages. Hidden is
   // its own scope: its months, counts and selection use the hidden filter.
   const timelineActive = props.layout === "timeline";
-  const catalogTimeline = timelineActive;
   const timelineFilter = props.hiddenView
     ? hiddenPageFilter(library)
     : currentLibraryFilter(library);
-  const timelineRefreshKey = props.hiddenView
-    ? `${viewKey}|${library.hiddenCount}`
-    : `${viewKey}|${library.totalCount}`;
-  const catalogMonths = useTimelineMonths(catalogTimeline, timelineFilter, timelineRefreshKey);
-  const timelineHasMore = props.hiddenView ? library.hiddenHasMore : library.hasMore;
+  const timelineRefreshKey = timelineKey(library, !!props.hiddenView);
+  useEffect(() => {
+    const state = useLibraryStore.getState();
+    if (
+      state.timelineCache &&
+      (!timelineActive || state.timelineCache.view !== timelineRefreshKey)
+    ) {
+      useLibraryStore.setState({ timelineCache: undefined });
+      state.refreshDerived();
+    }
+  }, [timelineActive, timelineRefreshKey]);
+  const catalogMonths = useTimelineMonths(timelineActive, timelineFilter, timelineRefreshKey);
+  const pages = scopedPages(library, !!props.hiddenView);
   const timelineMonths = useMemo(
     () => (timelineActive ? (catalogMonths ?? monthsFromItems(props.items)) : []),
     [timelineActive, catalogMonths, props.items],
   );
   const timelineCollapse = useTimelineCollapse();
-  const newestTimelineYear = timelineMonths[0] ? monthYear(timelineMonths[0].key) : null;
-  const loadedByMonth = useMemo(() => {
-    const byMonth = new Map<string, MediaItem[]>();
-    if (!timelineActive) return byMonth;
-    for (const item of props.items) {
-      const { key } = itemMonth(item);
-      const items = byMonth.get(key) ?? [];
-      items.push(item);
-      byMonth.set(key, items);
-    }
-    return byMonth;
-  }, [props.items, timelineActive]);
-  const visibleTimelineGroups = useMemo(() => {
-    if (!timelineMonths.length) return [];
-    const renderedByMonth = new Map<string, MediaItem[]>();
-    for (const item of renderedItems) {
-      const { key } = itemMonth(item);
-      const items = renderedByMonth.get(key) ?? [];
-      items.push(item);
-      renderedByMonth.set(key, items);
-    }
-    // Show months down to the oldest rendered item; older ones appear as
-    // scrolling loads them, so the infinite-scroll sentinel stays at the end.
-    const complete = !timelineHasMore && renderedItems.length >= props.items.length;
-    const oldest = renderedItems.length
-      ? itemMonth(renderedItems[renderedItems.length - 1]).key
-      : null;
-    return timelineMonths
-      .filter((month) => complete || (oldest !== null && month.key >= oldest))
-      .map((month) => ({
+  const [jumpTarget, setJumpTarget] = useState<string | null>(null);
+  const loadedByMonth = useMemo(
+    () => groupLoaded(timelineActive ? props.items : [], pages),
+    [timelineActive, props.items, pages],
+  );
+  const visibleTimelineGroups = useMemo(
+    () =>
+      timelineMonths.map((month) => ({
         ...month,
         label: monthLabel(month.key),
-        visibleItems: renderedByMonth.get(month.key) ?? [],
-        collapsed: isMonthCollapsed(timelineCollapse.overrides, month.key, newestTimelineYear),
-      }));
-  }, [
-    timelineMonths,
-    renderedItems,
-    props.items.length,
-    timelineHasMore,
-    timelineCollapse.overrides,
-    newestTimelineYear,
-  ]);
-  const timelineYears = useMemo(() => {
-    const years = new Map<string, number>();
-    for (const month of timelineMonths) {
-      const year = monthYear(month.key);
-      years.set(year, (years.get(year) ?? 0) + month.count);
-    }
-    return [...years.entries()].map(([year, count]) => ({ year, count }));
-  }, [timelineMonths]);
+        visibleItems: loadedByMonth.get(month.key) ?? [],
+        collapsed:
+          month.key !== jumpTarget && isMonthCollapsed(timelineCollapse.overrides, month.key),
+      })),
+    [timelineMonths, loadedByMonth, timelineCollapse.overrides, jumpTarget],
+  );
+  const yearsByKey = useMemo(() => groupYears(visibleTimelineGroups), [visibleTimelineGroups]);
+  const timelineYears = useMemo(() => [...yearsByKey.values()], [yearsByKey]);
 
   // The Timeline is a chronology: it always reads newest first by date.
   const { sortBy: librarySortBy, sortOrder: librarySortOrder, setSort: setLibrarySort } = library;
   useEffect(() => {
-    if (!catalogTimeline) return;
+    if (!timelineActive) return;
     if (librarySortBy !== "capturedAt" || librarySortOrder !== "desc") {
       setLibrarySort("capturedAt", "desc");
     }
-  }, [catalogTimeline, librarySortBy, librarySortOrder, setLibrarySort]);
+  }, [timelineActive, librarySortBy, librarySortOrder, setLibrarySort]);
 
   const sortDetailsBy = (sortBy: typeof library.sortBy) => {
     library.setSort(
@@ -910,7 +889,7 @@ function LibraryScreen(props: LibraryScreenProps) {
     view: "",
     ids: new Map(),
   });
-  const monthIdsView = `${viewKey}|${library.totalCount}`;
+  const monthIdsView = timelineRefreshKey;
   if (monthIdsRef.current.view !== monthIdsView) {
     monthIdsRef.current = { view: monthIdsView, ids: new Map() };
   }
@@ -938,6 +917,7 @@ function LibraryScreen(props: LibraryScreenProps) {
       } catch {
         ids = (loadedByMonth.get(month.key) ?? []).map((item) => item.id);
       }
+      if (monthIdsRef.current.view !== monthIdsView) return;
       monthIdsRef.current.ids.set(month.key, ids);
     }
     const selected = useLibraryStore.getState().selectedIds;
@@ -950,6 +930,7 @@ function LibraryScreen(props: LibraryScreenProps) {
     );
   };
   const toggleTimelineCollapse = (key: string, collapsed: boolean, everything: boolean) => {
+    if (everything || key === jumpTarget) setJumpTarget(null);
     if (everything) {
       timelineCollapse.setAll(
         timelineYears.map(({ year }) => year),
@@ -960,10 +941,8 @@ function LibraryScreen(props: LibraryScreenProps) {
     }
   };
   const toggleTimelineYear = (year: string, everything: boolean) => {
-    const months = timelineMonths.filter((month) => monthYear(month.key) === year);
-    const allCollapsed = months.every((month) =>
-      isMonthCollapsed(timelineCollapse.overrides, month.key, newestTimelineYear),
-    );
+    if (everything || jumpTarget?.startsWith(year + "-")) setJumpTarget(null);
+    const allCollapsed = yearsByKey.get(year)?.collapsed;
     if (everything) {
       timelineCollapse.setAll(
         timelineYears.map((entry) => entry.year),
@@ -973,62 +952,26 @@ function LibraryScreen(props: LibraryScreenProps) {
       timelineCollapse.setYear(year, !allCollapsed);
     }
   };
-  /** Open a month, load pages until it is reached, and scroll to it. */
-  const jumpToTimelineMonth = async (key: string, toYear = false) => {
-    timelineCollapse.setMonth(key, false);
-    // Hidden has its own paginated query; jumping there must not pull visible
-    // library pages into the hidden list.
-    const currentItems = () => {
-      const state = useLibraryStore.getState();
-      return props.hiddenView ? state.hiddenItems : state.items;
-    };
-    const canLoadMore = () => {
-      const state = useLibraryStore.getState();
-      return props.hiddenView ? state.hiddenHasMore : state.hasMore;
-    };
-    const reached = (items: MediaItem[]) =>
-      items.length > 0 && itemMonth(items[items.length - 1]).key < key;
-    for (let attempt = 0; attempt < 400; attempt += 1) {
-      const state = useLibraryStore.getState();
-      if (!canLoadMore() || reached(currentItems())) break;
-      const before = currentItems().length;
-      if (props.hiddenView) {
-        await state.loadMoreHiddenItems();
-      } else {
-        await state.loadNextPage();
-      }
-      if (currentItems().length === before) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
-    }
-    const items = currentItems();
-    let last = -1;
-    items.forEach((item, index) => {
-      if (itemMonth(item).key === key) last = index;
-    });
-    if (last >= 0) setRenderLimit((limit) => Math.max(limit, last + 1));
-    // A year jump lands on the year's heading when there is one.
+  const jumpToTimelineMonth = (key: string, toYear = false) => {
+    setJumpTarget(key);
     const scroll = () =>
       (
         (toYear && document.getElementById(`timeline-year-${monthYear(key)}`)) ||
         document.getElementById(`timeline-month-${key}`)
       )?.scrollIntoView({ block: "start", behavior: "auto" });
     window.requestAnimationFrame(() => window.requestAnimationFrame(scroll));
-    // Settle once more after thumbnails and folded months finish laying out.
-    window.setTimeout(scroll, 200);
   };
 
   const lastClickedRef = useRef<string | null>(null);
 
-  // Interaction contract:
-  //  - plain single click → inspect the item (Inspector follows; selection untouched)
-  //  - shift-click → range-select from the last clicked tile
-  //  - Cmd/Ctrl-click → toggle selection membership (inspection untouched)
-  //  - double click → inspect + open the viewer on exactly that item
-  //  - checkbox → toggle selection membership only
   const handleTileClick = (item: MediaItem, e: React.MouseEvent) => {
     if (e.shiftKey && lastClickedRef.current && lastClickedRef.current !== item.id) {
-      props.onSelectRange?.(lastClickedRef.current, item.id);
+      const start = lastClickedRef.current;
+      if (!timelineActive) props.onSelectRange?.(start, item.id);
+      else {
+        const ids = timelineRange(visibleTimelineGroups, start, item.id);
+        if (ids) props.onSetSelection?.(ids);
+      }
       return;
     }
     if (e.metaKey || e.ctrlKey) {
@@ -1067,9 +1010,7 @@ function LibraryScreen(props: LibraryScreenProps) {
       masked(item) ? " hidden-obscured" : ""
     }`;
 
-  // Right-clicking a photo is the most direct place to manage its album
-  // membership. The picker itself carries the album list and search. The menu
-  // is shared with the viewer, so the two surfaces cannot drift apart.
+  // Gallery and Viewer share the same item menu.
   const itemContextMenu = (item: MediaItem) =>
     buildItemContextMenu(item, {
       onOpen: (id) => props.onOpenViewer(id),
@@ -1100,8 +1041,19 @@ function LibraryScreen(props: LibraryScreenProps) {
     if (ids.size > 0) {
       selected.push(...props.items.filter((item) => ids.delete(item.id)));
     }
+    if (timelineActive && ids.size)
+      for (const group of loadedByMonth.values())
+        selected.push(...group.filter((item) => ids.delete(item.id)));
     return selected;
-  }, [props.selectedIds, props.hiddenView, props.items, library.items, library.hiddenItems]);
+  }, [
+    props.selectedIds,
+    props.hiddenView,
+    props.items,
+    library.items,
+    library.hiddenItems,
+    timelineActive,
+    loadedByMonth,
+  ]);
   const anySelectedFavorite = selectedItems.some((i) => i.favorite);
   const anySelectedHidden = selectedItems.some((i) => i.hidden);
   // Play on a video-only selection opens the player; anything with a photo
@@ -1338,7 +1290,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                           className={props.layout === l ? "selected" : ""}
                           onClick={() => props.onChangeLayout(l)}
                         >
-                          <Icon size={14} />
+                          <Icon size={l === "timeline" ? 18 : 14} />
                         </button>
                       );
                     })}
@@ -1406,8 +1358,8 @@ function LibraryScreen(props: LibraryScreenProps) {
                   >
                     <select
                       aria-label="Sort library by"
-                      disabled={catalogTimeline}
-                      title={catalogTimeline ? "Timeline is always sorted by date" : undefined}
+                      disabled={timelineActive}
+                      title={timelineActive ? "Timeline is always sorted by date" : undefined}
                       value={library.sortBy}
                       onChange={(e) =>
                         library.setSort(e.target.value as typeof library.sortBy, library.sortOrder)
@@ -1422,9 +1374,9 @@ function LibraryScreen(props: LibraryScreenProps) {
                     <button
                       type="button"
                       aria-label={`Sort ${nextSortDirectionLabel}`}
-                      disabled={catalogTimeline}
+                      disabled={timelineActive}
                       title={
-                        catalogTimeline
+                        timelineActive
                           ? "Timeline is always sorted by date, newest first"
                           : `Currently ${sortDirectionLabel}; click to sort ${nextSortDirectionLabel}`
                       }
@@ -1833,44 +1785,20 @@ function LibraryScreen(props: LibraryScreenProps) {
                   {timelineMonths.length > 1 && (
                     <nav className="timeline-jump" aria-label="Jump to a year or month">
                       <div className="timeline-jump-years">
-                        {timelineYears.map(({ year, count }) => (
+                        {timelineYears.map(({ year, count, months }) => (
                           <button
                             key={year}
                             type="button"
                             className="timeline-jump-year"
                             title={`${count.toLocaleString()} ${count === 1 ? "item" : "items"}`}
-                            onClick={() => {
-                              const newest = timelineMonths.find(
-                                (month) => monthYear(month.key) === year,
-                              );
-                              if (newest) void jumpToTimelineMonth(newest.key, true);
-                            }}
+                            aria-label={`Jump to ${year}`}
+                            onClick={() => jumpToTimelineMonth(months[0].key, true)}
                           >
                             {year}
                           </button>
                         ))}
                       </div>
-                      <select
-                        className="timeline-jump-month"
-                        aria-label="Jump to month"
-                        value=""
-                        onChange={(e) => {
-                          if (e.target.value) void jumpToTimelineMonth(e.target.value);
-                        }}
-                      >
-                        <option value="">Jump to date…</option>
-                        {timelineYears.map(({ year }) => (
-                          <optgroup key={year} label={year}>
-                            {timelineMonths
-                              .filter((month) => monthYear(month.key) === year)
-                              .map((month) => (
-                                <option key={month.key} value={month.key}>
-                                  {monthLabel(month.key)} · {month.count.toLocaleString()}
-                                </option>
-                              ))}
-                          </optgroup>
-                        ))}
-                      </select>
+                      <DateJump years={timelineYears} jump={jumpToTimelineMonth} />
                     </nav>
                   )}
                   {timelineMonths.length === 0 ||
@@ -1881,19 +1809,9 @@ function LibraryScreen(props: LibraryScreenProps) {
                     : visibleTimelineGroups.map((month, index) => {
                         const { key, label, count, visibleItems, collapsed, coverIds } = month;
                         const year = monthYear(key);
-                        const yearCount =
-                          timelineYears.find((entry) => entry.year === year)?.count ?? 0;
+                        const yearGroup = yearsByKey.get(year)!;
                         const yearStarts =
                           index === 0 || monthYear(visibleTimelineGroups[index - 1].key) !== year;
-                        const yearCollapsed = timelineMonths
-                          .filter((entry) => monthYear(entry.key) === year)
-                          .every((entry) =>
-                            isMonthCollapsed(
-                              timelineCollapse.overrides,
-                              entry.key,
-                              newestTimelineYear,
-                            ),
-                          );
                         const allSelected = monthAllSelected(month);
                         const countLabel = `${count.toLocaleString()} ${count === 1 ? "item" : "items"}`;
                         return (
@@ -1903,7 +1821,7 @@ function LibraryScreen(props: LibraryScreenProps) {
                                 <button
                                   type="button"
                                   className="timeline-year-toggle"
-                                  aria-expanded={!yearCollapsed}
+                                  aria-expanded={!yearGroup.collapsed}
                                   title="Option-click to expand or collapse every year"
                                   onClick={(e) => toggleTimelineYear(year, e.altKey)}
                                 >
@@ -1911,7 +1829,8 @@ function LibraryScreen(props: LibraryScreenProps) {
                                   <span>{year}</span>
                                 </button>
                                 <span className="timeline-count">
-                                  {yearCount.toLocaleString()} {yearCount === 1 ? "item" : "items"}
+                                  {yearGroup.count.toLocaleString()}{" "}
+                                  {yearGroup.count === 1 ? "item" : "items"}
                                 </span>
                               </div>
                             )}
@@ -1920,17 +1839,42 @@ function LibraryScreen(props: LibraryScreenProps) {
                               id={`timeline-month-${key}`}
                               data-month={key}
                             >
-                              <button
-                                type="button"
-                                className="timeline-date-marker timeline-month-toggle"
-                                aria-expanded={!collapsed}
-                                aria-label={`${collapsed ? "Expand" : "Collapse"} ${label}`}
-                                title="Option-click to expand or collapse every month"
-                                onClick={(e) => toggleTimelineCollapse(key, collapsed, e.altKey)}
-                              >
-                                <ChevronDownIcon size={12} />
-                              </button>
-                              <h3>{label}</h3>
+                              <h3>
+                                <button
+                                  type="button"
+                                  className="timeline-month-toggle"
+                                  aria-expanded={!collapsed}
+                                  aria-label={`${collapsed ? "Expand" : "Collapse"} ${label}`}
+                                  title="Option-click to expand or collapse every month"
+                                  onClick={(e) => toggleTimelineCollapse(key, collapsed, e.altKey)}
+                                >
+                                  <ChevronDownIcon size={14} />
+                                  {label}
+                                </button>
+                              </h3>
+                              {collapsed && (
+                                <button
+                                  type="button"
+                                  className="timeline-covers"
+                                  aria-label={`Show ${countLabel} from ${label}`}
+                                  onClick={() => timelineCollapse.setMonth(key, false)}
+                                >
+                                  {coverIds.slice(0, 4).map((id) => (
+                                    <span key={id} className="timeline-cover">
+                                      {veiled ? (
+                                        <EyeOffIcon size={15} />
+                                      ) : (
+                                        <CachedThumbnail itemId={id} name="" size={128} />
+                                      )}
+                                    </span>
+                                  ))}
+                                  {count > coverIds.length && (
+                                    <span className="timeline-cover-more">
+                                      +{(count - Math.min(coverIds.length, 4)).toLocaleString()}
+                                    </span>
+                                  )}
+                                </button>
+                              )}
                               <span className="timeline-count">{countLabel}</span>
                               <button
                                 type="button"
@@ -1945,25 +1889,6 @@ function LibraryScreen(props: LibraryScreenProps) {
                                 {allSelected ? "Selected" : "Select all"}
                               </button>
                             </div>
-                            {collapsed && (
-                              <button
-                                type="button"
-                                className="timeline-covers"
-                                aria-label={`Show ${countLabel} from ${label}`}
-                                onClick={() => timelineCollapse.setMonth(key, false)}
-                              >
-                                {coverIds.slice(0, 4).map((id) => (
-                                  <span key={id} className="timeline-cover">
-                                    <CachedThumbnail itemId={id} name="" size={128} />
-                                  </span>
-                                ))}
-                                {count > coverIds.length && (
-                                  <span className="timeline-cover-more">
-                                    +{(count - Math.min(coverIds.length, 4)).toLocaleString()}
-                                  </span>
-                                )}
-                              </button>
-                            )}
                             {!collapsed &&
                               visibleItems.map((item) => (
                                 <article
@@ -2124,6 +2049,19 @@ function LibraryScreen(props: LibraryScreenProps) {
                                   </span>
                                 </article>
                               ))}
+                            {!collapsed &&
+                              (pages?.has(key)
+                                ? pages.get(key)?.nextCursor
+                                : visibleItems.length < count) && (
+                                <MonthContinuation
+                                  key={timelineRefreshKey}
+                                  month={key}
+                                  requested={jumpTarget === key && !pages?.has(key)}
+                                  view={timelineRefreshKey}
+                                  filter={timelineFilter}
+                                  cursor={pages?.get(key)?.nextCursor ?? null}
+                                />
+                              )}
                           </React.Fragment>
                         );
                       })}
@@ -2297,7 +2235,7 @@ function LibraryScreen(props: LibraryScreenProps) {
               </div>
             );
           })()}
-          {!supportsGridVirtualization && renderLimit < props.items.length && (
+          {!timelineActive && !supportsGridVirtualization && renderLimit < props.items.length && (
             <div className="grid-more">
               <button type="button" className="quiet-button" onClick={loadMore}>
                 Show more loaded items · {(props.items.length - renderLimit).toLocaleString()}
