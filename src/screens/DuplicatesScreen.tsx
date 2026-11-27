@@ -31,6 +31,9 @@ import { MiddleTruncate } from "../design/components/MiddleTruncate";
 import { parentFolder } from "../engine/utils/fileName";
 
 import { DuplicateGroupCard, INLINE_COPIES } from "./duplicates/DuplicateGroupCard";
+import { DuplicateModeTabs, type ScanMode } from "./duplicates/ModeTabs";
+
+export type { ScanMode } from "./duplicates/ModeTabs";
 
 interface DuplicatesScreenProps {
   groups: DuplicateGroup[];
@@ -81,7 +84,6 @@ const GROUP_PAGE = 40;
 const FILE_GROUP_PAGE = 50;
 
 type ViewMode = "grid" | "list";
-export type ScanMode = "media" | "bursts" | "files";
 type KindFilter = "all" | "photo" | "video" | "raw";
 type SortBy = "saving" | "copies" | "newest" | "name";
 
@@ -788,38 +790,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
   );
 
   const modeTabs = onChangeScope ? (
-    <div
-      className="duplicate-filter-tabs duplicate-mode-tabs"
-      role="group"
-      aria-label="What to compare"
-    >
-      <button
-        type="button"
-        aria-pressed={mode === "media"}
-        className={mode === "media" ? "is-active" : ""}
-        onClick={() => switchMode("media")}
-      >
-        Photos &amp; videos
-      </button>
-      <button
-        type="button"
-        aria-pressed={mode === "bursts"}
-        className={mode === "bursts" ? "is-active" : ""}
-        title="Find camera bursts and visually similar photos in your library"
-        onClick={() => switchMode("bursts")}
-      >
-        Bursts &amp; similar
-      </button>
-      <button
-        type="button"
-        aria-pressed={mode === "files"}
-        className={mode === "files" ? "is-active" : ""}
-        title="Compare file contents in a single folder"
-        onClick={() => switchMode("files")}
-      >
-        Any file type
-      </button>
-    </div>
+    <DuplicateModeTabs mode={mode} onModeChange={switchMode} />
   ) : null;
 
   const folderPicker =
@@ -957,6 +928,8 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     );
   };
 
+  const fileHeadingActionsClass =
+    mode === "files" ? "duplicate-heading-actions is-file-mode" : "duplicate-heading-actions";
   const fileHeading = (
     <div className="page-heading">
       <div>
@@ -969,11 +942,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           </p>
         )}
       </div>
-      <div
-        className={
-          mode === "files" ? "duplicate-heading-actions is-file-mode" : "duplicate-heading-actions"
-        }
-      >
+      <div className={fileHeadingActionsClass}>
         {modeTabs}
         <div className="duplicate-heading-row">
           {folderPicker}
