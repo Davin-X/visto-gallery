@@ -39,7 +39,7 @@ export function LivePhotoThumb({
   return (
     <span
       style={{ display: "block", width: "100%", height: "100%" }}
-      tabIndex={-1}
+      tabIndex={0}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onFocus={() => setHovered(true)}
