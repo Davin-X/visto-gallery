@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+- Fix camera-card imports to require a destination choice, work on exFAT cards, preserve colliding files, report unreadable directories, and index copied photos before completion; save ratings, favorites, and color labels for timeline items.
+
 ### Added
 - Timeline now lets you jump directly to any catalog month, with a pinned year bar, a compact year-and-month picker, cover previews for every month by default and photos loaded as you browse.
 - **Fast RAW embedded previews**: grid thumbnails and screen-size viewer previews extract embedded JPEGs from DNG, CR2, CR3, NEF, ARW, ORF, PEF, RW2, SRW, and RAF files before falling back to macOS ImageIO.

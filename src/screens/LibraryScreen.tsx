@@ -53,6 +53,7 @@ import {
 import {
   groupYears,
   isMonthCollapsed,
+  timelineRange,
   monthsFromItems,
   monthYear,
   useTimelineCollapse,
@@ -963,15 +964,14 @@ function LibraryScreen(props: LibraryScreenProps) {
 
   const lastClickedRef = useRef<string | null>(null);
 
-  // Interaction contract:
-  //  - plain single click → inspect the item (Inspector follows; selection untouched)
-  //  - shift-click → range-select from the last clicked tile
-  //  - Cmd/Ctrl-click → toggle selection membership (inspection untouched)
-  //  - double click → inspect + open the viewer on exactly that item
-  //  - checkbox → toggle selection membership only
   const handleTileClick = (item: MediaItem, e: React.MouseEvent) => {
     if (e.shiftKey && lastClickedRef.current && lastClickedRef.current !== item.id) {
-      props.onSelectRange?.(lastClickedRef.current, item.id);
+      const start = lastClickedRef.current;
+      if (!timelineActive) props.onSelectRange?.(start, item.id);
+      else {
+        const ids = timelineRange(visibleTimelineGroups, start, item.id);
+        if (ids) props.onSetSelection?.(ids);
+      }
       return;
     }
     if (e.metaKey || e.ctrlKey) {

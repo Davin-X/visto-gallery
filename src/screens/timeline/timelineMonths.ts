@@ -156,3 +156,16 @@ export function groupYears<T extends { key: string; count: number; collapsed: bo
   }
   return years;
 }
+
+export function timelineRange(
+  months: { collapsed: boolean; visibleItems: MediaItem[] }[],
+  startId: string,
+  endId: string,
+) {
+  const ids = months.flatMap((month) =>
+    month.collapsed ? [] : month.visibleItems.map((item) => item.id),
+  );
+  const start = ids.indexOf(startId);
+  const end = ids.indexOf(endId);
+  if (start >= 0 && end >= 0) return ids.slice(Math.min(start, end), Math.max(start, end) + 1);
+}
