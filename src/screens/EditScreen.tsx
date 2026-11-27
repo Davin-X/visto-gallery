@@ -1,5 +1,5 @@
 import { usePopoverFocus } from "../design/hooks/usePopoverFocus";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowLeftIcon,
@@ -112,7 +112,7 @@ function EditScreen(props: EditScreenProps) {
     right: number;
   } | null>(null);
   // Measure Canvas Viewport
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
 
@@ -136,7 +136,7 @@ function EditScreen(props: EditScreenProps) {
 
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [props.item?.id]);
 
   useEffect(() => {
     if (draftTrayOpen && draftTriggerRef.current) {
