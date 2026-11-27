@@ -517,7 +517,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
     setBurstGroups([]);
     setBurstScanned(false);
     setBurstProgress(null);
-  }, [scope]);
+  }, [scope, setBurstGroups, setBurstScanned]);
 
   // A folder picked for the any-file scan is session-only; narrowing the
   // library scope means the user is choosing a source again, so the pick
