@@ -607,12 +607,12 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
 
   const switchMode = useCallback(
     (next: ScanMode) => {
-      setLocalMode(next);
+      if (modeProp === undefined) setLocalMode(next);
       onModeChange?.(next);
       setConfirmFileTrash(false);
       setSelected(new Set());
     },
-    [onModeChange],
+    [modeProp, onModeChange],
   );
 
   const runFileScan = useCallback(async () => {
@@ -972,7 +972,7 @@ function DuplicatesScreen(props: DuplicatesScreenProps) {
           </p>
         )}
       </div>
-      <div className="duplicate-heading-actions is-file-mode">
+      <div className={`duplicate-heading-actions${mode === "files" ? " is-file-mode" : ""}`}>
         {modeTabs}
         <div className="duplicate-heading-row">
           {folderPicker}
