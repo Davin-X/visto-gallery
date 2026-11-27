@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { tauri } from "../../engine/commands/tauri";
 import type { LibraryFilterDTO, MediaItem, TimelineMonth } from "../../engine/types/commands";
-import { itemMonth } from "../../engine/utils/mediaDate";
+import { itemMonthKey } from "../../engine/utils/mediaDate";
 
 /**
  * The Timeline's months for the current library filter, with counts from the
@@ -15,7 +15,7 @@ export function useTimelineMonths(
   filter: LibraryFilterDTO,
   refreshKey: string,
 ): TimelineMonth[] | null {
-  const [months, setMonths] = useState<TimelineMonth[] | null>(null);
+  const [months, setMonths] = useState<{ view: string; rows: TimelineMonth[] } | null>(null);
   useEffect(() => {
     if (!enabled) {
       setMonths(null);
@@ -33,7 +33,8 @@ export function useTimelineMonths(
     tauri.library
       .getTimelineMonths(rest)
       .then((result) => {
-        if (!cancelled) setMonths(Array.isArray(result) && result.length ? result : null);
+        if (!cancelled)
+          setMonths(Array.isArray(result) ? { view: refreshKey, rows: result } : null);
       })
       .catch(() => {
         if (!cancelled) setMonths(null);
@@ -45,14 +46,14 @@ export function useTimelineMonths(
     // on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, refreshKey]);
-  return months;
+  return enabled && months?.view === refreshKey ? months.rows : null;
 }
 
 /** Months built from loaded items, for when the catalog cannot answer. */
 export function monthsFromItems(items: MediaItem[]): TimelineMonth[] {
   const byKey = new Map<string, TimelineMonth>();
   for (const item of items) {
-    const { key } = itemMonth(item);
+    const key = itemMonthKey(item);
     const month = byKey.get(key) ?? { key, count: 0, coverIds: [] };
     month.count += 1;
     if (month.coverIds.length < 4) month.coverIds.push(item.id);
@@ -152,4 +153,19 @@ export function useTimelineCollapse() {
   );
 
   return { overrides, setMonth, setYear, setAll };
+}
+
+export function groupYears<T extends { key: string; count: number; collapsed: boolean }>(
+  months: T[],
+) {
+  const years = new Map<string, { year: string; count: number; collapsed: boolean; months: T[] }>();
+  for (const month of months) {
+    const year = monthYear(month.key);
+    const group = years.get(year) ?? { year, count: 0, collapsed: true, months: [] };
+    group.count += month.count;
+    group.collapsed &&= month.collapsed;
+    group.months.push(month);
+    years.set(year, group);
+  }
+  return years;
 }

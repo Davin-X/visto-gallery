@@ -43,14 +43,16 @@ test("timeline months: catalog counts, collapse, whole-month select, jump", asyn
   await expect(selectOctober).toHaveAttribute("aria-pressed", "false");
 
   // One click jumps to the previous year: its newest month opens and scrolls
-  // into view, loading the pages in between.
-  await page.getByRole("button", { name: "2025", exact: true }).click();
+  // into view.
+  await page.getByRole("button", { name: "Jump to 2025", exact: true }).click();
   await expect(toggle(page, "2025-12")).toHaveAttribute("aria-expanded", "true");
   await expect(month(page, "2025-12")).toBeInViewport();
   await expect(month(page, "2025-12").locator(".timeline-count")).toHaveText("31 items");
 
   // The month menu reaches any month.
-  await page.getByRole("combobox", { name: "Jump to month" }).selectOption("2025-06");
+  await page.getByRole("button", { name: "Jump to date" }).click();
+  await page.getByRole("combobox", { name: "Year", exact: true }).selectOption("2025");
+  await page.getByRole("button", { name: "June 2025", exact: true }).click();
   await expect(month(page, "2025-06")).toBeInViewport();
   await expect(toggle(page, "2025-06")).toHaveAttribute("aria-expanded", "true");
   // Older years start folded; jumping opened only the months it went to.
@@ -101,4 +103,78 @@ test("Hidden timeline counts and selects only hidden items", async ({ page }) =>
   await expect(selectNovember).toHaveAttribute("aria-pressed", "true");
 
   expect(pageErrors).toEqual([]);
+});
+
+test("an old month opens and navigates without paging through the catalog", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await openTimeline(page);
+  const pages = () =>
+    page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            __benchmark: { pages: { month?: string; cursor?: string; limit: number }[] };
+          }
+        ).__benchmark.pages,
+    );
+  await expect(toggle(page, "2025-06")).toHaveAttribute("aria-expanded", "false");
+  expect((await pages()).every((p) => !p.month && !p.cursor && p.limit === 250)).toBe(true);
+  await page.getByRole("button", { name: "Jump to date" }).click();
+  await page.getByRole("combobox", { name: "Year", exact: true }).selectOption("2025");
+  await page.getByRole("button", { name: "June 2025", exact: true }).click();
+  const tiles = page
+    .locator("#timeline-month-2025-06 ~ .gallery-tile")
+    .locator(".tile-open-button");
+  await expect(tiles.first()).toBeInViewport();
+  const first = await tiles.nth(0).getAttribute("data-item-id");
+  const second = await tiles.nth(1).getAttribute("data-item-id");
+  await toggle(page, "2025-06").click();
+  await toggle(page, "2025-06").click();
+  await tiles.first().dblclick();
+  const heading = page.locator(".viewer-screen .video-player-title h1");
+  await expect(heading).toContainText(first!);
+  await page.keyboard.press("k");
+  await expect(heading).toContainText(second!);
+  await page.getByRole("button", { name: "Edit photo", exact: true }).click();
+  await expect(page.locator(".edit-title-group h1")).toContainText(second!);
+  const calls = await pages();
+  expect(calls.filter((p) => p.month === "2025-06")).toHaveLength(1);
+  expect(calls.filter((p) => !p.month && p.cursor)).toEqual([]);
+});
+
+test("Hidden loads an older month through its own pager", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await page.goto(URL + "&hiddenCount=600");
+  await page.locator(".sidebar").getByRole("button", { name: "Hidden", exact: true }).click();
+  await page.getByRole("button", { name: "Timeline view", exact: true }).click();
+  await page.getByRole("button", { name: "Jump to date" }).click();
+  await page.getByRole("combobox", { name: "Year", exact: true }).selectOption("2025");
+  await page.getByRole("button", { name: "June 2025", exact: true }).click();
+  const first = page.locator("#timeline-month-2025-06 + .gallery-tile .tile-open-button");
+  await expect(first).toHaveAttribute("data-item-id", /^hidden-/);
+  const calls = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __benchmark: { pages: { month?: string; hidden: boolean; cursor?: string }[] };
+        }
+      ).__benchmark.pages,
+  );
+  expect(calls.filter((p) => p.month === "2025-06").map((p) => p.hidden)).toEqual([true]);
+  expect(calls.filter((p) => !p.month && p.cursor)).toEqual([]);
+});
+
+test("a large partial month continues in scoped pages as its end approaches", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await page.goto("/harness.html?benchmark=600");
+  await page.waitForSelector(".gallery-tile");
+  await page.getByRole("button", { name: "Timeline view", exact: true }).click();
+  const tiles = page.locator(".layout-timeline .gallery-tile");
+  await expect(tiles).toHaveCount(250);
+  const marker = page.locator(".timeline-continuation");
+  await marker.scrollIntoViewIfNeeded();
+  await expect(tiles).toHaveCount(500);
+  await marker.scrollIntoViewIfNeeded();
+  await expect(tiles).toHaveCount(600);
+  await expect(marker).toHaveCount(0);
 });
