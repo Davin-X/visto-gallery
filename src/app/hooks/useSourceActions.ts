@@ -116,21 +116,18 @@ export function useSourceActions({
       showErrorNotice(e, "Could not open the folder picker");
       return;
     }
-    let destinationPaths: string[];
-    try {
-      destinationPaths = await tauri.library.pickSourceFolders();
-      if (!destinationPaths.length) return;
-    } catch (e) {
-      showErrorNotice(e, "Could not open the folder picker");
-      return;
-    }
     const source = sourcePaths[0];
-    const destination = destinationPaths[0];
     const library = useLibraryStore.getState();
     try {
       library.setBusy(true);
       library.setProgress({ phase: "importing", processed: 0, total: 0 });
-      const result = await tauri.library.importCameraCard(source, destination);
+      const result = await tauri.library.importCameraCard(source);
+      if (!result) {
+        library.setBusy(false);
+        library.setProgress(null);
+        return;
+      }
+      await tauri.library.scan(result.destination);
       await library.loadLibrary();
       refreshLibraryStats();
       library.setBusy(false);

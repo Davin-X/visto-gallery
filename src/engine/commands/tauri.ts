@@ -1,3 +1,4 @@
+import type { CameraCardImportResult } from "../../../src-tauri/bindings/CameraCardImportResult";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   ScanResult,
@@ -89,14 +90,8 @@ export const tauri = {
     pickMediaFiles: (): Promise<string[]> => invoke("pick_media_files"),
 
     /** Copy a camera card's media into date-based folders, skipping duplicates. */
-    importCameraCard: (
-      source: string,
-      destination: string,
-    ): Promise<{
-      imported: number;
-      skipped: number;
-      failed: number;
-    }> => invoke("import_camera_card", { source, destination }),
+    importCameraCard: (source: string): Promise<CameraCardImportResult | null> =>
+      invoke("import_camera_card", { source }),
 
     /** Native audio-file picker for the slideshow ambient track. */
     pickAmbientAudio: (): Promise<string | null> => invoke("pick_ambient_audio"),
