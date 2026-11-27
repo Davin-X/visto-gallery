@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- Timeline now lets you jump directly to any catalog month, with cover previews for folded months and photos loaded as you browse.
 - **Fast RAW embedded previews**: grid thumbnails and screen-size viewer previews extract embedded JPEGs from DNG, CR2, CR3, NEF, ARW, ORF, PEF, RW2, SRW, and RAF files before falling back to macOS ImageIO.
 - **Batch metadata editing**: edit capture date, title, keywords, and GPS location across selected items in **Batch → Edit metadata**, written to `.xmp` sidecar files so originals are never modified.
 - **Map view**: browse geotagged photos and RAW files on a built-in offline map, group nearby photos into thumbnail markers, and open a photo in the viewer or show it in Finder.

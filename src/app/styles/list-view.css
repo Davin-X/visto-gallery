@@ -615,22 +615,12 @@
 
 .gallery-grid.layout-timeline .timeline-group {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
   margin: 14px 0 0;
   padding: 0 0 10px;
   border-bottom: 1px solid var(--line-strong);
-}
-
-.gallery-grid.layout-timeline .timeline-date-marker {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border: 1px solid var(--line-strong);
-  border-radius: 50%;
-  background: var(--surface-2);
 }
 
 /* Jump bar: years one click away, every month in the menu. Sticks to the top
@@ -647,9 +637,25 @@
   margin: 0 -2px;
   padding: 8px 2px;
   border-bottom: 1px solid var(--line);
-  background: var(--bg);
+  background: var(--surface);
   /* Cover the scroller's top padding so tiles never peek above the bar. */
-  box-shadow: 0 -32px 0 var(--bg);
+  box-shadow: 0 -32px 0 var(--surface);
+}
+
+.gallery-grid.layout-timeline {
+  container-type: inline-size;
+}
+
+@container (min-width: 720px) {
+  .gallery-grid.layout-timeline .timeline-group.collapsed {
+    grid-template-columns: 178px minmax(0, 1fr) auto auto;
+    margin-top: 2px;
+  }
+  .gallery-grid.layout-timeline .timeline-group .timeline-covers {
+    grid-column: auto;
+    grid-row: auto;
+    justify-self: start;
+  }
 }
 
 /* One row, scrolling sideways when a library spans many years. */
@@ -740,17 +746,34 @@
 }
 
 .gallery-grid.layout-timeline .timeline-month-toggle {
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   cursor: pointer;
 }
 
-.gallery-grid.layout-timeline .timeline-month-toggle:hover,
-.gallery-grid.layout-timeline .timeline-month-toggle:focus-visible {
-  border-color: var(--accent);
+.timeline-month-toggle:hover, .timeline-month-toggle:focus-visible {
+  color: var(--accent-text);
+}
+
+.timeline-year::after {
+  content: "";
+  flex: 1;
+  align-self: center;
+  height: 1px;
+  background: var(--line);
 }
 
 /* A folded month keeps a strip of its newest covers. */
 .gallery-grid.layout-timeline .timeline-covers {
+  grid-row: 2;
   display: flex;
   grid-column: 1 / -1;
   align-items: center;
@@ -763,7 +786,8 @@
 }
 
 .timeline-cover {
-  display: block;
+  display: grid;
+  place-items: center;
   width: 72px;
   height: 54px;
   overflow: hidden;
@@ -788,14 +812,6 @@
 .timeline-covers:hover .timeline-cover,
 .timeline-covers:focus-visible .timeline-cover {
   border-color: var(--accent);
-}
-
-.gallery-grid.layout-timeline .timeline-date-marker span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
 .gallery-grid.layout-timeline .timeline-group h3 {
@@ -942,3 +958,9 @@
   transition: opacity 0.2s ease;
 }
 
+.timeline-continuation {
+  grid-column: 1 / -1;
+  padding: 12px 0;
+  color: var(--muted);
+  font-size: 12px;
+}

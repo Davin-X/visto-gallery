@@ -112,11 +112,12 @@
       // The hidden set spans months and has its own ids, so the Hidden
       // Timeline's month counts and whole-month Select all can be told apart
       // from the Library's.
-      const hiddenItems = [items[0], items[7], items[14]]
+      const hiddenItems = (params.has("hiddenCount") ? items.slice(0, Number(params.get("hiddenCount"))) : [items[0], items[7], items[14]])
         .filter(Boolean)
         .map((item, index) => ({ ...item, id: `hidden-${index}`, hidden: true }));
       const benchmark = {
         calls: Object.create(null),
+        pages: [],
         activeThumbnails: 0,
         maxActiveThumbnails: 0,
       };
@@ -266,10 +267,6 @@
         if (command === "lock_hidden") {
           hiddenUnlocked = false;
           return null;
-        }
-        if (command === "get_hidden_items") {
-          if (!hiddenVisible()) throw { code: "locked", message: "Hidden is locked." };
-          return { items: hiddenItems, hasMore: false, totalCount: hiddenItems.length };
         }
         if (command === "get_library_stats") {
           return {
@@ -426,18 +423,23 @@
           const byId = new Map([...items, ...hiddenItems].map((item) => [item.id, item]));
           return (args?.ids || []).map((id) => byId.get(id)).filter(Boolean);
         }
-        if (command === "get_library_items") {
+        if (command === "get_library_items" || command === "get_hidden_items") {
           const filter = args?.filter || {};
+          const hidden = command === "get_hidden_items";
+          if (hidden && !hiddenVisible()) throw { code: "locked", message: "Hidden is locked." };
+          const source = hidden ? hiddenItems : items;
+          const matching = filter.month ? source.filter(item => monthOf(item) === filter.month && inScope(item, filter)) : source;
+          benchmark.pages.push({ month: filter.month, cursor: filter.cursor, limit: filter.limit, hidden });
           const cursor = filter.cursor || "items-0";
           const offset = Math.max(0, Number(cursor.replace("items-", "")) || 0);
           const limit = Math.max(1, Number(filter.limit || PAGE_SIZE));
-          const pageItems = items.slice(offset, offset + limit);
+          const pageItems = matching.slice(offset, offset + limit);
           const nextOffset = offset + pageItems.length;
           return {
             items: pageItems,
-            hasMore: nextOffset < totalItems,
-            nextCursor: nextOffset < totalItems ? `items-${nextOffset}` : undefined,
-            totalCount: totalItems,
+            hasMore: nextOffset < matching.length,
+            nextCursor: nextOffset < matching.length ? `items-${nextOffset}` : undefined,
+            totalCount: matching.length,
           };
         }
         if (command === "get_item_thumbnail") {

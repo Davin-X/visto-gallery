@@ -1,3 +1,4 @@
+import { cachedItem, scopedPages } from "../../../screens/timeline/monthCache";
 import type { StateCreator } from "zustand";
 import { tauri } from "../../commands/tauri";
 import type { MediaItem } from "../../types/media";
@@ -9,7 +10,12 @@ function findKnownItem(state: LibraryState, id: string): MediaItem | null {
   const direct =
     state.items.find((item) => item.id === id) ||
     state.hiddenItems.find((item) => item.id === id) ||
-    state.mapItems.find((item) => item.id === id);
+    state.mapItems.find((item) => item.id === id) ||
+    cachedItem(
+      state,
+      state.screen === "Hidden" || (state.screen === "Viewer" && state.viewerScope === "hidden"),
+      id,
+    );
   if (direct) return direct;
   for (const group of state.duplicates) {
     const match = group.items.find((item) => item.id === id);
@@ -142,7 +148,12 @@ export const createSelectionActions: StateCreator<
       let currentIndex = photos.findIndex((item) => item.id === currentId);
       if (currentIndex < 0) return false;
 
-      if (delta > 0 && state.viewerScope === "library" && currentIndex + delta >= photos.length) {
+      if (
+        delta > 0 &&
+        !scopedPages(state, false)?.size &&
+        state.viewerScope === "library" &&
+        currentIndex + delta >= photos.length
+      ) {
         while (state.hasMore) {
           const previousItemCount = state.items.length;
           await state.loadNextPage();

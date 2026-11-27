@@ -1,3 +1,4 @@
+import { timelineViewerItems } from "../../screens/timeline/monthCache";
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
@@ -16,8 +17,6 @@ import { mergeDuplicateGroups, sortSmartAlbums } from "./library/collections";
 export { currentLibraryFilter, hiddenPageFilter, libraryViewKey } from "./library/filters";
 export type { LibraryState } from "./library/types";
 
-// Each notice gets an id so its dismiss timer clears only that notice, never
-// a newer one shown in the meantime (such as an Undo toast).
 let latestNoticeId = 0;
 
 // The icons-only sidebar is a per-Mac view preference, so it lives in local
@@ -135,6 +134,7 @@ function computeDerived(state: LibraryState) {
     viewerItems = visible.filter((item) => matchesKindFilter(item, state.filter));
   }
 
+  viewerItems = timelineViewerItems(state, viewerItems);
   const viewerSelected = resolveInspectedItem({ ...state, inspectedId }, viewerItems);
   const currentIndex = Math.max(
     0,
@@ -153,7 +153,7 @@ function computeDerived(state: LibraryState) {
     currentIndex,
     viewerIndex,
     hiddenItems: state.hiddenItems,
-    hiddenCount: state.hiddenItems.length,
+    hiddenCount: state.hiddenHasMore ? state.hiddenCount : state.hiddenItems.length,
   };
 }
 
