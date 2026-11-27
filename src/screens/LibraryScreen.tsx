@@ -26,6 +26,7 @@ import {
   TrashIcon,
 } from "../design/components/icons";
 import { CachedThumbnail } from "../design/components/CachedThumbnail";
+import { LivePhotoThumb } from "../design/components/LivePhotoThumb";
 import { PanelResizer } from "../design/components/PanelResizer";
 import { KindBadge, KindDot } from "../design/components/KindBadge";
 import { AlbumPhotoStack } from "../design/components/AlbumPhotoStack";
@@ -68,14 +69,12 @@ import type { MediaItem, Filter } from "../engine/types/media";
 import type { LibraryFolder } from "../engine/types/commands";
 import { formatItemDate, itemMonth, monthLabel } from "../engine/utils/mediaDate";
 import { displayFileName } from "../engine/utils/fileName";
+import { livePhotoMotionMap, livePhotoMotionSrc } from "../engine/utils/livePhotos";
 import { MiddleTruncate } from "../design/components/MiddleTruncate";
 import { buildItemContextMenu } from "../engine/utils/itemContextMenu";
-
 import { LibraryInspector } from "./library/LibraryInspector";
 import type { LibraryScreenProps } from "./library/types";
-
 const GALLERY_PAGE_SIZE = 180;
-
 /**
  * Scroll offsets remembered per view.
  *
@@ -93,7 +92,6 @@ interface RememberedScroll {
 }
 const rememberedScroll = new Map<string, RememberedScroll>();
 const MAX_REMEMBERED_SCROLL_VIEWS = 40;
-
 function rememberScroll(key: string, value: RememberedScroll) {
   rememberedScroll.delete(key);
   rememberedScroll.set(key, value);
@@ -103,7 +101,6 @@ function rememberScroll(key: string, value: RememberedScroll) {
     rememberedScroll.delete(oldest);
   }
 }
-
 /**
  * The heading above the grid.
  *
@@ -120,9 +117,7 @@ export function libraryHeading(
   if (smartAlbumName) return smartAlbumName;
   return filter === "All" ? "All Media" : filter;
 }
-
 import { ListRowMeta } from "./library/ListRowMeta";
-
 function LibraryScreen(props: LibraryScreenProps) {
   const library = useLibraryStore();
   const inspectedItem =
@@ -135,7 +130,6 @@ function LibraryScreen(props: LibraryScreenProps) {
   const isPlaying = usePlaybackStore((state) => state.playing);
   const [copiedPathFor, setCopiedPathFor] = useState<string | null>(null);
   const copyPathTimeoutRef = useRef<number | null>(null);
-
   const copyItemPath = useCallback((path: string, itemId: string) => {
     if (copyPathTimeoutRef.current) window.clearTimeout(copyPathTimeoutRef.current);
     void navigator.clipboard.writeText(path).then(() => {
@@ -145,7 +139,6 @@ function LibraryScreen(props: LibraryScreenProps) {
       }, 1500);
     });
   }, []);
-
   useEffect(
     () => () => {
       if (copyPathTimeoutRef.current) window.clearTimeout(copyPathTimeoutRef.current);
@@ -184,7 +177,6 @@ function LibraryScreen(props: LibraryScreenProps) {
   const updateSettings = useSettingsStore((s) => s.update);
   const inspectorWidth = useInspectorWidth();
   const inspectorRef = useRef<HTMLDivElement>(null);
-
   // A width persisted on a large display must not squeeze the grid below a
   // usable size when the window is later made narrower. The drag handle uses
   // the same bound; this keeps the resting layout honest after a window resize.
@@ -238,6 +230,7 @@ function LibraryScreen(props: LibraryScreenProps) {
   // preview is only 42-52 px, so a 128 px thumbnail is plenty there.
   const thumbnailPixels =
     props.layout === "overview" ? 1024 : props.layout === "details" ? 128 : 512;
+  const livePhotoMotionByItemId = useMemo(() => livePhotoMotionMap(props.items), [props.items]);
   // Hidden items are masked by default. A pointer-down reveals just that tile
   // while it is held; releasing (or leaving the tile) puts the veil back.
   const [revealedIds, setRevealedIds] = useState<Set<string>>(() => new Set());
@@ -1743,12 +1736,13 @@ function LibraryScreen(props: LibraryScreenProps) {
                             />
                           )
                         ) : item.kind === "photo" ? (
-                          <CachedThumbnail
+                          <LivePhotoThumb
                             itemId={item.id}
                             name={tileAlt(item)}
                             size={thumbnailPixels}
                             style={draftImageStyle(draftTransforms, item.id)}
                             fallbackSrc={assetUrl(item.path)}
+                            motionSrc={livePhotoMotionSrc(livePhotoMotionByItemId, item, assetUrl)}
                           />
                         ) : (
                           <CachedThumbnail
@@ -2021,12 +2015,17 @@ function LibraryScreen(props: LibraryScreenProps) {
                                         />
                                       )
                                     ) : item.kind === "photo" ? (
-                                      <CachedThumbnail
+                                      <LivePhotoThumb
                                         itemId={item.id}
                                         name={tileAlt(item)}
                                         size={thumbnailPixels}
                                         style={draftImageStyle(draftTransforms, item.id)}
                                         fallbackSrc={assetUrl(item.path)}
+                                        motionSrc={livePhotoMotionSrc(
+                                          livePhotoMotionByItemId,
+                                          item,
+                                          assetUrl,
+                                        )}
                                       />
                                     ) : (
                                       <CachedThumbnail
@@ -2190,12 +2189,13 @@ function LibraryScreen(props: LibraryScreenProps) {
                           />
                         )
                       ) : item.kind === "photo" ? (
-                        <CachedThumbnail
+                        <LivePhotoThumb
                           itemId={item.id}
                           name={tileAlt(item)}
                           size={thumbnailPixels}
                           style={draftImageStyle(draftTransforms, item.id)}
                           fallbackSrc={assetUrl(item.path)}
+                          motionSrc={livePhotoMotionSrc(livePhotoMotionByItemId, item, assetUrl)}
                         />
                       ) : (
                         <CachedThumbnail

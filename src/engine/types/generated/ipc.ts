@@ -374,9 +374,9 @@ slideshowBackgroundAudio: boolean,
  */
 slideshowBackgroundAudioPath: string | null, videoAutoPlay: boolean, videoLoop: boolean, watchFolders: Array<string>, autoImport: boolean, 
 /**
- * Dormant compatibility field. RAW+JPEG pairing is not implemented yet;
- * the control is marked unavailable in Settings, but the persisted value
- * is kept so an upgrade never drops a user preference.
+ * RAW+JPEG companion pairs are protected in duplicate/burst scans; the
+ * Settings toggle for it is still unavailable, but the persisted value is
+ * kept so an upgrade never drops a user preference.
  */
 pairRawJpeg: boolean, 
 /**
@@ -386,9 +386,9 @@ pairRawJpeg: boolean,
  */
 stackBursts: boolean, 
 /**
- * Dormant compatibility field. Live Photo stacking is not implemented yet;
- * the control is marked unavailable in Settings, but the persisted value
- * is kept so an upgrade never drops a user preference.
+ * Live Photo motion playback on hover is implemented in the library grid;
+ * catalog stacking is not, and the Settings toggle stays unavailable, but
+ * the persisted value is kept so an upgrade never drops a user preference.
  */
 stackLivePhotos: boolean, 
 /**
@@ -426,9 +426,9 @@ slideshowBackgroundAudio?: boolean,
  */
 slideshowBackgroundAudioPath?: string | null, videoAutoPlay?: boolean, videoLoop?: boolean, watchFolders?: Array<string>, autoImport?: boolean, 
 /**
- * Dormant compatibility field. RAW+JPEG pairing is not implemented yet;
- * the control is marked unavailable in Settings, but the persisted value
- * is kept so an upgrade never drops a user preference.
+ * RAW+JPEG companion pairs are protected in duplicate/burst scans; the
+ * Settings toggle for it is still unavailable, but the persisted value is
+ * kept so an upgrade never drops a user preference.
  */
 pairRawJpeg?: boolean, 
 /**
@@ -438,9 +438,9 @@ pairRawJpeg?: boolean,
  */
 stackBursts?: boolean, 
 /**
- * Dormant compatibility field. Live Photo stacking is not implemented yet;
- * the control is marked unavailable in Settings, but the persisted value
- * is kept so an upgrade never drops a user preference.
+ * Live Photo motion playback on hover is implemented in the library grid;
+ * catalog stacking is not, and the Settings toggle stays unavailable, but
+ * the persisted value is kept so an upgrade never drops a user preference.
  */
 stackLivePhotos?: boolean, 
 /**
