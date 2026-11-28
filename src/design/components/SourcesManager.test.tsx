@@ -76,3 +76,76 @@ describe("SourcesManager Locate…", () => {
     expect(mocks.apply).not.toHaveBeenCalled();
   });
 });
+
+describe("SourcesManager sorting", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.state.folders = [
+      makeLibraryFolder({
+        path: "/Volumes/Photos/Zeta",
+        name: "Zeta",
+        itemCount: 2,
+        totalSize: 20,
+      }),
+      makeLibraryFolder({
+        path: "/Volumes/Photos/Alpha",
+        name: "Alpha",
+        itemCount: 10,
+        totalSize: 3,
+      }),
+      makeLibraryFolder({
+        path: "/Volumes/Photos/Album 10",
+        name: "Album 10",
+        itemCount: 5,
+        totalSize: 12,
+      }),
+      makeLibraryFolder({
+        path: "/Volumes/Photos/Album 2",
+        name: "Album 2",
+        itemCount: 5,
+        totalSize: 4,
+      }),
+    ];
+  });
+
+  const sourceNames = () =>
+    screen
+      .getAllByRole("row")
+      .slice(1)
+      .map((row) => row.querySelector(".sources-name-text")?.textContent);
+
+  it("keeps the existing item-count order by default and toggles source-name sorting", () => {
+    render(<SourcesManager />);
+
+    expect(sourceNames()).toEqual(["Alpha", "Album 10", "Album 2", "Zeta"]);
+    expect(screen.getByRole("columnheader", { name: /Items/ })).toHaveAttribute(
+      "aria-sort",
+      "descending",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Source ascending" }));
+    expect(sourceNames()).toEqual(["Album 2", "Album 10", "Alpha", "Zeta"]);
+    expect(screen.getByRole("columnheader", { name: /Source/ })).toHaveAttribute(
+      "aria-sort",
+      "ascending",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Source descending" }));
+    expect(sourceNames()).toEqual(["Zeta", "Alpha", "Album 10", "Album 2"]);
+  });
+
+  it("sorts sizes numerically while preserving the active filter", () => {
+    render(<SourcesManager />);
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Filter sources" }), {
+      target: { value: "album" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Size ascending" }));
+
+    expect(sourceNames()).toEqual(["Album 2", "Album 10"]);
+    expect(screen.getByRole("columnheader", { name: /Size/ })).toHaveAttribute(
+      "aria-sort",
+      "ascending",
+    );
+  });
+});
