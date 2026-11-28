@@ -9,7 +9,7 @@ import {
 import { useFocusTrap } from "../design/hooks/useFocusTrap";
 import { useKeyboard } from "../engine/hooks/useKeyboard";
 import { AlbumsIcon, FolderIcon, PlusIcon, SearchIcon } from "../design/components/icons";
-import { SourcesManager } from "../design/components/SourcesManager";
+import { SourcesManager, SourcesRemovalNote } from "../design/components/SourcesManager";
 import { RemoveAllSourcesDialog } from "./RemoveAllSourcesDialog";
 import { tauri } from "../engine/commands/tauri";
 import type { LibraryFolder, UpdateCheckResult } from "../engine/types/commands";
@@ -814,6 +814,7 @@ function SourcesSheet({
           >
             Remove all sources…
           </button>
+          {library.folders.length > 0 && <SourcesRemovalNote />}
           <div style={{ flex: 1 }} />
           <button type="button" className="quiet-button" onClick={onClose}>
             Done

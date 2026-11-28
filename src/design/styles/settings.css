@@ -1156,6 +1156,7 @@
 
 .sources-summary-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
@@ -1188,7 +1189,6 @@
   border-collapse: separate;
   border-spacing: 0;
   border-radius: 8px;
-  overflow: hidden;
   font-size: 12px;
   table-layout: fixed;
 }
@@ -1207,6 +1207,9 @@
 }
 
 .sources-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   padding: 8px 12px;
   border-bottom: 1px solid var(--line);
   background: var(--surface-2);
@@ -1238,6 +1241,18 @@
 
 .sources-sort-button:hover {
   color: var(--text);
+}
+
+.sources-sort-hint {
+  display: inline-flex;
+  flex-direction: column;
+  color: var(--muted);
+  line-height: 0;
+}
+
+.sources-sort-hint svg {
+  display: block;
+  height: 7px;
 }
 
 .sources-table th[aria-sort] .sources-sort-button {
@@ -1356,6 +1371,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--muted) 40%, transparent);
+  text-underline-offset: 2px;
 }
 
 .sources-path:hover {
@@ -1413,7 +1431,9 @@
 }
 
 .sources-filter {
-  margin: 10px 0 12px;
+  flex: 1 1 180px;
+  min-width: 160px;
+  max-width: 240px;
 }
 
 .sources-paste-form {
@@ -1442,6 +1462,10 @@
   background: var(--surface-2);
   color: var(--text);
   font-size: 13px;
+}
+
+.sources-filter input {
+  height: 30px;
 }
 
 .sources-filter input:hover,
@@ -1545,7 +1569,9 @@
 }
 
 .sources-sheet .sources-filter {
-  flex: 0 0 auto;
+  flex: 1 1 180px;
+  min-width: 160px;
+  max-width: 240px;
   margin: 0;
 }
 
@@ -1569,14 +1595,6 @@
 .sources-sheet .sources-table {
   border: 0;
   border-radius: 0;
-}
-
-.sources-sheet .sources-note {
-  flex: 0 0 auto;
-  padding: 10px 12px;
-  border-top: 1px solid var(--line);
-  border-radius: 0 0 8px 8px;
-  background: var(--surface-2);
 }
 
 .sources-sr-only {

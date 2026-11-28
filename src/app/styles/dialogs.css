@@ -55,7 +55,16 @@
 }
 
 .sources-sheet .dialog-actions {
+  align-items: center;
   margin-top: 16px;
+}
+
+.sources-sheet .dialog-actions .sources-note {
+  align-items: center;
+}
+
+.sources-sheet .dialog-actions .sources-note svg {
+  margin-top: 0;
 }
 
 .dialog-heading {

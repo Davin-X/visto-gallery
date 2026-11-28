@@ -175,7 +175,14 @@ export function SourcesManager(props: {
         onClick={() => sortBy(column)}
       >
         {label}
-        {active && <Indicator size={12} />}
+        {active ? (
+          <Indicator size={12} />
+        ) : (
+          <span className="sources-sort-hint" aria-hidden="true">
+            <ChevronUpIcon size={9} />
+            <ChevronDownIcon size={9} />
+          </span>
+        )}
       </button>
     );
   };
@@ -219,7 +226,7 @@ export function SourcesManager(props: {
               disabled={libraryBusy}
               title="Paste or type a folder path to index"
             >
-              Paste path…
+              Add by path…
             </button>
           )}
           {onRescan && (
@@ -232,6 +239,17 @@ export function SourcesManager(props: {
             >
               {libraryBusy ? "Working…" : "Rescan sources"}
             </button>
+          )}
+          {folders.length > 0 && (
+            <div className="sources-filter">
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Filter sources…"
+                aria-label="Filter sources"
+              />
+            </div>
           )}
         </div>
       </div>
@@ -281,18 +299,6 @@ export function SourcesManager(props: {
             Cancel
           </button>
         </form>
-      )}
-
-      {folders.length > 0 && (
-        <div className="sources-filter">
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter sources…"
-            aria-label="Filter sources"
-          />
-        </div>
       )}
 
       {folders.length === 0 ? (
@@ -450,12 +456,9 @@ export function SourcesManager(props: {
         />
       )}
 
-      {folders.length > 0 && (
+      {folders.length > 0 && variant !== "sheet" && (
         <div className="sources-footer">
-          <p className="sources-note">
-            <InfoIcon size={14} />
-            <span>Removing a source leaves its files on disk.</span>
-          </p>
+          <SourcesRemovalNote />
           {onRemoveAllSources && (
             <button
               className="quiet-button sources-remove-all"
@@ -485,6 +488,15 @@ export function SourcesManager(props: {
       </p>
       {body}
     </section>
+  );
+}
+
+export function SourcesRemovalNote() {
+  return (
+    <p className="sources-note">
+      <InfoIcon size={14} />
+      <span>Removing a source leaves its files on disk.</span>
+    </p>
   );
 }
 
