@@ -1219,6 +1219,40 @@
   white-space: nowrap;
 }
 
+.sources-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: -4px -6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.sources-sort-button:hover {
+  color: var(--text);
+}
+
+.sources-table th[aria-sort] .sources-sort-button {
+  color: var(--text);
+}
+
+.sources-table th[aria-sort] .sources-sort-button svg {
+  color: var(--accent);
+}
+
+.sources-sort-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .sources-table td {
   padding: 8px 12px;
   border-bottom: 1px solid var(--line);

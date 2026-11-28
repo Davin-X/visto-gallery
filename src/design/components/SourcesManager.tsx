@@ -3,7 +3,19 @@ import { formatBytes, tauri } from "../../engine/commands/tauri";
 import { useLibraryStore } from "../../engine/stores";
 import type { LibraryFolder } from "../../engine/types/commands";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
-import { FolderIcon, InfoIcon, MoreIcon, PlusIcon } from "./icons";
+import { ChevronDownIcon, ChevronUpIcon, FolderIcon, InfoIcon, MoreIcon, PlusIcon } from "./icons";
+
+type SourceSortColumn = "name" | "itemCount" | "totalSize";
+type SortDirection = "ascending" | "descending";
+
+const sourceNameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+function compareSourceValue(a: LibraryFolder, b: LibraryFolder, column: SourceSortColumn) {
+  if (column === "name") return sourceNameCollator.compare(a.name, b.name);
+  const left = column === "itemCount" ? a.itemCount : a.totalSize;
+  const right = column === "itemCount" ? b.itemCount : b.totalSize;
+  return left < right ? -1 : left > right ? 1 : 0;
+}
 
 export function SourcesManager(props: {
   variant?: "inline" | "sheet";
@@ -35,6 +47,10 @@ export function SourcesManager(props: {
   const [showPastePath, setShowPastePath] = useState(false);
   const [pastePath, setPastePath] = useState("");
   const [pasting, setPasting] = useState(false);
+  const [sort, setSort] = useState<{ column: SourceSortColumn; direction: SortDirection }>({
+    column: "itemCount",
+    direction: "descending",
+  });
   const [menu, setMenu] = useState<{
     folder: LibraryFolder;
     x: number;
@@ -132,6 +148,37 @@ export function SourcesManager(props: {
   const filteredFolders = q
     ? folders.filter((f) => f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q))
     : folders;
+  const sortedFolders = [...filteredFolders].sort((a, b) => {
+    const comparison = compareSourceValue(a, b, sort.column);
+    const pathComparison = a.path.toLowerCase().localeCompare(b.path.toLowerCase());
+    const primary = sort.direction === "ascending" ? comparison : -comparison;
+    return primary || pathComparison;
+  });
+  const sortBy = (column: SourceSortColumn) =>
+    setSort((current) =>
+      current.column === column
+        ? {
+            column,
+            direction: current.direction === "ascending" ? "descending" : "ascending",
+          }
+        : { column, direction: "ascending" },
+    );
+  const sortHeader = (column: SourceSortColumn, label: string) => {
+    const active = sort.column === column;
+    const nextDirection = active && sort.direction === "ascending" ? "descending" : "ascending";
+    const Indicator = sort.direction === "ascending" ? ChevronUpIcon : ChevronDownIcon;
+    return (
+      <button
+        type="button"
+        className="sources-sort-button"
+        aria-label={`Sort by ${label} ${nextDirection}`}
+        onClick={() => sortBy(column)}
+      >
+        {label}
+        {active && <Indicator size={12} />}
+      </button>
+    );
+  };
 
   const body = (
     <>
@@ -275,12 +322,22 @@ export function SourcesManager(props: {
             <caption className="sources-sr-only">Library sources</caption>
             <thead>
               <tr>
-                <th scope="col">Source</th>
-                <th scope="col" className="sources-num">
-                  Items
+                <th scope="col" aria-sort={sort.column === "name" ? sort.direction : undefined}>
+                  {sortHeader("name", "Source")}
                 </th>
-                <th scope="col" className="sources-num">
-                  Size
+                <th
+                  scope="col"
+                  className="sources-num"
+                  aria-sort={sort.column === "itemCount" ? sort.direction : undefined}
+                >
+                  {sortHeader("itemCount", "Items")}
+                </th>
+                <th
+                  scope="col"
+                  className="sources-num"
+                  aria-sort={sort.column === "totalSize" ? sort.direction : undefined}
+                >
+                  {sortHeader("totalSize", "Size")}
                 </th>
                 <th scope="col">
                   <span className="sources-sr-only">Actions</span>
@@ -288,7 +345,7 @@ export function SourcesManager(props: {
               </tr>
             </thead>
             <tbody>
-              {filteredFolders.map((folder) => {
+              {sortedFolders.map((folder) => {
                 const viewing = isViewing(folder);
                 const missing = !folder.available;
                 return (
