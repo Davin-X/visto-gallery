@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Fix camera-card imports to require a destination choice, work on exFAT cards, preserve colliding files, report unreadable directories, and index copied photos before completion; save ratings, favorites, and color labels for timeline items.
 - Keep burst scan results and the Bursts tab selected when returning from an opened photo.
+- Select the requested photo whenever the Viewer opens.
 - Keep Any file type folder controls and scan actions aligned in the Clean up header.
 
 ### Added

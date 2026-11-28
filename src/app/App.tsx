@@ -262,6 +262,7 @@ function App() {
         setScreen("Video");
       } else {
         lib.setViewerScope(scope);
+        lib.inspectItem(item.id);
         viewerState.open(item.id);
         setScreen("Viewer");
       }
