@@ -1535,6 +1535,10 @@
   margin-top: 12px;
 }
 
+.settings-section .sources-table-viewport {
+  margin-top: 8px;
+}
+
 .sources-footer:has(.sources-remove-all) {
   display: flex;
   flex-wrap: wrap;
