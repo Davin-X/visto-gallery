@@ -204,6 +204,17 @@ export function SourcesManager(props: {
             {formatBytes(totalSize)}
           </span>
         </div>
+        {onRescan && (
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => onRescan()}
+            disabled={libraryBusy || folders.length === 0}
+            title={folders.length === 0 ? "Add a source before rescanning" : undefined}
+          >
+            {libraryBusy ? "Working…" : "Rescan sources"}
+          </button>
+        )}
         <div className="sources-summary-actions">
           <button
             className="primary-button"
@@ -227,17 +238,6 @@ export function SourcesManager(props: {
               title="Paste or type a folder path to index"
             >
               Add by path…
-            </button>
-          )}
-          {onRescan && (
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => onRescan()}
-              disabled={libraryBusy || folders.length === 0}
-              title={folders.length === 0 ? "Add a source before rescanning" : undefined}
-            >
-              {libraryBusy ? "Working…" : "Rescan sources"}
             </button>
           )}
           {folders.length > 0 && (

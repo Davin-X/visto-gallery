@@ -1162,9 +1162,12 @@
 }
 
 .sources-summary-copy {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .sources-summary-text {
