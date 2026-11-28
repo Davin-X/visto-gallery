@@ -815,7 +815,6 @@ function SourcesSheet({
             Remove all sources…
           </button>
           {library.folders.length > 0 && <SourcesRemovalNote />}
-          <div style={{ flex: 1 }} />
           <button type="button" className="quiet-button" onClick={onClose}>
             Done
           </button>
