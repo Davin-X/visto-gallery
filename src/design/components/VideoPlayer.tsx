@@ -30,6 +30,7 @@ import {
 
 import { VideoPlaybackFallback } from "./video-player/VideoPlaybackFallback";
 import { VideoTrackSelectors } from "./video-player/VideoTrackSelectors";
+import { useVideoMediaSession } from "./useVideoMediaSession";
 
 type PlaybackSnapshot = ReturnType<typeof usePlaybackStore.getState>;
 
@@ -946,40 +947,8 @@ function VideoPlayer({
     usePlaybackStore.getState().setLastVolume(volume);
   }, [volume, muted, syncPlayback]);
 
-  // Wire media keys / PiP transport controls to the player.
-  useEffect(() => {
-    const video = ref.current;
-    if (!video || !("mediaSession" in navigator)) return;
-    const session = navigator.mediaSession;
-    session.metadata = new MediaMetadata({
-      title: name || "Video",
-      artist: "VistoGallery",
-    });
-    const play = () => {
-      requestVideoPlay(video);
-    };
-    const seekBy = (delta: number) => {
-      const next = Math.min(Math.max(0, video.currentTime + delta), video.duration || 0);
-      video.currentTime = next;
-      setTime(next);
-    };
-    session.setActionHandler("play", play);
-    session.setActionHandler("pause", () => video.pause());
-    session.setActionHandler("seekbackward", (details) => seekBy(-(details?.seekOffset || 10)));
-    session.setActionHandler("seekforward", (details) => seekBy(details?.seekOffset || 10));
-    const onPlay = () => (session.playbackState = "playing");
-    const onPause = () => (session.playbackState = "paused");
-    video.addEventListener("play", onPlay);
-    video.addEventListener("pause", onPause);
-    return () => {
-      video.removeEventListener("play", onPlay);
-      video.removeEventListener("pause", onPause);
-      session.setActionHandler("play", null);
-      session.setActionHandler("pause", null);
-      session.setActionHandler("seekbackward", null);
-      session.setActionHandler("seekforward", null);
-    };
-  }, [src, name]);
+  // Wire macOS media controls and Now Playing metadata to this video.
+  useVideoMediaSession(ref, itemId, name, src, setTime);
 
   const toggle = () => {
     const video = ref.current;

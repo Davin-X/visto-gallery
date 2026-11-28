@@ -151,6 +151,11 @@ function loadThumbnail(itemId: string, size: CachedThumbnailSize): Promise<strin
   return request;
 }
 
+/** Load the standard player-size poster through the shared cache. */
+export function getOrLoadThumbnailUrl(itemId: string): Promise<string> {
+  return loadThumbnail(itemId, 128);
+}
+
 function CachedThumbnail({
   itemId,
   name,

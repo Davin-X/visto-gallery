@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { usePlaybackStore } from "../../engine/stores/usePlaybackStore";
 import type { PreparedPlayback } from "../../engine/types/commands";
+import { getOrLoadThumbnailUrl } from "./CachedThumbnail";
 import VideoPlayer from "./VideoPlayer";
 
 // Capture the conversion-progress handlers so a test can drive them.
@@ -31,7 +32,30 @@ vi.mock("@tauri-apps/api/event", () => ({
   ),
 }));
 
+vi.mock("./CachedThumbnail", () => ({
+  getOrLoadThumbnailUrl: vi.fn(),
+}));
+
 const invokeMock = vi.mocked(invoke);
+const thumbnailUrlMock = vi.mocked(getOrLoadThumbnailUrl);
+const mediaActionHandlers = new Map<
+  MediaSessionAction,
+  (details?: MediaSessionActionDetails) => void
+>();
+const mediaSessionMock = {
+  metadata: null as unknown as MediaMetadata,
+  playbackState: "none" as MediaSessionPlaybackState,
+  setActionHandler: vi.fn(
+    (
+      action: MediaSessionAction,
+      handler: ((details?: MediaSessionActionDetails) => void) | null,
+    ) => {
+      if (handler) mediaActionHandlers.set(action, handler);
+      else mediaActionHandlers.delete(action);
+    },
+  ),
+  setPositionState: vi.fn(),
+};
 
 function probeWithTracks() {
   return {
@@ -75,6 +99,58 @@ beforeAll(() => {
   Object.defineProperty(window.HTMLMediaElement.prototype, "pause", {
     configurable: true,
     value: vi.fn(),
+  });
+  vi.stubGlobal(
+    "MediaMetadata",
+    class {
+      constructor(init: MediaMetadataInit) {
+        Object.assign(this, init);
+      }
+    },
+  );
+  Object.defineProperty(navigator, "mediaSession", {
+    configurable: true,
+    value: mediaSessionMock,
+  });
+  thumbnailUrlMock.mockResolvedValue("data:image/jpeg;base64,cG9zdGVy");
+});
+
+describe("video player Now Playing artwork", () => {
+  it("shows the playing video's thumbnail in macOS media metadata", async () => {
+    renderPlayer();
+
+    await waitFor(() => {
+      expect(mediaSessionMock.metadata).toMatchObject({
+        title: "video-a.mp4",
+        artist: "VistoGallery",
+        artwork: [
+          {
+            src: "data:image/jpeg;base64,cG9zdGVy",
+            sizes: "128x128",
+            type: "image/jpeg",
+          },
+        ],
+      });
+    });
+  });
+
+  it("seeks to the position selected in Now Playing", () => {
+    const { container } = renderPlayer();
+    const video = container.querySelector("video")!;
+    Object.defineProperty(video, "duration", { configurable: true, value: 180 });
+    fireEvent(video, new Event("loadedmetadata"));
+
+    act(() => {
+      mediaActionHandlers.get("seekto")?.({ seekTime: 42 } as MediaSessionActionDetails);
+    });
+
+    expect(screen.getByRole("slider", { name: "Seek" })).toHaveValue("42");
+    expect(video.currentTime).toBe(42);
+    expect(mediaSessionMock.setPositionState).toHaveBeenLastCalledWith({
+      duration: 180,
+      playbackRate: 1,
+      position: 42,
+    });
   });
 });
 
